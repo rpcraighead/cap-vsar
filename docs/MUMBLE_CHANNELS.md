@@ -1,8 +1,11 @@
 # Mumble channel structure
 
-Channels are created once, by hand, after first start. Mumble has no
-config-file channel definition, so this is a five-minute setup with the
-Mumble desktop client connected as **SuperUser** (password in `.env`).
+**The channels below already exist** - they were inserted into the server
+database at deploy time. Mumble has no config-file channel definition, so they
+were created by writing to `mumble-server.sqlite` with the server stopped.
+
+The one thing still to do by hand is the ACL on the instructor channel, in
+step 4 below.
 
 ```
 CAP V-SAR                       (root)
@@ -30,17 +33,18 @@ application with its own audio device and push-to-talk. Two radios, two PTT
 keys, as in the aeroplane. Keeping mission traffic off the ATC frequency is
 both realistic and a courtesy to the controllers.
 
-## Setup steps
+## Remaining setup
 
-1. Connect with the Mumble client to `192.0.2.151:64738`, server password
-   from `.env`.
-2. Log in as SuperUser: right-click the server -> **Change username** to
-   `SuperUser`, use the SuperUser password from `.env`.
-3. Right-click the root channel -> **Add** for each channel above.
-4. On **Instructor / SET**, set ACL to deny `Enter` for `@all` and grant it to
-   a group containing the instructor accounts.
-5. Register the regular participants (right-click user -> **Register**) so they
-   keep identities between sessions.
+1. Connect as **SuperUser** (right-click server -> **Change username**), using
+   the SuperUser password from `.env`.
+2. On **Instructor - SET**, right-click -> **Edit** -> **ACL**: deny `Enter`
+   for `@all`, then grant it to the instructor accounts or a group containing
+   them. Until this is done the channel is visible to everyone.
+3. Register participants as they first connect (right-click user ->
+   **Register**) so identities persist between sessions.
+
+Participant-facing instructions are in `docs/CONNECT.md` - that is the document
+to hand to aircrew and mission base staff.
 
 ## Discipline
 

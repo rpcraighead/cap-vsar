@@ -8,11 +8,10 @@ ROOT="$PWD"
 [ -f .env ] || { echo "ERROR: .env missing. cp .env.example .env and fill it in."; exit 1; }
 set -a; . ./.env; set +a
 
-echo "==> rendering Mumble config"
+# The mumble image generates /data/mumble_server_config.ini from the
+# MUMBLE_CONFIG_* variables in docker-compose.yml on every start. Do not write
+# that file here - it will be overwritten.
 mkdir -p mumble/data
-sed "s|__SERVER_PASSWORD__|${MUMBLE_SERVER_PASSWORD}|g" \
-    mumble/mumble_server_config.ini.tmpl > mumble/data/mumble_server_config.ini
-chmod 600 mumble/data/mumble_server_config.ini
 
 echo "==> pulling images"
 docker compose pull --quiet

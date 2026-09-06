@@ -14,7 +14,7 @@ docker-compose.yml     Mumble + WireGuard service stack
 mumble/                voice server config template
 scripts/               deploy, firewall, peer handout
 infra/ROUTER.md        the two port forwards this needs, and nothing more
-docs/                  plan, CONOPS, channel structure
+docs/                  plan, CONOPS, channel structure, CONNECT.md for participants
 sim/xppython3/         Phase 1: the DF propagation engine plugin
 sim/airmanager/        Phase 2-3: Becker 517, RT-600, MO COM panel
 services/scenario/     Phase 4: beacon truth service

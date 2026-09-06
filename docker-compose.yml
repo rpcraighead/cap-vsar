@@ -15,9 +15,36 @@ services:
       - "64738:64738/udp"
     volumes:
       - ./mumble/data:/data
+    # This image GENERATES its config from MUMBLE_CONFIG_* variables and
+    # overwrites anything mounted at /data/mumble_server_config.ini - a
+    # mounted config file is silently discarded. Set everything here.
     environment:
       TZ: ${TZ}
       MUMBLE_SUPERUSER_PASSWORD: ${MUMBLE_SUPERUSER_PASSWORD}
+      MUMBLE_CONFIG_SERVERPASSWORD: ${MUMBLE_SERVER_PASSWORD}
+      MUMBLE_CONFIG_REGISTERNAME: "CAP V-SAR"
+      MUMBLE_CONFIG_USERS: "100"
+      MUMBLE_CONFIG_BANDWIDTH: "72000"
+      MUMBLE_CONFIG_OPUSTHRESHOLD: "0"
+      MUMBLE_CONFIG_CHANNELNESTINGLIMIT: "10"
+      MUMBLE_CONFIG_TEXTMESSAGELENGTH: "2000"
+      MUMBLE_CONFIG_IMAGEMESSAGELENGTH: "0"
+      MUMBLE_CONFIG_ALLOWHTML: "true"
+      MUMBLE_CONFIG_CERTREQUIRED: "false"
+      MUMBLE_CONFIG_SUGGESTPUSHTOTALK: "true"
+      MUMBLE_CONFIG_REMEMBERCHANNEL: "true"
+      MUMBLE_CONFIG_AUTOBANATTEMPTS: "10"
+      MUMBLE_CONFIG_AUTOBANTIMEFRAME: "120"
+      MUMBLE_CONFIG_AUTOBANTIME: "300"
+      MUMBLE_CONFIG_WELCOMETEXT: >-
+        <b>CAP V-SAR - Mission Voice Net</b><br/><br/>
+        <b>EXERCISE TRAFFIC ONLY.</b> This is a training system. Nothing said
+        here is a real distress communication, and nothing here is transmitted
+        on any real radio.<br/><br/>
+        ATC is on PilotEdge, not on this server. Keep mission traffic -
+        bearings, beacon reports, base coordination - on the mission net
+        channels.<br/><br/>
+        Begin and end transmissions with EXERCISE, EXERCISE, EXERCISE.
     # The image ships neither ss nor netstat; bash is present, so open a real
     # TCP connection to the listening port instead.
     healthcheck:
