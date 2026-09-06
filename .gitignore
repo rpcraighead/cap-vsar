@@ -1,0 +1,7 @@
+.env
+wireguard/config/
+mumble/data/
+*.log
+__pycache__/
+*.pyc
+.venv/

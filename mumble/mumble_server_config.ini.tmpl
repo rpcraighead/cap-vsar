@@ -1,0 +1,33 @@
+; CAP V-SAR mission voice net - Mumble server configuration
+; Generated from mumble_server_config.ini.tmpl by scripts/deploy.sh
+; ATC is PilotEdge. This server carries CAP mission traffic only.
+
+database=/data/murmur.sqlite
+logfile=/data/murmur.log
+pidfile=/data/murmur.pid
+
+port=64738
+host=
+serverpassword=__SERVER_PASSWORD__
+
+; 100 slots is far beyond any exercise; keeps headroom for observers.
+users=100
+bandwidth=72000
+opusthreshold=0
+timeout=30
+
+registerName=CAP V-SAR
+allowping=true
+channelnestinglimit=10
+textmessagelength=2000
+imagemessagelength=0
+allowhtml=true
+certrequired=false
+
+welcometext="<b>CAP V-SAR - Mission Voice Net</b><br/><br/>\
+<b>EXERCISE TRAFFIC ONLY.</b> This is a training system. Nothing said here \
+is a real distress communication, and nothing here is transmitted on any \
+real radio.<br/><br/>\
+ATC is on PilotEdge, not on this server. Keep mission traffic - bearings, \
+beacon reports, base coordination - on the mission net channels.<br/><br/>\
+Begin and end transmissions with EXERCISE, EXERCISE, EXERCISE."

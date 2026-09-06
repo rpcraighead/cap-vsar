@@ -1,0 +1,51 @@
+# CAP V-SAR - lab service stack
+# Host: ms01 (192.0.2.151). Bring up with:  docker compose up -d
+# Nothing here is reachable from the internet until the router forwards
+# the ports listed in infra/ROUTER.md to this host.
+
+services:
+
+  # ---- Voice: CAP mission net (NOT ATC - ATC is PilotEdge) ----------------
+  mumble:
+    image: mumblevoip/mumble-server:latest
+    container_name: capvsar-mumble
+    restart: unless-stopped
+    ports:
+      - "64738:64738/tcp"
+      - "64738:64738/udp"
+    volumes:
+      - ./mumble/data:/data
+    environment:
+      TZ: ${TZ}
+      MUMBLE_SUPERUSER_PASSWORD: ${MUMBLE_SUPERUSER_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "netstat -ltn 2>/dev/null | grep -q 64738 || ss -ltn | grep -q 64738"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ---- WireGuard: everything except Mumble rides this ---------------------
+  wireguard:
+    image: lscr.io/linuxserver/wireguard:latest
+    container_name: capvsar-wireguard
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    ports:
+      - "51820:51820/udp"
+    volumes:
+      - ./wireguard/config:/config
+      - /lib/modules:/lib/modules:ro
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+      SERVERURL: ${WG_SERVERURL}
+      SERVERPORT: 51820
+      PEERS: ${WG_PEERS}
+      PEERDNS: ${WG_PEERDNS}
+      INTERNAL_SUBNET: 10.13.13.0
+      ALLOWEDIPS: 10.13.13.0/24,192.0.2.0/24
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
