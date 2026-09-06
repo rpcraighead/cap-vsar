@@ -18,11 +18,14 @@ services:
     environment:
       TZ: ${TZ}
       MUMBLE_SUPERUSER_PASSWORD: ${MUMBLE_SUPERUSER_PASSWORD}
+    # The image ships neither ss nor netstat; bash is present, so open a real
+    # TCP connection to the listening port instead.
     healthcheck:
-      test: ["CMD-SHELL", "netstat -ltn 2>/dev/null | grep -q 64738 || ss -ltn | grep -q 64738"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/64738"]
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 20s
 
   # ---- WireGuard: everything except Mumble rides this ---------------------
   wireguard:
