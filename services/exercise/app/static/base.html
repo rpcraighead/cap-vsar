@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CAP V-SAR Mission Base</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="/static/style.css">
+</head><body>
+
+<header>
+  <div class="brand"><b>CAP V-SAR</b> <span>Mission Base</span></div>
+  <div id="status" class="status offline">connecting</div>
+  <div class="spacer"></div>
+  <a class="navlink" href="/">Instructor console</a>
+  <div id="clock" class="mono"></div>
+</header>
+
+<main>
+  <aside>
+    <section>
+      <h2>Alert</h2>
+      <div id="alertBox" class="box">waiting for a sortie to open</div>
+    </section>
+
+    <section>
+      <h2>Sortie status</h2>
+      <div id="board" class="box">no aircraft</div>
+    </section>
+
+    <section>
+      <h2>Bearing log</h2>
+      <p class="hint">Enter each bearing the crew reports. The cut is drawn from
+        their position at the moment you log it.</p>
+      <div class="row">
+        <input id="brgCallsign" placeholder="callsign" size="8">
+        <input id="brgValue" placeholder="deg true" size="6" inputmode="numeric">
+      </div>
+      <div class="row">
+        <input id="brgNote" placeholder="note (optional)">
+        <button id="brgAdd" class="primary">Log</button>
+      </div>
+      <div id="bearings" class="box small">no bearings logged</div>
+    </section>
+
+    <section>
+      <h2>Tasking &amp; messages</h2>
+      <p class="hint">Supplements the voice net and leaves a record for debrief.</p>
+      <div class="row">
+        <input id="msgTo" placeholder="to" size="6" value="ALL">
+        <input id="msgBody" placeholder="message">
+      </div>
+      <button id="msgSend" class="primary" style="width:100%;margin-top:6px">Send</button>
+      <div id="messages" class="box small">no messages</div>
+    </section>
+  </aside>
+
+  <div id="map"></div>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/base.js"></script>
+</body></html>

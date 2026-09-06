@@ -29,6 +29,12 @@ def db():
     return c
 
 
+ALERT_COLUMNS = [
+    ("alert_kind", "TEXT"), ("alert_text", "TEXT"),
+    ("alert_lat", "REAL"), ("alert_lon", "REAL"), ("alert_radius_nm", "REAL"),
+]
+
+
 def init_db():
     Path(DB).parent.mkdir(parents=True, exist_ok=True)
     with db() as c:
@@ -44,10 +50,18 @@ def init_db():
             sortie_id TEXT, callsign TEXT, t REAL,
             lat REAL, lon REAL, alt_ft REAL, hdg_true REAL);
         CREATE INDEX IF NOT EXISTS positions_sortie ON positions(sortie_id, t);
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, sortie_id TEXT, t REAL,
+            sender TEXT, recipient TEXT, body TEXT);
         CREATE TABLE IF NOT EXISTS bearings (
             id INTEGER PRIMARY KEY AUTOINCREMENT, sortie_id TEXT, callsign TEXT,
             t REAL, lat REAL, lon REAL, bearing_true REAL, note TEXT);
         """)
+        # additive migration for databases created before the alert model
+        existing = {r["name"] for r in c.execute("PRAGMA table_info(scenarios)")}
+        for col, typ in ALERT_COLUMNS:
+            if col not in existing:
+                c.execute(f"ALTER TABLE scenarios ADD COLUMN {col} {typ}")
 
 
 DEFAULT_EFFECTS = {
@@ -65,6 +79,15 @@ SEED = {
     "beacon_lat": 33.1700, "beacon_lon": -117.0792, "beacon_elev_ft": 700.0,
     "band": "121.5", "power": 1.0,
     "effects": {**DEFAULT_EFFECTS, "burst_cadence": False, "multipath": True},
+    # The alert is what mission base is given. It is NOT the beacon position -
+    # 121.5 has not been satellite-monitored since 2009, so this one arrives as
+    # reports with no position at all.
+    "alert_kind": "121.5 pilot report - no position",
+    "alert_text": ("Multiple reports of a 121.5 MHz ELT signal in the McClellan-Palomar "
+                   "(KCRQ) approach area. No satellite alert and no Doppler position. "
+                   "Search area is the approach corridor. Expect SoCal Approach to "
+                   "protect the ILS altitude - request blocks above and below."),
+    "alert_lat": 33.1283, "alert_lon": -117.2800, "alert_radius_nm": 12.0,
 }
 
 
@@ -75,6 +98,7 @@ class Hub:
         self.aircraft: dict[str, dict] = {}
         self.sortie: dict | None = None
         self.scenario: dict | None = None
+        self.messages: list[dict] = []
 
     async def broadcast(self, msg: dict):
         dead = []
@@ -113,10 +137,12 @@ async def lifespan(app: FastAPI):
     with db() as c:
         if not c.execute("SELECT 1 FROM scenarios LIMIT 1").fetchone():
             c.execute(
-                "INSERT INTO scenarios VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO scenarios VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (str(uuid.uuid4())[:8], SEED["name"], SEED["notes"],
                  SEED["beacon_lat"], SEED["beacon_lon"], SEED["beacon_elev_ft"],
-                 SEED["band"], SEED["power"], json.dumps(SEED["effects"]), time.time()))
+                 SEED["band"], SEED["power"], json.dumps(SEED["effects"]), time.time(),
+                 SEED["alert_kind"], SEED["alert_text"],
+                 SEED["alert_lat"], SEED["alert_lon"], SEED["alert_radius_nm"]))
     asyncio.create_task(ticker())
     yield
 
@@ -146,6 +172,11 @@ class ScenarioIn(BaseModel):
     band: str = Field("121.5", pattern="^(121\\.5|243|406)$")
     power: float = 1.0
     effects: dict[str, Any] = Field(default_factory=lambda: dict(DEFAULT_EFFECTS))
+    alert_kind: str = ""
+    alert_text: str = ""
+    alert_lat: float | None = None
+    alert_lon: float | None = None
+    alert_radius_nm: float | None = None
 
 
 class PositionIn(BaseModel):
@@ -181,9 +212,10 @@ def list_scenarios():
 def create_scenario(s: ScenarioIn):
     sid = str(uuid.uuid4())[:8]
     with db() as c:
-        c.execute("INSERT INTO scenarios VALUES (?,?,?,?,?,?,?,?,?,?)",
+        c.execute("INSERT INTO scenarios VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                   (sid, s.name, s.notes, s.beacon_lat, s.beacon_lon,
-                   s.beacon_elev_ft, s.band, s.power, json.dumps(s.effects), time.time()))
+                   s.beacon_elev_ft, s.band, s.power, json.dumps(s.effects), time.time(),
+                   s.alert_kind, s.alert_text, s.alert_lat, s.alert_lon, s.alert_radius_nm))
     return {"id": sid}
 
 
@@ -209,6 +241,7 @@ async def start_sortie(body: dict):
     hub.sortie = {"id": oid, "scenario_id": sid, "name": body.get("name") or r["name"],
                   "started": time.time(), "stopped": None, "revealed": 0}
     hub.aircraft.clear()
+    hub.messages.clear()
     await hub.broadcast({"type": "state", **hub.snapshot()})
     return hub.sortie
 
@@ -257,11 +290,15 @@ def track(oid: str):
         brgs = c.execute(
             "SELECT callsign, t, lat, lon, bearing_true, note FROM bearings WHERE sortie_id=? ORDER BY t",
             (oid,)).fetchall()
+        msgs = c.execute(
+            "SELECT t, sender, recipient, body FROM messages WHERE sortie_id=? ORDER BY t",
+            (oid,)).fetchall()
         s = c.execute("SELECT * FROM sorties WHERE id=?", (oid,)).fetchone()
         sc = c.execute("SELECT * FROM scenarios WHERE id=?", (s["scenario_id"],)).fetchone() if s else None
     return {
         "positions": [dict(r) for r in rows],
         "bearings": [dict(r) for r in brgs],
+        "messages": [dict(r) for r in msgs],
         "beacon": ({"lat": sc["beacon_lat"], "lon": sc["beacon_lon"]} if sc else None),
     }
 
@@ -321,6 +358,33 @@ async def log_bearing(b: BearingIn):
     return {"ok": True}
 
 
+class MessageIn(BaseModel):
+    sender: str = "MISSION BASE"
+    recipient: str = "ALL"
+    body: str
+
+
+@app.post("/api/messages")
+async def send_message(m: MessageIn):
+    """Retasking and coordination text. Supplements voice and leaves a record."""
+    if not hub.sortie:
+        raise HTTPException(400, "no sortie running")
+    now = time.time()
+    with db() as c:
+        c.execute("INSERT INTO messages (sortie_id, t, sender, recipient, body)"
+                  " VALUES (?,?,?,?,?)", (hub.sortie["id"], now, m.sender, m.recipient, m.body))
+    msg = {"type": "message", "t": now, "sender": m.sender,
+           "recipient": m.recipient, "body": m.body}
+    hub.messages.append(msg)
+    await hub.broadcast(msg)
+    return {"ok": True}
+
+
+@app.get("/api/messages")
+def list_messages():
+    return hub.messages[-100:]
+
+
 @app.get("/api/state")
 def state():
     return hub.snapshot()
@@ -351,3 +415,10 @@ app.mount("/static", StaticFiles(directory=STATIC), name="static")
 @app.get("/")
 def index():
     return FileResponse(STATIC / "index.html")
+
+
+@app.get("/base")
+def mission_base():
+    """Mission base view: no instructor controls, never shows beacon truth
+    until the instructor reveals it."""
+    return FileResponse(STATIC / "base.html")

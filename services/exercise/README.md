@@ -4,8 +4,33 @@ Instructor-facing web app that runs a sortie: pick a scenario, watch aircraft
 on a live map, toggle signal effects mid-flight, log the bearings the crew
 reports, and reveal beacon truth for the debrief.
 
-**http://192.0.2.151:8700** - LAN and WireGuard only. Not forwarded at the
-router, and it should stay that way.
+Two views on one backend:
+
+| View | URL | Audience |
+|---|---|---|
+| Instructor console | `http://192.0.2.151:8700/` | Runs the scenario: effects, reveal, control |
+| Mission base | `http://192.0.2.151:8700/base` | IC / AOBD / MRO: alert, board, bearings, tasking |
+
+LAN and WireGuard only. Not forwarded at the router, and it should stay that way.
+
+## The two views differ on purpose
+
+Mission base has **no scenario picker, no effect toggles and no reveal button**,
+and never receives the beacon position until the instructor reveals it. It is
+the same WebSocket and the same state endpoint - the server withholds truth, so
+opening dev tools on the mission base page gains a trainee nothing.
+
+What mission base has that the console does not:
+
+- **Alert intake.** The tasking as it actually arrives - kind, narrative, and a
+  reported area with an uncertainty radius, drawn on the map as a dashed circle.
+  This is deliberately *not* the beacon position. For scenario C-1 the alert is
+  a 121.5 pilot report with no position at all, because 121.5 has not been
+  satellite-monitored since 2009.
+- **Sortie status board** - aircraft, altitude, heading, position, time airborne,
+  and whether their reports have gone stale.
+- **Tasking messages** - retasking text that supplements the voice net and leaves
+  a record for debrief.
 
 ## What exists and what does not
 
@@ -52,9 +77,11 @@ terrain masking, which this server cannot do - and this response is ignored.
 | POST | `/api/sorties/stop` | stop the running sortie |
 | POST | `/api/sorties/reveal` | expose beacon truth for debrief |
 | POST | `/api/sorties/effects` | toggle effects mid-sortie |
-| GET | `/api/sorties/{id}/track` | recorded track, bearings, beacon - for replay |
+| GET | `/api/sorties/{id}/track` | recorded track, bearings, messages, beacon - for replay |
 | POST | `/api/positions` | **sim bridge ingest** |
 | POST | `/api/bearings` | log a bearing the crew reported |
+| POST | `/api/messages` | send a tasking / retasking message |
+| GET | `/api/messages` | recent messages |
 | GET | `/api/state` | current snapshot |
 | WS | `/ws` | live push to consoles |
 
