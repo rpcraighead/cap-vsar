@@ -54,6 +54,27 @@ services:
       retries: 3
       start_period: 20s
 
+  # ---- Exercise console: scenario control, live map, bearing log -----------
+  exercise:
+    build: ./services/exercise
+    container_name: capvsar-exercise
+    restart: unless-stopped
+    # LAN and WireGuard only - deliberately not published to the internet.
+    ports:
+      - "8700:8700"
+    volumes:
+      - ./services/exercise/data:/data
+    environment:
+      TZ: ${TZ}
+      CAPVSAR_DB: /data/exercise.db
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8700/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
 # WireGuard intentionally NOT run here.
 # The GL-MT6000 already terminates WireGuard on its WAN (wgserver, UDP 51820)
 # with live peers including a GCP site-to-site tunnel. Running a second server

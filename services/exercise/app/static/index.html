@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CAP V-SAR Exercise Console</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="/static/style.css">
+</head><body>
+
+<header>
+  <div class="brand"><b>CAP V-SAR</b> <span>Exercise Console</span></div>
+  <div id="status" class="status offline">connecting</div>
+  <div class="spacer"></div>
+  <div id="clock" class="mono"></div>
+</header>
+
+<main>
+  <aside>
+    <section>
+      <h2>Sortie</h2>
+      <div id="sortieBox" class="box">no sortie running</div>
+      <label for="scenarioSel">Scenario</label>
+      <select id="scenarioSel"></select>
+      <div id="scenarioNotes" class="notes"></div>
+      <div class="row">
+        <button id="startBtn" class="primary">Start sortie</button>
+        <button id="stopBtn" class="ghost" disabled>Stop</button>
+      </div>
+      <button id="revealBtn" class="danger" disabled>Reveal beacon (debrief)</button>
+    </section>
+
+    <section>
+      <h2>Injected effects</h2>
+      <p class="hint">Each one is a discrete teachable failure. Toggle mid-sortie.</p>
+      <div id="effects" class="effects"></div>
+    </section>
+
+    <section>
+      <h2>Aircraft</h2>
+      <div id="aircraft" class="box">none reporting</div>
+    </section>
+
+    <section>
+      <h2>Bearing log</h2>
+      <p class="hint">Log what the crew reports. Draws a line from their position.</p>
+      <div class="row">
+        <input id="brgCallsign" placeholder="callsign" size="8">
+        <input id="brgValue" placeholder="deg true" size="6" inputmode="numeric">
+        <button id="brgAdd">Log</button>
+      </div>
+      <div id="bearings" class="box small">no bearings logged</div>
+    </section>
+  </aside>
+
+  <div id="map"></div>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/app.js"></script>
+</body></html>

@@ -3,8 +3,9 @@
 Civil Air Patrol Virtual Search and Rescue trainer. This repository holds the
 service stack, the simulator plugins, and the project documents.
 
-**Status:** infrastructure only. No simulator code exists yet - Phase 0 of the
-implementation plan has not started.
+**Status:** infrastructure plus the exercise console. No simulator code exists
+yet - Phase 0 of the implementation plan has not started, so positions come
+from a mock bridge.
 
 ## Layout
 
@@ -17,9 +18,9 @@ infra/ROUTER.md        the two port forwards this needs, and nothing more
 docs/                  plan, CONOPS, channel structure, CONNECT.md for participants
 sim/xppython3/         Phase 1: the DF propagation engine plugin
 sim/airmanager/        Phase 2-3: Becker 517, RT-600, MO COM panel
-services/scenario/     Phase 4: beacon truth service
-services/tracking/     Phase 4: position aggregation, CalTopo relay
-services/missionbase/  Phase 5: mission base web client
+services/exercise/     Exercise console: scenario control, live map, ingest API
+services/tracking/     Phase 4: CalTopo relay (not started)
+services/missionbase/  Phase 5: mission base web client (not started)
 ```
 
 ## Host
