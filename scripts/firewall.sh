@@ -18,12 +18,12 @@ echo "==> allowing LAN (preserves NFS, Ollama, SSH for lab hosts)"
 sudo ufw allow from 192.0.2.0/24 comment 'lab LAN - full access'
 
 echo "==> allowing WireGuard peer subnet"
-sudo ufw allow from 10.13.13.0/24 comment 'CAP V-SAR WireGuard peers'
+sudo ufw allow from 10.0.0.0/24 comment 'WireGuard peers via router wgserver'
 
-echo "==> allowing the two intended public services"
+echo "==> allowing the one intended public service"
 sudo ufw allow 64738/tcp comment 'CAP V-SAR Mumble'
 sudo ufw allow 64738/udp comment 'CAP V-SAR Mumble'
-sudo ufw allow 51820/udp comment 'CAP V-SAR WireGuard'
+# No 51820 rule: WireGuard runs on the router, not this host.
 
 echo "==> default policy"
 sudo ufw default deny incoming

@@ -1,45 +1,98 @@
-# Router configuration - GL-MT6000 (OpenWrt) at 192.0.2.1
+# Router - GL-MT6000 (OpenWrt 21.02) at 192.0.2.1
 
-Two UDP forwards are all CAP V-SAR needs from the edge. **Nothing else should
-be forwarded.** No web service, no Gitea, no Proxmox, no SSH.
+WAN `eth1`, public address `203.0.113.10`. Root SSH with key auth.
 
-| Service | Protocol / Port | Forward to | Why public |
+## WireGuard is ALREADY on the router - do not run a second one
+
+The router terminates WireGuard itself on the WAN interface:
+
+- interface `wgserver`, **UDP 51820**, tunnel subnet `10.0.0.0/24`, router `10.0.0.1`
+- config in `/etc/config/wireguard_server` (uci), peers as `@peers[n]`
+- live peers: `ron-desktop` 10.0.0.3, `ron-mobile` 10.0.0.4,
+  `cyberflight-wp` 10.0.0.5 (GCP site-to-site), plus 10.0.0.2
+
+Because the router listens on its own WAN, **no port forward is needed for
+WireGuard**, and there is currently no forward for it.
+
+> **An earlier draft of this file said to forward UDP 51820 to ms01 for a
+> second WireGuard server. That was wrong and would have hijacked the router
+> tunnel, dropping remote access and the GCP site-to-site link. The ms01
+> WireGuard container has been removed.**
+
+## The only forward CAP V-SAR needs
+
+| Service | Protocol / Port | To | Why public |
 |---|---|---|---|
-| Mumble (mission voice net) | TCP **and** UDP 64738 | 192.0.2.151 | Base staff and aircrew join without a VPN client. Protected by a server password. |
-| WireGuard | UDP 51820 | 192.0.2.151 | Everything that is not Mumble rides this tunnel. |
+| Mumble | TCP **and** UDP 64738 | 192.0.2.151 | So base staff and aircrew join the voice net without a VPN client. Server password required. |
 
-Mumble uses TCP for control and UDP for voice. Forward both or voice degrades
-to TCP tunnelling and latency suffers.
+Mumble uses TCP for control and UDP for voice. Forward both, or voice falls
+back to TCP tunnelling and latency suffers.
 
-## Steps (GL.iNet / OpenWrt UI)
+```sh
+# on the router, as root
+uci add firewall redirect
+uci set firewall.@redirect[-1].name=capvsar-mumble-tcp
+uci set firewall.@redirect[-1].src=wan
+uci set firewall.@redirect[-1].src_dport=64738
+uci set firewall.@redirect[-1].dest=lan
+uci set firewall.@redirect[-1].dest_ip=192.0.2.151
+uci set firewall.@redirect[-1].dest_port=64738
+uci set firewall.@redirect[-1].proto=tcp
+uci set firewall.@redirect[-1].target=DNAT
 
-1. Log in to `http://192.0.2.1`.
-2. **Network -> Firewall -> Port Forwards** (GL.iNet: *Applications -> Port
-   Forwarding*).
-3. Add the three rules above (Mumble needs one TCP and one UDP entry).
-4. Set the internal host to `192.0.2.151` and keep external = internal port.
-5. Apply, then verify from off-network (phone on cellular):
-   `nc -vz -u <public-ip> 51820` and open the Mumble client against
-   `<public-ip>:64738`.
+uci add firewall redirect
+uci set firewall.@redirect[-1].name=capvsar-mumble-udp
+uci set firewall.@redirect[-1].src=wan
+uci set firewall.@redirect[-1].src_dport=64738
+uci set firewall.@redirect[-1].dest=lan
+uci set firewall.@redirect[-1].dest_ip=192.0.2.151
+uci set firewall.@redirect[-1].dest_port=64738
+uci set firewall.@redirect[-1].proto=udp
+uci set firewall.@redirect[-1].target=DNAT
+
+uci commit firewall && /etc/init.d/firewall reload
+```
+
+Verify from off-network (phone on cellular), pointing a Mumble client at
+`203.0.113.10:64738`.
+
+## Adding CAP V-SAR participants to the VPN
+
+Everything except Mumble rides the existing router tunnel. Add one peer per
+person, in the 10.0.0.10+ range to stay clear of the existing peers.
+
+Easiest path is the GL.iNet UI: **VPN -> WireGuard Server -> Add Client**,
+which generates the keypair and shows a QR code for the phone app.
+
+From the shell, additively and without reloading the interface (so existing
+tunnels including the GCP link are never dropped):
+
+```sh
+NAME=capvsar-instructor; IP=10.0.0.10
+PRIV=$(wg genkey); PUB=$(echo "$PRIV" | wg pubkey); PSK=$(wg genpsk)
+uci add wireguard_server peers
+uci set wireguard_server.@peers[-1].name="$NAME"
+uci set wireguard_server.@peers[-1].client_ip="$IP"
+uci set wireguard_server.@peers[-1].public_key="$PUB"
+uci set wireguard_server.@peers[-1].private_key="$PRIV"
+uci set wireguard_server.@peers[-1].presharedkey="$PSK"
+uci commit wireguard_server
+echo "$PSK" > /tmp/psk.$$
+wg set wgserver peer "$PUB" preshared-key /tmp/psk.$$ allowed-ips "$IP/32"
+rm -f /tmp/psk.$$
+```
+
+Suggested allocation: instructor 10.0.0.10, IC .11, AOBD .12, MRO .13,
+MP1 .14, MO1 .15, MS1 .16, spare .17.
 
 ## Dynamic WAN address
 
-The current WAN address is `203.0.113.10`. If it is not static, WireGuard
-peers will break when it changes, because each peer config hard-codes the
-endpoint.
-
-Fix before handing configs out: point a hostname such as
-`vpn.rpc-cyberflight.com` at the WAN address with DDNS (OpenWrt has a DDNS
-package; GL.iNet ships its own DDNS service), then set `WG_SERVERURL` in
-`.env` to that hostname and re-run `scripts/deploy.sh`. Peers regenerate with
-the hostname instead of the raw address.
+`203.0.113.10` is the current WAN address. If it is not static, set up DDNS
+(GL.iNet ships one; OpenWrt has the `ddns-scripts` package) and give
+participants a hostname such as `vpn.rpc-cyberflight.com` rather than the raw
+address, so peer configs survive a lease change.
 
 ## Deliberately NOT exposed
 
-| Service | Reach it via |
-|---|---|
-| Mission base web client | WireGuard |
-| Scenario / tracking services | WireGuard |
-| Gitea (192.0.2.121) | WireGuard |
-| Proxmox nodes, NFS, Ollama | WireGuard, LAN only |
-| SSH to any host | WireGuard, LAN only |
+Mission base client, scenario and tracking services, Gitea, Proxmox, NFS,
+Ollama, SSH. All of these are reachable over the WireGuard tunnel only.

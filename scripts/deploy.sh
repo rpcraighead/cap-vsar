@@ -23,8 +23,8 @@ docker compose up -d
 echo "==> status"
 docker compose ps
 echo
-echo "Mumble:    $(hostname -I | awk '{print $1}'):64738   (server password in .env)"
-echo "WireGuard: peer configs in wireguard/config/peer_*/  (run scripts/wg-peer.sh to list)"
+echo "Mumble: $(hostname -I | awk '{print $1}'):64738   (server password in .env)"
 echo
-echo "NOTE: neither is reachable from the internet until the router forwards"
-echo "      the ports in infra/ROUTER.md to this host."
+echo "NOTE: not reachable from the internet until the router forwards 64738"
+echo "      TCP+UDP to this host - see infra/ROUTER.md."
+echo "      WireGuard runs on the ROUTER (wgserver), not on this host."

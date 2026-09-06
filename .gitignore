@@ -1,5 +1,4 @@
 .env
-wireguard/config/
 mumble/data/
 *.log
 __pycache__/

@@ -12,7 +12,6 @@ implementation plan has not started.
 docker-compose.yml     Mumble + WireGuard service stack
 .env.example           copy to .env and fill in (never commit .env)
 mumble/                voice server config template
-wireguard/             peer configs (gitignored - they contain private keys)
 scripts/               deploy, firewall, peer handout
 infra/ROUTER.md        the two port forwards this needs, and nothing more
 docs/                  plan, CONOPS, channel structure
@@ -39,13 +38,21 @@ cp .env.example .env      # fill in secrets
 
 ## Exposure model
 
-Only two things face the internet, both by explicit router forward:
+One thing faces the internet, by explicit router forward:
 
 - **Mumble** (64738 TCP+UDP) - so non-technical mission base staff can join a
   voice net without installing a VPN client. Server password required.
-- **WireGuard** (51820 UDP) - everything else rides this.
 
-Nothing web-facing is public. See `infra/ROUTER.md`.
+Everything else rides the **WireGuard server already running on the
+GL-MT6000** (`wgserver`, UDP 51820, 10.0.0.0/24). It terminates on the
+router's own WAN and needs no forward. Participants get a peer there; see
+`infra/ROUTER.md`.
+
+Do not run a second WireGuard on this host. An earlier draft did, and
+forwarding 51820 to it would have hijacked the router tunnel, dropping remote
+access and the GCP site-to-site link.
+
+Nothing web-facing is public.
 
 ## Documents
 
