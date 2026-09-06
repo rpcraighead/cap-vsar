@@ -281,6 +281,15 @@ async def set_effects(body: dict):
     return hub.scenario["effects"]
 
 
+@app.get("/api/sorties")
+def list_sorties():
+    with db() as c:
+        return [dict(r) for r in c.execute(
+            "SELECT s.id, s.name, s.started, s.stopped, s.revealed,"
+            "  (SELECT COUNT(*) FROM positions p WHERE p.sortie_id=s.id) AS points"
+            " FROM sorties s ORDER BY s.started DESC LIMIT 50")]
+
+
 @app.get("/api/sorties/{oid}/track")
 def track(oid: str):
     with db() as c:
@@ -415,6 +424,12 @@ app.mount("/static", StaticFiles(directory=STATIC), name="static")
 @app.get("/")
 def index():
     return FileResponse(STATIC / "index.html")
+
+
+@app.get("/debrief")
+def debrief():
+    """Replay a recorded sortie against beacon truth. The product, per the plan."""
+    return FileResponse(STATIC / "debrief.html")
 
 
 @app.get("/base")
