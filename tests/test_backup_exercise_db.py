@@ -8,6 +8,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "scripts"))
@@ -58,6 +59,45 @@ class BackupExerciseDbTests(unittest.TestCase):
         count = check.execute("SELECT COUNT(*) FROM bearings").fetchone()[0]
         check.close()
         self.assertEqual(count, 2)
+
+    def test_transient_failure_is_retried_and_leaves_no_debris(self):
+        """Caught live against ms01's real NFS3 mount: the first attempt at a
+        freshly-touched destination directory raised sqlite3.OperationalError
+        with no retry of its own; the very next attempt succeeded clean.
+        sqlite3.Connection is a C type and can't be monkeypatched directly,
+        so this fails the connection itself the first time round instead."""
+        real_connect = sqlite3.connect
+        # backup()'s destination path is timestamped and unknown in advance,
+        # so intercept at the sqlite3.connect layer generically: each attempt
+        # makes two connect() calls (source, then destination) - fail only
+        # the destination connect of the first attempt.
+        connect_calls = []
+
+        def flaky_connect(target, *a, **kw):
+            connect_calls.append(target)
+            if len(connect_calls) == 2:
+                raise sqlite3.OperationalError("disk I/O error")
+            return real_connect(target, *a, **kw)
+
+        with patch.object(bx.sqlite3, "connect", flaky_connect), \
+                patch.object(bx.time, "sleep"):
+            dest = bx.backup(self.source, self.dest_dir, retries=2)
+
+        self.assertTrue(dest.exists())
+        self.assertGreater(dest.stat().st_size, 0)
+        # No stale 0-byte file left behind from the failed first attempt.
+        self.assertEqual(len(list(self.dest_dir.glob("exercise-*.db"))), 1)
+
+    def test_exhausting_all_retries_is_a_loud_error_with_no_debris(self):
+        def always_fails(target, *a, **kw):
+            raise sqlite3.OperationalError("disk I/O error")
+
+        with patch.object(bx.sqlite3, "connect", always_fails), \
+                patch.object(bx.time, "sleep"):
+            with self.assertRaises(SystemExit):
+                bx.backup(self.source, self.dest_dir, retries=1)
+
+        self.assertEqual(list(self.dest_dir.glob("exercise-*.db")), [])
 
     def test_prune_removes_only_backups_older_than_the_window(self):
         old = bx.backup(self.source, self.dest_dir)

@@ -33,7 +33,7 @@ DEFAULT_DEST_DIR = ROOT / "backups" / "exercise-db"
 DEFAULT_KEEP_DAYS = 14
 
 
-def backup(source: Path, dest_dir: Path) -> Path:
+def backup(source: Path, dest_dir: Path, retries: int = 2) -> Path:
     if not source.exists():
         raise SystemExit(f"{source} does not exist - nothing to back up")
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -43,13 +43,36 @@ def backup(source: Path, dest_dir: Path) -> Path:
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S-%fZ")
     dest = dest_dir / f"exercise-{stamp}.db"
 
-    src_con = sqlite3.connect(f"file:{source}?mode=ro", uri=True)
-    dst_con = sqlite3.connect(str(dest))
-    try:
-        src_con.backup(dst_con)
-    finally:
-        dst_con.close()
-        src_con.close()
+    # A network destination (this is meant to run against NFS-mounted cold
+    # storage) can hit a transient I/O error that a local disk essentially
+    # never does - confirmed live against ms01's actual NFS3 mount: the
+    # first attempt against a freshly-touched directory raised
+    # "disk I/O error" from inside Connection.backup() with no retry of its
+    # own, and the next two attempts immediately succeeded. A cron job with
+    # no one watching needs to ride that out rather than leave a 0-byte file
+    # and a bare traceback once a month.
+    last_exc: Exception | None = None
+    for attempt in range(retries + 1):
+        if attempt:
+            time.sleep(2)
+        dest.unlink(missing_ok=True)
+        src_con = dst_con = None
+        try:
+            src_con = sqlite3.connect(f"file:{source}?mode=ro", uri=True)
+            dst_con = sqlite3.connect(str(dest))
+            src_con.backup(dst_con)
+            last_exc = None
+            break
+        except sqlite3.OperationalError as exc:
+            last_exc = exc
+        finally:
+            if dst_con is not None:
+                dst_con.close()
+            if src_con is not None:
+                src_con.close()
+    if last_exc is not None:
+        dest.unlink(missing_ok=True)
+        raise SystemExit(f"backup of {source} failed after {retries + 1} attempts: {last_exc}")
 
     # A backup that didn't actually copy anything is worse than none - it
     # looks like success right up until it's needed.
