@@ -3,6 +3,34 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-09 — CAP-VSAR Website unification: Distributed SAREX, Virtual ICS & CalTopo integration
+
+**Status: completed, validated across all HTML documents with zero broken anchors/assets.**
+
+Unified all recent system developments, tactical avionics enhancements, exercise director workflows, and mission maps into the public CAP-branded marketing and technical website (`website/`):
+
+- **Created `website/sarex.html` (Distributed SAREX & Incident Command System)**:
+  - Articulates the monthly training cadence rationale (overcoming live flight friction, avgas fuel costs, weather groundings, and maintenance bottlenecks).
+  - Contrasts three operational modalities: In-Person Squadron Lab, Hybrid Multi-Station Base, and 100% Completely Virtual Distributed Wing SAREX.
+  - Documents the complete simulated ICS hierarchy (Incident Commander, Air Operations Branch Director, Operations/Planning, Mission Radio Operators 1 & 2 with Form 110 comms, Ground UDF teams with mobile PTT, and Mission Pilot / Observer aircrews).
+  - Highlights CalTopo Phase 2 Common Operating Picture (COP) integration: live telemetry streaming, bearing line-of-position (LOP) vector triangulation, and bi-directional SAR pattern exchange (.fms / GPX).
+  - Outlines 4 realistic operational search scenarios (Pauma Valley 406 ELT, Mountain Repeater Net, Air-to-Ground Handoff, Stuck-MIC Net Recovery).
+- **Updated `website/operations.html`**:
+  - Added **Exercise Director Setup & Mobile QR Dispatch** section detailing 1–4 aircraft stepper provisioning and scannable QR badge cards for rapid smartphone onboarding.
+  - Added **California Wing Mountain Repeaters Matrix** detailing standard national dual-pair conventions (148.125 / 143.550 MHz primary, 148.150 / 143.700 MHz secondary) and summit relay PL/NAC codes (Mt. Diablo, Santiago Peak, Mt. Palomar, Oat Mountain, Blue Ridge, Palm Springs).
+  - Corrected historical APX 6500 references to APX 4500 (resolving review finding D-2).
+- **Updated `website/cockpit.html`**:
+  - Added **Tactical Communications & Audio Integration** section covering Technisonic TDFM-136B dedicated Guard receiver (GD1/GD2), 60s transmit time-out timer (TOT), 20-channel priority scan engine, 240 memory channels, and Garmin GMA 1347 Table 6A.3.2 ICS isolation modes and rolling 2.5-minute digital clearance recorder.
+  - Documented acoustic RF SNR hiss degradation (`elt_noise.wav`) on Becker 517 and RT-600 direction finding instruments.
+  - Upgraded footer to standard 4-column brand grid.
+- **Updated `website/technical.html` & `website/deployment.html`**:
+  - Added automated test verification suite section (`#testing`) validating `test_engine.py`, `test_faceplate.py`, and `test_panel.py`.
+  - Corrected flight planner tech stack specification (Flask/Gunicorn, not Node.js/Vite) in `technical.html`.
+  - Added Step 5 to deployment guide documenting `scripts/build_station_kit.py` and `capvsar_station.ini` for turnkey multi-station aircraft provisioning.
+- **Cross-Navigation & Link Integrity**:
+  - Added `Distributed SAREX & ICS` to navigation bars across all 6 pages.
+  - Verified 100% link, image, and anchor target resolution across all pages with zero broken references.
+
 ## 2026-09-09 — O-4/O-5/O-6 live on ms01; two independent git histories reconciled; NFS3 backup target
 
 **Status: deployed and verified on ms01 directly, not just tested locally.**

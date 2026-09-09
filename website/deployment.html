@@ -23,6 +23,7 @@
         <li><a href="index.html" class="nav-link">Overview</a></li>
         <li><a href="cockpit.html" class="nav-link">Cockpit & Avionics</a></li>
         <li><a href="operations.html" class="nav-link">Base & Operations</a></li>
+        <li><a href="sarex.html" class="nav-link">Distributed SAREX & ICS</a></li>
         <li><a href="technical.html" class="nav-link">Engineering Specs</a></li>
         <li><a href="deployment.html" class="nav-link active">Deployment</a></li>
       </ul>
@@ -317,6 +318,33 @@ pytest tests/test_engine.py tests/test_faceplate.py tests/test_panel.py -v</code
           </div>
         </div>
       </div>
+
+      <!-- Step 5 -->
+      <div style="margin-top: 28px;">
+        <h3 style="font-size: 1.25rem; color: var(--cap-navy); margin-bottom: 8px;">Step 5: Provision Multi-Aircraft Station Kits</h3>
+        <p style="color: var(--text-secondary); margin-bottom: 12px;">
+          For multi-station squadron labs or remote distributed aircrews, generate turnkey self-contained installer packages for each aircraft. The builder generates <code>capvsar_station.ini</code> (console URL, callsign, and authentication key) bundled with pristine X-Plane plugins and Air Manager instruments:
+        </p>
+        <div class="tech-box">
+          <div class="tech-header">
+            <span class="tech-title">bash — Generate Station Kits</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <div class="tech-body">
+            <pre><code># Generate standalone installer zip for Aircraft 2 (CAP-2)
+python3 scripts/build_station_kit.py \
+  --callsign "CAP-2" \
+  --console "http://192.0.2.151:8700" \
+  --zip
+
+# Generates: dist/capvsar_station_CAP-2.zip containing:
+#  ├── PI_capvsar_df.py      (Tracked plugin source, byte-identical across fleet)
+#  ├── capvsar_station.ini   (Station console URL, callsign, and auth key)
+#  ├── instruments/          (Becker 517, RT-600, TDFM-136B, GMA 1347)
+#  └── README.md             (Target copy paths for X-Plane & Air Manager)</code></pre>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -408,17 +436,18 @@ pytest tests/test_engine.py tests/test_faceplate.py tests/test_panel.py -v</code
             <li><a href="cockpit.html#mo-station" class="footer-link">MO Station Panel</a></li>
             <li><a href="cockpit.html#df-heads" class="footer-link">Becker SAR-DF 517</a></li>
             <li><a href="cockpit.html#df-heads" class="footer-link">RHOTHETA RT-600</a></li>
-            <li><a href="cockpit.html#tdfm" class="footer-link">TDFM-136B Radio</a></li>
+            <li><a href="cockpit.html#tactical-comms" class="footer-link">TDFM-136B Radio</a></li>
           </ul>
         </div>
 
         <div>
           <h5 class="footer-col-title">Operations</h5>
           <ul class="footer-links">
+            <li><a href="sarex.html" class="footer-link">Distributed SAREX & ICS</a></li>
+            <li><a href="operations.html#exercise-setup" class="footer-link">Fleet & Exercise Setup</a></li>
             <li><a href="operations.html#base-radio" class="footer-link">MRO Base Radio</a></li>
+            <li><a href="operations.html#repeaters" class="footer-link">CA Wing Repeaters</a></li>
             <li><a href="operations.html#flight-planner" class="footer-link">N499CP Flight Planner</a></li>
-            <li><a href="operations.html#mission-base" class="footer-link">Mission Base Map</a></li>
-            <li><a href="operations.html#debrief" class="footer-link">Debrief & Scoring</a></li>
             <li><a href="operations.html#form-110" class="footer-link">CAP Form 110 Comms</a></li>
           </ul>
         </div>

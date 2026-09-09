@@ -23,6 +23,7 @@
         <li><a href="index.html" class="nav-link">Overview</a></li>
         <li><a href="cockpit.html" class="nav-link">Cockpit & Avionics</a></li>
         <li><a href="operations.html" class="nav-link active">Base & Operations</a></li>
+        <li><a href="sarex.html" class="nav-link">Distributed SAREX & ICS</a></li>
         <li><a href="technical.html" class="nav-link">Engineering Specs</a></li>
         <li><a href="deployment.html" class="nav-link">Deployment</a></li>
       </ul>
@@ -60,7 +61,7 @@
   <section class="section" id="base-radio">
     <div class="container">
       <div class="spotlight-row">
-        <div class="spotlight-img-frame" data-lightbox="images/fig_radio_dual.png" data-caption="CAP V-SAR Dual Base Radio Console - Motorola APX 6500 (VHF-FM) and Icom IC-A120 (VHF-AM) operating simultaneously">
+        <div class="spotlight-img-frame" data-lightbox="images/fig_radio_dual.png" data-caption="CAP V-SAR Dual Base Radio Console - Motorola APX 4500 (VHF-FM) and Icom IC-A120 (VHF-AM) operating simultaneously">
           <img src="images/fig_radio_dual.png" alt="Dual Base Radio Console">
         </div>
         <div class="spotlight-content">
@@ -72,7 +73,7 @@
           <ul class="feature-list">
             <li class="feature-list-item">
               <span class="feature-check-icon">✓</span>
-              <span><b>Dual Radio Emulation:</b> Run both the Motorola APX 6500 and Icom IC-A120 concurrently in a side-by-side or stacked rack configuration (<code>/radio?mode=dual</code>).</span>
+              <span><b>Dual Radio Emulation:</b> Run both the Motorola APX 4500 and Icom IC-A120 concurrently in a side-by-side or stacked rack configuration (<code>/radio?mode=dual</code>).</span>
             </li>
             <li class="feature-list-item">
               <span class="feature-check-icon">✓</span>
@@ -92,14 +93,14 @@
 
       <!-- Radios Detail Grid -->
       <div class="card-grid" style="grid-template-columns: repeat(2, 1fr); margin-top: 40px;">
-        <!-- APX 6500 Card -->
+        <!-- APX 4500 Card -->
         <div class="card">
-          <div class="card-media" data-lightbox="images/fig_radio_apx.png" data-caption="Motorola APX 6500 VHF-FM Base Radio - P25 Tactical Net Console">
-            <img src="images/fig_radio_apx.png" alt="Motorola APX 6500 Radio">
+          <div class="card-media" data-lightbox="images/fig_radio_apx.png" data-caption="Motorola APX 4500 VHF-FM Base Radio - P25 Tactical Net Console">
+            <img src="images/fig_radio_apx.png" alt="Motorola APX 4500 Radio">
           </div>
           <div class="card-body">
             <div class="card-tag">VHF-FM Tactical Communications</div>
-            <h3 class="card-title">Motorola APX 6500 VHF-FM Console</h3>
+            <h3 class="card-title">Motorola APX 4500 VHF-FM Console</h3>
             <p class="card-desc">
               The primary land mobile radio for CAP incident command and wing-wide tactical communications. Emulates authentic digital and analog channel operations.
             </p>
@@ -150,7 +151,7 @@
       </div>
 
       <!-- CAP Form 110 Comms Log Spotlight -->
-      <div class="card" style="margin-top: 32px; background: linear-gradient(135deg, #ffffff 0%, var(--cap-navy-tint) 100%); border-left: 5px solid var(--cap-navy);">
+      <div class="card" id="form-110" style="margin-top: 32px; background: linear-gradient(135deg, #ffffff 0%, var(--cap-navy-tint) 100%); border-left: 5px solid var(--cap-navy);">
         <div class="card-body" style="padding: 28px;">
           <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
             <div>
@@ -338,6 +339,254 @@
     </div>
   </section>
 
+  <!-- Exercise Director Setup & Participant QR Dispatch -->
+  <section id="exercise-setup" class="section">
+    <div class="container">
+      <div class="section-header">
+        <span class="badge badge-gold">Rapid Onboarding</span>
+        <h2 class="section-title">Exercise Director Setup & Mobile QR Dispatch</h2>
+        <p class="section-desc">
+          Spin up multi-aircraft search exercises in seconds. The Director Setup wizard automatically allocates aircraft slots, assigns crew positions, provisions tactical communications watches, and renders instant scannable QR badge cards for mobile and browser terminals.
+        </p>
+      </div>
+
+      <div class="grid grid-2" style="margin-bottom: 30px;">
+        <div class="card">
+          <div class="card-header">
+            <span class="badge badge-primary">Fleet Scaling</span>
+            <h3 class="card-title">1–4 Aircraft Stepper & Aircrew Allocations</h3>
+          </div>
+          <p style="color: var(--cap-gray-600); margin-bottom: 16px; font-size: 0.95rem;">
+            Instructors can select from 1 to 4 participating search aircraft with a single click. Tail numbers (<code>N499CP</code>, <code>N992CP</code>, <code>N104CP</code>, <code>N722CP</code>), direction finder instruments (Becker SAR-DF 517 or RHOTHETA RT-600), and aircrew positions are provisioned automatically.
+          </p>
+          <div style="background: var(--cap-gray-50); border: 1px solid var(--cap-gray-200); border-radius: var(--radius-md); padding: 16px; margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+              <span style="font-weight: 700; font-size: 0.9rem; color: var(--cap-navy);">Select Fleet Size:</span>
+              <div style="display: flex; gap: 6px;">
+                <span class="badge badge-outline" style="background:#fff; border-color:var(--cap-gold); color:var(--cap-navy); font-weight:700;">1 Plane</span>
+                <span class="badge badge-primary" style="font-weight:700;">2 Planes (Default)</span>
+                <span class="badge badge-outline" style="background:#fff; border-color:var(--cap-gray-300); color:var(--cap-gray-600);">3 Planes</span>
+                <span class="badge badge-outline" style="background:#fff; border-color:var(--cap-gray-300); color:var(--cap-gray-600);">4 Planes</span>
+              </div>
+            </div>
+            <div style="font-size: 0.85rem; color: var(--cap-gray-600); line-height: 1.5;">
+              Each aircraft generates two dedicated station logins: <b>Mission Pilot (MP)</b> with flight controls and G1000 SVT PFD/MFD telemetry, and <b>Mission Observer (MO)</b> with DF instrument head, Becker/RT-600 controls, and TDFM-136B airborne tactical FM.
+            </div>
+          </div>
+          <ul class="feature-list">
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Independent X-Plane Instances:</b> Each tail connects to its own simulator station via UDP telemetry port mapping (49000, 49001, 49002, 49003).</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Customizable Callsigns:</b> Preset with standard CAP operational designations (CAP499, CAP992, CAP104, CAP722).</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="badge badge-gold">Security & Access</span>
+            <h3 class="card-title">Role-Based Access Control (RBAC) & QR Cards</h3>
+          </div>
+          <p style="color: var(--cap-gray-600); margin-bottom: 16px; font-size: 0.95rem;">
+            Zero friction on exercise morning: participants don't need pre-registered user accounts. The instructor generates the session roster and projects or prints access cards. Scanning the QR code logs the cadet or officer directly into their designated operational seat.
+          </p>
+          <div style="background: var(--cap-navy-dark); color: #fff; border-radius: var(--radius-md); padding: 16px; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; margin-bottom: 10px;">
+              <span style="font-weight: 700; font-size: 0.85rem; color: var(--cap-gold); font-family: var(--font-mono);">CAP-VSAR ACCESS BADGE</span>
+              <span class="badge badge-outline" style="border-color: rgba(255,255,255,0.3); color:#fff; font-size:0.75rem;">TOKEN #740284</span>
+            </div>
+            <div style="display: flex; gap: 14px; align-items: center;">
+              <div style="background: #fff; padding: 6px; border-radius: 4px; display: inline-block;">
+                <div style="width: 64px; height: 64px; background: repeating-conic-gradient(#000 0% 25%, #fff 0% 50%) 50% / 16px 16px; border: 2px solid #000;"></div>
+              </div>
+              <div style="font-size: 0.85rem;">
+                <div style="font-weight: 700; color: #fff;">Role: Mission Radio Operator 1</div>
+                <div style="color: #94a3b8; font-size: 0.8rem; margin: 2px 0;">Base Tactical FM & Form 110 Log</div>
+                <div style="color: var(--cap-gold); font-family: var(--font-mono); font-size: 0.85rem; font-weight:700;">Code: MRO-1A</div>
+              </div>
+            </div>
+          </div>
+          <ul class="feature-list">
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Role-Guarded Endpoints:</b> URL enforcement prevents student aircrews from accessing instructor god-view consoles or ELT relocation controls.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Mobile PTT Integration:</b> Ground UDF searchers scanning their badges open an HTML5 audio station with low-latency WebRTC Push-to-Talk.</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- California Wing Mountain Repeaters Section -->
+  <section id="repeaters" class="section" style="background: var(--cap-gray-50); border-top: 1px solid var(--cap-gray-200); border-bottom: 1px solid var(--cap-gray-200);">
+    <div class="container">
+      <div class="section-header">
+        <span class="badge badge-primary">Tactical RF Infrastructure</span>
+        <h2 class="section-title">California Wing Tactical Repeaters Matrix</h2>
+        <p class="section-desc">
+          Realistic search missions require authentic communications architecture. CAP V-SAR models the national high-band repeater pair convention with authentic CTCSS analog PL tones and P25 NAC codes across mountain summit relays in California Wing.
+        </p>
+      </div>
+
+      <div class="grid grid-2" style="margin-bottom: 24px;">
+        <div class="card">
+          <h3 class="card-title" style="margin-bottom: 10px;">National Repeater Pair Convention</h3>
+          <p style="color: var(--cap-gray-600); font-size: 0.95rem; margin-bottom: 14px;">
+            Civil Air Patrol tactical VHF-FM repeaters nationwide operate on standard paired offset splits. Airborne TDFM-136B transceivers and base station Motorola APX 4500 radios transmit on the repeater input and receive the high-power summit retransmission.
+          </p>
+          <table class="data-table" style="font-size: 0.85rem;">
+            <thead>
+              <tr>
+                <th>Channel Pair</th>
+                <th>Base / Air TX (Input)</th>
+                <th>Repeater TX (Output)</th>
+                <th>Offset</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><b>Primary Pair</b></td>
+                <td><code class="code-badge">143.5500 MHz</code></td>
+                <td><code class="code-badge">148.1250 MHz</code></td>
+                <td>+4.575 MHz</td>
+              </tr>
+              <tr>
+                <td><b>Secondary Pair</b></td>
+                <td><code class="code-badge">143.7000 MHz</code></td>
+                <td><code class="code-badge">148.1500 MHz</code></td>
+                <td>+4.450 MHz</td>
+              </tr>
+              <tr>
+                <td><b>Simplex Tactical</b></td>
+                <td><code class="code-badge">148.1500 MHz</code></td>
+                <td><code class="code-badge">148.1500 MHz</code></td>
+                <td>Direct (Talkaround)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title" style="margin-bottom: 10px;">Dual-Mode Analog CTCSS & P25 Digital NAC</h3>
+          <p style="color: var(--cap-gray-600); font-size: 0.95rem; margin-bottom: 14px;">
+            To prevent co-channel interference across adjacent mountain ridges, each summit site uses a distinct sub-audible tone (Continuous Tone Coded Squelch System) or 12-bit digital Network Access Code.
+          </p>
+          <div style="background: #fff; border: 1px solid var(--cap-gray-200); border-radius: var(--radius-md); padding: 14px; margin-bottom: 12px;">
+            <div style="display: flex; gap: 10px; align-items: baseline; margin-bottom: 6px;">
+              <span class="badge badge-gold" style="font-size: 0.75rem;">Physics Simulation</span>
+              <span style="font-weight: 700; font-size: 0.85rem; color: var(--cap-navy);">Tone squelch rejection modeled in real time</span>
+            </div>
+            <p style="font-size: 0.85rem; color: var(--cap-gray-600); margin: 0; line-height: 1.45;">
+              If a student transmits with an incorrect PL tone or fails to program the CTCSS encode tone on the TDFM-136B front panel, the simulated summit receiver squelch remains clamped, training aircrews on proper tactical channel initialization.
+            </p>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <div class="stat-box" style="flex:1; padding: 12px;">
+              <div class="stat-value" style="font-size: 1.3rem;">500+</div>
+              <div class="stat-label">National Repeaters</div>
+            </div>
+            <div class="stat-box" style="flex:1; padding: 12px;">
+              <div class="stat-value" style="font-size: 1.3rem;">Dual-Mode</div>
+              <div class="stat-label">Analog & P25 Phase 1</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="overflow-x: auto;">
+        <h3 class="card-title" style="margin-bottom: 14px;">Simulated California Wing Mountain Repeater Sites</h3>
+        <table class="data-table" style="font-size: 0.9rem;">
+          <thead>
+            <tr>
+              <th>Site ID</th>
+              <th>Mountain Summit / Location</th>
+              <th>Repeater Freq</th>
+              <th>Analog PL (CTCSS)</th>
+              <th>Digital NAC (P25)</th>
+              <th>Tactical Coverage Zone</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="badge badge-primary">R02</span></td>
+              <td><b>Mt. Diablo (Primary)</b></td>
+              <td><code>148.1500 MHz</code></td>
+              <td><code>162.2 Hz</code></td>
+              <td><code>$656</code></td>
+              <td>San Francisco Bay Area, Sacramento Delta, Central Valley North</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-outline">R39</span></td>
+              <td><b>Mt. Diablo (Secondary)</b></td>
+              <td><code>148.1250 MHz</code></td>
+              <td><code>162.2 Hz</code></td>
+              <td><code>$656</code></td>
+              <td>Bay Area Auxiliary Net & Multi-Group SAR Channels</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-primary">R62</span></td>
+              <td><b>Santiago Peak (Primary)</b></td>
+              <td><code>148.1500 MHz</code></td>
+              <td><code>186.2 Hz</code></td>
+              <td><code>$746</code></td>
+              <td>Orange County, Los Angeles Basin, Inland Empire</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-outline">R59</span></td>
+              <td><b>Santiago Peak (Secondary)</b></td>
+              <td><code>148.1250 MHz</code></td>
+              <td><code>186.2 Hz</code></td>
+              <td><code>$746</code></td>
+              <td>Southern California Flight Following & Air-to-Ground Relay</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-primary">R20</span></td>
+              <td><b>Mt. Palomar</b></td>
+              <td><code>148.1500 MHz</code></td>
+              <td><code>141.3 Hz</code></td>
+              <td><code>$585</code></td>
+              <td>San Diego County, Pauma Valley Search Zone, Anza-Borrego Desert</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-primary">R28</span></td>
+              <td><b>Oat Mountain</b></td>
+              <td><code>148.1500 MHz</code></td>
+              <td><code>156.7 Hz</code></td>
+              <td><code>$61F</code></td>
+              <td>San Fernando Valley, Santa Clarita, Ventura County Corridor</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-primary">R12</span></td>
+              <td><b>Blue Ridge</b></td>
+              <td><code>148.1500 MHz</code></td>
+              <td><code>173.8 Hz</code></td>
+              <td><code>$6CA</code></td>
+              <td>San Gabriel Mountains, Antelope Valley, Mojave Approach</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-primary">R35</span></td>
+              <td><b>Palm Springs</b></td>
+              <td><code>148.1250 MHz</code></td>
+              <td><code>97.4 Hz</code></td>
+              <td><code>$3CE</code></td>
+              <td>Coachella Valley, San Gorgonio Pass, Low Desert SAR Basin</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="margin-top: 12px; font-size: 0.8rem; color: var(--cap-gray-500);">
+          * Frequency and tone assignments compiled from public Civil Air Patrol repeater registries for simulation and training realism.
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Call to Action Banner -->
   <section class="section" style="padding: 40px 0;">
     <div class="container">
@@ -391,10 +640,11 @@
         <div>
           <h5 class="footer-col-title">Operations</h5>
           <ul class="footer-links">
+            <li><a href="sarex.html" class="footer-link">Distributed SAREX & ICS</a></li>
+            <li><a href="operations.html#exercise-setup" class="footer-link">Fleet & Exercise Setup</a></li>
             <li><a href="operations.html#base-radio" class="footer-link">MRO Base Radio</a></li>
+            <li><a href="operations.html#repeaters" class="footer-link">CA Wing Repeaters</a></li>
             <li><a href="operations.html#flight-planner" class="footer-link">N499CP Flight Planner</a></li>
-            <li><a href="operations.html#mission-base" class="footer-link">Mission Base Map</a></li>
-            <li><a href="operations.html#debrief" class="footer-link">Debrief & Scoring</a></li>
             <li><a href="operations.html#form-110" class="footer-link">CAP Form 110 Comms</a></li>
           </ul>
         </div>

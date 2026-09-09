@@ -23,6 +23,7 @@
         <li><a href="index.html" class="nav-link">Overview</a></li>
         <li><a href="cockpit.html" class="nav-link active">Cockpit & Avionics</a></li>
         <li><a href="operations.html" class="nav-link">Base & Operations</a></li>
+        <li><a href="sarex.html" class="nav-link">Distributed SAREX & ICS</a></li>
         <li><a href="technical.html" class="nav-link">Engineering Specs</a></li>
         <li><a href="deployment.html" class="nav-link">Deployment</a></li>
       </ul>
@@ -173,7 +174,7 @@
       </div>
 
       <!-- Tabbed Views: Becker 517 vs RT-600 -->
-      <div class="tabs-container">
+      <div class="tabs-container" id="df-heads">
         <div class="tab-nav">
           <button class="tab-btn active" data-target="tab-becker">Layout 1: Becker SAR-DF 517 Station</button>
           <button class="tab-btn" data-target="tab-rt600">Layout 2: RHOTHETA RT-600 Modernization</button>
@@ -269,6 +270,79 @@
     </div>
   </section>
 
+  <!-- Tactical Comms & Audio Panel Section -->
+  <section class="section" id="tactical-comms">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-kicker">Tactical Communications</span>
+        <h2 class="section-title">Technisonic TDFM-136B & Garmin GMA 1347 Integration</h2>
+        <p class="section-lead">
+          Airborne tactical communications require specialized features beyond civilian airband VHF. CAP V-SAR implements the full operational specifications of the airborne transceiver and audio management panel.
+        </p>
+      </div>
+
+      <div class="grid grid-2" style="margin-bottom: 24px;">
+        <!-- TDFM-136B Card -->
+        <div class="card" id="tdfm">
+          <div class="card-header">
+            <span class="badge badge-primary">Airborne Transceiver</span>
+            <h3 class="card-title">Technisonic TDFM-136B VHF-FM</h3>
+          </div>
+          <p style="color: var(--cap-gray-600); font-size: 0.95rem; margin-bottom: 14px;">
+            The standard tactical FM transceiver installed across CAP search aircraft, bridging airborne crews with Wing repeaters, ground teams, and local emergency management agencies across 136–174 MHz.
+          </p>
+          <ul class="feature-list">
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Dedicated Guard Receiver (GD1 / GD2):</b> Dual-receiver architecture allows continuous background monitoring of emergency guard channels (168.650 MHz / 121.500 MHz) independent of the selected main channel.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>60-Second Transmit Time-Out Timer (TOT):</b> Prevents accidental stuck-microphone net lockout. Continuous PTT transmits for 60 seconds before automatically clamping RF output and sounding an aural alert.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>20-Channel Priority Scan Engine:</b> Fast channel scanning with programmable priority sampling, allowing crews to monitor squadron base net, air-to-ground tactical, and flight following concurrently.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>240 Memory Channels Across 16 Zones:</b> Full alphanumeric naming for Wing repeater summits, SAR tactical simplex, and inter-agency mutual aid channels.</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- GMA 1347 Audio Panel Card -->
+        <div class="card">
+          <div class="card-header">
+            <span class="badge badge-gold">Audio Management</span>
+            <h3 class="card-title">Garmin GMA 1347 NAV III Audio Panel</h3>
+          </div>
+          <p style="color: var(--cap-gray-600); font-size: 0.95rem; margin-bottom: 14px;">
+            Integrated with the Cessna 182T G1000 suite, routing COM1 (ATC/Airband), COM2 (Flight Following), COM3 (TDFM-136B Tactical FM), and intercom channels across the flight crew.
+          </p>
+          <ul class="feature-list">
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>ICS Isolation Modes (Table 6A.3.2):</b> Pilot can isolate to communicate exclusively with ATC while the Mission Observer and Scanner maintain tactical coordination on COM3 with ground teams without interrupting the pilot.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Digital Clearance Recorder:</b> Continuous rolling 2.5-minute digital audio buffer stores recent transmissions. Observer or pilot can press replay to verify complex latitude/longitude coordinates or ATC clearance readbacks.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Split-COM Operational Capability:</b> Pilot transmits on COM1 (121.5 or CTAF) while Observer simultaneously works COM3 (TDFM FM net) without audio cross-talk or bleed-through.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Acoustic RF SNR Degradation:</b> Direction finder audio reproduces authentic distance-attenuated white noise and hiss (<code>elt_noise.wav</code>), teaching crews to recognize distant ELT flutter.</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Crew Resource Management Section -->
   <section class="section" id="crm-workflow">
     <div class="container-narrow">
@@ -340,9 +414,56 @@
   <!-- Footer -->
   <footer class="footer">
     <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="footer-brand-title">Civil Air Patrol V-SAR</div>
+          <p class="footer-brand-desc">
+            Virtual Search and Rescue Training Platform. Designed for high-fidelity electronic homing, tactical communication, and aircrew crew resource management.
+          </p>
+          <div style="margin-top: 8px;">
+            <span class="badge badge-outline" style="color:#94a3b8; border-color:#334155;">USAF Auxiliary Training Resource</span>
+          </div>
+        </div>
+
+        <div>
+          <h5 class="footer-col-title">Systems</h5>
+          <ul class="footer-links">
+            <li><a href="cockpit.html#airframe-specs" class="footer-link">Cessna 182T NAV III</a></li>
+            <li><a href="cockpit.html#mo-station" class="footer-link">MO Station Panel</a></li>
+            <li><a href="cockpit.html#tab-becker" class="footer-link">Becker SAR-DF 517</a></li>
+            <li><a href="cockpit.html#tab-rt600" class="footer-link">RHOTHETA RT-600</a></li>
+            <li><a href="cockpit.html#tactical-comms" class="footer-link">TDFM-136B Radio</a></li>
+            <li><a href="cockpit.html#tactical-comms" class="footer-link">GMA 1347 Audio Panel</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h5 class="footer-col-title">Operations</h5>
+          <ul class="footer-links">
+            <li><a href="sarex.html" class="footer-link">Distributed SAREX & ICS</a></li>
+            <li><a href="operations.html#exercise-setup" class="footer-link">Fleet & Exercise Setup</a></li>
+            <li><a href="operations.html#base-radio" class="footer-link">MRO Base Radio</a></li>
+            <li><a href="operations.html#repeaters" class="footer-link">CA Wing Repeaters</a></li>
+            <li><a href="operations.html#flight-planner" class="footer-link">N499CP Flight Planner</a></li>
+            <li><a href="operations.html#form-110" class="footer-link">CAP Form 110 Comms</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h5 class="footer-col-title">Engineering</h5>
+          <ul class="footer-links">
+            <li><a href="technical.html#rf-physics" class="footer-link">RF Propagation Physics</a></li>
+            <li><a href="technical.html#datarefs" class="footer-link">Dataref Contracts</a></li>
+            <li><a href="technical.html#cospas" class="footer-link">406 MHz Protocol Specs</a></li>
+            <li><a href="deployment.html" class="footer-link">Installation & Setup</a></li>
+            <li><a href="technical.html#testing" class="footer-link">Test Verification Suite</a></li>
+          </ul>
+        </div>
+      </div>
+
       <div class="footer-bottom">
         <div>&copy; 2026 Civil Air Patrol V-SAR Project. Developed for Virtual Search and Rescue Training.</div>
-        <div><a href="index.html" style="color: #94a3b8;">Back to Home</a> &bull; <a href="operations.html" style="color: #94a3b8;">Next: Base Operations →</a></div>
+        <div>X-Plane 12 &bull; Air Manager 4.2+ &bull; Garmin G1000 SVT</div>
       </div>
     </div>
   </footer>

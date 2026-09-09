@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Distributed SAREX & Virtual ICS — CAP V-SAR</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Navigation Bar -->
+  <header class="navbar">
+    <div class="container navbar-inner">
+      <a href="index.html" class="brand">
+        <span class="brand-badge">CAP V-SAR</span>
+        <div class="brand-title-group">
+          <span class="brand-name">Civil Air Patrol V-SAR</span>
+          <span class="brand-subtitle">Virtual Search & Rescue Simulator</span>
+        </div>
+      </a>
+
+      <ul class="nav-links">
+        <li><a href="index.html" class="nav-link">Overview</a></li>
+        <li><a href="cockpit.html" class="nav-link">Cockpit & Avionics</a></li>
+        <li><a href="operations.html" class="nav-link">Base & Operations</a></li>
+        <li><a href="sarex.html" class="nav-link active">Distributed SAREX & ICS</a></li>
+        <li><a href="technical.html" class="nav-link">Engineering Specs</a></li>
+        <li><a href="deployment.html" class="nav-link">Deployment</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <div class="system-status-indicator">
+          <span class="status-dot"></span>
+          <span>Simulation Active</span>
+        </div>
+        <a href="deployment.html" class="btn btn-primary btn-sm">Get Started</a>
+      </div>
+
+      <button class="mobile-toggle" aria-label="Toggle navigation">☰</button>
+    </div>
+  </header>
+
+  <!-- Hero Banner -->
+  <section class="hero" style="padding: 56px 0 44px 0;">
+    <div class="container">
+      <div class="hero-tag-group">
+        <span class="badge badge-navy">Distributed SAREX Architecture</span>
+        <span class="badge badge-red">FEMA Incident Command System (ICS)</span>
+        <span class="badge badge-gold">CalTopo Common Operating Picture</span>
+      </div>
+      <h1 class="hero-title" style="margin-top: 14px; font-size: 2.8rem;">
+        Distributed SAREX Simulation &amp; <span class="highlight-red">Virtual Incident Command</span>
+      </h1>
+      <p class="hero-description" style="max-width: 860px; margin-top: 12px; font-size: 1.15rem;">
+        Execute full-fidelity Search and Rescue Exercises on a <b>monthly training cadence</b>. Simulate the complete Incident Command System (ICS) structure—connecting pilots, observers, radio operators, and command staff across in-person squadron hangars, hybrid hubs, or 100% virtual distributed networks with real-time <b>CalTopo</b> integration.
+      </p>
+
+      <div class="hero-stats-row" style="margin-top: 32px; max-width: 900px;">
+        <div class="stat-item">
+          <span class="stat-value">Monthly</span>
+          <span class="stat-label">Training Event Frequency</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value">$0 Avgas</span>
+          <span class="stat-label">Zero Flight Hour Budget Burn</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value">100% Virtual</span>
+          <span class="stat-label">Or In-Person / Hybrid Modality</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value">CalTopo</span>
+          <span class="stat-label">Live Common Operating Picture</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 1: The Distributed SAREX Paradigm -->
+  <section class="section" id="cadence">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-kicker">Operational Readiness</span>
+        <h2 class="section-title">The Paradigm Shift: From Rare Sorties to Monthly SAREXs</h2>
+        <p class="section-lead">
+          In-person flight training at the squadron hangar is optimal. But in the real world, fuel budgets, maintenance groundings, weather cancellations, and aircraft availability restrict units to quarterly or biannual SAREX events. CAP V-SAR removes the bottleneck.
+        </p>
+      </div>
+
+      <!-- Comparison Matrix Table -->
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 26%;">Training Dimension</th>
+              <th style="width: 37%; background: rgba(189, 59, 77, 0.06); color: var(--cap-red-dark);">Traditional Live Aircraft SAREX</th>
+              <th style="width: 37%; background: rgba(27, 50, 82, 0.08); color: var(--cap-navy-dark);">CAP V-SAR Distributed SAREX</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>Training Cadence</b></td>
+              <td><b>Quarterly or Biannual</b><br><span style="font-size:0.85rem;color:var(--text-muted);">Constrained by corporate aircraft allocation and weekend weather.</span></td>
+              <td><b style="color:var(--cap-navy);">Monthly or Bi-Weekly On-Demand</b><br><span style="font-size:0.85rem;color:var(--text-muted);">Run evening drills or full-day Saturday exercises anytime.</span></td>
+            </tr>
+            <tr>
+              <td><b>Operational Cost</b></td>
+              <td><b>$3,500 – $6,000+ per weekend</b><br><span style="font-size:0.85rem;color:var(--text-muted);">100LL avgas ($6.50+/gal), engine reserves, maintenance wear.</span></td>
+              <td><b style="color:var(--cap-navy);">$0 Fuel Cost</b><br><span style="font-size:0.85rem;color:var(--text-muted);">Operates on existing squadron PCs, personal laptops, and tablets.</span></td>
+            </tr>
+            <tr>
+              <td><b>Weather &amp; Safety Risk</b></td>
+              <td><b>High Weather Cancellation Rate</b><br><span style="font-size:0.85rem;color:var(--text-muted);">Low ceilings, turbulence, or mountain downdrafts ground fleets. Real mountain canyon DF homing carries inherent flight risk.</span></td>
+              <td><b style="color:var(--cap-navy);">100% Fleet &amp; Weather Availability</b><br><span style="font-size:0.85rem;color:var(--text-muted);">Zero risk. Aircrews practice low-altitude canyon homing, box canyon turns, and wing blanking safely in software.</span></td>
+            </tr>
+            <tr>
+              <td><b>Incident Command (ICS) Rigor</b></td>
+              <td><b>Fragmented Command Staff</b><br><span style="font-size:0.85rem;color:var(--text-muted);">Base staff often idle waiting for aircraft transit; Form 110 logging practice limited by sparse transmissions.</span></td>
+              <td><b style="color:var(--cap-navy);">Continuous Full-Mesh Command Simulation</b><br><span style="font-size:0.85rem;color:var(--text-muted);">Realistic multi-station radio workload, authentic stuck-mic drills, real-time bearing plotting, and Form 110 audits.</span></td>
+            </tr>
+            <tr>
+              <td><b>Debrief &amp; Learning Value</b></td>
+              <td><b>Subjective &amp; Memory-Based</b><br><span style="font-size:0.85rem;color:var(--text-muted);">Crews discuss what they think happened 2 hours after engine shutdown; exact beacon coordinates rarely replayed against tracks.</span></td>
+              <td><b style="color:var(--cap-navy);">Objective GPS Telemetry Debrief</b><br><span style="font-size:0.85rem;color:var(--text-muted);">Scrub second-by-second flight paths, heading vectors, altitude profiles, and LOP bearings against ground truth beacon location.</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 3 Modality Cards -->
+      <div class="grid-3" style="margin-top: 50px;">
+        <div class="card">
+          <div class="card-icon-header">🏢</div>
+          <h3 class="card-title">1. In-Person Squadron Lab</h3>
+          <p class="card-desc">
+            All participants collocated at the squadron hangar or composite facility.
+          </p>
+          <ul class="feature-list">
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Cockpit Station:</b> Pilot at dual-screen yoke rig; Mission Observer at touch Air Manager panel.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Incident Command Post:</b> IC, AOBD, and MROs operate in briefing room with overhead sectional displays.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Ideal For:</b> Initial crew onboarding, qualification check-rides, and face-to-face crew resource management.</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="card" style="border-color: var(--cap-gold); box-shadow: 0 4px 14px rgba(201,151,56,0.15);">
+          <div class="card-icon-header" style="background: var(--cap-gold-tint); color: var(--cap-gold-dark);">🔄</div>
+          <h3 class="card-title">2. Hybrid Multi-Station</h3>
+          <p class="card-desc">
+            Incident Command Post assembled at base; aircrews and ground teams participate from home or remote stations.
+          </p>
+          <ul class="feature-list">
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Base Collocation:</b> Command staff build team cohesion at the squadron CP with real radio gear.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Distributed Flight Stations:</b> Search pilots fly from home setups across the wing without traveling.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Ideal For:</b> Group-level and Wing-level training incorporating distant squadrons into a unified incident.</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-icon-header red">🌐</div>
+          <h3 class="card-title">3. 100% Completely Virtual</h3>
+          <p class="card-desc">
+            Zero physical travel required. Every crew member connects over secure WireGuard VPN or Caddy HTTPS.
+          </p>
+          <ul class="feature-list">
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Zero Friction Onboarding:</b> Participants scan role QR codes on phones or click browser invite links.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Statewide Participation:</b> Aircrews from Northern and Southern California fly joint sorties on the same net.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Ideal For:</b> Monthly weeknight tactical drills, bad-weather contingencies, and specialized radio staff training.</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 2: Virtual Incident Command System (ICS) -->
+  <section class="section section-alt" id="virtual-ics">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-kicker">Command &amp; Control Architecture</span>
+        <h2 class="section-title">Simulating the Incident Command System (ICS) Virtually</h2>
+        <p class="section-lead">
+          CAP V-SAR is not an isolated flight simulator—it is a full-theater command exercise. Every participant occupies a defined FEMA ICS seat with authentic tools, communications channels, and operational responsibilities.
+        </p>
+      </div>
+
+      <!-- ICS Organogram Layout -->
+      <div class="grid-3" style="gap: 24px;">
+        <!-- Column 1: Command & Air Operations -->
+        <div class="card" style="padding: 24px;">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+            <div style="font-size: 1.8rem;">🎖️</div>
+            <div>
+              <h3 style="font-size: 1.2rem; color: var(--cap-navy-dark); margin: 0;">Command &amp; Air Ops</h3>
+              <span style="font-size: 0.8rem; color: var(--cap-red); font-weight: 700;">STRATEGIC &amp; TACTICAL OVERSIGHT</span>
+            </div>
+          </div>
+          <div style="margin-bottom: 16px;">
+            <b style="color: var(--cap-navy-dark);">Incident Commander (IC):</b>
+            <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 4px;">
+              Establishes incident objectives, authorizes search areas, oversees safety, and coordinates with the Air Force Rescue Coordination Center (AFRCC) and County Sheriff.
+            </p>
+          </div>
+          <div style="margin-bottom: 16px;">
+            <b style="color: var(--cap-navy-dark);">Air Operations Branch Director (AOBD):</b>
+            <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 4px;">
+              Assigns search grids, manages loiter fuel endurance, deconflicts multiple aircraft altitudes (e.g. 5,500 ft vs 6,500 ft MSL), and reviews automated telemetry debriefs.
+            </p>
+          </div>
+          <div>
+            <b style="color: var(--cap-navy-dark);">Planning &amp; Operations Chiefs:</b>
+            <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 4px;">
+              Calculate Probability of Detection (POD), build Incident Action Plans (IAPs), and dispatch ground assets based on airborne bearing vectors.
+            </p>
+          </div>
+        </div>
+
+        <!-- Column 2: Communications & Base Radio -->
+        <div class="card" style="padding: 24px;">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+            <div style="font-size: 1.8rem;">📻</div>
+            <div>
+              <h3 style="font-size: 1.2rem; color: var(--cap-navy-dark); margin: 0;">Communications Unit</h3>
+              <span style="font-size: 0.8rem; color: var(--cap-red); font-weight: 700;">NET CONTROL &amp; FORM 110 LOGGING</span>
+            </div>
+          </div>
+          <div style="margin-bottom: 16px;">
+            <b style="color: var(--cap-navy-dark);">Mission Radio Operator 1 (MRO 1):</b>
+            <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 4px;">
+              Primary tactical net controller. Operates the Web Base Radio console (<code>/radio</code>) on CAP tactical VHF-FM channels. Enforces radiotelephone doctrine (CAPR 100-3).
+            </p>
+          </div>
+          <div style="margin-bottom: 16px;">
+            <b style="color: var(--cap-navy-dark);">Mission Radio Operator 2 (MRO 2):</b>
+            <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 4px;">
+              Airband watch controller. Monitors VHF-AM aeronautical search frequencies (123.100 MHz SAR, 122.900 MHz flight line) and logs pilot transit check-ins.
+            </p>
+          </div>
+          <div>
+            <b style="color: var(--cap-navy-dark);">CAP Form 110 Continuous Logging:</b>
+            <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 4px;">
+              Every station check-in, OPS NORMAL report, bearing transmission, and altitude change is recorded in real time with UTC timestamps for formal post-mission audit.
+            </p>
+          </div>
+        </div>
+
+        <!-- Column 3: Aircrews & Ground Search Teams -->
+        <div class="card" style="padding: 24px;">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+            <div style="font-size: 1.8rem;">✈️</div>
+            <div>
+              <h3 style="font-size: 1.2rem; color: var(--cap-navy-dark); margin: 0;">Field Search Assets</h3>
+              <span style="font-size: 0.8rem; color: var(--cap-red); font-weight: 700;">HOMING CREWS &amp; GROUND TEAMS</span>
+            </div>
+          </div>
+          <div style="margin-bottom: 16px;">
+            <b style="color: var(--cap-navy-dark);">SAR Mission Pilots (MP):</b>
+            <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 4px;">
+              Fly the C182T Skylane through search patterns, execute steep-turn heading corrections called by the MO, manage engine cooling, and maintain ATC separation.
+            </p>
+          </div>
+          <div style="margin-bottom: 16px;">
+            <b style="color: var(--cap-navy-dark);">Mission Observers (MO):</b>
+            <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 4px;">
+              Operate the Becker 517 / RT-600 DF heads and TDFM-136B tactical radio. Track 406 burst cadences, verify station passage over beacons, and call coordinates.
+            </p>
+          </div>
+          <div>
+            <b style="color: var(--cap-navy-dark);">Urban DF (UDF) Ground Teams:</b>
+            <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 4px;">
+              Mobile vehicle and foot search teams connected via smartphone Web PTT. Receive airborne bearing lines and conduct final ground signal homing.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 3: CalTopo Common Operating Picture -->
+  <section class="section" id="caltopo">
+    <div class="container">
+      <div class="spotlight-row">
+        <div class="spotlight-img-frame" data-lightbox="images/fig_flightplanner_sar.png" data-caption="CalTopo and Flight Planner Integration - Creeping line search pattern with live telemetry breadcrumbs and bearing vectors">
+          <img src="images/fig_flightplanner_sar.png" alt="CalTopo Common Operating Picture and SAR Patterns">
+        </div>
+        <div class="spotlight-content">
+          <span class="section-kicker">Common Operating Picture (COP)</span>
+          <h2 class="spotlight-title">Deep CalTopo Integration</h2>
+          <p class="spotlight-desc">
+            CalTopo is the gold-standard mapping tool used across Civil Air Patrol, county search-and-rescue teams, and state emergency services. CAP V-SAR integrates directly with CalTopo to maintain a unified, real-time Common Operating Picture.
+          </p>
+          <ul class="feature-list">
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Live Telemetry Streaming:</b> Aircraft GPS fixes, altitude MSL, and true headings stream continuously into CalTopo map layers, giving the Incident Commander total situational awareness.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Line of Position (LOP) Triangulation:</b> When an airborne observer or ground team logs a bearing, a visual LOP vector is instantly projected across CalTopo topography, highlighting cross-bearing intersection ellipses.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Bi-Directional Search Patterns:</b> Creeping Line, Expanding Square, and Sector search grids planned in the N499CP Flight Planner export seamlessly as GPX/KML for CalTopo and FMS flight plans for the cockpit G1000.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Inter-Agency Interoperability:</b> Incident Commanders can share the live CalTopo exercise URL with County Sheriff SAR coordinators, Cal OES liaisons, and ground teams for authentic multi-agency collaboration.</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 4: Four Authentic SAR Operational Use Cases -->
+  <section class="section section-alt" id="use-cases">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-kicker">Operational Scenarios</span>
+        <h2 class="section-title">Tested SAR Operational Scenarios</h2>
+        <p class="section-lead">
+          CAP V-SAR comes pre-loaded with comprehensive exercise scenarios designed to test aircrews, radio operators, and command staff under authentic stress conditions.
+        </p>
+      </div>
+
+      <div class="grid-2">
+        <!-- Scenario 1: Pauma Valley -->
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+            <span class="badge badge-red">Scenario Alpha</span>
+            <span class="tag mono">406.025 MHz / 121.5 MHz</span>
+          </div>
+          <h3 class="card-title">1. Pauma Valley Mountain ELT Search</h3>
+          <p class="card-desc">
+            A non-flight-plan Cessna 172 fails to arrive at Borrego Valley. AFRCC reports a single COSPAS-SARSAT 406 composite alert in rugged terrain east of Palomar Mountain.
+          </p>
+          <ul class="feature-list" style="font-size:0.9rem;">
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Radio Horizon Climb:</b> Aircraft must climb past 4,500 ft MSL to break line-of-sight terrain shielding from Ramona Mission Base.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>406 Burst Tracking:</b> Becker 517 captures 50-second digital bursts, displaying hex ID and relative bearing; crew tracks analog 121.5 chirp between bursts.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Station Passage:</b> Observer verifies station passage via antenna cone-of-confusion needle swing, logs coordinates, and directs ground UDF team.</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Scenario 2: Mountain Repeater Net -->
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+            <span class="badge badge-navy">Scenario Bravo</span>
+            <span class="tag mono">VHF-FM Tactical Repeater</span>
+          </div>
+          <h3 class="card-title">2. California Wing Mountain Repeater Net</h3>
+          <p class="card-desc">
+            Multi-station wide-area coordination across San Diego and Riverside counties utilizing authentic California Wing high-elevation repeaters.
+          </p>
+          <ul class="feature-list" style="font-size:0.9rem;">
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Tactical Repeater Selection:</b> Aircrews select Mt. Laguna (6,000 ft MSL) or Otay Mountain repeaters with exact CTCSS subaudible access tones.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Shadowing &amp; Hand-offs:</b> As aircraft descend into canyon valleys, repeater coverage drops, forcing crews to switch to simplex AIR 1 or request airborne relay.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>MRO Net Discipline:</b> Base MRO manages high-density radio traffic, enforcing strict prowords and CAP Form 110 logging.</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Scenario 3: Air-to-Ground Handoff -->
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+            <span class="badge badge-gold">Scenario Charlie</span>
+            <span class="tag mono">Air-to-Ground Coordination</span>
+          </div>
+          <h3 class="card-title">3. Tactical Air-to-Ground SAR Coordination</h3>
+          <p class="card-desc">
+            Airborne crew isolates beacon to a 1-square-mile grid sector and guides a mobile ground Urban Direction Finding (UDF) vehicle team in for physical recovery.
+          </p>
+          <ul class="feature-list" style="font-size:0.9rem;">
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Cross-Band Net Bridge:</b> Aircrew communicates on CAP VHF-FM tactical while base relays instructions to ground units on CALCORD inter-agency frequencies.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Visual Air-to-Ground Signals:</b> Pilot performs high-visibility racetrack pattern directly over beacon wreckage to provide visual reference to ground team.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Ground Triangulation:</b> Ground team uses mobile smartphone PTT to confirm beacon signal reception and complete recovery.</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Scenario 4: Stuck-MIC Net Emergency -->
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+            <span class="badge badge-red">Scenario Delta</span>
+            <span class="tag mono">Contingency Drill</span>
+          </div>
+          <h3 class="card-title">4. Inadvertent Stuck-MIC Net Recovery</h3>
+          <p class="card-desc">
+            An observer microphone gets wedged between cockpit seats, keying the primary VHF-FM net and threatening to jam critical mission communications.
+          </p>
+          <ul class="feature-list" style="font-size:0.9rem;">
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Hardware TOT Intervention:</b> TDFM-136B internal 60-second Time-Out Timer trips automatically, unkeying the carrier and displaying <code>*** TIME OUT ***</code>.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Independent Guard Alert:</b> Base MRO breaks through on the TDFM independent Guard receiver (GD1 / AIRGUARD) to alert the aircrew of the stuck mic.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Net Re-establishment:</b> Observer switches GMA 1347 audio panel to COM2 auxiliary, clearing the primary mission net for active search traffic.</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 5: Exercise Setup & QR Code Onboarding -->
+  <section class="section" id="setup-qr">
+    <div class="container">
+      <div class="spotlight-row">
+        <div class="spotlight-content">
+          <span class="section-kicker">Zero-Friction Participation</span>
+          <h2 class="spotlight-title">Instant Setup &amp; Scannable QR Badges</h2>
+          <p class="spotlight-desc">
+            Setting up a distributed exercise takes less than 60 seconds. The Exercise Director opens <code>/setup</code>, selects the participating fleet, and generates unique scannable access codes for every seat.
+          </p>
+          <ul class="feature-list">
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Fleet Sizing Stepper:</b> Configure 1 to 4 airplanes instantly with custom tail numbers (e.g. <code>N499CP</code>, <code>N99885</code>), callsigns, and DF heads.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Role-Based Access Control (RBAC):</b> Dedicated access codes for Instructors (<code>INSTR-1</code>), Pilots (<code>PLT-423</code>), Observers (<code>OBS-423</code>), MROs (<code>MRO-1</code>), and UDF Teams (<code>UDF-1</code>).</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Phone &amp; Tablet QR Scanning:</b> Participants scan their assigned QR card with a smartphone camera, instantly opening their role console with microphone permissions pre-configured.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Printable Badges:</b> One-click print stylesheet outputs formatted access cards for lanyards and clipboards.</span>
+            </li>
+          </ul>
+        </div>
+        <div class="spotlight-img-frame" data-lightbox="images/fig_instructor_console.png" data-caption="Exercise Setup and Instructor Console - Dynamic fleet configuration, QR badge generation, and live scenario injection">
+          <img src="images/fig_instructor_console.png" alt="Instructor Exercise Setup and Console">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Lightbox Modal -->
+  <div class="lightbox-modal" id="lightboxModal">
+    <div class="lightbox-container">
+      <button class="lightbox-close" aria-label="Close image preview">&times;</button>
+      <img src="" alt="" class="lightbox-image">
+      <div class="lightbox-caption"></div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-bottom">
+        <div>&copy; 2026 Civil Air Patrol V-SAR Project. Developed for Virtual Search and Rescue Training.</div>
+        <div><a href="index.html" style="color: #94a3b8;">Back to Home</a> &bull; <a href="operations.html" style="color: #94a3b8;">Base Operations →</a></div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

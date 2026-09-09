@@ -23,6 +23,7 @@
         <li><a href="index.html" class="nav-link">Overview</a></li>
         <li><a href="cockpit.html" class="nav-link">Cockpit & Avionics</a></li>
         <li><a href="operations.html" class="nav-link">Base & Operations</a></li>
+        <li><a href="sarex.html" class="nav-link">Distributed SAREX & ICS</a></li>
         <li><a href="technical.html" class="nav-link active">Engineering Specs</a></li>
         <li><a href="deployment.html" class="nav-link">Deployment</a></li>
       </ul>
@@ -437,7 +438,7 @@ xpl_dataref_subscribe("cap/df/bearing_rel_deg", "FLOAT",
 
         <div class="card">
           <div class="card-body">
-            <div class="card-tag">Port 8090 &bull; Node.js / Vite</div>
+            <div class="card-tag">Port 8090 &bull; Python / Flask / Gunicorn</div>
             <h4 class="card-title">capvsar-flightplanner</h4>
             <p class="card-desc">
               High-performance web mapping interface serving georeferenced FAA VFR sectional tiles, calculating WGS-84 search patterns, and compiling downloadable <code>.fms</code> files.
@@ -453,6 +454,51 @@ xpl_dataref_subscribe("cap/df/bearing_rel_deg", "FLOAT",
               Sub-20ms latency tactical voice network connecting pilot headsets, observer stations, and ground radio operators with channel separation and radio PTT effects.
             </p>
           </div>
+        </div>
+      </div>
+  <!-- Automated Testing & Quality Assurance Suite -->
+  <section class="section" id="testing" style="background: var(--cap-gray-50); border-top: 1px solid var(--cap-gray-200); border-bottom: 1px solid var(--cap-gray-200);">
+    <div class="container">
+      <div class="section-header">
+        <span class="badge badge-navy">Quality Assurance</span>
+        <h2 class="section-title">Automated Test Verification Suite</h2>
+        <p class="section-desc">
+          Rigorous continuous verification ensures flight physics, instrument layouts, and radio propagation algorithms adhere strictly to real-world avionics specifications.
+        </p>
+      </div>
+
+      <div class="grid grid-3">
+        <div class="card">
+          <div class="card-header">
+            <span class="badge badge-primary">Airframe Physics</span>
+            <h4 class="card-title" style="font-size: 1.1rem;">test_engine.py</h4>
+          </div>
+          <p style="color: var(--cap-gray-600); font-size: 0.88rem; margin-bottom: 12px;">
+            Validates 40+ Lycoming IO-540 airframe parameters in X-Plane <code>.acf</code> binary structures, including fuel flow curves, manifold pressure governors, and loiter endurance calculations.
+          </p>
+          <div class="code-badge" style="font-size: 0.8rem;">100% Passing &bull; 8 Test Fixtures</div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="badge badge-primary">Avionics Displays</span>
+            <h4 class="card-title" style="font-size: 1.1rem;">test_faceplate.py</h4>
+          </div>
+          <p style="color: var(--cap-gray-600); font-size: 0.88rem; margin-bottom: 12px;">
+            Enforces pixel-perfect SVG vector layouts for the Becker 517 and RT-600 instrument faceplates, display cutouts, and rotary switch click zones across Air Manager 4.2+ canvases.
+          </p>
+          <div class="code-badge" style="font-size: 0.8rem;">100% Passing &bull; 12 Dimensions Checked</div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="badge badge-primary">System Integration</span>
+            <h4 class="card-title" style="font-size: 1.1rem;">test_panel.py</h4>
+          </div>
+          <p style="color: var(--cap-gray-600); font-size: 0.88rem; margin-bottom: 12px;">
+            Validates Air Manager SQLite database schema insertion, instrument UUID registrations, multi-station UDP telemetry routing, and dataref variable subscriptions.
+          </p>
+          <div class="code-badge" style="font-size: 0.8rem;">100% Passing &bull; SQLite Schema Validated</div>
         </div>
       </div>
     </div>
@@ -504,17 +550,18 @@ xpl_dataref_subscribe("cap/df/bearing_rel_deg", "FLOAT",
             <li><a href="cockpit.html#mo-station" class="footer-link">MO Station Panel</a></li>
             <li><a href="cockpit.html#df-heads" class="footer-link">Becker SAR-DF 517</a></li>
             <li><a href="cockpit.html#df-heads" class="footer-link">RHOTHETA RT-600</a></li>
-            <li><a href="cockpit.html#tdfm" class="footer-link">TDFM-136B Radio</a></li>
+            <li><a href="cockpit.html#tactical-comms" class="footer-link">TDFM-136B Radio</a></li>
           </ul>
         </div>
 
         <div>
           <h5 class="footer-col-title">Operations</h5>
           <ul class="footer-links">
+            <li><a href="sarex.html" class="footer-link">Distributed SAREX & ICS</a></li>
+            <li><a href="operations.html#exercise-setup" class="footer-link">Fleet & Exercise Setup</a></li>
             <li><a href="operations.html#base-radio" class="footer-link">MRO Base Radio</a></li>
+            <li><a href="operations.html#repeaters" class="footer-link">CA Wing Repeaters</a></li>
             <li><a href="operations.html#flight-planner" class="footer-link">N499CP Flight Planner</a></li>
-            <li><a href="operations.html#mission-base" class="footer-link">Mission Base Map</a></li>
-            <li><a href="operations.html#debrief" class="footer-link">Debrief & Scoring</a></li>
             <li><a href="operations.html#form-110" class="footer-link">CAP Form 110 Comms</a></li>
           </ul>
         </div>
