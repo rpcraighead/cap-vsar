@@ -5,6 +5,7 @@ const state = {
   held: new Set(), request: 0, epoch: 0, generation: 0, ws: null, context: null,
   stream: null, source: null, capture: null, playback: null, gain: null,
   started: 0, lastPong: 0, lastRx: 0, channels: [], config: null, timeout: null,
+  wantOnline: false, reconnectTimer: null, reconnectAttempt: 0,
 };
 const models = {
   apx4500: {className:'apx', title:'Motorola APX 4500 O2 control head', caption:'APX 4500 / O2 CONTROL HEAD',
@@ -31,7 +32,7 @@ function render() {
   $('pttLabel').textContent=state.tx?'TRANSMITTING':state.held.size?'KEYING MIC…':'HOLD TO TALK';
   $('pttHint').textContent=state.tx?'Release to listen':ready?'Hold here or hold the spacebar':state.tuning?'Changing mission net…':'Connect your headset to begin';
   $('join').disabled=state.joining;
-  $('join').textContent=state.joining?'Connecting…':state.online?'Disconnect radio':'Join mission net ↗';
+  $('join').textContent=state.joining?'Connecting…':state.online?'Disconnect radio':state.wantOnline?'Cancel reconnect':'Join mission net ↗';
   $('join').classList.toggle('connected',state.online);
   $('callsign').disabled=state.joining || state.online;
   $('accessCode').disabled=state.joining || state.online;
@@ -113,7 +114,7 @@ function press(source) {
   state.held.add(source);
   if(state.held.size===1) {
     notice(); state.request=(state.request+1)%2147483647;
-    state.context.resume().catch(()=>releaseAll('Audio is paused. Tap Join to reconnect.'));
+    state.context.resume().catch(()=>connectionLost('Headset audio is paused.'));
     send({action:'ptt',active:true,request:state.request});
   }
   render();
@@ -121,11 +122,54 @@ function press(source) {
 function release(source) {
   state.held.delete(source); if(!state.held.size) releaseAll();
 }
+function soundDisconnectAlarm() {
+  if(!state.context) return;
+  if(state.context.state==='suspended') {
+    state.context.resume().then(soundDisconnectAlarm).catch(()=>{}); return;
+  }
+  if(state.context.state!=='running') return;
+  const oscillator=state.context.createOscillator(), alarm=state.context.createGain();
+  const now=state.context.currentTime; oscillator.frequency.value=880;
+  alarm.gain.setValueAtTime(0,now);
+  for(let i=0;i<3;i++) {
+    alarm.gain.setValueAtTime(.16,now+i*.22);
+    alarm.gain.setValueAtTime(0,now+i*.22+.11);
+  }
+  oscillator.connect(alarm);alarm.connect(state.gain||state.context.destination);
+  oscillator.start(now);oscillator.stop(now+.66);
+  oscillator.onended=()=>{oscillator.disconnect();alarm.disconnect();};
+}
+function cancelReconnect() {
+  clearTimeout(state.reconnectTimer); state.reconnectTimer=null;
+}
+function scheduleReconnect(message) {
+  if(!state.wantOnline||state.reconnectTimer) return;
+  const delay=Math.min(30000,1000*2**Math.min(state.reconnectAttempt,5));
+  state.reconnectAttempt+=1;
+  notice(`${message} Retrying in ${Math.ceil(delay/1000)} seconds.`);
+  soundDisconnectAlarm();
+  state.reconnectTimer=setTimeout(()=>{state.reconnectTimer=null;connect(true);},delay);
+  render();
+}
+function connectionLost(message) {
+  if(!state.wantOnline) return;
+  ++state.generation; releaseAll();
+  state.online=false;state.joining=false;state.tuning=false;
+  const socket=state.ws;state.ws=null;socket?.close();
+  state.stream?.getAudioTracks().forEach(track=>{track.enabled=false;});
+  scheduleReconnect(message);
+}
 async function audioContext() {
   if(state.context && state.context.state!=='closed') { await state.context.resume(); return; }
   if(!AudioCtx) throw new Error('This browser does not support headset audio. Use a current Safari, Chrome, Firefox or Edge.');
   try { state.context=new AudioCtx({sampleRate:48000,latencyHint:'interactive'}); }
   catch { state.context=new AudioCtx({latencyHint:'interactive'}); }
+  const context=state.context;
+  state.context.addEventListener('statechange',()=>{
+    if(state.context===context && context.state==='suspended' && state.wantOnline) {
+      context.resume().catch(()=>connectionLost('Headset audio paused.'));
+    }
+  });
   await state.context.resume();
   state.gain=state.context.createGain(); updateVolume(); state.gain.connect(state.context.destination);
   if(typeof state.context.setSinkId==='function' && $('output').value) await state.context.setSinkId($('output').value);
@@ -143,12 +187,14 @@ async function devices() {
   $('output').disabled=!routing;
   $('outputHelp').textContent=routing?'Select your headset here, or use the system default.':'This browser uses the device’s selected audio output. Choose your Bluetooth headset in system settings.';
 }
-async function connect() {
+async function connect(automatic=false) {
   if(state.joining) return;
   if(!state.config?.configured) { notice('Mission voice has not been configured on this server.'); return; }
   if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia) { $('secureHelp').hidden=false; return; }
   if(!$('joinForm').reportValidity()) return;
-  notice(); state.joining=true; const generation=++state.generation; render();
+  state.wantOnline=true;cancelReconnect();
+  notice(automatic?'Reconnecting to mission voice…':'');
+  state.joining=true; const generation=++state.generation; render();
   try {
     await audioContext();
     // Load in the user-initiated audio context before connecting to the mission net.
@@ -165,14 +211,16 @@ async function connect() {
       };
     }
     const microphone=$('microphone').value;
-    const stream=await navigator.mediaDevices.getUserMedia({audio:{deviceId:microphone?{exact:microphone}:undefined,channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
+    const stream=state.stream || await navigator.mediaDevices.getUserMedia({audio:{deviceId:microphone?{exact:microphone}:undefined,channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
     if(generation!==state.generation) {stream.getTracks().forEach(t=>t.stop());return;}
-    state.stream=stream; stream.getAudioTracks().forEach(track=>{
-      track.enabled=false;
-      track.addEventListener('ended',()=>{if(state.stream===stream){disconnect();notice('Microphone disconnected. Check your headset, then rejoin.');}});
-      track.addEventListener('mute',()=>{if(state.tx)releaseAll('Microphone interrupted. Release PTT and check your headset.');});
-    });
-    state.source=state.context.createMediaStreamSource(stream); state.source.connect(state.capture);
+    if(!state.stream) {
+      state.stream=stream; stream.getAudioTracks().forEach(track=>{
+        track.enabled=false;
+        track.addEventListener('ended',()=>{if(state.stream===stream){disconnect();notice('Microphone disconnected. Check your headset, then rejoin.');}});
+        track.addEventListener('mute',()=>{if(state.tx)releaseAll('Microphone interrupted. Release PTT and check your headset.');});
+      });
+      state.source=state.context.createMediaStreamSource(stream); state.source.connect(state.capture);
+    }
     await devices();
     if(generation!==state.generation) return;
     const socket=new WebSocket(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/api/radio/stream`);
@@ -182,16 +230,18 @@ async function connect() {
       send({action:'join',callsign:$('callsign').value.trim(),accessCode:$('accessCode').value,channel:$('netSelect').value});
     });
     socket.addEventListener('message',event=>{if(state.ws===socket) receive(event.data);});
-    socket.addEventListener('close',()=>{if(state.ws===socket){disconnect();notice('Radio disconnected. Rejoin when you are ready.');}});
-    socket.addEventListener('error',()=>{if(state.ws===socket){disconnect();notice('Could not reach mission voice. Check your connection and retry.');}});
-    state.timeout=setTimeout(()=>{if(state.joining&&state.ws===socket){disconnect();notice('The mission voice connection timed out. Try joining again.');}},15000);
+    socket.addEventListener('close',()=>{if(state.ws===socket)connectionLost('Radio disconnected.');});
+    socket.addEventListener('error',()=>{if(state.ws===socket)connectionLost('Could not reach mission voice.');});
+    state.timeout=setTimeout(()=>{if(state.joining&&state.ws===socket)connectionLost('The mission voice connection timed out.');},15000);
   } catch(error) {
     if(generation!==state.generation) return;
-    disconnect();
-    notice(error.name==='NotAllowedError'?'Microphone permission is needed. Allow this site to use your headset, then join again.':error.name==='NotFoundError'?'No microphone was found. Pair or connect your headset, then retry.':error.name==='NotReadableError'?'The microphone is in use or unavailable. Check headset settings and try again.':error.message||'Headset setup failed. Please try again.');
+    const message=error.name==='NotAllowedError'?'Microphone permission is needed. Allow this site to use your headset, then join again.':error.name==='NotFoundError'?'No microphone was found. Pair or connect your headset, then retry.':error.name==='NotReadableError'?'The microphone is in use or unavailable. Check headset settings and try again.':error.message||'Headset setup failed. Please try again.';
+    if(['NotAllowedError','NotFoundError','NotReadableError'].includes(error.name)) {disconnect();notice(message);}
+    else connectionLost(message);
   }
 }
 function disconnect() {
+  state.wantOnline=false;state.reconnectAttempt=0;cancelReconnect();
   ++state.generation; releaseAll();
   state.online=false; state.joining=false; state.tuning=false;
   const socket=state.ws; state.ws=null; socket?.close();
@@ -217,6 +267,7 @@ function receive(data) {
   let message; try{message=JSON.parse(data);}catch{disconnect();notice('Invalid response from the voice server.');return;}
   if(message.type==='tuned') {
     clearTimeout(state.timeout); state.timeout=null;
+    cancelReconnect();state.reconnectAttempt=0;
     silenceMic(); state.held.clear(); state.online=true;state.joining=false;state.tuning=false;state.epoch=message.epoch;
     $('netSelect').value=message.channel;state.playback.port.postMessage({clear:true});
     state.lastPong=Date.now();$('speaker').textContent='Listening for traffic.';notice();render();
@@ -237,7 +288,7 @@ function receive(data) {
   else if(message.type==='error'){disconnect();notice(message.message||'Voice connection unavailable.');}
 }
 
-$('joinForm').addEventListener('submit',event=>{event.preventDefault();if(state.online)disconnect();else connect();});
+$('joinForm').addEventListener('submit',event=>{event.preventDefault();if(state.wantOnline)disconnect();else connect();});
 $('modelApx').addEventListener('click',()=>setModel('apx4500'));
 $('modelEfj').addEventListener('click',()=>setModel('efj5300'));
 $('callsign').addEventListener('input',render);
@@ -272,7 +323,7 @@ navigator.mediaDevices?.addEventListener('devicechange',()=>devices().catch(()=>
 setInterval(()=>{
   $('clock').textContent=new Date().toISOString().slice(11,19)+' Z';
   if(state.online) {
-    if(Date.now()-state.lastPong>6000){disconnect();notice('Mission voice stopped responding. Rejoin to reconnect.');return;}
+    if(Date.now()-state.lastPong>6000){connectionLost('Mission voice stopped responding.');return;}
     send({action:'ping'});if(state.tx)send({action:'keepalive'});
     if(state.tx)$('pttHint').textContent=`${Math.floor((Date.now()-state.started)/1000)}s / 60s · release to listen`;
     if(Date.now()-state.lastRx>400){$('rxMeter').style.width='0%';$('instrument').classList.remove('receiving');$('speaker').textContent=state.tx?'Microphone open — transmitting.':'Listening for traffic.';}

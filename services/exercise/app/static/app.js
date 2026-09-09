@@ -266,5 +266,28 @@ $('nsCreate').onclick = async () => {
   $('nsName').value = ''; $('nsNotes').value = '';
 };
 
+async function initAuthBadge() {
+  try {
+    const res = await fetch('/api/auth/me');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.authenticated && $('userBadge')) {
+        const title = data.title || (data.role ? data.role.toUpperCase() : 'Instructor');
+        const cs = data.callsign ? ` (${data.callsign})` : '';
+        $('userBadge').textContent = `\uD83D\uDC64 ${title}${cs}`;
+      }
+    }
+  } catch (e) {}
+
+  if ($('logoutBtn')) {
+    $('logoutBtn').onclick = async () => {
+      try {
+        await fetch('/api/auth/logout', {method: 'POST'});
+      } catch (e) {}
+      location.href = '/login';
+    };
+  }
+}
+
 setInterval(() => $('clock').textContent = new Date().toUTCString().slice(17, 25) + 'Z', 1000);
-nsRenderEffects(); loadScenarios(); connect();
+nsRenderEffects(); loadScenarios(); connect(); initAuthBadge();

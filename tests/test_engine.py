@@ -599,5 +599,40 @@ check("beyond the two-ended horizon it is still silent",
       not bool(xp.read("cap/df/valid")),
       "signal %.3f at %.0f NM" % (xp.read("cap/df/signal"), xp.read("cap/df/distance_nm")))
 
+print("\n== per-station config: capvsar_station.ini (O-2) ==")
+import tempfile
+check("no ini on disk falls back to the historical single-station defaults",
+      mod._load_station_config("/nonexistent/capvsar_station.ini") ==
+      ("http://192.0.2.151:8700", "CAP-1", os.environ.get("CAPVSAR_TOKEN_PLUGIN", "")))
+
+with tempfile.TemporaryDirectory() as d:
+    ini = os.path.join(d, "capvsar_station.ini")
+    with open(ini, "w") as f:
+        f.write("[station]\nconsole = http://10.0.0.5:8700\ncallsign = CAP-3\nplugin_key = stationkey\n")
+    console, callsign, key = mod._load_station_config(ini)
+    check("console overridden by the ini", console == "http://10.0.0.5:8700", console)
+    check("callsign overridden by the ini", callsign == "CAP-3", callsign)
+    check("plugin_key read from the ini when no env var is set", key == "stationkey", key)
+
+    with open(ini, "w") as f:
+        f.write("[station]\ncallsign = CAP-3\n")
+    console, callsign, key = mod._load_station_config(ini)
+    check("an ini overriding only callsign leaves console at its default",
+          console == "http://192.0.2.151:8700", console)
+    check("...and leaves plugin_key at its default too", key == os.environ.get("CAPVSAR_TOKEN_PLUGIN", ""))
+
+    old_env = os.environ.get("CAPVSAR_TOKEN_PLUGIN")
+    os.environ["CAPVSAR_TOKEN_PLUGIN"] = "envkey"
+    try:
+        with open(ini, "w") as f:
+            f.write("[station]\nplugin_key = inikey\n")
+        _, _, key = mod._load_station_config(ini)
+        check("CAPVSAR_TOKEN_PLUGIN env var wins over the ini's plugin_key", key == "envkey", key)
+    finally:
+        if old_env is None:
+            del os.environ["CAPVSAR_TOKEN_PLUGIN"]
+        else:
+            os.environ["CAPVSAR_TOKEN_PLUGIN"] = old_env
+
 print("\n" + ("ALL PASS" if not FAILED else "FAILURES: " + ", ".join(FAILED)))
 sys.exit(1 if FAILED else 0)

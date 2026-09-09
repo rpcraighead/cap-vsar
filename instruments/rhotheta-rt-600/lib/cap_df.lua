@@ -89,11 +89,54 @@ function M.has_decode() return engine_seen end
 local on_change_cb = nil
 local last_valid_at = nil
 local elapsed = 0
+local last_snap = {}
 
 function M.on_change(callback) on_change_cb = callback end
 
-local function changed()
-    if on_change_cb then on_change_cb(M.state) end
+local function snapshot_changed()
+    local s = M.state
+    if s.valid ~= last_snap.valid
+        or s.rx_open ~= last_snap.rx_open
+        or s.blocked ~= last_snap.blocked
+        or s.in_cone ~= last_snap.in_cone
+        or s.band_mhz ~= last_snap.band_mhz
+        or s.error_code ~= last_snap.error_code
+        or s.cs_sync ~= last_snap.cs_sync
+        or s.cs_has_pos ~= last_snap.cs_has_pos
+        or s.cs_hex15 ~= last_snap.cs_hex15
+        or s.airframe_shadowed ~= last_snap.airframe_shadowed
+        or math.abs((s.bearing or 0) - (last_snap.bearing or 0)) >= 0.1
+        or math.abs((s.signal or 0) - (last_snap.signal or 0)) >= 0.5
+        or math.abs((s.spread or 0) - (last_snap.spread or 0)) >= 0.1
+        or math.abs((s.distance_nm or 0) - (last_snap.distance_nm or 0)) >= 0.1
+        or math.floor(s.last_signal or 0) ~= (last_snap.last_signal_sec or -1)
+        or math.floor(s.burst_age or 0) ~= (last_snap.burst_age_sec or -1)
+    then
+        last_snap.valid = s.valid
+        last_snap.rx_open = s.rx_open
+        last_snap.blocked = s.blocked
+        last_snap.in_cone = s.in_cone
+        last_snap.band_mhz = s.band_mhz
+        last_snap.error_code = s.error_code
+        last_snap.cs_sync = s.cs_sync
+        last_snap.cs_has_pos = s.cs_has_pos
+        last_snap.cs_hex15 = s.cs_hex15
+        last_snap.airframe_shadowed = s.airframe_shadowed
+        last_snap.bearing = s.bearing
+        last_snap.signal = s.signal
+        last_snap.spread = s.spread
+        last_snap.distance_nm = s.distance_nm
+        last_snap.last_signal_sec = math.floor(s.last_signal or 0)
+        last_snap.burst_age_sec = math.floor(s.burst_age or 0)
+        return true
+    end
+    return false
+end
+
+local function changed(force)
+    if (force or snapshot_changed()) and on_change_cb then
+        on_change_cb(M.state)
+    end
 end
 
 -- ---------------------------------------------------------------- subscribe --
@@ -220,6 +263,10 @@ function M.tick(dt)
     end
     if s.band_mhz > 400 then
         s.burst_age = s.burst_age + dt
+    end
+    if math.floor(s.last_signal or 0) ~= (last_snap.last_signal_sec or -1)
+       or math.floor(s.burst_age or 0) ~= (last_snap.burst_age_sec or -1) then
+        changed()
     end
 end
 

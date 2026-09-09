@@ -161,14 +161,15 @@ end
 -- this could not be re-verified against the live application from this
 -- environment - watch for a recurrence of that log line.
 local function redraw()
-    if canvas_id then pcall(canvas_draw, canvas_id, draw_lcd) end
+    if canvas_id then canvas_draw(canvas_id, draw_lcd) end
 end
 
 -- Audio follows instantaneous squelch state, never a TIMEHOLD bearing. The
 -- receiver stays muted during its ten-second power-up screen.
 local function sync_audio()
     df_audio.update(st.power and not st.booting, df.state.rx_open,
-                    df.state.band_mhz, st.volume / 100, st.tone_suppressed)
+                    df.state.band_mhz, st.volume / 100, st.tone_suppressed,
+                    (df.state.signal or 0) / 100)
 end
 
 -- Push the whole control state at the engine. Cheap, and keeps the engine from
@@ -630,6 +631,7 @@ dcu.add_controls({
         local list = active_freqs()
         st.freq_index = ((st.freq_index - 1 + direction) % #list) + 1
         st.repeat_show = false
+        st.tone_suppressed = false
         df_audio.stop()
         df.set_frequency_hz(current_freq().hz)
         df.set_squelch(st.squelch[st.freq_index])
@@ -754,7 +756,6 @@ end)
 -- from valid-state transitions and needs a regular tick.
 timer_start(0, 250, function()
     df.tick(0.25)
-    if st.power and (scanning() or st.page == 4 or st.page <= 3) then redraw() end
 end)
 
 df.set_power(false)

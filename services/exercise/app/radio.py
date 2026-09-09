@@ -20,19 +20,21 @@ from urllib.parse import urlsplit
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from . import access
+from .mumble_channels import browser_nets
+
 router = APIRouter()
 log = logging.getLogger(__name__)
 RATE = 48000
 FRAME_BYTES = 1920
 MAX_TX_SECONDS = 60
 LEASE_SECONDS = 1.5
-CHANNELS = [
-    {"id": "primary", "label": "PRIMARY", "name": "Mission Net PRIMARY"},
-    {"id": "alternate", "label": "ALTERNATE", "name": "Mission Net ALTERNATE"},
-    {"id": "base", "label": "MISSION BASE", "name": "Mission Base"},
-    {"id": "briefing", "label": "BRIEFING", "name": "Briefing Room"},
-]
+# O-4: was its own hardcoded copy of four channel names, independently of the
+# provisioning script and liable to silently disagree with it. Both now read
+# services/exercise/app/mumble_channels.py.
+CHANNELS = browser_nets()
 SESSIONS: set = set()
+CHANNEL_ACTIVITY: dict[str, float] = {}
 
 
 @router.get('/api/radio/config')
@@ -42,6 +44,43 @@ def config():
             "accessCodeRequired": bool(os.getenv('CAPVSAR_RADIO_ACCESS_CODE')),
             "configured": bool(os.getenv('CAPVSAR_MUMBLE_HOST')),
             "securePort": int(os.getenv('CAPVSAR_RADIO_HTTPS_PORT', '8743'))}
+
+
+@router.get('/api/radio/rx')
+def rx_status():
+    now = time.monotonic()
+    return {
+        "main_rx": (now - CHANNEL_ACTIVITY.get('primary', 0) < 0.4),
+        "guard_rx": (now - CHANNEL_ACTIVITY.get('alternate', 0) < 0.4),
+        "channels": {k: (now - v < 0.4) for k, v in CHANNEL_ACTIVITY.items()}
+    }
+
+
+ICS_STATE: dict = {
+    "mode": "ALL",
+    "split_com": False,
+    "pilot_isolated": False,
+    "copilot_isolated": False,
+    "crew_isolated": False,
+}
+
+
+@router.get('/api/radio/ics')
+def ics_status():
+    return dict(ICS_STATE)
+
+
+@router.post('/api/radio/ics')
+def update_ics(payload: dict):
+    mode = str(payload.get('mode', ICS_STATE['mode'])).upper()
+    if mode in ('ALL', 'PILOT', 'COPILOT', 'CREW'):
+        ICS_STATE['mode'] = mode
+        ICS_STATE['pilot_isolated'] = (mode == 'PILOT')
+        ICS_STATE['copilot_isolated'] = (mode in ('PILOT', 'COPILOT'))
+        ICS_STATE['crew_isolated'] = (mode == 'CREW')
+    if 'split_com' in payload:
+        ICS_STATE['split_com'] = bool(payload['split_com'])
+    return dict(ICS_STATE)
 
 
 class TransmitGate:
@@ -122,7 +161,27 @@ class MumbleRadio:
             return
         if not pcm or len(pcm) % 2 or len(pcm) > RATE * 2:
             return
+
+        # Check ICS isolation: PILOT mode isolates pilot from copilot/crew path
+        if ICS_STATE.get('pilot_isolated'):
+            spk_u = name.upper()
+            self_u = self.callsign.upper()
+            is_spk_pilot = ('PILOT' in spk_u and 'COPILOT' not in spk_u)
+            is_self_pilot = ('PILOT' in self_u and 'COPILOT' not in self_u)
+            is_spk_crew = ('OBSERVER' in spk_u or 'COPILOT' in spk_u or 'CREW' in spk_u or 'MO' in spk_u)
+            is_self_crew = ('OBSERVER' in self_u or 'COPILOT' in self_u or 'CREW' in self_u or 'MO' in self_u)
+            if (is_spk_pilot and is_self_crew) or (is_spk_crew and is_self_pilot):
+                return
+
+        # Split COM drops MO from FM mission net
+        if ICS_STATE.get('split_com'):
+            self_u = self.callsign.upper()
+            if ('MO' in self_u or 'OBSERVER' in self_u) and self.channel_key in ('primary', 'alternate'):
+                return
+
         now = time.monotonic()
+        if self.channel_key:
+            CHANNEL_ACTIVITY[self.channel_key] = now
         if now-self.rx_announced.get(session, 0) > .3:
             self.enqueue({"type": "rx", "speaker": name, "session": session})
             self.rx_announced[session] = now
@@ -217,6 +276,16 @@ class MumbleRadio:
                 self.gate.renewed = time.monotonic()
         elif action == 'ping':
             self.enqueue({"type": "pong"})
+        elif action == 'ics':
+            mode = str(data.get('mode', ICS_STATE['mode'])).upper()
+            if mode in ('ALL', 'PILOT', 'COPILOT', 'CREW'):
+                ICS_STATE['mode'] = mode
+                ICS_STATE['pilot_isolated'] = (mode == 'PILOT')
+                ICS_STATE['copilot_isolated'] = (mode in ('PILOT', 'COPILOT'))
+                ICS_STATE['crew_isolated'] = (mode == 'CREW')
+            if 'split_com' in data:
+                ICS_STATE['split_com'] = bool(data['split_com'])
+            self.enqueue({"type": "ics", **ICS_STATE})
         else:
             raise ValueError('Unknown radio command.')
 
@@ -311,9 +380,19 @@ async def stream(sock: WebSocket):
         name = hello.get('callsign')
         if not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9 ._-]{2,32}', name.strip()):
             raise ValueError('Use a callsign of 2–32 letters, numbers, spaces, dots or dashes.')
+        name = name.strip()
+        # O-5: an authenticated RBAC session's callsign always overrides
+        # whatever the client claims, so a base-role student can't type
+        # "MISSION BASE" or "INSTRUCTOR" and impersonate another station on
+        # the net. No session - RBAC not configured for this exercise - falls
+        # back to the client-supplied name, matching access.py's fail-open
+        # design elsewhere: this stays usable with no login system engaged.
+        session = access.get_session_from_request(sock)
+        if session and session.get('callsign'):
+            name = session['callsign']
         if len(SESSIONS) >= int(os.getenv('CAPVSAR_RADIO_MAX_SESSIONS', '16')):
             raise ValueError('All browser radio connections are occupied.')
-        radio = MumbleRadio(sock, name.strip())
+        radio = MumbleRadio(sock, name)
         SESSIONS.add(radio)
         await radio.connect(hello.get('channel', 'primary'))
         tasks = [asyncio.create_task(fn()) for fn in (radio.sender, radio.receiver, radio.watchdog)]

@@ -73,6 +73,7 @@ component rather than the two the plan sketched.
     cap/scenario/beacon_elev  float    feet MSL
 """
 import collections
+import configparser
 import hashlib
 import json
 import math
@@ -85,15 +86,48 @@ import urllib.request
 
 import xp
 
-CONSOLE = "http://192.0.2.151:8700"
-CALLSIGN = "CAP-1"
+# O-2: three aircraft used to mean three hand-edited copies of this file,
+# because CONSOLE/CALLSIGN/PLUGIN_KEY were literals. They now come from
+# capvsar_station.ini next to wherever this plugin is actually deployed
+# (built by scripts/build_station_kit.py), so the tracked source in
+# xplane/ stays identical for every station and deploy_xplane_plugin.py's
+# hash check keeps meaning something. A station with no ini - or a
+# pre-O-2 install that only ever had this file - gets exactly the old
+# hardcoded single-station defaults, so this is not a breaking change.
+_DEFAULT_CONSOLE = "http://192.0.2.151:8700"
+_DEFAULT_CALLSIGN = "CAP-1"
+STATION_INI = os.path.join(os.path.dirname(os.path.abspath(__file__)), "capvsar_station.ini")
+
+
+def _load_station_config(path=STATION_INI):
+    """Read [station] console/callsign/plugin_key from an ini beside the
+    plugin. Missing file, missing section, or a missing individual key all
+    fall back independently - a station can override just the callsign.
+
+    CAPVSAR_TOKEN_PLUGIN, if set, always wins over the ini's plugin_key: the
+    env var is the documented mechanism used by the exercise console's own
+    tokened routes (docs/DATAREF_CONTRACT.md) and by ms01 deploys, and a
+    station.ini checked out alongside a plugin should not silently defeat it.
+    """
+    console, callsign = _DEFAULT_CONSOLE, _DEFAULT_CALLSIGN
+    plugin_key = os.environ.get("CAPVSAR_TOKEN_PLUGIN", "")
+    if os.path.exists(path):
+        cfg = configparser.ConfigParser()
+        cfg.read(path)
+        if cfg.has_section("station"):
+            console = cfg.get("station", "console", fallback=console)
+            callsign = cfg.get("station", "callsign", fallback=callsign)
+            if not plugin_key:
+                plugin_key = cfg.get("station", "plugin_key", fallback="")
+    return console, callsign, plugin_key
+
+
 # Shared secret for the console's plugin routes. The console withholds the
 # beacon position from every browser until the instructor reveals, so this key
 # is how the engine that actually needs it - this one - gets it. Without a key
 # the console answers 503 and the DF stays silent rather than searching for a
-# beacon at 0,0. CONSOLE and CALLSIGN stay hardcoded here; moving all three
-# into a per-station config file is tracked separately as O-2.
-PLUGIN_KEY = os.environ.get("CAPVSAR_TOKEN_PLUGIN", "")
+# beacon at 0,0.
+CONSOLE, CALLSIGN, PLUGIN_KEY = _load_station_config()
 POLL_S = 3.0            # scenario refresh
 REPORT_S = 2.0          # position report
 LOOP_S = 0.25           # DF recompute

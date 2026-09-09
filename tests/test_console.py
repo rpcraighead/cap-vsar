@@ -493,5 +493,73 @@ class OfflineAssets(unittest.TestCase):
             self.assertEqual(r.status_code, 200, img)
 
 
+class F4Backfill(unittest.TestCase):
+    """F-4: reconnecting base consoles recover missed persisted traffic."""
+
+    def setUp(self):
+        self.main, self.client, self.db = build_app()
+        self.sid, self.oid = 'f4scenario', 'f4sortie'
+        self.main._exec(
+            'INSERT INTO scenarios (id, name, beacon_lat, beacon_lon, effects, created)'
+            ' VALUES (?,?,?,?,?,?)',
+            (self.sid, 'F-4 test', 33.17, -117.0792, '{}', 900.0))
+        self.main._exec(
+            'INSERT INTO sorties (id, scenario_id, name, started) VALUES (?,?,?,?)',
+            (self.oid, self.sid, 'F-4 test', 900.0))
+        self.main.hub.sortie = {
+            'id': self.oid, 'scenario_id': self.sid, 'name': 'F-4 test',
+            'started': 900.0, 'stopped': None, 'revealed': 0}
+
+    def tearDown(self):
+        os.unlink(self.db)
+
+    def test_messages_since_reads_sqlite_instead_of_hub_memory(self):
+        for when, body in ((1000.0, 'first'), (1001.0, 'missed')):
+            self.main._exec(
+                'INSERT INTO messages (sortie_id, t, sender, recipient, body)'
+                ' VALUES (?,?,?,?,?)',
+                (self.oid, when, 'MISSION BASE', 'ALL', body))
+        self.main.hub.messages.clear()
+
+        rows = self.main.list_messages(since=1000.0)
+        self.assertEqual([r['body'] for r in rows], ['missed'])
+        self.assertEqual(rows[0]['type'], 'message')
+
+    def test_bearings_since_returns_only_missed_rows(self):
+        for when, bearing in ((2000.0, 90.0), (2001.0, 120.0)):
+            self.main._exec(
+                'INSERT INTO bearings (sortie_id, callsign, t, lat, lon,'
+                ' bearing_true, note) VALUES (?,?,?,?,?,?,?)',
+                (self.oid, 'CAP-1', when, 33.4, -117.1, bearing, ''))
+
+        rows = self.main.list_bearings(since=2000.0)
+        self.assertEqual([r['bearing_true'] for r in rows], [120.0])
+        self.assertEqual(rows[0]['type'], 'bearing')
+
+    def test_backfill_survives_a_console_restart(self):
+        self.main._exec(
+            'INSERT INTO messages (sortie_id, t, sender, recipient, body)'
+            ' VALUES (?,?,?,?,?)',
+            (self.oid, 3000.0, 'MISSION BASE', 'ALL', 'persisted message'))
+        self.main._exec(
+            'INSERT INTO bearings (sortie_id, callsign, t, lat, lon,'
+            ' bearing_true, note) VALUES (?,?,?,?,?,?,?)',
+            (self.oid, 'CAP-1', 3000.0, 33.4, -117.1, 275.0, ''))
+
+        main2, client2, _ = build_app(db_path=self.db)
+        main2.rehydrate()
+        self.assertEqual(main2.list_messages(since=0.0)[-1]['body'],
+                         'persisted message')
+        self.assertEqual(main2.list_bearings(since=0.0)[-1]['bearing_true'],
+                         275.0)
+
+    def test_base_client_backfills_on_every_websocket_open(self):
+        source = (Path(__file__).resolve().parents[1] /
+                  'services/exercise/app/static/base.js').read_text()
+        self.assertIn('/api/messages?since=', source)
+        self.assertIn('/api/bearings?since=', source)
+        self.assertRegex(source, r'ws\.onopen\s*=.*backfill')
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

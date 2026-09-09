@@ -9,6 +9,8 @@ let state = {}, acLayers = {}, trackLines = {}, beaconMarker = null,
 let sortieId = null;
 const bearingLayer = L.layerGroup().addTo(map);
 const bearingLog = [], msgLog = [];
+const seenBearings = new Set(), seenMessages = new Set();
+let lastBearingT = 0, lastMessageT = 0;
 let centred = false;
 
 const planeIcon = c => L.divIcon({className:'', iconSize:[26,26], html:
@@ -20,7 +22,7 @@ const fmtDur = s => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(Math.f
 
 function connect() {
   const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
-  ws.onopen  = () => { $('status').textContent = 'live'; $('status').className = 'status online'; };
+  ws.onopen  = () => { $('status').textContent = 'live'; $('status').className = 'status online'; backfill(); };
   ws.onclose = () => { $('status').textContent = 'reconnecting'; $('status').className = 'status offline';
                        setTimeout(connect, 2000); };
   ws.onmessage = e => {
@@ -42,7 +44,11 @@ function clearSortieLayers() {
   acLayers = {}; trackLines = {};
   bearingLayer.clearLayers();
   bearingLog.length = 0;
+  msgLog.length = 0;
+  seenBearings.clear(); seenMessages.clear();
+  lastBearingT = lastMessageT = 0;
   $('bearings').textContent = 'no bearings logged';
+  $('messages').textContent = 'no messages';
   centred = false;
 }
 
@@ -51,7 +57,7 @@ function render() {
 
   // A different sortie means a different search. Reset before drawing anything.
   const id = s ? s.id : null;
-  if (id !== sortieId) { clearSortieLayers(); sortieId = id; }
+  if (id !== sortieId) { clearSortieLayers(); sortieId = id; if (id) backfill(); }
 
   // ---- alert intake: how the search opens
   if (sc) {
@@ -121,6 +127,10 @@ function render() {
 }
 
 function addBearing(m) {
+  const key = m.id != null ? `bearing:${m.id}` :
+    `bearing:${m.t}:${m.callsign}:${m.bearing_true}`;
+  if (seenBearings.has(key)) return;
+  seenBearings.add(key); lastBearingT = Math.max(lastBearingT, m.t || 0);
   bearingLog.unshift(m);
   const R = 40 / 60;
   const brg = m.bearing_true * Math.PI / 180;
@@ -134,11 +144,27 @@ function addBearing(m) {
 }
 
 function addMessage(m) {
+  const key = m.id != null ? `message:${m.id}` :
+    `message:${m.t}:${m.sender}:${m.recipient}:${m.body}`;
+  if (seenMessages.has(key)) return;
+  seenMessages.add(key); lastMessageT = Math.max(lastMessageT, m.t || 0);
   msgLog.unshift(m);
   $('messages').innerHTML = msgLog.map(x => {
     const t = new Date(x.t * 1000).toUTCString().slice(17, 22);
     return `<div class="brg"><b>${t}Z ${x.sender}</b> &rarr; ${x.recipient}<br>${x.body}</div>`;
   }).join('');
+}
+
+async function backfill() {
+  try {
+    const messageSince = Math.max(0, lastMessageT - .001);
+    const bearingSince = Math.max(0, lastBearingT - .001);
+    const [messages, bearings] = await Promise.all([
+      fetch(`/api/messages?since=${messageSince}`).then(r => r.ok ? r.json() : []),
+      fetch(`/api/bearings?since=${bearingSince}`).then(r => r.ok ? r.json() : []),
+    ]);
+    messages.forEach(addMessage); bearings.forEach(addBearing);
+  } catch {}
 }
 
 $('brgAdd').onclick = async () => {
@@ -160,6 +186,28 @@ $('msgSend').onclick = async () => {
 };
 $('msgBody').addEventListener('keydown', e => { if (e.key === 'Enter') $('msgSend').click(); });
 
+async function initAuthBadge() {
+  try {
+    const res = await fetch('/api/auth/me');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.authenticated && $('userBadge')) {
+        const title = data.title || (data.role ? data.role.toUpperCase() : 'Base Staff');
+        const cs = data.callsign ? ` (${data.callsign})` : '';
+        $('userBadge').textContent = `\uD83D\uDC64 ${title}${cs}`;
+      }
+    }
+  } catch (e) {}
+
+  if ($('logoutBtn')) {
+    $('logoutBtn').onclick = async () => {
+      try {
+        await fetch('/api/auth/logout', {method: 'POST'});
+      } catch (e) {}
+      location.href = '/login';
+    };
+  }
+}
+
 setInterval(() => $('clock').textContent = new Date().toUTCString().slice(17, 25) + 'Z', 1000);
-fetch('/api/messages').then(r => r.json()).then(ms => ms.forEach(addMessage));
-connect();
+connect(); initAuthBadge();

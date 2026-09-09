@@ -61,6 +61,20 @@ local st = {
     vol_mode = "VOL",       -- whether the rings adjust volume or squelch
 
     play_flash = false,
+
+    -- §Clearance Recorder: digital recording of up to 2.5 min of incoming audio
+    recorder = {
+        blocks = {},      -- list of { com = "com1"|"com2"|"com3", duration_ms = ..., text = ... }
+        max_blocks = 16,
+        max_time_ms = 150000, -- 2.5 minutes
+        current_idx = 0,
+        active_rx = {
+            com1 = false,
+            com2 = false,
+            com3 = false,
+        },
+    },
+    playback_active = false,
 }
 
 local test_timer, play_timer
@@ -75,9 +89,24 @@ local refresh = function() end
 -- instrument and the local Mumble agent use (plan §6.3.2). This is the
 -- audio-panel half of the split the CAP guide describes: selecting COM3 audio
 -- lets you *listen*, selecting COM3 MIC is what lets you *talk*.
-local var_fm_audio = si_variable_create("cap_fm_audio_selected", "BOOL", false)
-local var_fm_mic   = si_variable_create("cap_fm_mic_selected",   "BOOL", false)
-local var_ics      = si_variable_create("cap_ics_isolation",     "STRING", "ALL")
+local var_fm_audio        = si_variable_create("cap_fm_audio_selected", "BOOL", false)
+local var_fm_mic          = si_variable_create("cap_fm_mic_selected",   "BOOL", false)
+local var_ics             = si_variable_create("cap_ics_isolation",     "STRING", "ALL")
+local var_ics_pilot_iso   = si_variable_create("cap_ics_pilot_isolated",   "BOOL", false)
+local var_ics_copilot_iso = si_variable_create("cap_ics_copilot_isolated", "BOOL", false)
+local var_ics_crew_iso    = si_variable_create("cap_ics_crew_isolated",    "BOOL", false)
+local var_split_com       = si_variable_create("cap_split_com_active",     "BOOL", false)
+local var_rec_playing     = si_variable_create("cap_recorder_playing",     "BOOL", false)
+local var_rec_block       = si_variable_create("cap_recorder_block",       "INT", 0)
+local var_rec_count       = si_variable_create("cap_recorder_count",       "INT", 0)
+local var_rec_text        = si_variable_create("cap_recorder_text",        "STRING", "")
+
+local function publish_ics()
+    si_variable_write(var_ics, st.ics)
+    si_variable_write(var_ics_pilot_iso,   st.ics == "PILOT")
+    si_variable_write(var_ics_copilot_iso, st.ics == "PILOT" or st.ics == "COPILOT")
+    si_variable_write(var_ics_crew_iso,    st.ics == "CREW")
+end
 
 -- ------------------------------------------------------------ X-Plane wiring --
 
@@ -116,6 +145,7 @@ local function push_audio()
     local fm_audio = effective_audio("com3") or (st.mic == "com3")
     si_variable_write(var_fm_audio, st.split and false or fm_audio)
     si_variable_write(var_fm_mic,   st.split and false or (st.mic == "com3"))
+    si_variable_write(var_split_com, st.split)
 end
 
 local function push_mic()
@@ -157,7 +187,7 @@ local ICS_COPLT = { PILOT = "CREW", COPILOT = "ALL",  CREW = "PILOT",   ALL = "C
 
 local function press_ics(key)
     st.ics = (key == "pilot") and ICS_PILOT[st.ics] or ICS_COPLT[st.ics]
-    si_variable_write(var_ics, st.ics)
+    publish_ics()
 end
 
 --- MKR/MUTE, §MARKER BEACON RECEIVER: selected -> (tone received) press mutes
@@ -184,15 +214,79 @@ local function press_split()
     push_audio()
 end
 
---- PLAY is momentary — the digital clearance recorder playback.
-local function press_play()
-    st.play_flash = true
-    refresh()
-    if play_timer then timer_stop(play_timer) end
-    play_timer = timer_start(1200, 0, function()
-        st.play_flash = false
+local function record_transmission(com_id, duration_ms, text)
+    if not st.powered then return end
+    local dur = math.max(500, math.min(30000, duration_ms or 1500))
+    table.insert(st.recorder.blocks, {
+        com = com_id,
+        duration_ms = dur,
+        text = text or string.format("%s transmission (%d ms)", string.upper(tostring(com_id)), dur),
+    })
+    while #st.recorder.blocks > st.recorder.max_blocks do
+        table.remove(st.recorder.blocks, 1)
+    end
+    local total_dur = 0
+    for _, b in ipairs(st.recorder.blocks) do total_dur = total_dur + b.duration_ms end
+    while #st.recorder.blocks > 1 and total_dur > st.recorder.max_time_ms do
+        total_dur = total_dur - st.recorder.blocks[1].duration_ms
+        table.remove(st.recorder.blocks, 1)
+    end
+    si_variable_write(var_rec_count, #st.recorder.blocks)
+end
+
+local function stop_playback()
+    if play_timer then
+        timer_stop(play_timer)
         play_timer = nil
+    end
+    st.play_flash = false
+    st.playback_active = false
+    st.recorder.current_idx = 0
+    si_variable_write(var_rec_playing, false)
+    si_variable_write(var_rec_block, 0)
+    refresh()
+end
+
+--- PLAY is the digital clearance recorder playback (§Clearance Recorder).
+local function press_play()
+    if not st.powered or st.self_test then return end
+    local count = #st.recorder.blocks
+    if count == 0 then
+        -- Empty buffer: 400 ms flash
+        st.play_flash = true
         refresh()
+        if play_timer then timer_stop(play_timer) end
+        play_timer = timer_start(400, 0, function()
+            st.play_flash = false
+            play_timer = nil
+            refresh()
+        end)
+        return
+    end
+
+    if st.playback_active then
+        -- Step back to previous recorded block (reverse chronological)
+        if st.recorder.current_idx > 1 then
+            st.recorder.current_idx = st.recorder.current_idx - 1
+        else
+            st.recorder.current_idx = count
+        end
+    else
+        st.recorder.current_idx = count
+        st.playback_active = true
+    end
+
+    local block = st.recorder.blocks[st.recorder.current_idx]
+    local dur = (block and block.duration_ms) or 1500
+    st.play_flash = true
+    si_variable_write(var_rec_playing, true)
+    si_variable_write(var_rec_block, st.recorder.current_idx)
+    si_variable_write(var_rec_text, (block and block.text) or ("COM" .. tostring(block and block.com or 1)))
+    refresh()
+
+    if play_timer then timer_stop(play_timer) end
+    play_timer = timer_start(dur, 0, function()
+        stop_playback()
     end)
 end
 
@@ -310,6 +404,9 @@ for _, k in ipairs(panel.KEYS) do
     button_add(panel.key_image(k, false), panel.key_image(k, true), x, y, w, h,
         function()
             if not st.powered or st.self_test then return end
+            if k.id ~= "play" and st.playback_active then
+                stop_playback()
+            end
             if action then action() end
             refresh()
         end)
@@ -394,9 +491,50 @@ xpl_dataref_subscribe("sim/cockpit2/switches/avionics_power_on", "INT", function
         run_self_test()
     else
         st.self_test = false
+        stop_playback()
         si_variable_write(var_fm_audio, false)
         si_variable_write(var_fm_mic, false)
         refresh()
+    end
+end)
+
+-- Ingest audio events to feed the clearance recorder buffer
+xpl_dataref_subscribe("sim/cockpit2/radios/indicators/com1_receiving", "INT", function(v)
+    if not st.powered then return end
+    local rx = (v == 1)
+    if rx and not st.recorder.active_rx.com1 then
+        st.recorder.active_rx.com1 = true
+    elseif not rx and st.recorder.active_rx.com1 then
+        st.recorder.active_rx.com1 = false
+        record_transmission("com1", 2000, "COM1 ATC clearance")
+    end
+end)
+
+xpl_dataref_subscribe("sim/cockpit2/radios/indicators/com2_receiving", "INT", function(v)
+    if not st.powered then return end
+    local rx = (v == 1)
+    if rx and not st.recorder.active_rx.com2 then
+        st.recorder.active_rx.com2 = true
+    elseif not rx and st.recorder.active_rx.com2 then
+        st.recorder.active_rx.com2 = false
+        record_transmission("com2", 2000, "COM2 radio traffic")
+    end
+end)
+
+si_variable_subscribe("cap_fm_main_rx", "BOOL", function(v)
+    if not st.powered then return end
+    local rx = v and true or false
+    if rx and not st.recorder.active_rx.com3 then
+        st.recorder.active_rx.com3 = true
+    elseif not rx and st.recorder.active_rx.com3 then
+        st.recorder.active_rx.com3 = false
+        record_transmission("com3", 2500, "CAP VHF-FM mission net")
+    end
+end)
+
+si_variable_subscribe("cap_record_transmission", "STRING", function(v)
+    if v and #v > 0 then
+        record_transmission("com3", 2000, v)
     end
 end)
 
@@ -404,5 +542,6 @@ end)
 -- the pilot's. Without it the MO hears the pilot's selections, not their own.
 xpl_command("sim/audio_panel/use_copilot_audio")
 
-si_variable_write(var_ics, st.ics)
+publish_ics()
+push_audio()
 refresh()

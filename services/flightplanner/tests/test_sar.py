@@ -4,9 +4,12 @@ Unit tests for Civil Air Patrol Search & Rescue (SAR) pattern algorithms
 and X-Plane 12 .FMS export in N499CP Flight Planner.
 """
 import unittest
+import fcntl
+import inspect
 import math
 import sys
 import os
+import tempfile
 from datetime import datetime, timezone
 from unittest.mock import patch
 
@@ -40,6 +43,7 @@ from app import (
     gc_dist,
     bearing
 )
+import app as flight_app
 
 class TestSARPatterns(unittest.TestCase):
 
@@ -140,6 +144,185 @@ class TestSARPatterns(unittest.TestCase):
             self.assertEqual(fields[0], '28')
             self.assertEqual(fields[2], 'DRCT')
             self.assertEqual(fields[3], '5500.000000')
+
+
+class TestSARRequestBounds(unittest.TestCase):
+    @staticmethod
+    def request(payload):
+        return types.SimpleNamespace(
+            json=payload,
+            is_json=True,
+            headers={'Origin': 'http://localhost'},
+            host_url='http://localhost/',
+            remote_addr='127.0.0.1',
+        )
+
+    def test_parallel_track_rejects_oversized_dimensions_by_name(self):
+        for field in ('length_nm', 'width_nm'):
+            payload = {
+                'pattern_type': 'parallel_track',
+                'spacing_nm': 1.0,
+                'length_nm': 5.0,
+                'width_nm': 4.0,
+                field: 51.0,
+            }
+            with self.subTest(field=field), patch.object(
+                    flight_app, 'request', self.request(payload)):
+                body, status = flight_app.sar_generate()
+                self.assertEqual(status, 400)
+                self.assertIn(field, body['error'])
+
+    def test_parallel_track_rejects_excessive_sweep_count(self):
+        payload = {
+            'pattern_type': 'parallel_track',
+            'spacing_nm': 0.1,
+            'length_nm': 5.0,
+            'width_nm': 30.0,
+        }
+        with patch.object(flight_app, 'request', self.request(payload)):
+            body, status = flight_app.sar_generate()
+        self.assertEqual(status, 400)
+        self.assertIn('width_nm', body['error'])
+        self.assertIn('sweeps', body['error'])
+
+
+class TestAviationDatabaseUpdateLock(unittest.TestCase):
+    def test_second_worker_does_not_start_a_database_rebuild(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lock_path = os.path.join(tmp, 'aviation.update.lock')
+            with open(lock_path, 'a+') as held:
+                fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                with patch.object(flight_app, 'DATABASE_UPDATE_LOCK_PATH', lock_path,
+                                  create=True), patch.object(
+                                      flight_app.threading, 'Thread') as thread:
+                    started = flight_app.start_database_update()
+                self.assertFalse(started)
+                thread.assert_not_called()
+
+    def test_database_row_errors_are_logged(self):
+        source = inspect.getsource(flight_app.download_database)
+        self.assertNotIn('except: pass', source)
+        self.assertIn('log_msg(', source)
+
+    def test_update_progress_is_shared_between_workers(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(
+                flight_app, 'DATABASE_UPDATE_STATUS_PATH',
+                os.path.join(tmp, 'aviation.update.json')):
+            flight_app._publish_update_status(
+                in_progress=True, progress=40, message='Downloading runways...')
+            local_status = flight_app.update_status
+            try:
+                flight_app.update_status = {
+                    'in_progress': False, 'progress': 0, 'message': ''}
+                self.assertEqual(flight_app._read_update_status(), {
+                    'in_progress': True, 'progress': 40,
+                    'message': 'Downloading runways...'})
+            finally:
+                flight_app.update_status = local_status
+
+
+class TestPlannerSecurity(unittest.TestCase):
+    def setUp(self):
+        if hasattr(flight_app, '_vsar_export_attempts'):
+            flight_app._vsar_export_attempts.clear()
+
+    @staticmethod
+    def request(payload=None, *, origin='http://localhost', is_json=True,
+                token=None, remote_addr='127.0.0.1'):
+        headers = {}
+        if origin is not None:
+            headers['Origin'] = origin
+        if token is not None:
+            headers['X-CAPVSAR-Token'] = token
+        return types.SimpleNamespace(
+            json=payload,
+            is_json=is_json,
+            headers=headers,
+            host_url='http://localhost/',
+            remote_addr=remote_addr,
+        )
+
+    @staticmethod
+    def export_payload(**overrides):
+        payload = {
+            'pattern_type': 'parallel_track',
+            'callsign': 'CAP499',
+            'departure': 'KSEE',
+            'destination': 'KCRQ',
+            'waypoints': [{'lat': 33.17, 'lon': -117.0792}],
+        }
+        payload.update(overrides)
+        return payload
+
+    @staticmethod
+    def response(status=200, text='ok'):
+        return types.SimpleNamespace(status_code=status, text=text)
+
+    def test_database_update_rejects_plain_form_post(self):
+        req = self.request({}, is_json=False)
+        with patch.object(flight_app, 'request', req), patch.object(
+                flight_app, 'start_database_update') as start:
+            body, status = flight_app.trigger_update()
+        self.assertEqual(status, 415)
+        self.assertIn('JSON', body['error'])
+        start.assert_not_called()
+
+    def test_database_update_rejects_cross_origin_json(self):
+        req = self.request({}, origin='https://attacker.example')
+        with patch.dict(os.environ, {'CAPVSAR_TOKEN_INSTRUCTOR': 'instructor-key'}), \
+                patch.object(flight_app, 'request', req), patch.object(
+                    flight_app, 'start_database_update') as start:
+            body, status = flight_app.trigger_update()
+        self.assertEqual(status, 403)
+        self.assertIn('same-origin', body['error'])
+        start.assert_not_called()
+
+    def test_export_rejects_oversized_free_text_by_field(self):
+        for field, maximum in (('callsign', 24), ('pattern_type', 40),
+                               ('departure', 8), ('destination', 8)):
+            req = self.request(self.export_payload(**{field: 'X' * (maximum + 1)}))
+            with self.subTest(field=field), patch.object(
+                    flight_app, 'request', req), patch.object(
+                        flight_app.requests, 'post') as post:
+                body, status = flight_app.sar_export_vsar()
+                self.assertEqual(status, 400)
+                self.assertIn(field, body['error'])
+                post.assert_not_called()
+
+    def test_export_sends_the_two_console_role_tokens(self):
+        req = self.request(self.export_payload())
+        with patch.dict(os.environ, {
+                'CAPVSAR_TOKEN_INSTRUCTOR': 'instructor-key',
+                'CAPVSAR_TOKEN_BASE': 'base-key',
+        }), patch.object(flight_app, 'request', req), patch.object(
+                flight_app.requests, 'post', side_effect=[self.response(), self.response()]) as post:
+            body = flight_app.sar_export_vsar()
+        self.assertTrue(body['success'])
+        self.assertEqual(post.call_args_list[0].kwargs['headers'],
+                         {'X-CAPVSAR-Token': 'instructor-key'})
+        self.assertEqual(post.call_args_list[1].kwargs['headers'],
+                         {'X-CAPVSAR-Token': 'base-key'})
+
+    def test_export_reports_an_instructor_token_rejection(self):
+        req = self.request(self.export_payload())
+        with patch.dict(os.environ, {'CAPVSAR_TOKEN_INSTRUCTOR': 'wrong-key'}), \
+                patch.object(flight_app, 'request', req), patch.object(
+                    flight_app.requests, 'post', return_value=self.response(403, 'forbidden')):
+            body, status = flight_app.sar_export_vsar()
+        self.assertEqual(status, 502)
+        self.assertIn('instructor token', body['error'])
+
+    def test_export_is_rate_limited_per_client(self):
+        req = self.request(self.export_payload(), remote_addr='192.0.2.10')
+        with patch.object(flight_app, 'request', req), patch.object(
+                flight_app.requests, 'post', return_value=self.response()):
+            flight_app._vsar_export_attempts.clear()
+            for _ in range(flight_app.VSAR_EXPORT_RATE_LIMIT):
+                response = flight_app.sar_export_vsar()
+                self.assertTrue(response['success'])
+            body, status = flight_app.sar_export_vsar()
+        self.assertEqual(status, 429)
+        self.assertIn('rate limit', body['error'].lower())
 
 if __name__ == '__main__':
     unittest.main()

@@ -13,9 +13,9 @@ from typing import Any
 
 from urllib.parse import urlsplit
 
-from fastapi import (Depends, FastAPI, HTTPException, Request, WebSocket,
-                     WebSocketDisconnect)
-from fastapi.responses import FileResponse
+from fastapi import (Depends, FastAPI, HTTPException, Request, Response,
+                     WebSocket, WebSocketDisconnect)
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
@@ -106,6 +106,7 @@ def init_db():
         for col, typ in ALERT_COLUMNS:
             if col not in existing:
                 c.execute(f"ALTER TABLE scenarios ADD COLUMN {col} {typ}")
+    access.init_auth_db()
 
 
 DEFAULT_EFFECTS = {
@@ -530,19 +531,35 @@ async def log_bearing(b: BearingIn):
             if not row:
                 return None
             lat, lon = row["lat"], row["lon"]
-        _exec("INSERT INTO bearings (sortie_id, callsign, t, lat, lon, bearing_true, note)"
-              " VALUES (?,?,?,?,?,?,?)",
-              (hub.sortie["id"], b.callsign, now, lat, lon, b.bearing_true, b.note))
-        return lat, lon
+        with db() as c:
+            cursor = c.execute(
+                "INSERT INTO bearings (sortie_id, callsign, t, lat, lon, bearing_true, note)"
+                " VALUES (?,?,?,?,?,?,?)",
+                (hub.sortie["id"], b.callsign, now, lat, lon,
+                 b.bearing_true, b.note))
+            bearing_id = cursor.lastrowid
+        return lat, lon, bearing_id
 
     where = await db_call(go)
     if where is None:
         raise HTTPException(404, "no position on record for that aircraft")
-    lat, lon = where
-    await hub.broadcast({"type": "bearing", "callsign": b.callsign,
-                         "lat": lat, "lon": lon,
+    lat, lon, bearing_id = where
+    await hub.broadcast({"type": "bearing", "id": bearing_id,
+                         "callsign": b.callsign, "t": now, "lat": lat, "lon": lon,
                          "bearing_true": b.bearing_true, "note": b.note})
     return {"ok": True}
+
+
+@app.get("/api/bearings")
+def list_bearings(since: float = 0.0):
+    """Persisted bearings missed by a reconnecting mission-base console."""
+    if not hub.sortie:
+        return []
+    sortie_id = hub.sortie["id"]
+    with db() as c:
+        return [{"type": "bearing", **dict(r)} for r in c.execute(
+            "SELECT id, callsign, t, lat, lon, bearing_true, note FROM bearings"
+            " WHERE sortie_id=? AND t>? ORDER BY t, id", (sortie_id, since))]
 
 
 class MessageIn(BaseModel):
@@ -555,14 +572,18 @@ class MessageIn(BaseModel):
 async def send_message(m: MessageIn):
     """Retasking and coordination text. Supplements voice and leaves a record."""
     now = time.time()
+    message_id = None
     if hub.sortie and not hub.sortie.get("stopped"):
         # After a sortie is stopped its record is closed: late traffic is
         # broadcast to whoever is still watching but not written into it.
-        await db_call(lambda: _exec(
-            "INSERT INTO messages (sortie_id, t, sender, recipient, body)"
-            " VALUES (?,?,?,?,?)",
-            (hub.sortie["id"], now, m.sender, m.recipient, m.body)))
-    msg = {"type": "message", "t": now, "sender": m.sender,
+        def go():
+            with db() as c:
+                return c.execute(
+                    "INSERT INTO messages (sortie_id, t, sender, recipient, body)"
+                    " VALUES (?,?,?,?,?)",
+                    (hub.sortie["id"], now, m.sender, m.recipient, m.body)).lastrowid
+        message_id = await db_call(go)
+    msg = {"type": "message", "id": message_id, "t": now, "sender": m.sender,
            "recipient": m.recipient, "body": m.body}
     hub.messages.append(msg)
     await hub.broadcast(msg)
@@ -570,8 +591,15 @@ async def send_message(m: MessageIn):
 
 
 @app.get("/api/messages")
-def list_messages():
-    return hub.messages[-100:]
+def list_messages(since: float = 0.0):
+    """Persisted messages missed by a reconnecting mission-base console."""
+    if not hub.sortie:
+        return []
+    sortie_id = hub.sortie["id"]
+    with db() as c:
+        return [{"type": "message", **dict(r)} for r in c.execute(
+            "SELECT id, t, sender, recipient, body FROM messages"
+            " WHERE sortie_id=? AND t>? ORDER BY t, id", (sortie_id, since))]
 
 
 @app.get("/api/state")
@@ -656,24 +684,166 @@ async def ws(sock: WebSocket):
 app.include_router(radio.router)
 
 
+class LoginPayload(BaseModel):
+    code: str
+
+
+@app.get("/login")
+def login_page():
+    return FileResponse(STATIC / "login.html")
+
+
+@app.post("/api/auth/login")
+def api_login(payload: LoginPayload, response: Response):
+    res = access.authenticate_code(payload.code)
+    if not res:
+        raise HTTPException(401, "Invalid participant access code. Please verify your code or scan your QR badge.")
+    user, sess_id = res
+    response.set_cookie(
+        key=access.SESSION_COOKIE,
+        value=sess_id,
+        httponly=True,
+        max_age=86400,
+        samesite="lax"
+    )
+    return {
+        "ok": True,
+        "session_id": sess_id,
+        "user": user,
+        "target_url": user.get("target_url") or "/"
+    }
+
+
+@app.get("/api/auth/me")
+def api_auth_me(request: Request):
+    sess = access.get_session_from_request(request)
+    if not sess:
+        if not access.token_for("instructor") and not access.token_for("base"):
+            return {
+                "authenticated": True,
+                "role": "instructor",
+                "title": "Exercise Director (Dev)",
+                "code": "DEV",
+                "callsign": "DEV",
+            }
+        return {"authenticated": False}
+    return {"authenticated": True, **sess}
+
+
+@app.post("/api/auth/logout")
+def api_logout(request: Request, response: Response):
+    sess_id = request.cookies.get(access.SESSION_COOKIE)
+    if sess_id:
+        access.delete_session(sess_id)
+    response.delete_cookie(key=access.SESSION_COOKIE)
+    return {"ok": True}
+
+
+@app.get("/join/{code}")
+def join_by_code(code: str):
+    res = access.authenticate_code(code)
+    if not res:
+        return RedirectResponse(f"/login?error=invalid_code&code={code}", status_code=302)
+    user, sess_id = res
+    target = user.get("target_url") or "/"
+    resp = RedirectResponse(target, status_code=302)
+    resp.set_cookie(
+        key=access.SESSION_COOKIE,
+        value=sess_id,
+        httponly=True,
+        max_age=86400,
+        samesite="lax"
+    )
+    return resp
+
+
+@app.get("/setup")
+def setup_page(request: Request):
+    sess = access.get_session_from_request(request)
+    if sess and sess.get("role") == "instructor":
+        return FileResponse(STATIC / "setup.html")
+    if sess and sess.get("role") != "instructor":
+        return RedirectResponse("/login?error=instructor_required", status_code=302)
+    if access.token_for("instructor"):
+        return RedirectResponse("/login?next=/setup", status_code=302)
+    return FileResponse(STATIC / "setup.html")
+
+
+@app.get("/api/setup")
+def api_get_setup(request: Request):
+    access.enforce("instructor", request)
+    return access.get_exercise_setup()
+
+
+class SetupPayload(BaseModel):
+    name: str = "Civil Air Patrol SAREX Exercise"
+    num_aircraft: int = 1
+    aircraft: list[dict] = []
+    staff: list[dict] = []
+
+
+@app.post("/api/setup")
+def api_save_setup(payload: SetupPayload, request: Request):
+    access.enforce("instructor", request)
+    return access.save_exercise_setup(
+        name=payload.name,
+        num_aircraft=payload.num_aircraft,
+        aircraft_list=payload.aircraft,
+        staff_list=payload.staff
+    )
+
+
+@app.post("/api/setup/reset")
+def api_reset_setup(request: Request):
+    access.enforce("instructor", request)
+    default_setup = access.get_exercise_setup()
+    return access.save_exercise_setup(
+        name=default_setup.get("name", "Civil Air Patrol SAREX Exercise"),
+        num_aircraft=1,
+        aircraft_list=[{
+            "id": "ac-1",
+            "callsign": "CAP 423",
+            "tail": "N499CP",
+            "df_model": "Becker SAR-DF 517",
+            "crew": ["pilot", "observer", "scanner"]
+        }],
+        staff_list=[
+            {"role": "base", "title": "Mission Radio Operator 1", "callsign": "MRO 1"},
+            {"role": "ground_team", "title": "Ground Team / UDF 1 Leader", "callsign": "UDF 1"}
+        ]
+    )
+
+
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
 @app.get("/")
-def index():
+def index(request: Request):
+    sess = access.get_session_from_request(request)
+    if sess and sess.get("role") == "instructor":
+        return FileResponse(STATIC / "index.html")
+    if sess and sess.get("role") != "instructor":
+        return RedirectResponse("/login?error=instructor_required", status_code=302)
+    if access.token_for("instructor"):
+        return RedirectResponse("/login?next=/", status_code=302)
     return FileResponse(STATIC / "index.html")
 
 
 @app.get("/debrief")
-def debrief():
+def debrief(request: Request):
     """Replay a recorded sortie against beacon truth. The product, per the plan."""
     return FileResponse(STATIC / "debrief.html")
 
 
 @app.get("/base")
-def mission_base():
+def mission_base(request: Request):
     """Mission base view: no instructor controls, never shows beacon truth
     until the instructor reveals it."""
+    sess = access.get_session_from_request(request)
+    if sess and sess.get("role") in ("base", "instructor", "aircrew"):
+        return FileResponse(STATIC / "base.html")
+    if access.token_for("base"):
+        return RedirectResponse("/login?next=/base", status_code=302)
     return FileResponse(STATIC / "base.html")
 
 
@@ -697,3 +867,4 @@ def radio_certificate():
         raise HTTPException(404, "The local HTTPS certificate has not been installed yet.")
     return FileResponse(path, media_type="application/x-x509-ca-cert",
                         filename="cap-vsar-mission-base-ca.crt")
+

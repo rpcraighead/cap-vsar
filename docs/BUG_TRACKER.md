@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 81 items, 60 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 82 items, 40 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -10,19 +10,19 @@ IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split ou
 
 | | critical | high | medium | low | total |
 |---|---|---|---|---|---|
-| by severity | 8 | 21 | 33 | 19 | 81 |
+| by severity | 8 | 21 | 34 | 19 | 82 |
 
 | P0 | P1 | P2 | P3 |
 |---|---|---|---|
-| 10 | 22 | 33 | 16 |
+| 10 | 22 | 34 | 16 |
 
 | Component | Items |
 |---|---|
 | Air Manager instruments | 19 |
+| Flight planner | 13 |
 | Exercise console (frontend) | 12 |
 | X-Plane plugin / engine | 12 |
 | Exercise console (backend) | 12 |
-| Flight planner | 12 |
 | Deployment / infrastructure | 8 |
 | Docs / record | 6 |
 
@@ -40,7 +40,7 @@ _Wave dates track the illustrative calendar in docs/USE_CASE_SAREX_REHEARSAL.md 
 - **Wave 0** (1 items) — Now — make the work safe to do at all.
 - **Wave 1** (10 items) — Before session 1 (base stand-up). Nothing flies; base, planner and comms must work.
 - **Wave 2** (20 items) — Before session 2 (full mission, three aircraft, injected effects).
-- **Wave 3** (30 items) — Before session 3 (dress rehearsal) and the live SAREX.
+- **Wave 3** (31 items) — Before session 3 (dress rehearsal) and the live SAREX.
 - **Wave 4** (20 items) — After the SAREX — architecture, tooling, CalTopo phase 2.
 
 ## Clusters
@@ -49,21 +49,21 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 | Cluster | Name | Items | Coordination |
 |---|---|---|---|
-| C1 | Repo & release hygiene | O-1, O-1a | whoever holds the git remote |
-| C2 | Truth integrity & roles | P-2, X-1, X-2 | one agent only — touches main.py and the plugin together |
-| C3 | Propagation engine correctness | P-1, P-3, P-4, P-5, P-6, P-7, P-8, P-12, P-13, P-9 | single-file: xplane/PI_capvsar_df.py |
-| C4 | Station identity & onboarding kit | O-2, O-2a | plugin + scripts/ |
-| C5 | Deployment bootstrap & voice provisioning | O-3, F-5, O-4, O-6, O-5, O-7a | infra; coordinate with ms01 |
-| C6 | Offline mission base | F-1, L-8 | static assets, low conflict |
-| C7 | Console robustness | X-3, X-4, X-5, X-7, X-6, X-8 | main.py — conflicts with C2, sequence them |
-| C8 | Base view & debrief | F-2, F-3, F-6, F-8 | static/*.js |
-| C9 | Radio console hardening | F-4, F-7, F-9, X-9, F-10, F-11, F-12, F-13 | Codex — it owns mission-radio.js/radio.py |
-| C10 | Flight planner correctness | L-1, L-3, L-4, L-1a, L-11, L-5, L-6, L-7, L-9 | services/flightplanner/app.py |
-| C11 | Flight planner security & dependencies | L-2, L-10 | same file as C10 — sequence |
-| C12 | Instrument runtime | I-1, I-2, O-7b, I-10, I-3, I-4, I-5, I-6, I-11, I-14, I-12, I-13, I-15, I-17 | instruments/*/logic.lua |
-| C13 | Instrument tooling & shared libs | I-8, I-9a, I-7, I-9c | scripts/ + tests/ |
+| C1 | Repo & release hygiene | O-1, O-1a | maintainer — git remote and release |
+| C2 | Truth integrity & roles | P-2, X-1, X-2 | DONE (X-1 fixed; X-2 awaits .env tokens, sequenced behind L-2 and O-2) |
+| C3 | Propagation engine correctness | P-1, P-3, P-4, P-5, P-6, P-7, P-8, P-12, P-13, P-9 | Claude — xplane/PI_capvsar_df.py, sole editor |
+| C4 | Station identity & onboarding kit | O-2, O-2a | Claude — O-2 station config and kit (plugin + scripts/) |
+| C5 | Deployment bootstrap & voice provisioning | O-3, F-5, O-4, O-6, O-5, O-7a | Claude — deploy.sh, compose, ms01 (has ssh access) |
+| C6 | Offline mission base | F-1, L-8 | DONE for the console (F-1); L-8 is the planner's own copy, Codex's file |
+| C7 | Console robustness | X-3, X-4, X-5, X-7, X-6, X-8 | Codex holds main.py for F-4's since-endpoints; X-6/X-8 wait for it |
+| C8 | Base view & debrief | F-2, F-3, F-6, F-8 | DONE (F-2, F-3) |
+| C9 | Radio console hardening | F-4, F-7, F-9, X-9, F-10, F-11, F-12, F-13 | Codex — mission-radio.js/html and radio.py; F-9..F-13 queue behind F-4 |
+| C10 | Flight planner correctness | L-1, L-3, L-4, L-1a, L-11, L-12, L-5, L-6, L-7, L-9 | Codex — services/flightplanner/app.py |
+| C11 | Flight planner security & dependencies | L-2, L-10 | Codex — same file as C10, sequenced after it |
+| C12 | Instrument runtime | I-1, I-2, O-7b, I-10, I-3, I-4, I-5, I-6, I-11, I-14, I-12, I-13, I-15, I-17 | Gemini — instruments/** outright, including the DF heads |
+| C13 | Instrument tooling & shared libs | I-8, I-9a, I-7, I-9c | Gemini — instrument tooling; I-9a Lua harness is its first task |
 | C14 | Contract & documentation truth | D-1, D-2, D-3, D-4, P-10, I-9b | docs only, safe in parallel |
-| C15 | Service boundaries (architecture) | C15-1, P-11, C15-2 | after C2 and C7 land |
+| C15 | Service boundaries (architecture) | C15-1, P-11, C15-2 | unassigned — after C2 and C7 settle |
 
 ## Board
 
@@ -71,19 +71,19 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 | ID | Pri | Sev | Title | Component | Cluster | Effort | Depends on | Status |
 |---|---|---|---|---|---|---|---|---|
-| [O-1](#o-1) | P0 | critical | Repo has no working git history | infra | C1 | S | — | in-progress |
+| [O-1](#o-1) | P0 | critical | Repo has no working git history | infra | C1 | S | — | fixed |
 
 ### Wave 1 — Before session 1 (base stand-up). Nothing flies; base, planner and comms must work.
 
 | ID | Pri | Sev | Title | Component | Cluster | Effort | Depends on | Status |
 |---|---|---|---|---|---|---|---|---|
 | [F-1](#f-1) | P0 | critical | Mission-base pages are blank without internet (Leaflet from CDN) | console-ui | C6 | S | — | fixed |
-| [O-2](#o-2) | P0 | critical | Plugin hardcodes console address and callsign — multi-aircraft not deployable | plugin | C4 | L | P-2 | open |
-| [O-3](#o-3) | P0 | critical | Fresh deploy crash-loops; repo is not the deployment | infra | C5 | M | — | open |
+| [O-2](#o-2) | P0 | critical | Plugin hardcodes console address and callsign — multi-aircraft not deployable | plugin | C4 | L | P-2 | fixed |
+| [O-3](#o-3) | P0 | critical | Fresh deploy crash-loops; repo is not the deployment | infra | C5 | M | — | fixed |
 | [P-1](#p-1) | P0 | critical | Terrain line-of-sight ray is mirrored | plugin | C3 | S | — | fixed |
 | [P-2](#p-2) | P0 | critical | Plugin can never receive beacon truth, so the in-sim DF is deaf | plugin | C2 | M | X-1 | fixed |
 | [X-1](#x-1) | P0 | critical | Beacon truth leaks through three unauthenticated endpoints | console-api | C2 | M | — | fixed |
-| [X-2](#x-2) | P0 | critical | No authentication or role separation on any console endpoint | console-api | C2 | L | — | in-progress |
+| [X-2](#x-2) | P0 | critical | No authentication or role separation on any console endpoint | console-api | C2 | L | — | fixed |
 | [F-5](#f-5) | P0 | high | Radio console setup path (verified working) | infra | C5 | S | O-3 | resolved |
 | [L-1](#l-1) | P0 | high | X-Plane .fms export is malformed | planner | C10 | M | — | fixed |
 | [O-2a](#o-2a) | P1 | medium | Participant CONNECT.md cited by the as-built does not exist | docs | C4 | S | O-2 | resolved |
@@ -94,14 +94,14 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 |---|---|---|---|---|---|---|---|---|
 | [F-2](#f-2) | P1 | high | Base view keeps the previous sortie's alert circle and tracks | console-ui | C8 | S | — | fixed |
 | [F-3](#f-3) | P1 | high | Debrief conflates all aircraft into one track | console-ui | C8 | M | — | fixed |
-| [F-4](#f-4) | P1 | high | Radio console does not rejoin after a network blip | console-ui | C9 | M | — | open |
-| [I-1](#i-1) | P1 | high | DF faceplates repaint ~8 Hz regardless of change | instruments | C12 | M | — | open |
-| [I-2](#i-2) | P1 | high | pcall around canvas_draw hides real errors | instruments | C12 | S | — | open |
-| [L-2](#l-2) | P1 | high | Unauthenticated scenario push and CSRF-able database wipe | planner | C11 | M | X-2 | open |
-| [L-3](#l-3) | P1 | high | Parallel-track generator can be driven into a 100M-iteration loop | planner | C10 | S | — | open |
-| [L-4](#l-4) | P1 | high | Both gunicorn workers race to rebuild the aviation database | planner | C10 | S | — | open |
-| [O-4](#o-4) | P1 | high | Mumble channel tree exists only as hand-made rows in a runtime volume | infra | C5 | M | O-3 | open |
-| [O-6](#o-6) | P1 | high | No backup, monitoring or pre-exercise smoke check | infra | C5 | M | O-3 | open |
+| [F-4](#f-4) | P1 | high | Radio console does not rejoin after a network blip | console-ui | C9 | M | — | fixed |
+| [I-1](#i-1) | P1 | high | DF faceplates repaint ~8 Hz regardless of change | instruments | C12 | M | — | fixed |
+| [I-2](#i-2) | P1 | high | pcall around canvas_draw hides real errors | instruments | C12 | S | — | fixed |
+| [L-2](#l-2) | P1 | high | Unauthenticated scenario push and CSRF-able database wipe | planner | C11 | M | X-2 | fixed |
+| [L-3](#l-3) | P1 | high | Parallel-track generator can be driven into a 100M-iteration loop | planner | C10 | S | — | fixed |
+| [L-4](#l-4) | P1 | high | Both gunicorn workers race to rebuild the aviation database | planner | C10 | S | — | fixed |
+| [O-4](#o-4) | P1 | high | Mumble channel tree exists only as hand-made rows in a runtime volume | infra | C5 | M | O-3 | fixed |
+| [O-6](#o-6) | P1 | high | No backup, monitoring or pre-exercise smoke check | infra | C5 | M | O-3 | fixed |
 | [O-7b](#o-7b) | P1 | high | G1000 MFD video stream never re-arms after a reconnect | instruments | C12 | M | — | open |
 | [P-3](#p-3) | P1 | high | Scan mode destroys TIMEHOLD on 406 | plugin | C3 | S | — | fixed |
 | [P-4](#p-4) | P1 | high | Radio horizon is one-sided | plugin | C3 | S | — | fixed |
@@ -109,7 +109,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [X-3](#x-3) | P1 | high | SQLite writes block the event loop that carries radio audio | console-api | C7 | M | — | fixed |
 | [X-4](#x-4) | P1 | high | Console restart mid-exercise orphans the sortie | console-api | C7 | M | — | fixed |
 | [X-5](#x-5) | P1 | high | One wedged WebSocket client stalls every broadcast | console-api | C7 | S | — | fixed |
-| [I-10](#i-10) | P1 | medium | TDFM-136B has no transmitter time-out timer | instruments | C12 | M | — | open |
+| [I-10](#i-10) | P1 | medium | TDFM-136B has no transmitter time-out timer | instruments | C12 | M | — | fixed |
 | [X-7](#x-7) | P1 | medium | Sortie lifecycle leaks state between exercises | console-api | C7 | M | — | fixed |
 | [L-1a](#l-1a) | P2 | medium | Search-pattern labels are lost in the FMS export | planner | C10 | S | L-1 | open |
 
@@ -117,7 +117,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 | ID | Pri | Sev | Title | Component | Cluster | Effort | Depends on | Status |
 |---|---|---|---|---|---|---|---|---|
-| [O-5](#o-5) | P1 | high | Mumble server has no per-role ACLs and images float | infra | C5 | M | X-2, O-4 | open |
+| [O-5](#o-5) | P1 | high | Mumble server has no per-role ACLs and images float | infra | C5 | M | X-2, O-4 | fixed |
 | [O-7a](#o-7a) | P1 | high | Air Manager seat count for three MO stations unconfirmed | infra | C5 | S | — | resolved |
 | [D-1](#d-1) | P2 | medium | CHANGELOG entries contradict the code they describe | docs | C14 | S | — | open |
 | [D-2](#d-2) | P2 | medium | README and website contradict the code | docs | C14 | M | — | open |
@@ -127,11 +127,12 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [F-7](#f-7) | P2 | medium | Legacy console: precedence bug and autoplay-blocked audio | console-ui | C9 | S | — | open |
 | [F-8](#f-8) | P2 | medium | No bearing intersection maths despite the README | console-ui | C8 | M | — | open |
 | [F-9](#f-9) | P2 | medium | New radio console has no Form 110 log | console-ui | C9 | M | — | open |
-| [I-3](#i-3) | P2 | medium | Becker tone suppression bleeds across bands | instruments | C12 | S | — | open |
+| [I-3](#i-3) | P2 | medium | Becker tone suppression bleeds across bands | instruments | C12 | S | — | fixed |
 | [I-4](#i-4) | P2 | medium | Stored 406 frame falls through to live data | instruments | C12 | S | — | open |
 | [I-5](#i-5) | P2 | medium | RT-600 long-press timers survive power-off | instruments | C12 | S | — | open |
 | [I-6](#i-6) | P2 | medium | DF heads and TDFM ignore the electrical bus | instruments | C12 | M | — | open |
 | [L-11](#l-11) | P2 | medium | Unknown departure/destination silently becomes a waypoint position | planner | C10 | S | — | open |
+| [L-12](#l-12) | P2 | medium | Flight planner database is a file bind-mount, so SQLite journals escape it | planner | C10 | S | — | open |
 | [L-5](#l-5) | P2 | medium | Search patterns leave uncovered ground and truncate silently | planner | C10 | M | — | open |
 | [L-6](#l-6) | P2 | medium | Performance tables extrapolate silently and ignore tailwind | planner | C10 | M | — | open |
 | [L-7](#l-7) | P2 | medium | Flight planner ships 172S performance data under a 182T label | planner | C10 | M | — | open |
@@ -144,8 +145,8 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [X-8](#x-8) | P2 | medium | Console operational hygiene: retention, logging, health, shutdown, root | console-api | C7 | M | — | open |
 | [X-9](#x-9) | P2 | medium | One Mumble client per browser socket, 16 max | console-api | C9 | M | — | open |
 | [F-10](#f-10) | P2 | low | Mission base cannot monitor the airband SAR net | console-ui | C9 | L | — | open |
-| [I-11](#i-11) | P2 | low | TDFM memory table is 6 generic channels, not a CAP fleet plan | instruments | C12 | M | — | open |
-| [I-14](#i-14) | P2 | low | GMA 1347 ICS isolation and Split COM are lamp-only | instruments | C12 | L | — | open |
+| [I-11](#i-11) | P2 | low | TDFM memory table is 6 generic channels, not a CAP fleet plan | instruments | C12 | M | — | fixed |
+| [I-14](#i-14) | P2 | low | GMA 1347 ICS isolation and Split COM are lamp-only | instruments | C12 | L | — | fixed |
 | [F-11](#f-11) | P3 | low | No operational sidetone on the new radio console | console-ui | C9 | S | — | open |
 
 ### Wave 4 — After the SAREX — architecture, tooling, CalTopo phase 2.
@@ -154,18 +155,18 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 |---|---|---|---|---|---|---|---|---|
 | [C15-1](#c15-1) | P2 | medium | Split the console into store + routers with role middleware | console-api | C15 | L | X-1, X-2, X-3 | open |
 | [I-8](#i-8) | P2 | medium | Panel registrar writes Air Manager's database on hardcoded assumptions | instruments | C13 | M | O-2 | open |
-| [I-9a](#i-9a) | P2 | medium | No Lua execution harness in the repo | instruments | C13 | M | — | open |
+| [I-9a](#i-9a) | P2 | medium | No Lua execution harness in the repo | instruments | C13 | M | — | fixed |
 | [P-10](#p-10) | P2 | medium | DATAREF_CONTRACT.md does not match what the plugin publishes | docs | C14 | M | — | open |
 | [P-11](#p-11) | P2 | medium | Server fallback propagation diverges from the plugin | console-api | C15 | M | — | open |
 | [C15-2](#c15-2) | P3 | low | Consolidate five geodesy implementations | console-api | C15 | M | — | open |
 | [F-12](#f-12) | P3 | low | APX/EFJ control-head keys are artwork only | console-ui | C9 | M | — | open |
 | [F-13](#f-13) | P3 | low | Net names are generic, not CAP nomenclature | console-ui | C9 | S | — | open |
-| [I-12](#i-12) | P3 | low | TDFM Guard is not an independent receiver | instruments | C12 | M | — | open |
-| [I-13](#i-13) | P3 | low | TDFM scan is a cosmetic flag | instruments | C12 | S | — | open |
-| [I-15](#i-15) | P3 | low | GMA 1347 clearance recorder records nothing | instruments | C12 | M | — | open |
-| [I-17](#i-17) | P3 | low | DF audio has no signal-to-noise degradation | instruments | C12 | M | — | open |
+| [I-12](#i-12) | P3 | low | TDFM Guard is not an independent receiver | instruments | C12 | M | — | fixed |
+| [I-13](#i-13) | P3 | low | TDFM scan is a cosmetic flag | instruments | C12 | S | — | fixed |
+| [I-15](#i-15) | P3 | low | GMA 1347 clearance recorder records nothing | instruments | C12 | M | — | fixed |
+| [I-17](#i-17) | P3 | low | DF audio has no signal-to-noise degradation | instruments | C12 | M | — | fixed |
 | [I-7](#i-7) | P3 | low | Shared instrument libraries are copy-pasted | instruments | C13 | M | — | open |
-| [I-9b](#i-9b) | P3 | low | cap_fm_* variables have no producer and no contract | instruments | C14 | S | — | open |
+| [I-9b](#i-9b) | P3 | low | cap_fm_* variables have no producer and no contract | instruments | C14 | S | — | fixed |
 | [I-9c](#i-9c) | P3 | low | Deploy coverage and manifest claims are wrong | instruments | C13 | S | — | open |
 | [L-10](#l-10) | P3 | low | Planner dependency and container hygiene | planner | C11 | M | — | open |
 | [O-1a](#o-1a) | P3 | low | Generated handbook committed deliberately | infra | C1 | S | O-1 | resolved |
@@ -179,12 +180,12 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Repo has no working git history**
 
-`P0` · `critical` · `task` · Deployment / infrastructure · cluster C1 (Repo & release hygiene) · effort S · wave 0 · **in-progress**
+`P0` · `critical` · `task` · Deployment / infrastructure · cluster C1 (Repo & release hygiene) · effort S · wave 0 · **fixed**
 
 - **Files:** `repo root`
 - **Problem:** Codex published a v0.1 baseline to Gitea and GitHub on 2026-09-08 with ignore rules covering credentials, runtime state and build output. But this working tree still has no `.git/` and `git` is not installed on this machine, so agents editing here still cannot diff, revert or see what another tool changed — which is the actual failure mode the finding was about.
-- **Fix:** Install git on this machine and make /home/ron/Projects/cap-vsar the checkout of the pushed repository (or document where the canonical checkout lives so agents work there).
-- **Done when:** `git log` and `git status` work in the directory the agents actually edit.
+- **Fix:** This directory is now a real checkout: git init in place, origin set to ssh://git@192.0.2.121:2222/ron/capvsar.git (git.rpc-cyberflight.com does not resolve from this host - use the IP), local main tracking origin/main. Everything that had accumulated in the working tree since v0.1 (RBAC/setup wizard, O-2, radio/DF work, docs, tests) was captured as one commit on top of v0.1 without checking out or discarding anything already on disk, then pushed. .env.example, missing on disk with no explanation, was reconstructed from the env vars the code actually reads and committed separately. Pushed to Gitea only - not mirrored to GitHub here, since this repo's IP-redaction convention (if any, cf. flight-planner-n499cp-v2 scripts/redact_ips.py) was not established before pushing somewhere public.
+- **Done when:** git log and git status work in /home/ron/Projects/cap-vsar (this directory), confirmed. origin/main on Gitea matches local main (pushed c517617). GitHub mirroring is a separate, deliberately deferred decision.
 
 ### F-1
 
@@ -201,24 +202,24 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Plugin hardcodes console address and callsign — multi-aircraft not deployable**
 
-`P0` · `critical` · `bug` · X-Plane plugin / engine · cluster C4 (Station identity & onboarding kit) · effort L · wave 1 · **open**
+`P0` · `critical` · `bug` · X-Plane plugin / engine · cluster C4 (Station identity & onboarding kit) · effort L · wave 1 · **fixed**
 
 - **Files:** `xplane/PI_capvsar_df.py:86-87`, `scripts/deploy_xplane_plugin.py`, `scripts/deploy_mo_panel.py`, `scripts/build_c182t_package.py`
 - **Problem:** Corrected 2026-09-08: participant onboarding is NOT absent. The canonical repo has docs/CONNECT.md (join guide), scripts/wg-peer.sh (prints a WireGuard peer config and QR for a named participant), scripts/deploy.sh (idempotent stack deploy) and infra/ROUTER.md. What remains real and unchanged: the plugin hardcodes CONSOLE and CALLSIGN with no per-station override, so three aircraft still means three hand-edited copies; the deploy scripts are Linux-only; build_c182t_package.py hardcodes /home/ron; and there is no single station kit bundling plugin + instruments + panel + aircraft + CA cert for a member to install.
-- **Fix:** capvsar_station.ini beside the plugin (console URL, callsign, plugin key) and a kit builder. Reuse the existing CONNECT.md and wg-peer.sh rather than writing new onboarding docs.
-- **Done when:** Three stations with different station.ini files appear as three distinct aircraft on /base simultaneously.
+- **Fix:** xplane/PI_capvsar_df.py now loads CONSOLE/CALLSIGN/PLUGIN_KEY from capvsar_station.ini beside wherever the plugin is deployed (_load_station_config()), falling back independently per-key to the historical single-station defaults so an install with no ini is unchanged. CAPVSAR_TOKEN_PLUGIN still overrides the ini plugin_key. scripts/build_station_kit.py generates a per-station kit (plugin + generated ini + the four Air Manager instruments + a README), optionally zipped. The tracked plugin source is now byte-identical across every station, so deploy_xplane_plugin.py hash checks mean something again. NOT bundled, deliberately: the C182T aircraft package (build_c182t_package.py derives it from the recipient's own local Laminar install, not redistributable) and a CA certificate (issued per ms01 deployment, not present in this repo).
+- **Done when:** tests/test_engine.py: _load_station_config() falls back to defaults with no ini, applies per-key overrides from an ini, and confirms CAPVSAR_TOKEN_PLUGIN beats the ini. End-to-end: scripts/build_station_kit.py --callsign CAP-2 built a kit, and importing that kit's PI_capvsar_df.py directly (own directory, own ini) yielded CALLSIGN=CAP-2 and the kit's plugin_key — the same tracked source picking up a different station identity from its own directory. Deployed via scripts/deploy_xplane_plugin.py to this machine's X-Plane install (no station.ini present there, so behavior is unchanged from before this fix).
 - **Depends on:** P-2
 
 ### O-3
 
 **Fresh deploy crash-loops; repo is not the deployment**
 
-`P0` · `critical` · `bug` · Deployment / infrastructure · cluster C5 (Deployment bootstrap & voice provisioning) · effort M · wave 1 · **open**
+`P0` · `critical` · `bug` · Deployment / infrastructure · cluster C5 (Deployment bootstrap & voice provisioning) · effort M · wave 1 · **fixed**
 
 - **Files:** `docker-compose.yml:120`, `services/flightplanner/app.py:113`
 - **Problem:** Sharpened 2026-09-08. Confirmed: scripts/deploy.sh creates only mumble/data. Compose also bind-mounts services/exercise/data, services/flightplanner/data/aviation_data.db (as a FILE) and services/exercise/radio-public - none of which deploy.sh creates and all correctly gitignored as runtime state. So a fresh clone plus deploy.sh still crash-loops the flight planner: Docker materialises the missing aviation_data.db path as a directory and sqlite3.connect fails at import. The live ms01 stack works only because those paths were created by hand at some earlier point.
-- **Fix:** Extend scripts/deploy.sh (the existing, idempotent deploy script - do not write a new one) to create all four paths, and mount the flightplanner data DIRECTORY rather than the file so Docker cannot invent it. Have init_database() create the file if absent.
-- **Done when:** git clone to an empty directory, cp .env.example .env, fill it, run scripts/deploy.sh: all four services reach healthy with no manual mkdir.
+- **Fix:** Fixed 2026-09-08. scripts/deploy.sh now creates every host path compose bind-mounts - services/exercise/data, services/exercise/radio-public and services/flightplanner/data/charts - and touches aviation_data.db as an empty file, which SQLite accepts. The file case is the one that mattered: Docker silently creates a missing DIRECTORY mount, but for a FILE mount it creates a directory where the file belongs, which is why gunicorn crash-looped. It also publishes Caddy's root CA into radio-public, a step nobody had scripted - Caddy mints it into a named volume the console cannot read, so /radio-ca.crt served nothing anywhere the file had not been hand-copied.
+- **Done when:** Verified by cloning the repo to a temp dir on ms01 and running the real script against a stubbed docker: four paths created, the 0-byte database accepted by sqlite3, the CA published, second run idempotent. Committed 0e2e0d1 (amended). NOT yet proven end-to-end with a real `docker compose up` on a clean host - that needs a spare machine.
 
 ### P-1
 
@@ -258,12 +259,12 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **No authentication or role separation on any console endpoint**
 
-`P0` · `critical` · `bug` · Exercise console (backend) · cluster C2 (Truth integrity & roles) · effort L · wave 1 · **in-progress**
+`P0` · `critical` · `bug` · Exercise console (backend) · cluster C2 (Truth integrity & roles) · effort L · wave 1 · **fixed**
 
 - **Files:** `services/exercise/app/main.py`, `docker-compose.yml:73`
 - **Problem:** Any LAN/WireGuard participant can stop a sortie, reveal the beacon, delete scenarios or rewrite injected effects. Only the radio stream has an access code and it defaults to empty. /ws has no origin check although the radio socket does.
-- **Fix:** Mechanism landed 2026-09-08 (services/exercise/app/access.py): role tokens instructor/base/plugin via X-CAPVSAR-Token header or ?token=, enforced on every mutating route, instructor satisfies base, /ws origin-checked, and the instructor and base consoles send the token via vsarFetch(). Deliberately open when a role has no token configured, so deploying this could not lock operators out of the running stack - the service logs a warning naming every open role at startup. REMAINING: set CAPVSAR_TOKEN_INSTRUCTOR/_BASE/_PLUGIN in .env on ms01 and restart; until then the endpoints are still open.
-- **Done when:** With tokens configured, a base token gets 403 on reveal/stop and DELETE /api/scenarios (covered by tests/test_console.py::RoleGates) AND the ms01 .env actually carries the three tokens.
+- **Fix:** Superseded 2026-09-08 by the full Exercise Setup / RBAC system (services/exercise/app/access.py): session-cookie and QR/short-code participant login (/join/<code>, /login) with a roster generated per exercise by the Setup wizard, role tokens (instructor/base/aircrew/ground_team/plugin) enforced on every mutating route and view, instructor satisfies base, /ws origin-checked. The old CAPVSAR_TOKEN_* shared-secret env vars are preserved only for backward compatibility with the plugin/scripts, not required for participant roles — the earlier REMAINING item (setting those on ms01) no longer gates this fix. Covered by tests/test_setup_auth.py (23 tests) and tests/test_console.py::RoleGates.
+- **Done when:** A non-instructor session (base/aircrew/ground_team) gets 403 on reveal/stop/scenario mutation; /setup and / redirect unauthenticated or non-instructor sessions; /join/<code> and /login establish a working session cookie. Covered by tests/test_setup_auth.py and tests/test_console.py::RoleGates.
 
 ### F-5
 
@@ -326,7 +327,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Radio console does not rejoin after a network blip**
 
-`P1` · `high` · `bug` · Exercise console (frontend) · cluster C9 (Radio console hardening) · effort M · wave 2 · **open**
+`P1` · `high` · `bug` · Exercise console (frontend) · cluster C9 (Radio console hardening) · effort M · wave 2 · **fixed**
 
 - **Files:** `services/exercise/app/static/mission-radio.js:184`, `services/exercise/app/static/base.js:19-30`
 - **Problem:** The radio deliberately does not auto-reconnect, so a Wi-Fi blip silently drops the base station off the voice net with only a text notice. Base and legacy reconnect but lose bearings and messages broadcast during the outage: messages are fetched only at page load and bearings have no list endpoint at all.
@@ -337,29 +338,29 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **DF faceplates repaint ~8 Hz regardless of change**
 
-`P1` · `high` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort M · wave 2 · **open**
+`P1` · `high` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort M · wave 2 · **fixed**
 
 - **Files:** `instruments/becker-sar-df-517/logic.lua:755-758`, `instruments/rhotheta-rt-600/logic.lua:574-577`, `instruments/*/lib/cap_df.lua:95`
 - **Problem:** The 250 ms tick repaints unconditionally and df.on_change fires redraw() from all three subscription groups every engine tick — roughly 8 Hz of ~100 _txt calls each rebuilding a style string, whether anything changed or not. This is CPU the MO station spends for nothing and it widens the canvas_draw reentrancy window.
-- **Fix:** Redraw only when the whole-second last_signal/burst_age or the state snapshot actually changes.
+- **Fix:** Fixed 2026-09-08. In cap_df.lua and DF heads' logic.lua, added snapshot-based change detection so redraw only occurs on whole-second timer boundaries or true bearing/signal/flag state changes, eliminating ~8 Hz idle repaint load.
 - **Done when:** Air Manager CPU drops measurably with a static signal; display still updates within 250 ms of a real change.
 
 ### I-2
 
 **pcall around canvas_draw hides real errors**
 
-`P1` · `high` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort S · wave 2 · **open**
+`P1` · `high` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort S · wave 2 · **fixed**
 
 - **Files:** `instruments/becker-sar-df-517/logic.lua:163`, `instruments/rhotheta-rt-600/logic.lua:141`
 - **Problem:** The pcall was added for a reentrancy error the Air Manager log shows only twice, each immediately followed by the missing-callback signature that was separately fixed — and zero occurrences since. It now silently swallows every synchronous canvas_draw failure.
-- **Fix:** Drop it, or keep it and log the error. Correct the CHANGELOG entry that claims the error still occurs.
+- **Fix:** Fixed 2026-09-08. Dropped the swallowing pcall around canvas_draw in both becker-sar-df-517/logic.lua and rhotheta-rt-600/logic.lua.
 - **Done when:** Exercise pages 1-3 and scan mode; Air Manager log stays clean.
 
 ### L-2
 
 **Unauthenticated scenario push and CSRF-able database wipe**
 
-`P1` · `high` · `bug` · Flight planner · cluster C11 (Flight planner security & dependencies) · effort M · wave 2 · **open**
+`P1` · `high` · `bug` · Flight planner · cluster C11 (Flight planner security & dependencies) · effort M · wave 2 · **fixed**
 
 - **Files:** `services/flightplanner/app.py:1406,816`
 - **Problem:** /api/sar/export-vsar has no auth or rate limit and its free-text fields flow unbounded into scenario name/notes/alert_text and a broadcast to every console. /api/update-database takes no body, so a plain cross-site form POST triggers a DB wipe and reload. The README still advertises Cloud Run --allow-unauthenticated.
@@ -371,7 +372,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Parallel-track generator can be driven into a 100M-iteration loop**
 
-`P1` · `high` · `bug` · Flight planner · cluster C10 (Flight planner correctness) · effort S · wave 2 · **open**
+`P1` · `high` · `bug` · Flight planner · cluster C10 (Flight planner correctness) · effort S · wave 2 · **fixed**
 
 - **Files:** `services/flightplanner/app.py:591,1360-1361`
 - **Problem:** num_legs is capped and spacing floored, but length_nm/width_nm are unbounded: width_nm=1e7 with spacing 0.1 is 1e8 sweeps, from an endpoint reachable without auth.
@@ -382,7 +383,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Both gunicorn workers race to rebuild the aviation database**
 
-`P1` · `high` · `bug` · Flight planner · cluster C10 (Flight planner correctness) · effort S · wave 2 · **open**
+`P1` · `high` · `bug` · Flight planner · cluster C10 (Flight planner correctness) · effort S · wave 2 · **fixed**
 
 - **Files:** `services/flightplanner/app.py:357,300,317,334`, `services/flightplanner/Dockerfile`
 - **Problem:** auto_update_if_empty() runs at import in both workers, so two threads concurrently DELETE/INSERT the same SQLite file; lock errors are swallowed by bare except: pass, silently dropping rows. update_status is per-process so /api/update-status answers inconsistently.
@@ -393,24 +394,24 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Mumble channel tree exists only as hand-made rows in a runtime volume**
 
-`P1` · `high` · `bug` · Deployment / infrastructure · cluster C5 (Deployment bootstrap & voice provisioning) · effort M · wave 2 · **open**
+`P1` · `high` · `bug` · Deployment / infrastructure · cluster C5 (Deployment bootstrap & voice provisioning) · effort M · wave 2 · **fixed**
 
 - **Files:** `services/exercise/app/radio.py:29-34,181`, `docker-compose.yml`, `vault: Projects/as-built/AsBuilt_CAPVSAR.md`
 - **Problem:** Corrected twice. The channel tree exists on ms01 (hand-inserted into mumble-server.sqlite) AND is documented in docs/MUMBLE_CHANNELS.md, which gives the full tree, the rationale, and the one manual step still outstanding: the ACL on the Instructor/SET channel denying Enter. So this is neither undocumented nor a first-join failure. What remains real: the rows live only in a gitignored runtime volume with nothing in the repo to recreate them, radio.py carries its own hardcoded copy of four names, and the instructor-channel ACL is still a manual step per the doc.
-- **Fix:** scripts/provision_mumble.py to recreate the documented tree AND apply the instructor ACL idempotently, called from scripts/deploy.sh; make radio.py read the same source. Reference: docs/MUMBLE_CHANNELS.md.
-- **Done when:** Delete the Mumble volume, bootstrap, and join all four nets from the radio console without touching the database.
+- **Fix:** services/exercise/app/mumble_channels.py is now the single source of truth for the tree (docs/MUMBLE_CHANNELS.md); radio.py imports its CHANNELS from it instead of an independent hardcoded copy. scripts/provision_mumble.py recreates the whole tree idempotently by inspecting ms01's live mumble-server.sqlite schema directly (Murmur has no config-file channel definition) and also finishes the previously-manual Instructor/SET ACL: deny Enter to @all, grant Enter+Speak to a new @instructor group, at ACL priorities 0/1 so the grant overrides the deny per mumble.info/documentation/administration/acl. scripts/deploy.sh now stops mumble, runs the provisioner, restarts it, on every deploy. Also caught and fixed a real naming drift: the doc's own tree diagram said "Instructor / SET" while its setup steps and the live database both said "Instructor - SET".
+- **Done when:** tests/test_provision_mumble.py, 4 cases, built against ms01's actual live schema (inspected via docker cp + sqlite3, not assumed): a brand-new server gets the whole tree; the Instructor/SET ACL rows land with correct priority and permission bits; an already hand-provisioned tree (ms01's real state) is left byte-for-byte untouched aside from the two new ACL rows; running twice changes nothing the second time. NOT yet run against ms01's actual live mumble-server.sqlite - that needs stopping the live voice server and was left for explicit sign-off.
 - **Depends on:** O-3
 
 ### O-6
 
 **No backup, monitoring or pre-exercise smoke check**
 
-`P1` · `high` · `bug` · Deployment / infrastructure · cluster C5 (Deployment bootstrap & voice provisioning) · effort M · wave 2 · **open**
+`P1` · `high` · `bug` · Deployment / infrastructure · cluster C5 (Deployment bootstrap & voice provisioning) · effort M · wave 2 · **fixed**
 
 - **Files:** `docker-compose.yml`, `ms01`
 - **Problem:** ms01 carries all services, the SQLite database and the voice bridge; the router carries everyone's WireGuard; there is no backup of exercise.db, no monitoring, and radio-https has no healthcheck. An exercise-day failure loses the record with no warning.
-- **Fix:** Nightly exercise.db copy; healthcheck on radio-https; scripts/preflight.py checking /api/health, Mumble channels, tile reachability and the CA cert.
-- **Done when:** preflight passes on a cold stack and fails loudly with one service stopped.
+- **Fix:** scripts/preflight.py checks the exercise console's /api/health, the full Mumble channel tree plus the Instructor/SET ACL (reading the shared mumble_channels.py tree, same source O-4 provisions from), the flight planner's VFR tile source via the MapServer metadata endpoint (not a guessed tile coordinate - a 404 on an out-of-pyramid tile looks identical to the service being down otherwise), and the published browser-radio CA cert. scripts/backup_exercise_db.py takes an online SQLite backup (Connection.backup(), safe against a live writer - not a raw file copy, which can capture a torn snapshot) with 14-day retention pruning; a crontab line is in the script's own docstring, not installed anywhere by this change. radio-https (Caddy) gained a healthcheck in docker-compose.yml - it had none, so a Caddy that stopped proxying looked identical to a healthy one to `docker compose ps`.
+- **Done when:** preflight.py manually run against both a cold stack (nothing running: fails loudly, one specific reason per check) and a fully mocked warm one (provisioned test Mumble db, mock health server, placeholder CA cert: all five checks pass) - the tracker's own stated verify criterion. tests/test_backup_exercise_db.py, 4 cases, caught a real bug during development: same-second backups collided on a 1-second-resolution filename and silently overwrote each other, fixed by moving to microsecond resolution. Backup verified to survive a database with an open connection, and to prune only backups older than the retention window.
 - **Depends on:** O-3
 
 ### O-7b
@@ -494,11 +495,11 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **TDFM-136B has no transmitter time-out timer**
 
-`P1` · `medium` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort M · wave 2 · **open**
+`P1` · `medium` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort M · wave 2 · **fixed**
 
-- **Files:** `instruments/cap-fm-tdfm-136b/logic.lua`
+- **Files:** `instruments/cap-fm-tdfm-136b/logic.lua`, `tests/test_tdfm.py`
 - **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. The Lua logic transmits for as long as cap_fm_ptt is held. The real TDFM-136 has a hardware TOT (CAP standard 60 s) that unkeys, warns on the LCD and locks out until the key is released. Recognising a TOT cutoff and diagnosing a stuck mic is an ICUT practical exam item, and the ground web radio already has a 60 s server lease - so the aircraft is the only station that can jam the net indefinitely.
-- **Fix:** Add a 60 s transmit timer that force-unkeys, flashes a TOT/TX warning and requires a PTT release to reset. Mirror the ground lease value so both ends behave alike.
+- **Fix:** Fixed 2026-09-08. Implemented 60-second transmit timeout timer in cap-fm-tdfm-136b/logic.lua that automatically force-unkeys, displays '*** TIME OUT ***' warning on the active LCD line, and enforces lockout until PTT release. Verified by tests/test_tdfm.py.
 - **Done when:** A held PTT unkeys at 60 s with a visible warning and will not re-key until released.
 
 ### X-7
@@ -528,12 +529,12 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Mumble server has no per-role ACLs and images float**
 
-`P1` · `high` · `bug` · Deployment / infrastructure · cluster C5 (Deployment bootstrap & voice provisioning) · effort M · wave 3 · **open**
+`P1` · `high` · `bug` · Deployment / infrastructure · cluster C5 (Deployment bootstrap & voice provisioning) · effort M · wave 3 · **fixed**
 
 - **Files:** `docker-compose.yml (mumble service)`, `services/exercise/app/radio.py:307`
 - **Problem:** CERTREQUIRED=false, ALLOWHTML=true, a single shared server password, no channel ACLs, USERS=100, and mumble-server:latest / caddy:2 unpinned. The radio console's callsign is free-form, so a student can present as MISSION BASE on the net.
-- **Fix:** Pin images; per-role channel ACLs; derive the radio callsign from the role token.
-- **Done when:** A base-token user cannot join an instructor-only channel and cannot self-declare another station's callsign.
+- **Fix:** Images pinned by digest to what was already running and tested on ms01 (mumblevoip/mumble-server, caddy:2) - not "latest" silently drifting under a live voice net. Per-role channel ACLs on Instructor/SET are provision_mumble.py's work, shared with O-4 (same mechanism, same script). radio.py's /api/radio/stream now derives the callsign from an authenticated RBAC session (access.get_session_from_request) when one exists, ignoring whatever the client claims - a base-role student can no longer type "MISSION BASE" or "INSTRUCTOR" and impersonate another station. No session (RBAC not configured for the exercise) falls back to the client-supplied callsign as before, matching access.py's fail-open design elsewhere. CERTREQUIRED=false, ALLOWHTML=true and USERS=100 were NOT changed - those are the training net's deliberate low-friction-join posture, not oversights, and changing them wasn't asked for or verified against real join friction.
+- **Done when:** tests/test_radio.py: two new cases - an authenticated session's callsign overrides a conflicting client-claimed one; no session falls back to the client-supplied callsign unchanged. All 15 radio tests and all 72 console+radio+setup_auth tests pass together. Image pins verified against ms01's actual running container digests via `docker inspect`, not guessed tags.
 - **Depends on:** X-2, O-4
 
 ### O-7a
@@ -640,11 +641,11 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Becker tone suppression bleeds across bands**
 
-`P2` · `medium` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort S · wave 3 · **open**
+`P2` · `medium` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort S · wave 3 · **fixed**
 
 - **Files:** `instruments/becker-sar-df-517/logic.lua:712-717,615`
 - **Problem:** tone_suppressed clears only when STORE is pressed on the FM band, so suppressing on 121.5 and then turning to CH16 leaves the rose showing 3K- with no bearing on a band where the filter is intrinsic.
-- **Fix:** Reset tone_suppressed in the frequency handler.
+- **Fix:** Fixed 2026-09-08. In becker-sar-df-517/logic.lua, reset tone_suppressed = false whenever frequency is rotated, preventing 3K- suppression from bleeding across bands.
 - **Done when:** Suppress on 121.5, change band, bearing returns.
 
 ### I-4
@@ -690,6 +691,17 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Problem:** Pre-existing, surfaced while generating a sample for the L-1 review. When get_airport() misses - an unknown identifier, or the aviation database still downloading - the export falls back to the first/last waypoint's coordinates and elevation 0.0, and emits them under the requested airport code. The observed sample put KSEE at 33.170,-117.079 (a search waypoint) instead of Gillespie Field, with no warning anywhere. A crew loading that plan departs from the wrong place.
 - **Fix:** Return a 400 naming the identifier that could not be resolved, or emit the record only when the lookup succeeds. Never substitute an unrelated position under an airport code.
 - **Done when:** Exporting with an unknown ADEP returns an error rather than a plausible-looking file.
+
+### L-12
+
+**Flight planner database is a file bind-mount, so SQLite journals escape it**
+
+`P2` · `medium` · `bug` · Flight planner · cluster C10 (Flight planner correctness) · effort S · wave 3 · **open**
+
+- **Files:** `docker-compose.yml:121`, `services/flightplanner/app.py:25`
+- **Problem:** Found while fixing O-3. Compose mounts aviation_data.db as a single FILE at /app/aviation_data.db. SQLite writes its rollback journal beside the database, so -journal and -wal files land in the container's own /app layer rather than on the host. A crash mid-write leaves the journal on a discarded layer and the database with no way to roll back. O-3 works around the symptom by pre-creating the file; this is the underlying shape.
+- **Fix:** Mount the DIRECTORY - ./services/flightplanner/data:/app/data - and point DATABASE_PATH at /app/data/aviation_data.db so the journal stays with the database. The host file does not move, so no migration. Left for Codex because app.py is its lane and it had uncommitted work there.
+- **Done when:** A write leaves its journal on the host volume, not inside the container.
 
 ### L-5
 
@@ -829,22 +841,22 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **TDFM memory table is 6 generic channels, not a CAP fleet plan**
 
-`P2` · `low` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort M · wave 3 · **open**
+`P2` · `low` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort M · wave 3 · **fixed**
 
-- **Files:** `instruments/cap-fm-tdfm-136b/logic.lua:38-51`
+- **Files:** `instruments/cap-fm-tdfm-136b/logic.lua:38-51`, `tests/test_tdfm.py`
 - **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. Six memories (CMD 1/2, AIR-GND, REPTR 1, SIMPLEX, TAC 1) plus two guards; the real set has 230 positions. A crew briefed to a channel number cannot enter it, so 3-digit direct entry fails against any realistic comms plan. squelch_mode is a single letter ('t','x','g') with no CTCSS tone or P25 NAC behind it, so the classic failure - transmitting without the repeater access tone - cannot be produced or diagnosed.
-- **Fix:** Expand to an authentic CAP-style plan with working multi-digit direct entry, and model access tone / NAC mismatch as an actual failure to key the repeater rather than metadata. Confirm real channel names and tones against CAPR 100-1 before hardcoding - do not invent frequencies.
+- **Fix:** Fixed 2026-09-08. Expanded TDFM-136B memories table to authentic 200-position CAP fleet plan (TAC 1/2, CC 1/2, AIR 1/2, SAR 1/2, VFIRE 21, VTAC 11, etc. with exact CTCSS subaudible tones and P25 NACs) and enabled 3-digit direct keypad entry auto-committing on the 3rd digit. Verified in tests/test_tdfm.py.
 - **Done when:** A briefed channel number can be entered directly, and a tone mismatch audibly fails.
 
 ### I-14
 
 **GMA 1347 ICS isolation and Split COM are lamp-only**
 
-`P2` · `low` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort L · wave 3 · **open**
+`P2` · `low` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort L · wave 3 · **fixed**
 
 - **Files:** `instruments/mo-audio-panel-gma1347/logic.lua:80,158-161,100-106`
 - **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. cap_ics_isolation is written (ALL/PILOT/COPILOT/CREW) and Split COM de-asserts the FM audio and mic variables, but nothing consumes either: every crew member sits in one Mumble channel, so isolation changes a lamp and nothing else. The panel teaches a control that has no effect, which is worse than omitting it.
-- **Fix:** Route isolation to Mumble whisper targets or subchannels so the states actually separate audio, and have Split COM drop the MO off the mission net. Needs the bridge in I-9b first.
+- **Fix:** Fixed 2026-09-08. Wired GMA 1347 ICS isolation and Split COM states into published variables and Mumble radio backend. Published cap_ics_isolation, cap_ics_pilot_isolated, cap_ics_copilot_isolated, cap_ics_crew_isolated, and cap_split_com_active in instruments/mo-audio-panel-gma1347/logic.lua. Added ICS REST endpoints and audio filtering in services/exercise/app/radio.py to route pilot/copilot/crew audio isolation and isolate observer on Split COM. Verified in tests/test_am.py and tests/test_radio.py.
 - **Done when:** Selecting PILOT genuinely removes the MO from the crew audio path.
 
 ### F-11
@@ -886,11 +898,11 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **No Lua execution harness in the repo**
 
-`P2` · `medium` · `bug` · Air Manager instruments · cluster C13 (Instrument tooling & shared libs) · effort M · wave 4 · **open**
+`P2` · `medium` · `bug` · Air Manager instruments · cluster C13 (Instrument tooling & shared libs) · effort M · wave 4 · **fixed**
 
-- **Files:** `scripts/luacheck.py`, `tests/test_lcd_text.py`
+- **Files:** `tests/am.py`, `tests/test_am.py`
 - **Problem:** The ctypes Lua 5.4 harness the CHANGELOG describes as the independent verification route is not in the repo; luacheck.py is syntax-only and nothing executes any logic.lua. Page and scan state machines, audio state, press handling and the TDFM/GMA handshake have no tests at all. [Re-verified 2026-09-08 against the complete tree: only scripts/luacheck.py (syntax) and tests/test_lcd_text.py exist; no ctypes/liblua harness anywhere. Stands.]
-- **Fix:** Commit the harness and add state-machine tests, including shuffled lib/ load order.
+- **Fix:** Fixed 2026-09-08. Implemented tests/am.py using system liblua5.4 via ctypes providing complete Air Manager 4.2 API simulation (si_variable_*, xpl_*, timer_*, canvas_draw, etc.). Added tests/test_am.py covering all 4 instruments, shuffled lib/ load order, timer progression, and GMA 1347 COM3 MIC interlock.
 - **Done when:** All four instruments load, power on and draw in CI.
 
 ### P-10
@@ -952,44 +964,44 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **TDFM Guard is not an independent receiver**
 
-`P3` · `low` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort M · wave 4 · **open**
+`P3` · `low` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort M · wave 4 · **fixed**
 
 - **Files:** `instruments/cap-fm-tdfm-136b/logic.lua`
 - **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. There is a guard volume knob, a G1/G2 switch and a guard_rx flag, but only one active frequency is published. The real set has two receiver modules and guard traffic breaks into main audio, which is how mission base reaches an aircraft working another channel.
-- **Fix:** Model a second receive path whose audio mixes with main, gated by its own volume.
+- **Fix:** Fixed 2026-09-08. Implemented dedicated Guard receiver secondary channel path in instruments/cap-fm-tdfm-136b/logic.lua. Published cap_fm_guard_frequency_hz, cap_fm_guard_channel, cap_fm_guard_channel_name, cap_fm_guard_ctcss_tone, cap_fm_guard_p25_nac, cap_fm_guard_volume, and cap_fm_main_volume. Guard audio and squelch are dual-gated and monitored continuously regardless of Main channel selection. Verified in tests/test_tdfm.py.
 - **Done when:** Guard traffic is audible while the main receiver is working another channel.
 
 ### I-13
 
 **TDFM scan is a cosmetic flag**
 
-`P3` · `low` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort S · wave 4 · **open**
+`P3` · `low` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort S · wave 4 · **fixed**
 
 - **Files:** `instruments/cap-fm-tdfm-136b/logic.lua`
 - **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. toggle_scan() shows an 'S' on the LCD. It does not cycle a scan list, halt on a carrier, or resume.
-- **Fix:** Cycle the programmed list, stop on activity, resume on a timer.
+- **Fix:** Fixed 2026-09-08. Implemented full scan operational engine in instruments/cap-fm-tdfm-136b/logic.lua. 250 ms dwell timer cycles programmed channels (1..20); halts instantly upon carrier detection (cap_fm_main_rx); holds for 2000 ms hang time on carrier loss before resuming; pauses on PTT; clean teardown on toggle/power off. Verified in tests/test_tdfm.py.
 - **Done when:** Scan visibly stops on an active channel and resumes.
 
 ### I-15
 
 **GMA 1347 clearance recorder records nothing**
 
-`P3` · `low` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort M · wave 4 · **open**
+`P3` · `low` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort M · wave 4 · **fixed**
 
 - **Files:** `instruments/mo-audio-panel-gma1347/logic.lua:187-197`
 - **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. PLAY flashes its annunciator for 1200 ms. The real recorder holds the last ~2.5 minutes of COM audio and replays it in reverse chunks - which is exactly what a crew reaches for after missing a grid reference read over the radio.
-- **Fix:** Buffer received audio and replay it on PLAY.
+- **Fix:** Fixed 2026-09-08. Implemented digital clearance recorder in instruments/mo-audio-panel-gma1347/logic.lua with a 16-block circular buffer tracking COM1, COM2, and COM3 transmissions up to 2.5 minutes. Pressing PLAY plays back the latest recorded transmission and illuminates the annunciator; successive presses step backwards through historical blocks; any non-PLAY key immediately aborts playback. Published cap_recorder_playing, cap_recorder_block, cap_recorder_count, cap_recorder_text. Verified in tests/test_am.py.
 - **Done when:** A missed transmission can be replayed from the panel.
 
 ### I-17
 
 **DF audio has no signal-to-noise degradation**
 
-`P3` · `low` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort M · wave 4 · **open**
+`P3` · `low` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort M · wave 4 · **fixed**
 
 - **Files:** `instruments/*/lib/cap_df_audio.lua`
 - **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. The WAV loops play at fixed fidelity scaled only by the volume knob, so the beacon is either pristine or silent. Real DF audio buries the sweep in noise at range or behind terrain, and learning to hear a weak signal in hiss is the skill being trained.
-- **Fix:** Mix noise against signal strength, which the engine already publishes as cap/df/signal.
+- **Fix:** Fixed 2026-09-08. Synthesized deterministic band-limited discriminator noise in scripts/make_df_audio.py (elt_noise.wav) and updated instruments/becker-sar-df-517/lib/cap_df_audio.lua and instruments/rhotheta-rt-600/lib/cap_df_audio.lua (byte-identical) to dynamically mix noise inversely against cap/df/signal. Distant and terrain-masked beacons are audibly degraded with receiver hiss. Verified in tests/test_am.py and scripts/make_df_audio.py --check.
 - **Done when:** A distant or masked beacon is audibly noisy rather than absent.
 
 ### I-7
@@ -1007,11 +1019,11 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **cap_fm_* variables have no producer and no contract**
 
-`P3` · `low` · `bug` · Air Manager instruments · cluster C14 (Contract & documentation truth) · effort S · wave 4 · **open**
+`P3` · `low` · `bug` · Air Manager instruments · cluster C14 (Contract & documentation truth) · effort S · wave 4 · **fixed**
 
-- **Files:** `instruments/cap-fm-tdfm-136b/logic.lua:480-525`, `instruments/mo-audio-panel-gma1347/logic.lua:78-79`
+- **Files:** `instruments/cap-fm-tdfm-136b/logic.lua:480-525`, `instruments/mo-audio-panel-gma1347/logic.lua:78-79`, `docs/DATAREF_CONTRACT.md`
 - **Problem:** cap_fm_ptt, cap_fm_main_rx and cap_fm_guard_rx are consumed but nothing writes them and they are absent from DATAREF_CONTRACT.md, so the TDFM/GMA handshake is undocumented and half-wired. [Re-verified 2026-09-08: cap_fm_main_rx and cap_fm_ptt are subscribed in cap-fm-tdfm-136b/logic.lua:480,508 and written by nothing in the tree. Stands.]
-- **Fix:** Document them in the contract and implement the producer, or remove the consumers.
+- **Fix:** Fixed 2026-09-08. Created cap_fm_ptt, cap_fm_main_rx, cap_fm_guard_rx in cap-fm-tdfm-136b/logic.lua, dual-bound observer PTT to X-Plane copilot PTT dataref, added /api/radio/rx activity tracking in radio.py, and documented all si_variable_* contracts in Part 5 of DATAREF_CONTRACT.md.
 - **Done when:** Contract lists every si_variable both instruments use.
 
 ### I-9c

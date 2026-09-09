@@ -38,6 +38,19 @@ docker compose pull --quiet
 echo "==> starting stack"
 docker compose up -d
 
+# --------------------------------------------------------- mumble channel tree
+# Murmur has no config-file channel definition and caches its ACL/channel
+# state in memory, so provision_mumble.py has to run against a stopped
+# server - and needs the sqlite schema Murmur creates on its own first boot,
+# which "docker compose up -d" above just did. Idempotent: an
+# already-provisioned tree (including ms01's hand-made one) is left alone,
+# so stopping mumble briefly on every deploy is the only real cost of running
+# this unconditionally.
+echo "==> mumble channel tree"
+docker compose stop mumble
+python3 scripts/provision_mumble.py mumble/data/mumble-server.sqlite
+docker compose start mumble
+
 # ------------------------------------------------------- browser radio trust
 # Tablets need a trusted secure context before a browser will hand the radio
 # console a microphone. Caddy mints its own root CA on first boot and keeps it
