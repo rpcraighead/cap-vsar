@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 70 items, 49 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 81 items, 60 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -10,20 +10,20 @@ IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split ou
 
 | | critical | high | medium | low | total |
 |---|---|---|---|---|---|
-| by severity | 8 | 21 | 32 | 9 | 70 |
+| by severity | 8 | 21 | 33 | 19 | 81 |
 
 | P0 | P1 | P2 | P3 |
 |---|---|---|---|
-| 10 | 21 | 30 | 9 |
+| 10 | 22 | 33 | 16 |
 
 | Component | Items |
 |---|---|
+| Air Manager instruments | 19 |
+| Exercise console (frontend) | 12 |
 | X-Plane plugin / engine | 12 |
 | Exercise console (backend) | 12 |
 | Flight planner | 12 |
-| Air Manager instruments | 12 |
 | Deployment / infrastructure | 8 |
-| Exercise console (frontend) | 8 |
 | Docs / record | 6 |
 
 ## Priority definitions
@@ -39,9 +39,9 @@ _Wave dates track the illustrative calendar in docs/USE_CASE_SAREX_REHEARSAL.md 
 
 - **Wave 0** (1 items) — Now — make the work safe to do at all.
 - **Wave 1** (10 items) — Before session 1 (base stand-up). Nothing flies; base, planner and comms must work.
-- **Wave 2** (19 items) — Before session 2 (full mission, three aircraft, injected effects).
-- **Wave 3** (26 items) — Before session 3 (dress rehearsal) and the live SAREX.
-- **Wave 4** (14 items) — After the SAREX — architecture, tooling, CalTopo phase 2.
+- **Wave 2** (20 items) — Before session 2 (full mission, three aircraft, injected effects).
+- **Wave 3** (30 items) — Before session 3 (dress rehearsal) and the live SAREX.
+- **Wave 4** (20 items) — After the SAREX — architecture, tooling, CalTopo phase 2.
 
 ## Clusters
 
@@ -57,10 +57,10 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | C6 | Offline mission base | F-1, L-8 | static assets, low conflict |
 | C7 | Console robustness | X-3, X-4, X-5, X-7, X-6, X-8 | main.py — conflicts with C2, sequence them |
 | C8 | Base view & debrief | F-2, F-3, F-6, F-8 | static/*.js |
-| C9 | Radio console hardening | F-4, F-7, F-9, X-9 | Codex — it owns mission-radio.js/radio.py |
+| C9 | Radio console hardening | F-4, F-7, F-9, X-9, F-10, F-11, F-12, F-13 | Codex — it owns mission-radio.js/radio.py |
 | C10 | Flight planner correctness | L-1, L-3, L-4, L-1a, L-11, L-5, L-6, L-7, L-9 | services/flightplanner/app.py |
 | C11 | Flight planner security & dependencies | L-2, L-10 | same file as C10 — sequence |
-| C12 | Instrument runtime | I-1, I-2, O-7b, I-3, I-4, I-5, I-6 | instruments/*/logic.lua |
+| C12 | Instrument runtime | I-1, I-2, O-7b, I-10, I-3, I-4, I-5, I-6, I-11, I-14, I-12, I-13, I-15, I-17 | instruments/*/logic.lua |
 | C13 | Instrument tooling & shared libs | I-8, I-9a, I-7, I-9c | scripts/ + tests/ |
 | C14 | Contract & documentation truth | D-1, D-2, D-3, D-4, P-10, I-9b | docs only, safe in parallel |
 | C15 | Service boundaries (architecture) | C15-1, P-11, C15-2 | after C2 and C7 land |
@@ -109,6 +109,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [X-3](#x-3) | P1 | high | SQLite writes block the event loop that carries radio audio | console-api | C7 | M | — | fixed |
 | [X-4](#x-4) | P1 | high | Console restart mid-exercise orphans the sortie | console-api | C7 | M | — | fixed |
 | [X-5](#x-5) | P1 | high | One wedged WebSocket client stalls every broadcast | console-api | C7 | S | — | fixed |
+| [I-10](#i-10) | P1 | medium | TDFM-136B has no transmitter time-out timer | instruments | C12 | M | — | open |
 | [X-7](#x-7) | P1 | medium | Sortie lifecycle leaks state between exercises | console-api | C7 | M | — | fixed |
 | [L-1a](#l-1a) | P2 | medium | Search-pattern labels are lost in the FMS export | planner | C10 | S | L-1 | open |
 
@@ -142,6 +143,10 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [X-6](#x-6) | P2 | medium | Untyped request bodies mutate scenario definitions | console-api | C7 | M | — | open |
 | [X-8](#x-8) | P2 | medium | Console operational hygiene: retention, logging, health, shutdown, root | console-api | C7 | M | — | open |
 | [X-9](#x-9) | P2 | medium | One Mumble client per browser socket, 16 max | console-api | C9 | M | — | open |
+| [F-10](#f-10) | P2 | low | Mission base cannot monitor the airband SAR net | console-ui | C9 | L | — | open |
+| [I-11](#i-11) | P2 | low | TDFM memory table is 6 generic channels, not a CAP fleet plan | instruments | C12 | M | — | open |
+| [I-14](#i-14) | P2 | low | GMA 1347 ICS isolation and Split COM are lamp-only | instruments | C12 | L | — | open |
+| [F-11](#f-11) | P3 | low | No operational sidetone on the new radio console | console-ui | C9 | S | — | open |
 
 ### Wave 4 — After the SAREX — architecture, tooling, CalTopo phase 2.
 
@@ -153,6 +158,12 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [P-10](#p-10) | P2 | medium | DATAREF_CONTRACT.md does not match what the plugin publishes | docs | C14 | M | — | open |
 | [P-11](#p-11) | P2 | medium | Server fallback propagation diverges from the plugin | console-api | C15 | M | — | open |
 | [C15-2](#c15-2) | P3 | low | Consolidate five geodesy implementations | console-api | C15 | M | — | open |
+| [F-12](#f-12) | P3 | low | APX/EFJ control-head keys are artwork only | console-ui | C9 | M | — | open |
+| [F-13](#f-13) | P3 | low | Net names are generic, not CAP nomenclature | console-ui | C9 | S | — | open |
+| [I-12](#i-12) | P3 | low | TDFM Guard is not an independent receiver | instruments | C12 | M | — | open |
+| [I-13](#i-13) | P3 | low | TDFM scan is a cosmetic flag | instruments | C12 | S | — | open |
+| [I-15](#i-15) | P3 | low | GMA 1347 clearance recorder records nothing | instruments | C12 | M | — | open |
+| [I-17](#i-17) | P3 | low | DF audio has no signal-to-noise degradation | instruments | C12 | M | — | open |
 | [I-7](#i-7) | P3 | low | Shared instrument libraries are copy-pasted | instruments | C13 | M | — | open |
 | [I-9b](#i-9b) | P3 | low | cap_fm_* variables have no producer and no contract | instruments | C14 | S | — | open |
 | [I-9c](#i-9c) | P3 | low | Deploy coverage and manifest claims are wrong | instruments | C13 | S | — | open |
@@ -479,6 +490,17 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Fix:** Fixed 2026-09-08. broadcast() now sends to all clients concurrently with a 1 s per-client timeout (Hub.SEND_TIMEOUT_S) and drops anyone who times out or raises. A half-open socket never raises, so a timeout rather than an exception is what notices it.
 - **Done when:** Suspend a tablet mid-exercise; other consoles keep updating.
 
+### I-10
+
+**TDFM-136B has no transmitter time-out timer**
+
+`P1` · `medium` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort M · wave 2 · **open**
+
+- **Files:** `instruments/cap-fm-tdfm-136b/logic.lua`
+- **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. The Lua logic transmits for as long as cap_fm_ptt is held. The real TDFM-136 has a hardware TOT (CAP standard 60 s) that unkeys, warns on the LCD and locks out until the key is released. Recognising a TOT cutoff and diagnosing a stuck mic is an ICUT practical exam item, and the ground web radio already has a 60 s server lease - so the aircraft is the only station that can jam the net indefinitely.
+- **Fix:** Add a 60 s transmit timer that force-unkeys, flashes a TOT/TX warning and requires a PTT release to reset. Mirror the ground lease value so both ends behave alike.
+- **Done when:** A held PTT unkeys at 60 s with a visible warning and will not re-key until released.
+
 ### X-7
 
 **Sortie lifecycle leaks state between exercises**
@@ -792,6 +814,50 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Fix:** Share one Mumble client per operator across their radio faces, or raise and document the cap with measured CPU.
 - **Done when:** A dual-radio desk appears once on the net.
 
+### F-10
+
+**Mission base cannot monitor the airband SAR net**
+
+`P2` · `low` · `bug` · Exercise console (frontend) · cluster C9 (Radio console hardening) · effort L · wave 3 · **open**
+
+- **Files:** `services/exercise/app/static/mission-radio.js`, `services/exercise/app/radio.py`
+- **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. The MRO must watch the VHF-FM tactical net and the VHF-AM aeronautical SAR frequency at the same time; the console joins one Mumble channel at a time. The retired /radio-legacy console had a second airband station (Icom IC-A120) and the rewrite dropped it, so the base can no longer hear aircraft calling on the air-to-ground frequency while working the tactical net.
+- **Fix:** A second simultaneous receive channel on the console, with independent volume and its own log identity. Note the 16-session cap in X-9 - two channels per operator doubles the session count.
+- **Done when:** One operator hears both nets at once and can key the correct one.
+
+### I-11
+
+**TDFM memory table is 6 generic channels, not a CAP fleet plan**
+
+`P2` · `low` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort M · wave 3 · **open**
+
+- **Files:** `instruments/cap-fm-tdfm-136b/logic.lua:38-51`
+- **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. Six memories (CMD 1/2, AIR-GND, REPTR 1, SIMPLEX, TAC 1) plus two guards; the real set has 230 positions. A crew briefed to a channel number cannot enter it, so 3-digit direct entry fails against any realistic comms plan. squelch_mode is a single letter ('t','x','g') with no CTCSS tone or P25 NAC behind it, so the classic failure - transmitting without the repeater access tone - cannot be produced or diagnosed.
+- **Fix:** Expand to an authentic CAP-style plan with working multi-digit direct entry, and model access tone / NAC mismatch as an actual failure to key the repeater rather than metadata. Confirm real channel names and tones against CAPR 100-1 before hardcoding - do not invent frequencies.
+- **Done when:** A briefed channel number can be entered directly, and a tone mismatch audibly fails.
+
+### I-14
+
+**GMA 1347 ICS isolation and Split COM are lamp-only**
+
+`P2` · `low` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort L · wave 3 · **open**
+
+- **Files:** `instruments/mo-audio-panel-gma1347/logic.lua:80,158-161,100-106`
+- **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. cap_ics_isolation is written (ALL/PILOT/COPILOT/CREW) and Split COM de-asserts the FM audio and mic variables, but nothing consumes either: every crew member sits in one Mumble channel, so isolation changes a lamp and nothing else. The panel teaches a control that has no effect, which is worse than omitting it.
+- **Fix:** Route isolation to Mumble whisper targets or subchannels so the states actually separate audio, and have Split COM drop the MO off the mission net. Needs the bridge in I-9b first.
+- **Done when:** Selecting PILOT genuinely removes the MO from the crew audio path.
+
+### F-11
+
+**No operational sidetone on the new radio console**
+
+`P3` · `low` · `bug` · Exercise console (frontend) · cluster C9 (Radio console hardening) · effort S · wave 3 · **open**
+
+- **Files:** `services/exercise/app/static/mission-radio.js:251`
+- **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. The only oscillator is the 660 Hz headset-test beep. There is no talk-permit chirp on channel grant and no squelch tail, so an operator gets no acoustic confirmation that the radio actually keyed. NOTE: the audit proposed porting playP25Chirp/playP25Tail/playAmSquelchBurst from radio.js - those functions do not exist anywhere in the tree. This is new work, not a port.
+- **Fix:** Synthesise a talk-permit chirp on grant and a squelch tail on release.
+- **Done when:** Keying produces an audible grant tone before speech is passed.
+
 ### C15-1
 
 **Split the console into store + routers with role middleware**
@@ -859,6 +925,72 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Problem:** Bearing/distance is implemented five times with the same R_NM constant; debrief.js has already drifted (missing cos(lat) in heading). [Re-verified 2026-09-08 against the complete tree: exactly five files carry their own geodesy. Stands.]
 - **Fix:** One shared Python geodesy module for the two services; the plugin keeps its standalone copy tested against it; the JS uses one helper.
 - **Done when:** A cross-implementation test agrees within 1 m over 100 NM.
+
+### F-12
+
+**APX/EFJ control-head keys are artwork only**
+
+`P3` · `low` · `bug` · Exercise console (frontend) · cluster C9 (Radio console hardening) · effort M · wave 4 · **open**
+
+- **Files:** `services/exercise/app/static/mission-radio.js`
+- **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. SCAN, MON, SQL and EMER appear on the SVG faceplates but have no hit regions in the JS at all - grep finds none of those names. MON (squelch open) is what an operator actually reaches for to pull a marginal signal from an aircraft low in terrain, which is a real trained skill.
+- **Fix:** Add hit regions and behaviour, starting with MON.
+- **Done when:** MON opens the squelch and marginal traffic becomes audible.
+
+### F-13
+
+**Net names are generic, not CAP nomenclature**
+
+`P3` · `low` · `bug` · Exercise console (frontend) · cluster C9 (Radio console hardening) · effort S · wave 4 · **open**
+
+- **Files:** `services/exercise/app/radio.py:29-34`
+- **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. Channels read PRIMARY / ALTERNATE / MISSION BASE / BRIEFING. Real heads show zone and channel tags from the fleet plan, and reading them correctly is part of the operator's job. Related to I-11 - the airborne and ground plans should agree.
+- **Fix:** Adopt the same channel naming as I-11 so cockpit and base refer to a channel identically. Verify names against CAPR 100-1 rather than inventing them.
+- **Done when:** A channel briefed by name is identifiable on both the aircraft radio and the base console.
+
+### I-12
+
+**TDFM Guard is not an independent receiver**
+
+`P3` · `low` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort M · wave 4 · **open**
+
+- **Files:** `instruments/cap-fm-tdfm-136b/logic.lua`
+- **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. There is a guard volume knob, a G1/G2 switch and a guard_rx flag, but only one active frequency is published. The real set has two receiver modules and guard traffic breaks into main audio, which is how mission base reaches an aircraft working another channel.
+- **Fix:** Model a second receive path whose audio mixes with main, gated by its own volume.
+- **Done when:** Guard traffic is audible while the main receiver is working another channel.
+
+### I-13
+
+**TDFM scan is a cosmetic flag**
+
+`P3` · `low` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort S · wave 4 · **open**
+
+- **Files:** `instruments/cap-fm-tdfm-136b/logic.lua`
+- **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. toggle_scan() shows an 'S' on the LCD. It does not cycle a scan list, halt on a carrier, or resume.
+- **Fix:** Cycle the programmed list, stop on activity, resume on a timer.
+- **Done when:** Scan visibly stops on an active channel and resumes.
+
+### I-15
+
+**GMA 1347 clearance recorder records nothing**
+
+`P3` · `low` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort M · wave 4 · **open**
+
+- **Files:** `instruments/mo-audio-panel-gma1347/logic.lua:187-197`
+- **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. PLAY flashes its annunciator for 1200 ms. The real recorder holds the last ~2.5 minutes of COM audio and replays it in reverse chunks - which is exactly what a crew reaches for after missing a grid reference read over the radio.
+- **Fix:** Buffer received audio and replay it on PLAY.
+- **Done when:** A missed transmission can be replayed from the panel.
+
+### I-17
+
+**DF audio has no signal-to-noise degradation**
+
+`P3` · `low` · `bug` · Air Manager instruments · cluster C12 (Instrument runtime) · effort M · wave 4 · **open**
+
+- **Files:** `instruments/*/lib/cap_df_audio.lua`
+- **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. The WAV loops play at fixed fidelity scaled only by the volume knob, so the beacon is either pristine or silent. Real DF audio buries the sweep in noise at range or behind terrain, and learning to hear a weak signal in hiss is the skill being trained.
+- **Fix:** Mix noise against signal strength, which the engine already publishes as cap/df/signal.
+- **Done when:** A distant or masked beacon is audibly noisy rather than absent.
 
 ### I-7
 

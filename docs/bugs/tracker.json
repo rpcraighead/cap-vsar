@@ -1511,6 +1511,216 @@
       "fix": "Return a 400 naming the identifier that could not be resolved, or emit the record only when the lookup succeeds. Never substitute an unrelated position under an airport code.",
       "verify": "Exporting with an unknown ADEP returns an error rather than a plausible-looking file.",
       "depends_on": []
+    },
+    {
+      "id": "I-10",
+      "title": "TDFM-136B has no transmitter time-out timer",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P1",
+      "wave": 2,
+      "effort": "M",
+      "component": "instruments",
+      "cluster": "C12",
+      "status": "open",
+      "files": [
+        "instruments/cap-fm-tdfm-136b/logic.lua"
+      ],
+      "problem": "Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. The Lua logic transmits for as long as cap_fm_ptt is held. The real TDFM-136 has a hardware TOT (CAP standard 60 s) that unkeys, warns on the LCD and locks out until the key is released. Recognising a TOT cutoff and diagnosing a stuck mic is an ICUT practical exam item, and the ground web radio already has a 60 s server lease - so the aircraft is the only station that can jam the net indefinitely.",
+      "fix": "Add a 60 s transmit timer that force-unkeys, flashes a TOT/TX warning and requires a PTT release to reset. Mirror the ground lease value so both ends behave alike.",
+      "verify": "A held PTT unkeys at 60 s with a visible warning and will not re-key until released.",
+      "depends_on": []
+    },
+    {
+      "id": "I-11",
+      "title": "TDFM memory table is 6 generic channels, not a CAP fleet plan",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "M",
+      "component": "instruments",
+      "cluster": "C12",
+      "status": "open",
+      "files": [
+        "instruments/cap-fm-tdfm-136b/logic.lua:38-51"
+      ],
+      "problem": "Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. Six memories (CMD 1/2, AIR-GND, REPTR 1, SIMPLEX, TAC 1) plus two guards; the real set has 230 positions. A crew briefed to a channel number cannot enter it, so 3-digit direct entry fails against any realistic comms plan. squelch_mode is a single letter ('t','x','g') with no CTCSS tone or P25 NAC behind it, so the classic failure - transmitting without the repeater access tone - cannot be produced or diagnosed.",
+      "fix": "Expand to an authentic CAP-style plan with working multi-digit direct entry, and model access tone / NAC mismatch as an actual failure to key the repeater rather than metadata. Confirm real channel names and tones against CAPR 100-1 before hardcoding - do not invent frequencies.",
+      "verify": "A briefed channel number can be entered directly, and a tone mismatch audibly fails.",
+      "depends_on": []
+    },
+    {
+      "id": "I-12",
+      "title": "TDFM Guard is not an independent receiver",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 4,
+      "effort": "M",
+      "component": "instruments",
+      "cluster": "C12",
+      "status": "open",
+      "files": [
+        "instruments/cap-fm-tdfm-136b/logic.lua"
+      ],
+      "problem": "Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. There is a guard volume knob, a G1/G2 switch and a guard_rx flag, but only one active frequency is published. The real set has two receiver modules and guard traffic breaks into main audio, which is how mission base reaches an aircraft working another channel.",
+      "fix": "Model a second receive path whose audio mixes with main, gated by its own volume.",
+      "verify": "Guard traffic is audible while the main receiver is working another channel.",
+      "depends_on": []
+    },
+    {
+      "id": "I-13",
+      "title": "TDFM scan is a cosmetic flag",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 4,
+      "effort": "S",
+      "component": "instruments",
+      "cluster": "C12",
+      "status": "open",
+      "files": [
+        "instruments/cap-fm-tdfm-136b/logic.lua"
+      ],
+      "problem": "Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. toggle_scan() shows an 'S' on the LCD. It does not cycle a scan list, halt on a carrier, or resume.",
+      "fix": "Cycle the programmed list, stop on activity, resume on a timer.",
+      "verify": "Scan visibly stops on an active channel and resumes.",
+      "depends_on": []
+    },
+    {
+      "id": "I-14",
+      "title": "GMA 1347 ICS isolation and Split COM are lamp-only",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "L",
+      "component": "instruments",
+      "cluster": "C12",
+      "status": "open",
+      "files": [
+        "instruments/mo-audio-panel-gma1347/logic.lua:80,158-161,100-106"
+      ],
+      "problem": "Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. cap_ics_isolation is written (ALL/PILOT/COPILOT/CREW) and Split COM de-asserts the FM audio and mic variables, but nothing consumes either: every crew member sits in one Mumble channel, so isolation changes a lamp and nothing else. The panel teaches a control that has no effect, which is worse than omitting it.",
+      "fix": "Route isolation to Mumble whisper targets or subchannels so the states actually separate audio, and have Split COM drop the MO off the mission net. Needs the bridge in I-9b first.",
+      "verify": "Selecting PILOT genuinely removes the MO from the crew audio path.",
+      "depends_on": []
+    },
+    {
+      "id": "I-15",
+      "title": "GMA 1347 clearance recorder records nothing",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 4,
+      "effort": "M",
+      "component": "instruments",
+      "cluster": "C12",
+      "status": "open",
+      "files": [
+        "instruments/mo-audio-panel-gma1347/logic.lua:187-197"
+      ],
+      "problem": "Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. PLAY flashes its annunciator for 1200 ms. The real recorder holds the last ~2.5 minutes of COM audio and replays it in reverse chunks - which is exactly what a crew reaches for after missing a grid reference read over the radio.",
+      "fix": "Buffer received audio and replay it on PLAY.",
+      "verify": "A missed transmission can be replayed from the panel.",
+      "depends_on": []
+    },
+    {
+      "id": "F-10",
+      "title": "Mission base cannot monitor the airband SAR net",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "L",
+      "component": "console-ui",
+      "cluster": "C9",
+      "status": "open",
+      "files": [
+        "services/exercise/app/static/mission-radio.js",
+        "services/exercise/app/radio.py"
+      ],
+      "problem": "Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. The MRO must watch the VHF-FM tactical net and the VHF-AM aeronautical SAR frequency at the same time; the console joins one Mumble channel at a time. The retired /radio-legacy console had a second airband station (Icom IC-A120) and the rewrite dropped it, so the base can no longer hear aircraft calling on the air-to-ground frequency while working the tactical net.",
+      "fix": "A second simultaneous receive channel on the console, with independent volume and its own log identity. Note the 16-session cap in X-9 - two channels per operator doubles the session count.",
+      "verify": "One operator hears both nets at once and can key the correct one.",
+      "depends_on": []
+    },
+    {
+      "id": "F-11",
+      "title": "No operational sidetone on the new radio console",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 3,
+      "effort": "S",
+      "component": "console-ui",
+      "cluster": "C9",
+      "status": "open",
+      "files": [
+        "services/exercise/app/static/mission-radio.js:251"
+      ],
+      "problem": "Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. The only oscillator is the 660 Hz headset-test beep. There is no talk-permit chirp on channel grant and no squelch tail, so an operator gets no acoustic confirmation that the radio actually keyed. NOTE: the audit proposed porting playP25Chirp/playP25Tail/playAmSquelchBurst from radio.js - those functions do not exist anywhere in the tree. This is new work, not a port.",
+      "fix": "Synthesise a talk-permit chirp on grant and a squelch tail on release.",
+      "verify": "Keying produces an audible grant tone before speech is passed.",
+      "depends_on": []
+    },
+    {
+      "id": "F-12",
+      "title": "APX/EFJ control-head keys are artwork only",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 4,
+      "effort": "M",
+      "component": "console-ui",
+      "cluster": "C9",
+      "status": "open",
+      "files": [
+        "services/exercise/app/static/mission-radio.js"
+      ],
+      "problem": "Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. SCAN, MON, SQL and EMER appear on the SVG faceplates but have no hit regions in the JS at all - grep finds none of those names. MON (squelch open) is what an operator actually reaches for to pull a marginal signal from an aircraft low in terrain, which is a real trained skill.",
+      "fix": "Add hit regions and behaviour, starting with MON.",
+      "verify": "MON opens the squelch and marginal traffic becomes audible.",
+      "depends_on": []
+    },
+    {
+      "id": "F-13",
+      "title": "Net names are generic, not CAP nomenclature",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 4,
+      "effort": "S",
+      "component": "console-ui",
+      "cluster": "C9",
+      "status": "open",
+      "files": [
+        "services/exercise/app/radio.py:29-34"
+      ],
+      "problem": "Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. Channels read PRIMARY / ALTERNATE / MISSION BASE / BRIEFING. Real heads show zone and channel tags from the fleet plan, and reading them correctly is part of the operator's job. Related to I-11 - the airborne and ground plans should agree.",
+      "fix": "Adopt the same channel naming as I-11 so cockpit and base refer to a channel identically. Verify names against CAPR 100-1 rather than inventing them.",
+      "verify": "A channel briefed by name is identifiable on both the aircraft radio and the base console.",
+      "depends_on": []
+    },
+    {
+      "id": "I-17",
+      "title": "DF audio has no signal-to-noise degradation",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 4,
+      "effort": "M",
+      "component": "instruments",
+      "cluster": "C12",
+      "status": "open",
+      "files": [
+        "instruments/*/lib/cap_df_audio.lua"
+      ],
+      "problem": "Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. The WAV loops play at fixed fidelity scaled only by the volume knob, so the beacon is either pristine or silent. Real DF audio buries the sweep in noise at range or behind terrain, and learning to hear a weak signal in hiss is the skill being trained.",
+      "fix": "Mix noise against signal strength, which the engine already publishes as cap/df/signal.",
+      "verify": "A distant or masked beacon is audibly noisy rather than absent.",
+      "depends_on": []
     }
   ]
 }
