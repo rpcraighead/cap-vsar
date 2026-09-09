@@ -3,6 +3,75 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-08 — Tracker sweep, then the base view and debrief (F-2, F-3)
+
+**Status: implemented, tested in a browser, NOT yet deployed to ms01.**
+
+### Sweep first: one more wrong finding
+
+Re-verified every open item's file references and absence claims against the
+complete tree. All referenced paths resolve. **F-5 was wrong on both halves**
+and is now resolved: the setup notes exist as `static/radio-help.html` (linked
+from the radio footer and the secure-context overlay — there is no
+`radio-art/README.md` because `radio-art/` holds the two faceplate SVGs), and
+`services/exercise/radio-public/` exists on ms01 with `mission-base-ca.crt` in
+it — `GET /radio-ca.crt` returns a real PEM and `https://ms01:8743/radio`
+answers 200. Tablets can reach the secure context today.
+
+That is **six wrong findings** from reviewing the wrong tree (O-2a, O-7a, D-3,
+O-4, O-2, F-5). O-3 was sharpened instead: `scripts/deploy.sh` creates only
+`mumble/data`, not the other three paths compose needs, so a fresh clone still
+crash-loops. Six items re-verified as standing (I-9a/b/c, C15-2, D-1, D-2).
+
+### F-2 — the base view no longer mixes two exercises
+
+`base.js` tracks the sortie id from the state snapshot and clears the map when
+it changes: alert circle *and its marker* (which was never held in a variable
+at all), beacon marker, aircraft, tracks, bearings, and the `centred` flag.
+
+A second leak the review only half-described: when an aircraft went quiet for
+30 s and came back, a **new** polyline replaced `trackLines[callsign]` and
+orphaned the old one on the map permanently. It now resumes the existing
+track. An expired aircraft's marker is removed but its flown track is kept
+deliberately — that is history base staff still need.
+
+### F-3 — the debrief scores each aircraft
+
+Server: `/api/sorties/{id}/track` returns `hdg_true`, which was recorded on
+every position and thrown away by the query. Client: `debrief.js` groups by
+callsign — one faint full track, one playback polyline and one labelled marker
+per aircraft, each in its own colour — and scores each separately. The heading
+fallback now scales longitude by `cos(latitude)`, which the old inline
+calculation omitted (~10 deg of error at 33N).
+
+### Validation
+
+Both were verified by driving a real browser, because neither has unit-test
+coverage and neither could be checked by reading:
+
+- **F-3**: headless Chrome against a seeded three-aircraft sortie (180
+  positions) renders three separate scored rows — CAP-1 0.00 nm "overhead the
+  beacon", CAP-2 3.34 nm "did not close", CAP-3 1.96 nm "localised" — three
+  labelled markers, no JS errors. Previously one meaningless zig-zag.
+- **F-2**: a CDP-driven session taken through two sorties. With the fix,
+  tracks and bearings reset to 0 and map layers drop 9 → 5. Against pre-F-2
+  code the previous sortie's track and bearing **survive into the new one**
+  (tracks 1, bearings 1, layers 9 → 7).
+- `tests/test_console.py` grows to 30 with a `hdg_true` regression test.
+- Whole repo green: console 30, plugin-net 11, radio 12, engine 66, faceplate,
+  panel 7, planner 8.
+
+Incidentally confirmed the `/ws` origin check shipped this morning behaves
+correctly against a live server: same-origin upgrades (101), cross-origin is
+refused (403), and a client sending no Origin — the plugin, curl — is still
+allowed.
+
+### Not deployed
+
+These changes are in the working tree only. ms01 is running the earlier commit
+(`9dcafb5`); picking these up needs another sync plus
+`docker compose build exercise && docker compose up -d exercise`.
+
 ## 2026-09-08 — Deployment live on ms01; wave 1 and wave 2 items running
 
 **Status: implemented. Committed on ms01 (`9dcafb5`) and containers running live.**

@@ -388,6 +388,19 @@ class SurvivesAnExercise(unittest.TestCase):
         brg = self.client.get(f"/api/sorties/{oid}/track").json()["bearings"][-1]
         self.assertAlmostEqual(brg["lat"], 33.4, places=3)
 
+    def test_track_returns_heading_for_per_aircraft_replay(self):
+        """F-3: hdg_true was stored on every position and thrown away by the
+        query, so the debrief had to infer heading from consecutive fixes."""
+        _, oid = run_sortie(self.main, self.client)
+        for cs, hdg in (("CAP-1", 275.0), ("CAP-2", 90.0)):
+            self.client.post("/api/positions", json={
+                "callsign": cs, "lat": 33.4, "lon": -117.1,
+                "alt_ft": 5500.0, "hdg_true": hdg})
+        rows = self.client.get(f"/api/sorties/{oid}/track").json()["positions"]
+        self.assertTrue(all("hdg_true" in r for r in rows), "hdg_true not returned")
+        by_cs = {r["callsign"]: r["hdg_true"] for r in rows}
+        self.assertEqual(by_cs, {"CAP-1": 275.0, "CAP-2": 90.0})
+
     def test_bearing_for_an_unknown_aircraft_is_still_refused(self):
         run_sortie(self.main, self.client)
         r = self.client.post("/api/bearings",

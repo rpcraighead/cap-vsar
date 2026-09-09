@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 70 items, 55 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 70 items, 49 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -84,16 +84,16 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [P-2](#p-2) | P0 | critical | Plugin can never receive beacon truth, so the in-sim DF is deaf | plugin | C2 | M | X-1 | fixed |
 | [X-1](#x-1) | P0 | critical | Beacon truth leaks through three unauthenticated endpoints | console-api | C2 | M | — | fixed |
 | [X-2](#x-2) | P0 | critical | No authentication or role separation on any console endpoint | console-api | C2 | L | — | in-progress |
-| [F-5](#f-5) | P0 | high | Radio console blocks: CA cert directory and setup note missing | infra | C5 | S | O-3 | open |
+| [F-5](#f-5) | P0 | high | Radio console setup path (verified working) | infra | C5 | S | O-3 | resolved |
 | [L-1](#l-1) | P0 | high | X-Plane .fms export is malformed | planner | C10 | M | — | fixed |
-| [O-2a](#o-2a) | P1 | medium | Participant CONNECT.md cited by the as-built does not exist | docs | C4 | S | O-2 | open |
+| [O-2a](#o-2a) | P1 | medium | Participant CONNECT.md cited by the as-built does not exist | docs | C4 | S | O-2 | resolved |
 
 ### Wave 2 — Before session 2 (full mission, three aircraft, injected effects).
 
 | ID | Pri | Sev | Title | Component | Cluster | Effort | Depends on | Status |
 |---|---|---|---|---|---|---|---|---|
-| [F-2](#f-2) | P1 | high | Base view keeps the previous sortie's alert circle and tracks | console-ui | C8 | S | — | open |
-| [F-3](#f-3) | P1 | high | Debrief conflates all aircraft into one track | console-ui | C8 | M | — | open |
+| [F-2](#f-2) | P1 | high | Base view keeps the previous sortie's alert circle and tracks | console-ui | C8 | S | — | fixed |
+| [F-3](#f-3) | P1 | high | Debrief conflates all aircraft into one track | console-ui | C8 | M | — | fixed |
 | [F-4](#f-4) | P1 | high | Radio console does not rejoin after a network blip | console-ui | C9 | M | — | open |
 | [I-1](#i-1) | P1 | high | DF faceplates repaint ~8 Hz regardless of change | instruments | C12 | M | — | open |
 | [I-2](#i-2) | P1 | high | pcall around canvas_draw hides real errors | instruments | C12 | S | — | open |
@@ -117,10 +117,10 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | ID | Pri | Sev | Title | Component | Cluster | Effort | Depends on | Status |
 |---|---|---|---|---|---|---|---|---|
 | [O-5](#o-5) | P1 | high | Mumble server has no per-role ACLs and images float | infra | C5 | M | X-2, O-4 | open |
-| [O-7a](#o-7a) | P1 | high | Air Manager seat count for three MO stations unconfirmed | infra | C5 | S | — | open |
+| [O-7a](#o-7a) | P1 | high | Air Manager seat count for three MO stations unconfirmed | infra | C5 | S | — | resolved |
 | [D-1](#d-1) | P2 | medium | CHANGELOG entries contradict the code they describe | docs | C14 | S | — | open |
 | [D-2](#d-2) | P2 | medium | README and website contradict the code | docs | C14 | M | — | open |
-| [D-3](#d-3) | P2 | medium | CONOPS and referenced infra docs are missing from the repo | docs | C14 | S | — | open |
+| [D-3](#d-3) | P2 | medium | CONOPS and referenced infra docs are missing from the repo | docs | C14 | S | — | resolved |
 | [D-4](#d-4) | P2 | medium | No LICENSE despite deriving from Laminar assets | docs | C14 | S | O-1 | open |
 | [F-6](#f-6) | P2 | medium | Unescaped server strings in four views (HTML injection) | console-ui | C8 | S | — | open |
 | [F-7](#f-7) | P2 | medium | Legacy console: precedence bug and autoplay-blocked audio | console-ui | C9 | S | — | open |
@@ -193,8 +193,8 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 `P0` · `critical` · `bug` · X-Plane plugin / engine · cluster C4 (Station identity & onboarding kit) · effort L · wave 1 · **open**
 
 - **Files:** `xplane/PI_capvsar_df.py:86-87`, `scripts/deploy_xplane_plugin.py`, `scripts/deploy_mo_panel.py`, `scripts/build_c182t_package.py`
-- **Problem:** CONSOLE and CALLSIGN='CAP-1' are source constants with no env or config override, so three aircraft means three hand-edited plugin copies. Deploy scripts are Linux-and-/home/ron only; there is no participant install path at all (no kit, no checklist, no WireGuard peer doc).
-- **Fix:** capvsar_station.ini beside the plugin (console URL, callsign, plugin key). Kit zip: plugin + station.ini + four instruments + MO panel + C182T package + CA cert + WireGuard peer + one-page checklist. Windows paths in the deploy scripts.
+- **Problem:** Corrected 2026-09-08: participant onboarding is NOT absent. The canonical repo has docs/CONNECT.md (join guide), scripts/wg-peer.sh (prints a WireGuard peer config and QR for a named participant), scripts/deploy.sh (idempotent stack deploy) and infra/ROUTER.md. What remains real and unchanged: the plugin hardcodes CONSOLE and CALLSIGN with no per-station override, so three aircraft still means three hand-edited copies; the deploy scripts are Linux-only; build_c182t_package.py hardcodes /home/ron; and there is no single station kit bundling plugin + instruments + panel + aircraft + CA cert for a member to install.
+- **Fix:** capvsar_station.ini beside the plugin (console URL, callsign, plugin key) and a kit builder. Reuse the existing CONNECT.md and wg-peer.sh rather than writing new onboarding docs.
 - **Done when:** Three stations with different station.ini files appear as three distinct aircraft on /base simultaneously.
 - **Depends on:** P-2
 
@@ -205,9 +205,9 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 `P0` · `critical` · `bug` · Deployment / infrastructure · cluster C5 (Deployment bootstrap & voice provisioning) · effort M · wave 1 · **open**
 
 - **Files:** `docker-compose.yml:120`, `services/flightplanner/app.py:113`
-- **Problem:** Compose bind-mounts ./services/flightplanner/data/aviation_data.db as a file; the path does not exist in the repo, so Docker creates a directory and sqlite3.connect fails at import, crash-looping gunicorn. Several other host paths compose expects (mumble/data, services/exercise/data, radio-public/) exist only on ms01.
-- **Fix:** Mount the data/ directory rather than the file; init_database() creates the file; add a `make bootstrap` that creates every host path compose expects.
-- **Done when:** `git clone` into an empty dir, run bootstrap, `docker compose up` — all four services healthy.
+- **Problem:** Sharpened 2026-09-08. Confirmed: scripts/deploy.sh creates only mumble/data. Compose also bind-mounts services/exercise/data, services/flightplanner/data/aviation_data.db (as a FILE) and services/exercise/radio-public - none of which deploy.sh creates and all correctly gitignored as runtime state. So a fresh clone plus deploy.sh still crash-loops the flight planner: Docker materialises the missing aviation_data.db path as a directory and sqlite3.connect fails at import. The live ms01 stack works only because those paths were created by hand at some earlier point.
+- **Fix:** Extend scripts/deploy.sh (the existing, idempotent deploy script - do not write a new one) to create all four paths, and mount the flightplanner data DIRECTORY rather than the file so Docker cannot invent it. Have init_database() create the file if absent.
+- **Done when:** git clone to an empty directory, cp .env.example .env, fill it, run scripts/deploy.sh: all four services reach healthy with no manual mkdir.
 
 ### P-1
 
@@ -256,13 +256,13 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 ### F-5
 
-**Radio console blocks: CA cert directory and setup note missing**
+**Radio console setup path (verified working)**
 
-`P0` · `high` · `bug` · Deployment / infrastructure · cluster C5 (Deployment bootstrap & voice provisioning) · effort S · wave 1 · **open**
+`P0` · `high` · `bug` · Deployment / infrastructure · cluster C5 (Deployment bootstrap & voice provisioning) · effort S · wave 1 · **resolved**
 
 - **Files:** `services/exercise/radio-public/ (missing)`, `docker-compose.yml:67`, `services/exercise/app/static/mission-radio.html:52,54`
 - **Problem:** Caddy serves /radio-ca.crt from a directory that does not exist in the repo, so tablets cannot reach the secure context getUserMedia requires and the console blocks at mission-radio.js:148. radio-art/README.md, linked as the setup notes, does not exist either.
-- **Fix:** Create the path in bootstrap (it is correctly gitignored as generated trust material) and write the participant setup note.
+- **Fix:** WRONG FINDING, corrected 2026-09-08 by testing the live system. Both halves were false. The setup notes exist and are linked correctly - static/radio-help.html (6 KB), referenced from mission-radio.html's footer and its secure-context overlay; there is no radio-art/README.md because radio-art/ holds the two faceplate SVGs, not documentation. And services/exercise/radio-public/ exists on ms01 containing mission-base-ca.crt: GET /radio-ca.crt returns 200 with a real PEM certificate, and https://ms01:8743/radio answers 200. Tablets can reach the secure context today. Only residue: nothing in the repo creates radio-public/ for a fresh deployment, which is O-3's scope, not a separate defect.
 - **Done when:** A tablet with no prior trust can download the CA from /radio-ca.crt, install it, and key the radio.
 - **Depends on:** O-3
 
@@ -281,11 +281,11 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Participant CONNECT.md cited by the as-built does not exist**
 
-`P1` · `medium` · `bug` · Docs / record · cluster C4 (Station identity & onboarding kit) · effort S · wave 1 · **open**
+`P1` · `medium` · `bug` · Docs / record · cluster C4 (Station identity & onboarding kit) · effort S · wave 1 · **resolved**
 
 - **Files:** `docs/ (missing CONNECT.md)`, `vault: Projects/as-built/AsBuilt_CAPVSAR.md`
 - **Problem:** The as-built tells participants their instructions are at docs/CONNECT.md in the repository. That file does not exist, so the one pointer a new member is given leads nowhere — the same onboarding gap as O-2, but already promised in writing.
-- **Fix:** Write docs/CONNECT.md as the participant-facing page: WireGuard peer, Mumble server and net, radio console URL plus CA cert install, and where the station kit comes from.
+- **Fix:** WRONG FINDING, corrected 2026-09-08. docs/CONNECT.md exists in the canonical repo on ms01 and is a complete participant guide (Mumble client per platform, server details, nets, PTT). It was absent only from the local working tree this review was written against. Now pulled down. No work needed.
 - **Done when:** A member who has never seen the project can get onto the voice net and the base console from that page alone.
 - **Depends on:** O-2
 
@@ -293,23 +293,23 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Base view keeps the previous sortie's alert circle and tracks**
 
-`P1` · `high` · `bug` · Exercise console (frontend) · cluster C8 (Base view & debrief) · effort S · wave 2 · **open**
+`P1` · `high` · `bug` · Exercise console (frontend) · cluster C8 (Base view & debrief) · effort S · wave 2 · **fixed**
 
 - **Files:** `services/exercise/app/static/base.js:43,83-85`, `services/exercise/app/static/app.js:144-145`
 - **Problem:** alertCircle is created once and never updated or removed and `centred` never resets; trackLines/bearingLayer are never cleared on a new sortie. Base staff plot against the previous scenario's search area. Expired aircraft also leak their trackLines entry.
-- **Fix:** Reset layers on a sortie change in the snapshot, the way app.js already does.
-- **Done when:** Run two sorties with different scenarios back to back; the second shows only its own alert area.
+- **Fix:** Fixed 2026-09-08. base.js now tracks the sortie id from the state snapshot and calls clearSortieLayers() when it changes, removing the alert circle and its marker (the marker was never even held in a variable), the beacon marker, aircraft markers, tracks and bearings, and resetting `centred`. Also fixed a leak the review only half-described: when an aircraft went quiet for 30 s and came back, a NEW polyline replaced trackLines[callsign] and orphaned the old one on the map permanently - it now resumes the existing track instead. An expired aircraft's marker is removed but its flown track is deliberately kept, because that is history base staff still need.
+- **Done when:** Verified by driving a real browser session through two sorties over CDP: with the fix, tracks and bearings go to 0 and map layers drop 9 -> 5; against pre-F-2 code the previous sortie's track and bearing survive (tracks 1, bearings 1, layers 9 -> 7).
 
 ### F-3
 
 **Debrief conflates all aircraft into one track**
 
-`P1` · `high` · `bug` · Exercise console (frontend) · cluster C8 (Base view & debrief) · effort M · wave 2 · **open**
+`P1` · `high` · `bug` · Exercise console (frontend) · cluster C8 (Base view & debrief) · effort M · wave 2 · **fixed**
 
 - **Files:** `services/exercise/app/static/debrief.js:45,68-72,90-98`, `services/exercise/app/main.py:301`
 - **Problem:** /track returns callsign per position but the debrief treats them as one track: with three aircraft the polyline zigzags between them, 'track flown' sums inter-aircraft jumps and closest approach is meaningless — the scoring the SET relies on. Heading is also derived via atan2(dlon, dlat) with no cos(lat), ~10 deg bias at 33 N, although hdg_true is stored and simply not returned.
-- **Fix:** Group by callsign; return hdg_true from /track.
-- **Done when:** Three-aircraft debrief shows three separate tracks with per-aircraft CPA and efficiency.
+- **Fix:** Fixed 2026-09-08, both halves. Server: /api/sorties/{id}/track now returns hdg_true, which was stored on every position and discarded by the query. Client: debrief.js groups positions by callsign - one faint full track, one playback polyline and one labelled marker per aircraft, each in its own colour - and scores each aircraft separately for closest approach, track flown, direct line and efficiency. Heading uses the recorded hdg_true when present, and the fallback now scales longitude by cos(latitude), which the old inline calculation omitted (~10 deg of error at 33N).
+- **Done when:** Verified in a headless browser against a seeded three-aircraft sortie (180 positions): three separate scored rows - CAP-1 0.00 nm 'overhead the beacon', CAP-2 3.34 nm 'did not close', CAP-3 1.96 nm 'localised' - three labelled markers, no JS errors. tests/test_console.py covers the hdg_true half.
 
 ### F-4
 
@@ -385,8 +385,8 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 `P1` · `high` · `bug` · Deployment / infrastructure · cluster C5 (Deployment bootstrap & voice provisioning) · effort M · wave 2 · **open**
 
 - **Files:** `services/exercise/app/radio.py:29-34,181`, `docker-compose.yml`, `vault: Projects/as-built/AsBuilt_CAPVSAR.md`
-- **Problem:** Corrected 2026-09-08 against the vault as-built: the channels DO exist on ms01 (CAP V-SAR / Briefing Room / Mission Base / Mission Net PRIMARY / ALTERNATE / Aircraft > CAP-1..3 Intercom / Instructor - SET), created by hand directly in mumble-server.sqlite on 2026-09-06, so joins work today. But nothing in the repo creates them: the volume is gitignored runtime state, so a rebuilt or lost Mumble volume, or any second host, silently loses the whole voice net with no way to recreate it except by hand from a document outside the repo. radio.py's four hardcoded names must also stay in step with those rows manually.
-- **Fix:** scripts/provision_mumble.py that creates the documented tree (and ACLs, O-5) idempotently; call it from bootstrap; make radio.py's channel list read the same source.
+- **Problem:** Corrected twice. The channel tree exists on ms01 (hand-inserted into mumble-server.sqlite) AND is documented in docs/MUMBLE_CHANNELS.md, which gives the full tree, the rationale, and the one manual step still outstanding: the ACL on the Instructor/SET channel denying Enter. So this is neither undocumented nor a first-join failure. What remains real: the rows live only in a gitignored runtime volume with nothing in the repo to recreate them, radio.py carries its own hardcoded copy of four names, and the instructor-channel ACL is still a manual step per the doc.
+- **Fix:** scripts/provision_mumble.py to recreate the documented tree AND apply the instructor ACL idempotently, called from scripts/deploy.sh; make radio.py read the same source. Reference: docs/MUMBLE_CHANNELS.md.
 - **Done when:** Delete the Mumble volume, bootstrap, and join all four nets from the radio console without touching the database.
 - **Depends on:** O-3
 
@@ -518,11 +518,11 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Air Manager seat count for three MO stations unconfirmed**
 
-`P1` · `high` · `task` · Deployment / infrastructure · cluster C5 (Deployment bootstrap & voice provisioning) · effort S · wave 3 · **open**
+`P1` · `high` · `task` · Deployment / infrastructure · cluster C5 (Deployment bootstrap & voice provisioning) · effort S · wave 3 · **resolved**
 
 - **Files:** `Plan v0.8 §9.4`
 - **Problem:** The containerization entry says to confirm spare AM4 licences against AM4_COMPAT.md, which does not exist. Three MO seats are assumed, not verified — a blocker discovered on exercise day would be expensive.
-- **Fix:** Confirm seat entitlement in writing with Sim Innovations; record it in docs/.
+- **Fix:** WRONG FINDING, corrected 2026-09-08. docs/AM4_COMPAT.md exists in the canonical repo and records the licence position: spare AM4 licences cover the DF heads and MO COM panel, and it explicitly distinguishes Air Manager from Air Player seats (sold separately) for crew stations that only display. The CHANGELOG citation resolved all along.
 - **Done when:** Three MO stations activate simultaneously in a rehearsal.
 
 ### D-1
@@ -532,7 +532,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 `P2` · `medium` · `bug` · Docs / record · cluster C14 (Contract & documentation truth) · effort S · wave 3 · **open**
 
 - **Files:** `CHANGELOG.md`
-- **Problem:** The pymumble bridge is marked 'proposed only' in two entries although it is implemented; the '/radio' APX 6500 entry now describes /radio-legacy; the Becker pcall entry claims an error the log does not show; '55 engine checks' is 51; '/api/messages rejects the push (400)' is no longer true. The changelog is the coordination protocol between three tools, so a stale entry actively misleads the next agent.
+- **Problem:** The pymumble bridge is marked 'proposed only' in two entries although it is implemented; the '/radio' APX 6500 entry now describes /radio-legacy; the Becker pcall entry claims an error the log does not show; '55 engine checks' is 51; '/api/messages rejects the push (400)' is no longer true. The changelog is the coordination protocol between three tools, so a stale entry actively misleads the next agent. [Re-verified 2026-09-08: CHANGELOG.md:953 still reads 'Proposed only' and :1082 still claims 55 engine checks. The corrections were added as new entries; the original entries are still uncorrected in place. Stands.]
 - **Fix:** Add superseded-by notes to the affected entries.
 - **Done when:** A fresh reader following the changelog reaches the same conclusions as the code.
 
@@ -543,7 +543,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 `P2` · `medium` · `bug` · Docs / record · cluster C14 (Contract & documentation truth) · effort M · wave 3 · **open**
 
 - **Files:** `README.md:25`, `website/technical.html:441,453`, `website/deployment.html:136,295-298`, `website/operations.html:63-98`, `website/index.html:67-72`, `services/flightplanner/README.md:25`
-- **Problem:** The site calls the Flask planner 'Node.js / Vite', cites a docker-compose.prod.yml that does not exist, lists firewall ports 49000/49001 nothing uses, advertises APX 6500 where the code serves APX 4500, claims cloud/multi-aircraft topology that compose explicitly disclaims, quotes unsourced 85%/100% ROI figures and an unmeasured 'sub-20 ms' latency. The planner README still says Cloud Run.
+- **Problem:** The site calls the Flask planner 'Node.js / Vite', cites a docker-compose.prod.yml that does not exist, lists firewall ports 49000/49001 nothing uses, advertises APX 6500 where the code serves APX 4500, claims cloud/multi-aircraft topology that compose explicitly disclaims, quotes unsourced 85%/100% ROI figures and an unmeasured 'sub-20 ms' latency. The planner README still says Cloud Run. [Re-verified 2026-09-08: 'Node.js / Vite' x1, 'docker-compose.prod.yml' x2, 'APX 6500' x6 on the site, and the planner README still names Cloud Run twice. Stands.]
 - **Fix:** Correct each claim or remove it.
 - **Done when:** Every deployment command on the site runs as written.
 
@@ -551,11 +551,11 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **CONOPS and referenced infra docs are missing from the repo**
 
-`P2` · `medium` · `bug` · Docs / record · cluster C14 (Contract & documentation truth) · effort S · wave 3 · **open**
+`P2` · `medium` · `bug` · Docs / record · cluster C14 (Contract & documentation truth) · effort S · wave 3 · **resolved**
 
 - **Files:** `CHANGELOG.md (7 citations)`, `docker-compose.yml:4,131`
 - **Problem:** Corrected 2026-09-08: CONOPS-cap-vsar.md is not missing, it lives in the vault at Projects/architecture/CONOPS-cap-vsar.md — but outside the repo, so the agents that the CHANGELOG points at it cannot read it, and it has already drifted from the code it describes. AM4_COMPAT.md and infra/ROUTER.md are still cited as authoritative and still resolve nowhere.
-- **Fix:** Copy the vault CONOPS into docs/CONOPS.md (vault stays the author's copy, repo carries the agent-readable one) and reconcile it with Plan v0.8 §4; write or remove the other two references.
+- **Fix:** WRONG FINDING, corrected 2026-09-08. Every cited document exists in the canonical repo: docs/ragd/vaultnotes/CONOPS-cap-vsar.md, docs/AM4_COMPAT.md and infra/ROUTER.md. All three were missing only from the local working tree. The vault notes are published into the repo by docs/ragd/ragd_ingest.py, so the agents CAN read them. Now pulled down locally.
 - **Done when:** Every document the repo cites resolves from inside the repo.
 
 ### D-4
@@ -823,7 +823,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 `P2` · `medium` · `bug` · Air Manager instruments · cluster C13 (Instrument tooling & shared libs) · effort M · wave 4 · **open**
 
 - **Files:** `scripts/luacheck.py`, `tests/test_lcd_text.py`
-- **Problem:** The ctypes Lua 5.4 harness the CHANGELOG describes as the independent verification route is not in the repo; luacheck.py is syntax-only and nothing executes any logic.lua. Page and scan state machines, audio state, press handling and the TDFM/GMA handshake have no tests at all.
+- **Problem:** The ctypes Lua 5.4 harness the CHANGELOG describes as the independent verification route is not in the repo; luacheck.py is syntax-only and nothing executes any logic.lua. Page and scan state machines, audio state, press handling and the TDFM/GMA handshake have no tests at all. [Re-verified 2026-09-08 against the complete tree: only scripts/luacheck.py (syntax) and tests/test_lcd_text.py exist; no ctypes/liblua harness anywhere. Stands.]
 - **Fix:** Commit the harness and add state-machine tests, including shuffled lib/ load order.
 - **Done when:** All four instruments load, power on and draw in CI.
 
@@ -856,7 +856,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 `P3` · `low` · `task` · Exercise console (backend) · cluster C15 (Service boundaries (architecture)) · effort M · wave 4 · **open**
 
 - **Files:** `services/flightplanner/app.py`, `services/exercise/app/propagation.py`, `services/exercise/mock_bridge.py`, `services/exercise/app/static/debrief.js`, `xplane/PI_capvsar_df.py`
-- **Problem:** Bearing/distance is implemented five times with the same R_NM constant; debrief.js has already drifted (missing cos(lat) in heading).
+- **Problem:** Bearing/distance is implemented five times with the same R_NM constant; debrief.js has already drifted (missing cos(lat) in heading). [Re-verified 2026-09-08 against the complete tree: exactly five files carry their own geodesy. Stands.]
 - **Fix:** One shared Python geodesy module for the two services; the plugin keeps its standalone copy tested against it; the JS uses one helper.
 - **Done when:** A cross-implementation test agrees within 1 m over 100 NM.
 
@@ -878,7 +878,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 `P3` · `low` · `bug` · Air Manager instruments · cluster C14 (Contract & documentation truth) · effort S · wave 4 · **open**
 
 - **Files:** `instruments/cap-fm-tdfm-136b/logic.lua:480-525`, `instruments/mo-audio-panel-gma1347/logic.lua:78-79`
-- **Problem:** cap_fm_ptt, cap_fm_main_rx and cap_fm_guard_rx are consumed but nothing writes them and they are absent from DATAREF_CONTRACT.md, so the TDFM/GMA handshake is undocumented and half-wired.
+- **Problem:** cap_fm_ptt, cap_fm_main_rx and cap_fm_guard_rx are consumed but nothing writes them and they are absent from DATAREF_CONTRACT.md, so the TDFM/GMA handshake is undocumented and half-wired. [Re-verified 2026-09-08: cap_fm_main_rx and cap_fm_ptt are subscribed in cap-fm-tdfm-136b/logic.lua:480,508 and written by nothing in the tree. Stands.]
 - **Fix:** Document them in the contract and implement the producer, or remove the consumers.
 - **Done when:** Contract lists every si_variable both instruments use.
 
@@ -889,7 +889,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 `P3` · `low` · `bug` · Air Manager instruments · cluster C13 (Instrument tooling & shared libs) · effort S · wave 4 · **open**
 
 - **Files:** `scripts/deploy_df_instruments.py:14-17,47`, `instruments/*/info.xml:20-25`
-- **Problem:** The deploy script handles two of four instruments although the website claims it deploys all four; TDFM and GMA have no deploy script; stale target files are never removed; and every info.xml claims FSX/P3D/FS2020 support although all four are X-Plane only.
+- **Problem:** The deploy script handles two of four instruments although the website claims it deploys all four; TDFM and GMA have no deploy script; stale target files are never removed; and every info.xml claims FSX/P3D/FS2020 support although all four are X-Plane only. [Re-verified 2026-09-08: deploy_df_instruments.py still lists 2 of 4 instruments; TDFM and GMA have no deploy script. Stands.]
 - **Fix:** Deploy all four, prune stale files, correct the manifests.
 - **Done when:** One command deploys four instruments to a clean Air Manager.
 

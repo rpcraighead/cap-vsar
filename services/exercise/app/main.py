@@ -441,7 +441,8 @@ def list_sorties():
 def track(oid: str):
     with db() as c:
         rows = c.execute(
-            "SELECT callsign, t, lat, lon, alt_ft FROM positions WHERE sortie_id=? ORDER BY t",
+            "SELECT callsign, t, lat, lon, alt_ft, hdg_true FROM positions"
+            " WHERE sortie_id=? ORDER BY t",
             (oid,)).fetchall()
         brgs = c.execute(
             "SELECT callsign, t, lat, lon, bearing_true, note FROM bearings WHERE sortie_id=? ORDER BY t",

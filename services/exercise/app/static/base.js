@@ -4,7 +4,9 @@ const $ = id => document.getElementById(id);
 const map = L.map('map').setView([33.15, -117.18], 10);
 capvsarCharts(map, {view: 'base'});
 
-let state = {}, acLayers = {}, trackLines = {}, beaconMarker = null, alertCircle = null;
+let state = {}, acLayers = {}, trackLines = {}, beaconMarker = null,
+    alertCircle = null, alertMarker = null;
+let sortieId = null;
 const bearingLayer = L.layerGroup().addTo(map);
 const bearingLog = [], msgLog = [];
 let centred = false;
@@ -29,8 +31,27 @@ function connect() {
   };
 }
 
+function clearSortieLayers() {
+  // Everything drawn here belongs to one sortie. Base staff plotting bearings
+  // over the previous exercise's search area is worse than an empty map, and
+  // the alert circle used to be created once and kept forever.
+  for (const layer of [alertCircle, alertMarker, beaconMarker]) if (layer) map.removeLayer(layer);
+  alertCircle = alertMarker = beaconMarker = null;
+  Object.values(acLayers).forEach(l => map.removeLayer(l));
+  Object.values(trackLines).forEach(l => map.removeLayer(l));
+  acLayers = {}; trackLines = {};
+  bearingLayer.clearLayers();
+  bearingLog.length = 0;
+  $('bearings').textContent = 'no bearings logged';
+  centred = false;
+}
+
 function render() {
   const s = state.sortie, sc = state.scenario;
+
+  // A different sortie means a different search. Reset before drawing anything.
+  const id = s ? s.id : null;
+  if (id !== sortieId) { clearSortieLayers(); sortieId = id; }
 
   // ---- alert intake: how the search opens
   if (sc) {
@@ -44,7 +65,7 @@ function render() {
       alertCircle = L.circle([sc.alert_lat, sc.alert_lon],
         {radius: (sc.alert_radius_nm || 5) * 1852, color:'#ed7d31', weight:2,
          dashArray:'8,6', fillColor:'#ed7d31', fillOpacity:.06}).addTo(map);
-      L.marker([sc.alert_lat, sc.alert_lon], {icon: L.divIcon({className:'', iconSize:[14,14],
+      alertMarker = L.marker([sc.alert_lat, sc.alert_lon], {icon: L.divIcon({className:'', iconSize:[14,14],
         html:'<div style="width:12px;height:12px;border:2px solid #ed7d31;border-radius:50%"></div>'})})
         .addTo(map).bindTooltip('reported area', {direction:'right'});
       if (!centred) { map.fitBounds(alertCircle.getBounds().pad(0.2)); centred = true; }
@@ -73,7 +94,10 @@ function render() {
     if (!acLayers[a.callsign]) {
       acLayers[a.callsign] = L.marker(ll, {icon: planeIcon(a.hdg_true)}).addTo(map)
         .bindTooltip(a.callsign, {permanent:true, direction:'top', offset:[0,-8]});
-      trackLines[a.callsign] = L.polyline([ll], {color:'#2e5496', weight:2, opacity:.6}).addTo(map);
+      // An aircraft that went quiet for 30 s and came back keeps its existing
+      // track: replacing the polyline orphaned the old one on the map forever.
+      if (trackLines[a.callsign]) trackLines[a.callsign].addLatLng(ll);
+      else trackLines[a.callsign] = L.polyline([ll], {color:'#2e5496', weight:2, opacity:.6}).addTo(map);
     } else {
       acLayers[a.callsign].setLatLng(ll).setIcon(planeIcon(a.hdg_true));
       trackLines[a.callsign].addLatLng(ll);
@@ -81,6 +105,8 @@ function render() {
     if (!centred) { map.setView(ll, 11); centred = true; }
   });
   Object.keys(acLayers).forEach(k => {
+    // Marker goes when the aircraft stops reporting; the track it already flew
+    // stays on the map, because that is history base staff still need.
     if (!seen.has(k)) { map.removeLayer(acLayers[k]); delete acLayers[k]; }
   });
 
