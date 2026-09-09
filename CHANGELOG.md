@@ -124,6 +124,31 @@ Implemented an Exercise Director Setup system (`/setup`), scannable QR code and 
 - All 6 tests in `tests/test_tdfm.py` pass.
 - Lua syntax validation `scripts/luacheck.py` passes cleanly.
 
+## 2026-09-08 — Radio systems specification, feature matrix, and operational use cases publication (DOCX, PDF, Markdown)
+
+**Status: complete. Comprehensive reference manual and automated document generator published.**
+
+Authored and published the complete CAP V-SAR radio ecosystem reference manual across Markdown (`docs/RADIO_FEATURES_AND_USE_CASES.md`), Microsoft Word (`docs/CAP_V-SAR_Radio_Features_and_Use_Cases.docx`), and Adobe PDF (`docs/CAP_V-SAR_Radio_Features_and_Use_Cases.pdf`):
+
+### 1. Equipment Specifications & Operational Feature Matrices
+- **Airborne Transceivers & Direction Finders**:
+  - **Technisonic TDFM-136B**: P25 digital conventional & analog FM, 200 CAP fleet memory channels with CTCSS subaudible tones and P25 NACs, dual-receiver Guard path (GD1/GD2), 60 s transmitter time-out timer (TOT), and 20-channel carrier-sensing scan engine.
+  - **Garmin GMA 1347 Audio Panel**: Three transceiver inputs (COM1, COM2, COM3/TDFM), COM3 MIC transmission interlock, four ICS cockpit isolation modes (`ALL`, `PILOT`, `COPILOT`, `CREW`), Split COM operational separation, 16-block digital clearance recorder (PLAY), and analog fail-safe relay.
+  - **Becker SAR-DF 517 & RHOTHETA RT-600**: 121.5 / 243.0 / 406 MHz direction finding, multi-sample circular averaging filter, dynamic inverse signal-to-noise hiss degradation (`elt_noise.wav`), top/bottom antenna installation calibration, and 15-hex COSPAS-SARSAT emergency data frame decoding.
+- **Ground & Base Communications**:
+  - **Motorola APX 4500**: Fixed base & incident command post multi-channel monitoring, CAP Form 110 radio log synchronization, and cross-band relay.
+  - **Mission Base Web Console (`/radio`)**: WebRTC / Web Audio PTT browser radio console, channel selector, headset gain, and direct Mumble voice mesh integration.
+  - **Handheld Radios (ICOM IC-A25N & Portable P25)**: Flight line coordination, airfield advisory, and mobile Urban Direction Finding (UDF) ground team bearings.
+
+### 2. Operational Search and Rescue Use Cases
+- **Pauma Valley ELT Search**: Step-by-step aircrew DF homing, wing-null banking, cone-of-confusion avoidance, and ground UDF team handoff.
+- **Mountain Repeater Net Operations**: Tactical coordination using CA Wing mountain repeaters (Mt. Laguna, Otay Mountain, Santiago Peak) with tone-encoded access.
+- **Air-to-Ground SAR Coordination**: Inter-agency communications bridging airborne search assets and ground rescue teams on CALCORD and SAR frequencies.
+- **Inadvertent Stuck-MIC Emergency**: Airborne recognition, 60-second automatic timer cutoff, and ground base station diagnostic mitigation.
+
+### 3. Tooling & Automation
+- Created `scripts/build_radio_reference_doc.py` using `python-docx` to build the styled 40+ page operational manual with executive layout, styled callouts, comparison tables, and embedded high-resolution equipment graphics.
+
 ## 2026-09-08 — Full regression confirmed for L-2/L-3/L-4/F-4; the Python 3.14 TestClient hang does not reproduce
 
 **Status: verification complete. No code changed.**
