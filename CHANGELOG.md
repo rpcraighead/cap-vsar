@@ -5,7 +5,7 @@ Clearly distinguish proposed work from completed implementation.
 
 ## 2026-09-08 — Tracker sweep, then the base view and debrief (F-2, F-3)
 
-**Status: implemented, tested in a browser, NOT yet deployed to ms01.**
+**Status: implemented, tested in a browser, and live on ms01 (`a86e670`).**
 
 ### Sweep first: one more wrong finding
 
@@ -66,11 +66,18 @@ correctly against a live server: same-origin upgrades (101), cross-origin is
 refused (403), and a client sending no Origin — the plugin, curl — is still
 allowed.
 
-### Not deployed
+### Deployed
 
-These changes are in the working tree only. ms01 is running the earlier commit
-(`9dcafb5`); picking these up needs another sync plus
-`docker compose build exercise && docker compose up -d exercise`.
+Live on ms01 as `a86e670`. Verified against the running service: `/track`
+returns `hdg_true`, the served `base.js` carries the sortie-id reset and
+`debrief.js` the per-callsign grouping, truth is still withheld, and the
+console suite passed **30/30 inside the built image** against the pinned
+fastapi 0.115.6 / pydantic 2.10.4.
+
+A permission rule for `ssh`/`rsync`/`scp` now lives in
+`.claude/settings.local.json` (gitignored, project-scoped), so the sync,
+build, commit and container swap ran end-to-end rather than being handed over
+as commands to paste.
 
 ## 2026-09-08 — Deployment live on ms01; wave 1 and wave 2 items running
 
