@@ -8,16 +8,58 @@ ROOT="$PWD"
 [ -f .env ] || { echo "ERROR: .env missing. cp .env.example .env and fill it in."; exit 1; }
 set -a; . ./.env; set +a
 
+# ---------------------------------------------------------------- host paths
+# Every path compose bind-mounts has to exist before it starts, and all of them
+# are runtime state, so all of them are gitignored - which means a fresh clone
+# has none of them. Docker's behaviour on a missing path is what makes this
+# worth doing carefully: for a DIRECTORY mount it silently creates the
+# directory, but for a FILE mount it creates a DIRECTORY where a file was
+# meant to be. The flight planner then dies at import with
+# "unable to open database file" and gunicorn crash-loops, which is a
+# confusing way to learn that a directory was created for you.
+#
 # The mumble image generates /data/mumble_server_config.ini from the
 # MUMBLE_CONFIG_* variables in docker-compose.yml on every start. Do not write
 # that file here - it will be overwritten.
+echo "==> host paths"
 mkdir -p mumble/data
+mkdir -p services/exercise/data                 # exercise.db lives here
+mkdir -p services/exercise/radio-public         # CA cert served at /radio-ca.crt
+mkdir -p services/flightplanner/data/charts     # cached chart tiles
+
+# A file mount, not a directory mount - see above. An empty file is a valid
+# SQLite database; init_database() creates the schema on first run.
+[ -e services/flightplanner/data/aviation_data.db ] \
+  || : > services/flightplanner/data/aviation_data.db
 
 echo "==> pulling images"
 docker compose pull --quiet
 
 echo "==> starting stack"
 docker compose up -d
+
+# ------------------------------------------------------- browser radio trust
+# Tablets need a trusted secure context before a browser will hand the radio
+# console a microphone. Caddy mints its own root CA on first boot and keeps it
+# inside a named volume, where nothing else can read it - so the console serves
+# /radio-ca.crt from services/exercise/radio-public instead, and this is the
+# step that puts it there. Until this ran, that directory was populated by hand
+# on ms01 and was simply empty anywhere else.
+CA_SRC=/data/caddy/pki/authorities/local/root.crt
+CA_DST=services/exercise/radio-public/mission-base-ca.crt
+echo "==> browser radio CA"
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+  if docker compose exec -T radio-https test -f "$CA_SRC" 2>/dev/null; then
+    docker compose exec -T radio-https cat "$CA_SRC" > "$CA_DST.tmp" 2>/dev/null \
+      && mv "$CA_DST.tmp" "$CA_DST" \
+      && echo "    published $CA_DST" \
+      && break
+  fi
+  rm -f "$CA_DST.tmp"
+  [ "$attempt" = 10 ] && echo "    WARNING: Caddy has not minted its CA yet;" \
+      "re-run this script once it is up or tablets cannot reach the radio."
+  sleep 2
+done
 
 echo "==> status"
 docker compose ps
