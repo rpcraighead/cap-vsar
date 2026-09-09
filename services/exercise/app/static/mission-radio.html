@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#171d1c">
+<title>Mission Base · CAP V-SAR Radio</title>
+<link rel="stylesheet" href="/static/mission-radio.css">
+<script type="module" src="/static/mission-radio.js"></script>
+</head>
+<body>
+<header class="masthead">
+ <a class="wordmark" href="/base"><span class="mark" aria-hidden="true">◒</span> CAP <b>V-SAR</b><span class="divider"></span><span>COMMUNICATIONS</span></a>
+ <nav><a href="/base">Mission base</a><a href="/radio-legacy">Text console</a><time id="clock">00:00:00 Z</time></nav>
+</header>
+<main>
+ <div class="page-heading"><div><p class="eyebrow">MISSION SUPPORT / RADIO OPERATIONS</p><h1>Mission base.</h1><p class="intro">Your station on the mission net.</p></div><span class="exercise-tag">EXERCISE TRAFFIC</span></div>
+ <div class="workspace">
+  <section class="station" aria-label="Radio instrument">
+   <div class="station-top"><div><p class="eyebrow">SELECT YOUR RADIO</p><div class="model-tabs" role="group" aria-label="Radio faceplate"><button id="modelApx" type="button" aria-pressed="true">Motorola <b>APX 4500</b></button><button id="modelEfj" type="button" aria-pressed="false">EFJohnson <b>5300</b></button></div></div><span class="station-number">01 / BASE</span></div>
+   <div class="instrument-mount">
+    <div id="instrument" class="instrument apx" data-model="apx4500">
+     <img id="faceplate" src="/static/radio-art/apx4500.svg" alt="Motorola APX 4500 O2 control head" width="960" height="340" draggable="false">
+     <div class="radio-screen" id="radioScreen"><div class="screen-top"><span id="screenState">OFFLINE</span><span>V-SAR</span></div><div id="screenNet" class="screen-net">PRIMARY</div><div id="screenCall" class="screen-call">MISSION BASE</div><div class="screen-menu"><span>Net</span><span>Chan</span><span>Vol</span><span>Home</span></div></div>
+     <div class="hit-regions" id="hitRegions"></div>
+     <span class="hardware-led" id="hardwareLed" aria-hidden="true"></span>
+    </div>
+    <div class="instrument-caption"><span id="modelCaption">APX 4500 / O2 CONTROL HEAD</span><span>VHF MISSION RADIO · VIRTUAL STATION</span></div>
+   </div>
+   <div class="radio-controls">
+    <div class="net-control"><label for="netSelect">MISSION NET</label><div class="select-row"><button id="previousNet" type="button" aria-label="Previous mission net">−</button><select id="netSelect"><option value="primary">PRIMARY</option></select><button id="nextNet" type="button" aria-label="Next mission net">+</button></div></div>
+    <div class="volume-control"><label for="volume">HEADSET VOLUME <output id="volumeValue">70%</output></label><input id="volume" type="range" min="0" max="100" value="70" aria-label="Headset volume"></div>
+   </div>
+   <div class="receiver-status"><div><span class="signal-dot" id="signalDot"></span><strong id="connectionState" role="status">Radio disconnected</strong><span id="speaker">Join the net to listen.</span></div><div class="meter" aria-label="Receive audio level"><span id="rxMeter"></span></div></div>
+   <div class="ptt-area"><button id="ptt" class="ptt" type="button" disabled aria-pressed="false"><span class="ptt-icon" aria-hidden="true">◉</span><span><strong id="pttLabel">HOLD TO TALK</strong><small id="pttHint">Connect your headset to begin</small></span><kbd>SPACE</kbd></button><p class="ptt-help">Press and hold. Release to listen. <span>One net at a time.</span></p></div>
+   <div id="notice" class="notice" role="status" hidden></div>
+  </section>
+  <aside class="setup-panel">
+   <div class="setup-heading"><span class="eyebrow">OPERATOR SETUP</span><span class="headset-symbol" aria-hidden="true">◖ ◗</span></div>
+   <h2>Headset &amp; station</h2><p class="setup-intro">Pair your Bluetooth headset in your device settings, then join the mission net.</p>
+   <form id="joinForm">
+    <label for="callsign">YOUR CALLSIGN</label><input id="callsign" name="callsign" value="MISSION BASE" minlength="2" maxlength="32" pattern="[A-Za-z0-9 ._\-]{2,32}" autocomplete="off" required>
+    <div id="accessRow" hidden><label for="accessCode">EXERCISE ACCESS CODE</label><input id="accessCode" type="password" autocomplete="off"></div>
+    <label for="microphone">MICROPHONE</label><select id="microphone"><option value="">System default / Bluetooth headset</option></select>
+    <label for="output">LISTEN THROUGH</label><select id="output"><option value="">System audio output</option></select><p id="outputHelp" class="field-help">Choose your headset as the device’s audio output.</p>
+    <button id="join" class="join-button" type="submit">Join mission net <span aria-hidden="true">↗</span></button>
+   </form>
+   <button id="soundTest" type="button" class="test-button">Test headset sound</button>
+   <div class="setup-notes"><p><b>On a tablet</b>Hold the large talk button with your finger.</p><p><b>On a computer</b>Hold Space while the radio page is active. Typing in a field won’t key the mic.</p><p><b>Listen first</b>The mic is muted until you hold PTT. Switching apps or locking the screen releases it.</p></div>
+   <div class="transport-label"><span class="tiny-dot"></span> MUMBLE MISSION VOICE</div>
+  </aside>
+ </div>
+ <footer><span>CAP V-SAR / MISSION BASE STATION</span><a href="/static/radio-help.html">Radio references &amp; setup notes</a><span>APX 4500 + EFJOHNSON 5300</span></footer>
+</main>
+<div id="secureHelp" class="secure-overlay" hidden><section><p class="eyebrow">HEADSET ACCESS</p><h2>Open the secure radio page.</h2><p>Your browser needs HTTPS to use a microphone on another device.</p><a id="secureLink" class="join-button" href="#">Open HTTPS radio ↗</a><p class="field-help">For the local mission server, install its trusted certificate first. The setup notes explain the tablet and computer steps.</p><a href="/static/radio-help.html">Read setup notes</a></section></div>
+</body>
+</html>

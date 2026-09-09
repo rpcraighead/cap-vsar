@@ -2,8 +2,7 @@
 // instructor has revealed it for debrief.
 const $ = id => document.getElementById(id);
 const map = L.map('map').setView([33.15, -117.18], 10);
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-  {maxZoom: 18, attribution: '&copy; OpenStreetMap'}).addTo(map);
+capvsarCharts(map, {view: 'base'});
 
 let state = {}, acLayers = {}, trackLines = {}, beaconMarker = null, alertCircle = null;
 const bearingLayer = L.layerGroup().addTo(map);

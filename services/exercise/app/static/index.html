@@ -11,7 +11,9 @@
   <div id="status" class="status offline">connecting</div>
   <div class="spacer"></div>
   <a class="navlink" href="/base">Mission Base</a>
+  <a class="navlink" href="/radio">Base Radio</a>
   <a class="navlink" href="/debrief">Debrief</a>
+  <a class="navlink nav-planner" href=":8090" target="_blank" title="N499CP Flight Planner">Flight Planner</a>
   <div id="clock" class="mono"></div>
 </header>
 
@@ -28,6 +30,54 @@
         <button id="stopBtn" class="ghost" disabled>Stop</button>
       </div>
       <button id="revealBtn" class="danger" disabled>Reveal beacon (debrief)</button>
+    </section>
+
+    <section>
+      <details id="nsPanel">
+        <summary>New scenario</summary>
+
+        <label for="nsName">Name</label>
+        <input id="nsName" placeholder="C-2  406 ELT in Pauma Valley">
+
+        <label for="nsLat">Beacon position</label>
+        <div class="row">
+          <input id="nsLat" placeholder="lat" inputmode="decimal">
+          <input id="nsLon" placeholder="lon" inputmode="decimal">
+        </div>
+        <div class="row">
+          <button id="nsPick" class="ghost">Pick on map</button>
+          <button id="nsClear" class="ghost">Clear</button>
+        </div>
+        <p class="hint" id="nsHint">Type coordinates, or pick a point off the sectional and drag the pin to adjust.</p>
+
+        <div class="row">
+          <span class="fld">
+            <label for="nsElev">Ground elev ft</label>
+            <input id="nsElev" value="0" inputmode="decimal">
+          </span>
+          <span class="fld">
+            <label for="nsBand">Band</label>
+            <select id="nsBand">
+              <option>121.5</option><option>243</option><option>406</option>
+            </select>
+          </span>
+        </div>
+
+        <label>Effects</label>
+        <div id="nsEffects" class="effects"></div>
+
+        <label for="nsAntennaProfile">DF antenna installation</label>
+        <select id="nsAntennaProfile">
+          <option value="c182_belly">C182 belly antenna</option>
+          <option value="c182_top">C182 top antenna</option>
+        </select>
+
+        <label for="nsNotes">Notes &mdash; what this one teaches</label>
+        <textarea id="nsNotes" rows="2" placeholder="Beacon in a valley west of the ridge; the null is the lesson."></textarea>
+
+        <button id="nsCreate" class="primary" style="width:100%;margin-top:10px">Create scenario</button>
+        <div id="nsMsg" class="notes"></div>
+      </details>
     </section>
 
     <section>
@@ -57,5 +107,6 @@
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/charts.js"></script>
 <script src="/static/app.js"></script>
 </body></html>

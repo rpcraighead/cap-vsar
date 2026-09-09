@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Engineering Specifications & RF Physics — CAP V-SAR</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Navigation Bar -->
+  <header class="navbar">
+    <div class="container navbar-inner">
+      <a href="index.html" class="brand">
+        <span class="brand-badge">CAP V-SAR</span>
+        <div class="brand-title-group">
+          <span class="brand-name">Civil Air Patrol V-SAR</span>
+          <span class="brand-subtitle">Virtual Search & Rescue Simulator</span>
+        </div>
+      </a>
+
+      <ul class="nav-links">
+        <li><a href="index.html" class="nav-link">Overview</a></li>
+        <li><a href="cockpit.html" class="nav-link">Cockpit & Avionics</a></li>
+        <li><a href="operations.html" class="nav-link">Base & Operations</a></li>
+        <li><a href="technical.html" class="nav-link active">Engineering Specs</a></li>
+        <li><a href="deployment.html" class="nav-link">Deployment</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <div class="system-status-indicator">
+          <span class="status-dot"></span>
+          <span>Simulation Active</span>
+        </div>
+        <a href="deployment.html" class="btn btn-primary btn-sm">Get Started</a>
+      </div>
+
+      <button class="mobile-toggle" aria-label="Toggle navigation">☰</button>
+    </div>
+  </header>
+
+  <!-- Technical Header Banner -->
+  <section class="hero" style="padding: 50px 0 40px 0;">
+    <div class="container">
+      <div class="hero-tag-group">
+        <span class="badge badge-navy">Aerospace Systems Engineering</span>
+        <span class="badge badge-red">RF Physics & Protocol Layer</span>
+        <span class="badge badge-gold">Dataref Contracts & Telemetry</span>
+      </div>
+      <h1 class="hero-title" style="margin-top: 14px; font-size: 2.7rem;">
+        RF Propagation Physics & System Architecture
+      </h1>
+      <p class="hero-description" style="max-width: 840px; margin-top: 10px;">
+        Unlike arcade simulators that use simplified proximity spheres, CAP V-SAR implements aerospace-grade 3D electromagnetic propagation models. We simulate true radio line-of-sight refraction, Friis path loss, terrain shadowing, antenna nulls, and authentic 406 MHz COSPAS-SARSAT digital telemetry.
+      </p>
+    </div>
+  </section>
+
+  <!-- Section 1: RF Propagation Physics -->
+  <section class="section" id="rf-physics">
+    <div class="container">
+      <div class="spotlight-content" style="max-width: 100%; margin-bottom: 32px;">
+        <span class="section-kicker">Electromagnetic Simulation</span>
+        <h2 class="spotlight-title">3D Radio Wave Propagation Engine</h2>
+        <p class="spotlight-desc">
+          Implemented in the high-performance Python/C++ plugin layer (<code>PI_capvsar_df.py</code>), the RF engine evaluates propagation vectors at 20 Hz between the aircraft's multi-element DF antenna array and active ground or distress beacons.
+        </p>
+      </div>
+
+      <div class="card-grid" style="grid-template-columns: repeat(2, 1fr); gap: 24px;">
+        <!-- Formula 1: Radio Horizon -->
+        <div class="formula-card">
+          <div class="formula-title">4/3 Effective Earth Radius & Radio Horizon</div>
+          <div class="formula-equation">
+            d_{horizon} \approx 1.23 \left(\sqrt{h_{rx}} + \sqrt{h_{tx}}\right)
+          </div>
+          <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 12px;">
+            Atmospheric refractivity bends VHF/UHF radio waves downward slightly, extending the radio horizon beyond the optical horizon by approximately 15%.
+          </p>
+          <div class="formula-vars">
+            <b>d<sub>horizon</sub></b>: Maximum theoretical line-of-sight range in nautical miles (NM)<br>
+            <b>h<sub>rx</sub></b>: Aircraft receiver antenna altitude in feet Above Ground Level (ft AGL)<br>
+            <b>h<sub>tx</sub></b>: Ground emergency beacon transmitter antenna height in feet AGL
+          </div>
+        </div>
+
+        <!-- Formula 2: Friis Path Loss -->
+        <div class="formula-card">
+          <div class="formula-title">Free Space Path Loss & Received Signal Power</div>
+          <div class="formula-equation">
+            P_{rx} = P_{tx} + G_{tx} + G_{rx} - 20\log_{10}(d) - 20\log_{10}(f) - 32.44 - L_{shadow}
+          </div>
+          <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 12px;">
+            Calculates received signal power in dBm across slant range distance, taking into account antenna gains and topographical occlusion.
+          </p>
+          <div class="formula-vars">
+            <b>P<sub>rx</sub></b>: Received signal power at DF receiver front-end (dBm)<br>
+            <b>P<sub>tx</sub></b>: Transmitter output power (e.g., +20 dBm for 100 mW 121.5 MHz; +37 dBm for 5W 406 MHz)<br>
+            <b>d, f</b>: Slant range distance in kilometers (km) and carrier frequency in megahertz (MHz)<br>
+            <b>L<sub>shadow</sub></b>: Knife-edge diffraction attenuation behind terrain ridges (up to 40 dB)
+          </div>
+        </div>
+      </div>
+
+      <!-- Specialized RF Phenomena -->
+      <div class="card-grid" style="grid-template-columns: repeat(3, 1fr); margin-top: 28px;">
+        <div class="card">
+          <div class="card-body">
+            <div class="card-tag">Null Overhead</div>
+            <h4 class="card-title">Antenna Cone of Confusion</h4>
+            <p class="card-desc">
+              Vertical monopole and dipole antennas exhibit an electromagnetic null directly along their vertical axis ($Z$-axis). When an aircraft flies directly over a beacon:
+            </p>
+            <ul class="feature-list" style="margin-top: 10px;">
+              <li class="feature-list-item">
+                <span class="feature-check-icon">&bull;</span>
+                <span>Signal strength plummets 30+ dB within a 60° inverted cone.</span>
+              </li>
+              <li class="feature-list-item">
+                <span class="feature-check-icon">&bull;</span>
+                <span>The DF needle swings erratically, confirming station passage.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-body">
+            <div class="card-tag">Airframe Masking</div>
+            <h4 class="card-title">Wing & Fuselage Shadowing</h4>
+            <p class="card-desc">
+              When an aircraft enters a 30° to 45° steep bank during homing turns, the aluminum wings and fuselage partially occlude the line of sight between the antenna and the signal source:
+            </p>
+            <ul class="feature-list" style="margin-top: 10px;">
+              <li class="feature-list-item">
+                <span class="feature-check-icon">&bull;</span>
+                <span>Produces authentic bearing jitter and temporary signal attenuation.</span>
+              </li>
+              <li class="feature-list-item">
+                <span class="feature-check-icon">&bull;</span>
+                <span>Trains aircrews to maintain level wings when taking bearing cuts.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-body">
+            <div class="card-tag">Terrain Occlusion</div>
+            <h4 class="card-title">Topographic Shadowing</h4>
+            <p class="card-desc">
+              Digital elevation ray-tracing verifies whether a mountain ridge or canyon wall interrupts the direct line-of-sight vector between transmitter and receiver:
+            </p>
+            <ul class="feature-list" style="margin-top: 10px;">
+              <li class="feature-list-item">
+                <span class="feature-check-icon">&bull;</span>
+                <span>Simulates total RF cutoffs behind mountain ridges in SAR areas.</span>
+              </li>
+              <li class="feature-list-item">
+                <span class="feature-check-icon">&bull;</span>
+                <span>Requires pilots to climb to altitude to re-acquire radio line of sight.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Interactive RF Calculator Widget -->
+      <div class="card" style="margin-top: 36px; border: 2px solid var(--border-color); background: #ffffff;">
+        <div class="card-body" style="padding: 32px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+            <div>
+              <span class="badge badge-navy">Interactive Physics Tool</span>
+              <h3 style="font-size: 1.4rem; color: var(--cap-navy-dark); margin-top: 6px;">Live RF Horizon & Path Loss Calculator</h3>
+              <p style="color: var(--text-secondary); font-size: 0.95rem;">
+                Adjust aircraft altitude and beacon parameters below to verify simulated electromagnetic line-of-sight and link margin.
+              </p>
+            </div>
+            <span class="badge badge-gold">Real-Time JS Computation</span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
+            <div>
+              <label style="font-size: 0.82rem; font-weight: 700; color: var(--cap-navy); text-transform: uppercase;">Aircraft Alt (ft AGL)</label>
+              <input type="number" id="calcRxAlt" value="4500" min="100" max="45000" step="100" style="width: 100%; padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-top: 6px; font-weight: 600;">
+            </div>
+            <div>
+              <label style="font-size: 0.82rem; font-weight: 700; color: var(--cap-navy); text-transform: uppercase;">Beacon Alt (ft AGL)</label>
+              <input type="number" id="calcTxAlt" value="6" min="0" max="14000" step="1" style="width: 100%; padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-top: 6px; font-weight: 600;">
+            </div>
+            <div>
+              <label style="font-size: 0.82rem; font-weight: 700; color: var(--cap-navy); text-transform: uppercase;">Frequency (MHz)</label>
+              <input type="number" id="calcFreq" value="121.5" min="100" max="500" step="0.1" style="width: 100%; padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-top: 6px; font-weight: 600;">
+            </div>
+            <div>
+              <label style="font-size: 0.82rem; font-weight: 700; color: var(--cap-navy); text-transform: uppercase;">TX Power (mW)</label>
+              <input type="number" id="calcTxPwr" value="100" min="10" max="5000" step="10" style="width: 100%; padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-top: 6px; font-weight: 600;">
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-subtle); text-align: center;">
+            <div style="background: var(--bg-canvas); padding: 16px; border-radius: var(--radius-sm);">
+              <div style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Calculated Radio Horizon</div>
+              <div id="calcOutHorizon" style="font-size: 1.8rem; font-weight: 800; color: var(--cap-navy); margin-top: 4px;">85.5 NM</div>
+            </div>
+            <div style="background: var(--bg-canvas); padding: 16px; border-radius: var(--radius-sm);">
+              <div style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Free Space Path Loss</div>
+              <div id="calcOutFspl" style="font-size: 1.8rem; font-weight: 800; color: var(--cap-navy-mid); margin-top: 4px;">118.1 dB</div>
+            </div>
+            <div style="background: var(--bg-canvas); padding: 16px; border-radius: var(--radius-sm);">
+              <div style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Receiver Link Margin</div>
+              <div id="calcOutMargin" style="font-size: 1.8rem; font-weight: 800; color: #10b981; margin-top: 4px;">+10.9 dB (Solid)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 2: 406 MHz COSPAS-SARSAT Protocol -->
+  <section class="section" id="cospas" style="background-color: var(--bg-surface-muted);">
+    <div class="container">
+      <div class="spotlight-content" style="max-width: 100%; margin-bottom: 24px;">
+        <span class="section-kicker">Distress Protocol Emulation</span>
+        <h2 class="spotlight-title">406.025 MHz COSPAS-SARSAT Digital Protocol</h2>
+        <p class="spotlight-desc">
+          Modern Emergency Locator Transmitters (ELTs) and Personal Locator Beacons (PLBs) broadcast digital data packets on 406.025 MHz in addition to the traditional 121.5 MHz analog swept tone. CAP V-SAR replicates the complete digital pulse cadence and data decoding.
+        </p>
+      </div>
+
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Protocol Parameter</th>
+              <th>Specification (C/S T.001 Standard)</th>
+              <th>CAP V-SAR Implementation Behavior</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>Carrier Frequency</b></td>
+              <td>406.025 MHz ± 2 kHz</td>
+              <td>Simulated Doppler shift based on aircraft relative velocity ($\Delta f = f_0 \frac{v_{rel}}{c}$).</td>
+            </tr>
+            <tr>
+              <td><b>Burst Repetition Rate</b></td>
+              <td>50.0 ± 2.5 seconds (randomized)</td>
+              <td>Accurate pseudo-random transmission interval prevents synchronized collision between multiple beacons.</td>
+            </tr>
+            <tr>
+              <td><b>Burst Transmission Duration</b></td>
+              <td>520 milliseconds (long format)</td>
+              <td>Triggers instantaneous 520 ms DF strobe flag in datarefs and triggers audio pulse.</td>
+            </tr>
+            <tr>
+              <td><b>Modulation & Bit Rate</b></td>
+              <td>Bi-phase L (Manchester) at 400 bps</td>
+              <td>112 or 144 bit digital telegram containing hex ID, country code, and coordinate offsets.</td>
+            </tr>
+            <tr>
+              <td><b>15-Hex Identity Synthesis</b></td>
+              <td>e.g. <code>38CB4C99AB770F9</code></td>
+              <td>Decoded by the RHOTHETA RT-600 dot-matrix display and base station decoder in real-time.</td>
+            </tr>
+            <tr>
+              <td><b>Indicator Timehold Decay</b></td>
+              <td>30 seconds retention on display</td>
+              <td>Becker 517 flashing lock holdover; needle slowly returns to search sweep if no burst arrives within 55s.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 3: Dataref Specification Contract -->
+  <section class="section" id="datarefs">
+    <div class="container">
+      <div class="spotlight-content" style="max-width: 100%; margin-bottom: 24px;">
+        <span class="section-kicker">Software Interface Contract</span>
+        <h2 class="spotlight-title">X-Plane Dataref & Variable Contracts</h2>
+        <p class="spotlight-desc">
+          The simulation bridge communicates with Air Manager instruments and external applications through a published set of high-speed custom datarefs.
+        </p>
+      </div>
+
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Dataref Identifier</th>
+              <th>Type & Units</th>
+              <th>Update Rate</th>
+              <th>Description & Physical Meaning</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>cap/df/bearing_rel_deg</code></td>
+              <td>Float (deg: -180 to +180)</td>
+              <td>20 Hz</td>
+              <td>Relative bearing from aircraft nose to active transmitter (0 = dead ahead, +90 = 3 o'clock).</td>
+            </tr>
+            <tr>
+              <td><code>cap/df/bearing_mag_deg</code></td>
+              <td>Float (deg: 000 to 359)</td>
+              <td>20 Hz</td>
+              <td>Absolute magnetic bearing from aircraft to transmitter, compensated for current magnetic variation.</td>
+            </tr>
+            <tr>
+              <td><code>cap/df/signal_strength_pct</code></td>
+              <td>Float (percent: 0 to 100)</td>
+              <td>20 Hz</td>
+              <td>Smoothed receiver signal quality indicator driven by Friis equation and link budget.</td>
+            </tr>
+            <tr>
+              <td><code>cap/df/frequency_hz</code></td>
+              <td>Int (Hertz: e.g. 121500000)</td>
+              <td>On Change</td>
+              <td>Currently tuned homing frequency (121.5 MHz, 243.0 MHz, 406.025 MHz).</td>
+            </tr>
+            <tr>
+              <td><code>cap/df/burst_active</code></td>
+              <td>Int (Boolean: 0 or 1)</td>
+              <td>Instantaneous</td>
+              <td>Set to 1 during the active 520 ms 406 MHz COSPAS-SARSAT RF burst; 0 during quiet period.</td>
+            </tr>
+            <tr>
+              <td><code>cap/df/cone_of_confusion</code></td>
+              <td>Int (Boolean: 0 or 1)</td>
+              <td>20 Hz</td>
+              <td>Active when aircraft is inside the 60-degree inverted null cone directly overhead the beacon.</td>
+            </tr>
+            <tr>
+              <td><code>cap/df/terrain_shadowed</code></td>
+              <td>Int (Boolean: 0 or 1)</td>
+              <td>20 Hz</td>
+              <td>Active when topographical terrain blocks the direct radio line of sight.</td>
+            </tr>
+            <tr>
+              <td><code>cap_fm_freq_active</code></td>
+              <td>Float (MHz: e.g. 148.150)</td>
+              <td>On Change</td>
+              <td>Active tactical channel tuned on the Technisonic TDFM-136B airborne VHF-FM radio.</td>
+            </tr>
+            <tr>
+              <td><code>cap_fm_ptt</code></td>
+              <td>Int (Boolean: 0 or 1)</td>
+              <td>Instantaneous</td>
+              <td>Tactical radio Push-To-Talk state routed from yoke or observer panel button.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 4: Air Manager Lua Canvas Architecture -->
+  <section class="section" id="lua-canvas" style="background-color: var(--bg-surface-muted);">
+    <div class="container">
+      <div class="spotlight-content" style="max-width: 100%; margin-bottom: 24px;">
+        <span class="section-kicker">Avionics Rendering</span>
+        <h2 class="spotlight-title">Air Manager 4.2 Lua Vector Architecture</h2>
+        <p class="spotlight-desc">
+          To achieve photorealistic instrument displays without texture blurring or frame drops, the Becker SAR-DF 517 and RHOTHETA RT-600 instruments employ double-buffered hardware vector graphics:
+        </p>
+      </div>
+
+      <div class="tech-box">
+        <div class="tech-header">
+          <span class="tech-title">lua/becker_517_render.lua — Hardware Redraw Implementation</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <div class="tech-body">
+          <pre><code>-- Becker SAR-DF 517 Vector Redraw Loop (Air Manager 4.2+)
+local canvas_needle = canvas_add(0, 0, 512, 512)
+
+function render_df_needle(rel_bearing, sig_strength, is_burst, in_cone)
+    canvas_draw(canvas_needle, function()
+        _style(CLEAR)
+        
+        -- If signal is below squelch threshold or in overhead cone, simulate jitter
+        if sig_strength &lt; 5.0 or in_cone == 1 then
+            local jitter = math.random(-25, 25)
+            rel_bearing = rel_bearing + jitter
+        end
+
+        -- Draw high-contrast LCD circular bearing scale
+        _circle(256, 256, 180)
+        _color(0.12, 0.15, 0.18, 1.0)
+        _stroke(2)
+
+        -- Render primary indicator pointer with antialiasing
+        local rad = math.rad(rel_bearing - 90)
+        local x_tip = 256 + 170 * math.cos(rad)
+        local y_tip = 256 + 170 * math.sin(rad)
+
+        _line(256, 256, x_tip, y_tip)
+        _color(0.95, 0.20, 0.25, 1.0) -- Soft crimson indicator
+        _stroke(4)
+    end)
+end
+
+-- Subscribe to high-speed X-Plane datarefs
+xpl_dataref_subscribe("cap/df/bearing_rel_deg", "FLOAT",
+                      "cap/df/signal_strength_pct", "FLOAT",
+                      "cap/df/burst_active", "INT",
+                      "cap/df/cone_of_confusion", "INT",
+                      render_df_needle)</code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 5: Docker & Microservices Topology -->
+  <section class="section" id="docker-architecture">
+    <div class="container">
+      <div class="spotlight-content" style="max-width: 100%; margin-bottom: 24px;">
+        <span class="section-kicker">Deployment Infrastructure</span>
+        <h2 class="spotlight-title">Microservice Container Architecture</h2>
+        <p class="spotlight-desc">
+          CAP V-SAR backend components are packaged as isolated, lightweight Docker containers orchestrated via <code>docker-compose.prod.yml</code>.
+        </p>
+      </div>
+
+      <div class="card-grid" style="grid-template-columns: repeat(3, 1fr);">
+        <div class="card">
+          <div class="card-body">
+            <div class="card-tag">Port 8700 &bull; Python / FastAPI</div>
+            <h4 class="card-title">capvsar-exercise</h4>
+            <p class="card-desc">
+              Core simulation server managing exercise state, beacon truth coordinates, UDP telemetry listeners from X-Plane, and hosting the MRO Base Radio console and Debrief application.
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-body">
+            <div class="card-tag">Port 8090 &bull; Node.js / Vite</div>
+            <h4 class="card-title">capvsar-flightplanner</h4>
+            <p class="card-desc">
+              High-performance web mapping interface serving georeferenced FAA VFR sectional tiles, calculating WGS-84 search patterns, and compiling downloadable <code>.fms</code> files.
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-body">
+            <div class="card-tag">Port 64738 &bull; Murmur UDP</div>
+            <h4 class="card-title">mumble-server</h4>
+            <p class="card-desc">
+              Sub-20ms latency tactical voice network connecting pilot headsets, observer stations, and ground radio operators with channel separation and radio PTT effects.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Call to Action Banner -->
+  <section class="section" style="padding: 40px 0;">
+    <div class="container">
+      <div class="card" style="background: linear-gradient(135deg, var(--cap-navy) 0%, var(--cap-navy-mid) 100%); color: #ffffff; padding: 40px; text-align: center;">
+        <h2 style="font-size: 2rem; color: #ffffff;">Ready to Deploy Your Training Facility?</h2>
+        <p style="color: #cbd5e1; max-width: 650px; margin: 12px auto 24px auto;">
+          Follow our step-by-step deployment guide with hardware specifications and automated setup scripts for standalone and multi-station topologies.
+        </p>
+        <div style="display: flex; justify-content: center; gap: 14px;">
+          <a href="deployment.html" class="btn btn-gold">Deploy CAP V-SAR Now &rarr;</a>
+          <a href="index.html" class="btn btn-secondary" style="border-color: rgba(255,255,255,0.3); color:#fff;">Return to Overview</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Lightbox Modal for High-Res Zoom -->
+  <div id="lightboxModal" class="lightbox-modal">
+    <button class="lightbox-close">&times;</button>
+    <div class="lightbox-content">
+      <img src="" alt="" class="lightbox-image">
+      <div class="lightbox-caption"></div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="footer-brand-title">Civil Air Patrol V-SAR</div>
+          <p class="footer-brand-desc">
+            Virtual Search and Rescue Training Platform. Designed for high-fidelity electronic homing, tactical communication, and aircrew crew resource management.
+          </p>
+          <div style="margin-top: 8px;">
+            <span class="badge badge-outline" style="color:#94a3b8; border-color:#334155;">USAF Auxiliary Training Resource</span>
+          </div>
+        </div>
+
+        <div>
+          <h5 class="footer-col-title">Systems</h5>
+          <ul class="footer-links">
+            <li><a href="cockpit.html" class="footer-link">Cessna 182T NAV III</a></li>
+            <li><a href="cockpit.html#mo-station" class="footer-link">MO Station Panel</a></li>
+            <li><a href="cockpit.html#df-heads" class="footer-link">Becker SAR-DF 517</a></li>
+            <li><a href="cockpit.html#df-heads" class="footer-link">RHOTHETA RT-600</a></li>
+            <li><a href="cockpit.html#tdfm" class="footer-link">TDFM-136B Radio</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h5 class="footer-col-title">Operations</h5>
+          <ul class="footer-links">
+            <li><a href="operations.html#base-radio" class="footer-link">MRO Base Radio</a></li>
+            <li><a href="operations.html#flight-planner" class="footer-link">N499CP Flight Planner</a></li>
+            <li><a href="operations.html#mission-base" class="footer-link">Mission Base Map</a></li>
+            <li><a href="operations.html#debrief" class="footer-link">Debrief & Scoring</a></li>
+            <li><a href="operations.html#form-110" class="footer-link">CAP Form 110 Comms</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h5 class="footer-col-title">Engineering</h5>
+          <ul class="footer-links">
+            <li><a href="technical.html#rf-physics" class="footer-link">RF Propagation Physics</a></li>
+            <li><a href="technical.html#datarefs" class="footer-link">Dataref Contracts</a></li>
+            <li><a href="technical.html#cospas" class="footer-link">406 MHz Protocol Specs</a></li>
+            <li><a href="deployment.html" class="footer-link">Installation & Setup</a></li>
+            <li><a href="technical.html#testing" class="footer-link">Test Verification Suite</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <div>&copy; 2026 Civil Air Patrol V-SAR Project. Developed for Virtual Search and Rescue Training.</div>
+        <div>X-Plane 12 &bull; Air Manager 4.2+ &bull; Garmin G1000 SVT</div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
+

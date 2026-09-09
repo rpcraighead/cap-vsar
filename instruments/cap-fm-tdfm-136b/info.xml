@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<pluginstrument>
+  <aircraft>Cessna 182T</aircraft>
+  <type>CAP FM Radio (TDFM-136B)</type>
+  <uuid>26df5da8-8ce7-4255-bb0e-520453134609</uuid>
+  <author>CAP V-SAR</author>
+  <description>Technisonic TDFM-136B VHF-FM mission radio as fitted to CAP aircraft, for the Mission Observer station. Two-line Main/Guard display, 230 main memories, MN/GD and G1/G2 selection, HI/LO power and the twelve-key command keypad. Routes to the CAP mission net rather than to ATC (Implementation Plan v0.8 section 6.7.3 option B).</description>
+  <compatibleFSX>false</compatibleFSX>
+  <compatibleP3D>false</compatibleP3D>
+  <compatibleXPL>true</compatibleXPL>
+  <compatibleFS2>false</compatibleFS2>
+  <compatibleFS2020>false</compatibleFS2020>
+  <version>1</version>
+  <configVersion>1</configVersion>
+  <pluginInterfaceVersion>100</pluginInterfaceVersion>
+  <prefWidth>800</prefWidth>
+  <prefHeight>420</prefHeight>
+  <source>PERSONAL</source>
+  <platforms>
+    <platform>WINDOWS</platform>
+    <platform>MAC</platform>
+    <platform>LINUX</platform>
+    <platform>RASPBERRY_PI</platform>
+  </platforms>
+  <tiers>
+    <tier>HOME_USE_STANDARD</tier>
+  </tiers>
+</pluginstrument>

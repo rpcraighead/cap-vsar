@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deployment & Hardware Guide — CAP V-SAR</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Navigation Bar -->
+  <header class="navbar">
+    <div class="container navbar-inner">
+      <a href="index.html" class="brand">
+        <span class="brand-badge">CAP V-SAR</span>
+        <div class="brand-title-group">
+          <span class="brand-name">Civil Air Patrol V-SAR</span>
+          <span class="brand-subtitle">Virtual Search & Rescue Simulator</span>
+        </div>
+      </a>
+
+      <ul class="nav-links">
+        <li><a href="index.html" class="nav-link">Overview</a></li>
+        <li><a href="cockpit.html" class="nav-link">Cockpit & Avionics</a></li>
+        <li><a href="operations.html" class="nav-link">Base & Operations</a></li>
+        <li><a href="technical.html" class="nav-link">Engineering Specs</a></li>
+        <li><a href="deployment.html" class="nav-link active">Deployment</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <div class="system-status-indicator">
+          <span class="status-dot"></span>
+          <span>Simulation Active</span>
+        </div>
+        <a href="deployment.html" class="btn btn-primary btn-sm">Get Started</a>
+      </div>
+
+      <button class="mobile-toggle" aria-label="Toggle navigation">☰</button>
+    </div>
+  </header>
+
+  <!-- Deployment Header Banner -->
+  <section class="hero" style="padding: 50px 0 40px 0;">
+    <div class="container">
+      <div class="hero-tag-group">
+        <span class="badge badge-navy">Implementation & Setup</span>
+        <span class="badge badge-red">Automated Build Pipeline</span>
+        <span class="badge badge-gold">Turn-Key Topologies</span>
+      </div>
+      <h1 class="hero-title" style="margin-top: 14px; font-size: 2.7rem;">
+        Hardware Specifications & Deployment Guide
+      </h1>
+      <p class="hero-description" style="max-width: 840px; margin-top: 10px;">
+        Deploy CAP V-SAR seamlessly—from an individual volunteer's home desktop workstation to a full squadron multi-station simulator lab or a wing-wide distributed exercise. Automated scripts handle airframe generation, instrument deployment, and container launch.
+      </p>
+    </div>
+  </section>
+
+  <!-- Section 1: Three Standard Deployment Topologies -->
+  <section class="section" id="topologies">
+    <div class="container">
+      <div class="spotlight-content" style="max-width: 100%; margin-bottom: 28px;">
+        <span class="section-kicker">Architectural Scalability</span>
+        <h2 class="spotlight-title">Three Turn-Key Deployment Topologies</h2>
+        <p class="spotlight-desc">
+          Choose the deployment model that matches your unit's facilities, hardware inventory, and training scope.
+        </p>
+      </div>
+
+      <div class="card-grid" style="grid-template-columns: repeat(3, 1fr);">
+        <!-- Topology A -->
+        <div class="card">
+          <div class="card-body">
+            <div class="card-tag">Topology A &bull; Personal / Detachment</div>
+            <h3 class="card-title">Standalone All-in-One</h3>
+            <p class="card-desc">
+              All simulation roles run on a single PC equipped with dual monitors. Perfect for home study, individual qualification renewal, and desktop practice.
+            </p>
+            <ul class="feature-list" style="margin-top: 14px;">
+              <li class="feature-list-item">
+                <span class="feature-check-icon">✓</span>
+                <span><b>Display 1:</b> X-Plane 12 flight deck (C182T G1000 3D cockpit).</span>
+              </li>
+              <li class="feature-list-item">
+                <span class="feature-check-icon">✓</span>
+                <span><b>Display 2:</b> Air Manager MO Station panel (Becker 517 / RT-600) and web console.</span>
+              </li>
+              <li class="feature-list-item">
+                <span class="feature-check-icon">✓</span>
+                <span><b>Local Services:</b> Docker containers run quietly in background on localhost.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Topology B -->
+        <div class="card" style="border: 2px solid var(--cap-navy-mid); box-shadow: var(--shadow-md);">
+          <div class="card-body">
+            <div class="card-tag" style="background: var(--cap-red); color: #fff;">Topology B &bull; Squadron Sim Lab (Recommended)</div>
+            <h3 class="card-title">Multi-Station LAN Sim Bay</h3>
+            <p class="card-desc">
+              Full multi-crew tactical simulator bay providing authentic Crew Resource Management (CRM) between Pilot, Observer, and Ground Dispatch.
+            </p>
+            <ul class="feature-list" style="margin-top: 14px;">
+              <li class="feature-list-item">
+                <span class="feature-check-icon">✓</span>
+                <span><b>Pilot Station:</b> Primary PC with yoke, rudders, throttle quadrant, and G1000.</span>
+              </li>
+              <li class="feature-list-item">
+                <span class="feature-check-icon">✓</span>
+                <span><b>MO Station:</b> Dedicated secondary PC or tablet with touch-screen Air Manager panel.</span>
+              </li>
+              <li class="feature-list-item">
+                <span class="feature-check-icon">✓</span>
+                <span><b>MRO Console:</b> Tablet running APX 6500 & IC-A120 virtual radio console.</span>
+              </li>
+              <li class="feature-list-item">
+                <span class="feature-check-icon">✓</span>
+                <span><b>Incident Command:</b> Instructor console with live map and beacon controls.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Topology C -->
+        <div class="card">
+          <div class="card-body">
+            <div class="card-tag">Topology C &bull; Wing-Wide Exercise</div>
+            <h3 class="card-title">Distributed Cloud WAN</h3>
+            <p class="card-desc">
+              Connect multiple aircraft and geographically dispersed squadrons into unified wing-wide search operations over secure internet connections.
+            </p>
+            <ul class="feature-list" style="margin-top: 14px;">
+              <li class="feature-list-item">
+                <span class="feature-check-icon">✓</span>
+                <span><b>Cloud Server:</b> Central exercise host on cloud VPS (AWS/Azure) or Wing HQ.</span>
+              </li>
+              <li class="feature-list-item">
+                <span class="feature-check-icon">✓</span>
+                <span><b>Multi-Aircraft Sorties:</b> Simultaneous tracking of multiple flight crews.</span>
+              </li>
+              <li class="feature-list-item">
+                <span class="feature-check-icon">✓</span>
+                <span><b>Tactical Voice:</b> Low-latency Mumble bridge connecting remote home stations.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 2: Hardware Specifications Table -->
+  <section class="section" id="hardware-specs" style="background-color: var(--bg-surface-muted);">
+    <div class="container">
+      <div class="spotlight-content" style="max-width: 100%; margin-bottom: 24px;">
+        <span class="section-kicker">Hardware Requirements</span>
+        <h2 class="spotlight-title">Recommended System Specifications</h2>
+        <p class="spotlight-desc">
+          X-Plane 12 flight dynamics and photometric lighting require robust GPU and CPU performance, while the MO Station and web consoles run efficiently on standard hardware.
+        </p>
+      </div>
+
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Component</th>
+              <th>Minimum (Home Practice)</th>
+              <th>Recommended (Squadron Sim Bay)</th>
+              <th>High-End / Command Facility</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>Processor (CPU)</b></td>
+              <td>Intel Core i5-10400 or AMD Ryzen 5 3600 (3.6+ GHz)</td>
+              <td>Intel Core i7-13700K or AMD Ryzen 7 7800X3D (4.8+ GHz)</td>
+              <td>Intel Core i9-14900K or AMD Ryzen 9 7950X3D</td>
+            </tr>
+            <tr>
+              <td><b>Graphics Card (GPU)</b></td>
+              <td>NVIDIA RTX 3060 (8 GB VRAM)</td>
+              <td>NVIDIA RTX 4070 Ti Super (16 GB VRAM)</td>
+              <td>NVIDIA RTX 4090 (24 GB VRAM)</td>
+            </tr>
+            <tr>
+              <td><b>System RAM</b></td>
+              <td>16 GB DDR4</td>
+              <td>32 GB DDR5</td>
+              <td>64 GB DDR5</td>
+            </tr>
+            <tr>
+              <td><b>Storage</b></td>
+              <td>500 GB SATA SSD</td>
+              <td>1 TB NVMe M.2 SSD (Gen 4)</td>
+              <td>2 TB+ NVMe M.2 SSD (Gen 4/5)</td>
+            </tr>
+            <tr>
+              <td><b>Displays</b></td>
+              <td>1x 1080p Monitor</td>
+              <td>2x 1440p Displays + 1x 1080p Touch Monitor</td>
+              <td>Triple 4K Curved Displays + 2x Touch Panels</td>
+            </tr>
+            <tr>
+              <td><b>Flight Controls</b></td>
+              <td>Desktop joystick & throttle</td>
+              <td>Honeycomb Alpha Yoke + Bravo Throttle + Rudder Pedals</td>
+              <td>Flight1 Tech / Precision Flight Controls C182 Console</td>
+            </tr>
+            <tr>
+              <td><b>Operating System</b></td>
+              <td>Ubuntu 22.04 LTS / Windows 10 (64-bit)</td>
+              <td>Ubuntu 24.04 LTS / Windows 11 Pro (64-bit)</td>
+              <td>Ubuntu 24.04 LTS / Windows 11 Enterprise</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 3: Automated Installation & Setup -->
+  <section class="section" id="installation">
+    <div class="container">
+      <div class="spotlight-content" style="max-width: 100%; margin-bottom: 24px;">
+        <span class="section-kicker">Automated Setup Pipeline</span>
+        <h2 class="spotlight-title">Step-by-Step Installation Commands</h2>
+        <p class="spotlight-desc">
+          CAP V-SAR includes automated setup scripts that build the airframe package, deploy the Air Manager instruments, and register the multi-layout MO station panel in seconds.
+        </p>
+      </div>
+
+      <!-- Step 1 -->
+      <div style="margin-bottom: 28px;">
+        <h3 style="font-size: 1.25rem; color: var(--cap-navy); margin-bottom: 8px;">Step 1: Clone Repository & Build Cessna 182T Skylane Package</h3>
+        <p style="color: var(--text-secondary); margin-bottom: 12px;">
+          The package builder script reads your local X-Plane 12 C172SP G1000 base, upgrades the flight model to 230 HP Lycoming IO-540 specifications, enables the constant-speed propeller governor, and configures the G1000 EIS for dual Manifold Pressure and RPM gauges:
+        </p>
+        <div class="tech-box">
+          <div class="tech-header">
+            <span class="tech-title">bash — Build C182T Airframe</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <div class="tech-body">
+            <pre><code># Navigate to repository root
+cd /srv/capvsar
+
+# Build dedicated Cessna 182T NAV III standalone package
+python3 scripts/build_c182t_package.py \
+  --xplane-dir "/opt/x-plane-12" \
+  --tail-number "N499CP" \
+  --overwrite</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2 -->
+      <div style="margin-bottom: 28px;">
+        <h3 style="font-size: 1.25rem; color: var(--cap-navy); margin-bottom: 8px;">Step 2: Deploy Direction Finding Instruments & MO Station Panel</h3>
+        <p style="color: var(--text-secondary); margin-bottom: 12px;">
+          Deploy the custom Becker SAR-DF 517, RHOTHETA RT-600, Technisonic TDFM-136B, and Garmin GMA 1347 instruments to Air Manager 4.2+, then inject the panel into Air Manager's SQLite database:
+        </p>
+        <div class="tech-box">
+          <div class="tech-header">
+            <span class="tech-title">bash — Deploy Avionics to Air Manager</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <div class="tech-body">
+            <pre><code># Deploy instrument code and vector assets to Air Manager instruments directory
+python3 scripts/deploy_df_instruments.py
+
+# Deploy panel definition (panel.xml, background textures, canvas coordinates)
+python3 scripts/deploy_mo_panel.py
+
+# Register panel in Air Manager config.sqlite3 database
+python3 scripts/register_mo_panel.py</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3 -->
+      <div style="margin-bottom: 28px;">
+        <h3 style="font-size: 1.25rem; color: var(--cap-navy); margin-bottom: 8px;">Step 3: Launch Docker Services (Exercise, Radios, Flight Planner)</h3>
+        <p style="color: var(--text-secondary); margin-bottom: 12px;">
+          Start the exercise backend, MRO base radio web server, flight planner, and Mumble voice server:
+        </p>
+        <div class="tech-box">
+          <div class="tech-header">
+            <span class="tech-title">bash — Launch Docker Microservices</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <div class="tech-body">
+            <pre><code># Launch background container suite
+docker compose -f docker-compose.prod.yml up -d
+
+# Verify container health status
+docker compose -f docker-compose.prod.yml ps</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 4 -->
+      <div>
+        <h3 style="font-size: 1.25rem; color: var(--cap-navy); margin-bottom: 8px;">Step 4: Run Automated Verification Test Suite</h3>
+        <p style="color: var(--text-secondary); margin-bottom: 12px;">
+          Execute the automated test suite to confirm flight model parameters, instrument dimensions, and panel layout database registrations:
+        </p>
+        <div class="tech-box">
+          <div class="tech-header">
+            <span class="tech-title">bash — Run Pytest Validation Suite</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <div class="tech-body">
+            <pre><code># Run complete unit test suite
+pytest tests/test_engine.py tests/test_faceplate.py tests/test_panel.py -v</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 4: Network Port Matrix -->
+  <section class="section" id="network-ports" style="background-color: var(--bg-surface-muted);">
+    <div class="container">
+      <div class="spotlight-content" style="max-width: 100%; margin-bottom: 24px;">
+        <span class="section-kicker">Firewall & Ports</span>
+        <h2 class="spotlight-title">Network Port Configuration Matrix</h2>
+        <p class="spotlight-desc">
+          Ensure the following TCP and UDP ports are open on your local firewall or router for multi-station and remote exercises:
+        </p>
+      </div>
+
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Port</th>
+              <th>Protocol</th>
+              <th>Service Name</th>
+              <th>Description / Purpose</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>8700</code></td>
+              <td>TCP</td>
+              <td>Exercise API & Base Radio</td>
+              <td>Web consoles: MRO Base Radio (<code>/radio</code>), Mission Base (<code>/base</code>), Debrief (<code>/debrief</code>), REST API.</td>
+            </tr>
+            <tr>
+              <td><code>8090</code></td>
+              <td>TCP</td>
+              <td>N499CP Flight Planner</td>
+              <td>Web mapping frontend serving FAA VFR sectional tiles and FMS flight plans.</td>
+            </tr>
+            <tr>
+              <td><code>64738</code></td>
+              <td>TCP / UDP</td>
+              <td>Mumble Voice Server</td>
+              <td>Low-latency tactical voice communication between aircrew and base.</td>
+            </tr>
+            <tr>
+              <td><code>49000</code></td>
+              <td>UDP</td>
+              <td>X-Plane Telemetry In</td>
+              <td>Receives high-rate flight dynamics, positioning, and engine datarefs from X-Plane.</td>
+            </tr>
+            <tr>
+              <td><code>49001</code></td>
+              <td>UDP</td>
+              <td>X-Plane Dataref Out</td>
+              <td>Transmits DF bearing cuts, beacon activations, and RF squelch states back to aircraft.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Lightbox Modal for High-Res Zoom -->
+  <div id="lightboxModal" class="lightbox-modal">
+    <button class="lightbox-close">&times;</button>
+    <div class="lightbox-content">
+      <img src="" alt="" class="lightbox-image">
+      <div class="lightbox-caption"></div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="footer-brand-title">Civil Air Patrol V-SAR</div>
+          <p class="footer-brand-desc">
+            Virtual Search and Rescue Training Platform. Designed for high-fidelity electronic homing, tactical communication, and aircrew crew resource management.
+          </p>
+          <div style="margin-top: 8px;">
+            <span class="badge badge-outline" style="color:#94a3b8; border-color:#334155;">USAF Auxiliary Training Resource</span>
+          </div>
+        </div>
+
+        <div>
+          <h5 class="footer-col-title">Systems</h5>
+          <ul class="footer-links">
+            <li><a href="cockpit.html" class="footer-link">Cessna 182T NAV III</a></li>
+            <li><a href="cockpit.html#mo-station" class="footer-link">MO Station Panel</a></li>
+            <li><a href="cockpit.html#df-heads" class="footer-link">Becker SAR-DF 517</a></li>
+            <li><a href="cockpit.html#df-heads" class="footer-link">RHOTHETA RT-600</a></li>
+            <li><a href="cockpit.html#tdfm" class="footer-link">TDFM-136B Radio</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h5 class="footer-col-title">Operations</h5>
+          <ul class="footer-links">
+            <li><a href="operations.html#base-radio" class="footer-link">MRO Base Radio</a></li>
+            <li><a href="operations.html#flight-planner" class="footer-link">N499CP Flight Planner</a></li>
+            <li><a href="operations.html#mission-base" class="footer-link">Mission Base Map</a></li>
+            <li><a href="operations.html#debrief" class="footer-link">Debrief & Scoring</a></li>
+            <li><a href="operations.html#form-110" class="footer-link">CAP Form 110 Comms</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h5 class="footer-col-title">Engineering</h5>
+          <ul class="footer-links">
+            <li><a href="technical.html#rf-physics" class="footer-link">RF Propagation Physics</a></li>
+            <li><a href="technical.html#datarefs" class="footer-link">Dataref Contracts</a></li>
+            <li><a href="technical.html#cospas" class="footer-link">406 MHz Protocol Specs</a></li>
+            <li><a href="deployment.html" class="footer-link">Installation & Setup</a></li>
+            <li><a href="technical.html#testing" class="footer-link">Test Verification Suite</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <div>&copy; 2026 Civil Air Patrol V-SAR Project. Developed for Virtual Search and Rescue Training.</div>
+        <div>X-Plane 12 &bull; Air Manager 4.2+ &bull; Garmin G1000 SVT</div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
+

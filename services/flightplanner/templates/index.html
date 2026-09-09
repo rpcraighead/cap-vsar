@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>N499CP Flight Planner</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+  <!-- TOOLBAR -->
+  <header id="toolbar">
+    <div id="logo-area">
+      <img src="{{ url_for('static', filename='logo.jpg') }}" alt="CAP" id="logo-img">
+      <span id="logo-title">N499CP</span>
+    </div>
+
+    <div id="route-bar">
+      <input type="text" id="route-input" placeholder="KSEE OCN KMYF" spellcheck="false" autocomplete="off" value="KSEE JLI TRM KPSP">
+
+      <select id="alt-select" title="Cruise altitude">
+        <optgroup label="VFR Eastbound (0°–179°)">
+          <option value="3500">3,500 ft</option>
+          <option value="5500">5,500 ft</option>
+          <option value="7500">7,500 ft</option>
+          <option value="9500">9,500 ft</option>
+          <option value="11500">11,500 ft</option>
+        </optgroup>
+        <optgroup label="VFR Westbound (180°–359°)">
+          <option value="4500">4,500 ft</option>
+          <option value="6500" selected>6,500 ft</option>
+          <option value="8500">8,500 ft</option>
+          <option value="10500">10,500 ft</option>
+        </optgroup>
+        <optgroup label="IFR Eastbound">
+          <option value="3000">3,000 ft</option>
+          <option value="5000">5,000 ft</option>
+          <option value="7000">7,000 ft</option>
+          <option value="9000">9,000 ft</option>
+          <option value="11000">11,000 ft</option>
+        </optgroup>
+        <optgroup label="IFR Westbound">
+          <option value="4000">4,000 ft</option>
+          <option value="6000">6,000 ft</option>
+          <option value="8000">8,000 ft</option>
+          <option value="10000">10,000 ft</option>
+        </optgroup>
+        <option value="custom">Custom...</option>
+      </select>
+
+      <select id="rpm-select" title="Engine RPM">
+        <option value="2700">2700 RPM</option>
+        <option value="2650">2650 RPM</option>
+        <option value="2600">2600 RPM (75%)</option>
+        <option value="2550">2550 RPM</option>
+        <option value="2500">2500 RPM (65%)</option>
+        <option value="2450">2450 RPM</option>
+        <option value="2400" selected>2400 RPM (55%)</option>
+        <option value="2350">2350 RPM</option>
+        <option value="2300">2300 RPM</option>
+        <option value="custom">Custom...</option>
+      </select>
+
+      <select id="reserve-select" title="Fuel reserve">
+        <option value="30">Rsv: 30 min</option>
+        <option value="45" selected>Rsv: 45 min</option>
+        <option value="60">Rsv: 60 min</option>
+        <option value="custom">Rsv: Custom</option>
+      </select>
+
+      <button id="calc-btn">Fly</button>
+    </div>
+
+    <div id="toolbar-right">
+      <div id="sim-warning">SIM USE ONLY</div>
+      <div id="db-status">
+        <span id="db-dot"></span>
+        <span id="db-label">Loading...</span>
+      </div>
+      <button class="toolbar-btn" id="btn-sar" title="CAP Search & Rescue Pattern Generator">SAR 🔍</button>
+      <button class="toolbar-btn" id="btn-perf">Perf</button>
+      <button class="toolbar-btn" id="btn-wb">W&amp;B</button>
+      <button class="toolbar-btn" id="btn-ref">Ref</button>
+      <a class="toolbar-btn" id="btn-guide" href="/guide" target="_blank" title="User guide & quick start">Guide</a>
+      <button class="toolbar-btn" id="btn-update-db">DB ↻</button>
+    </div>
+  </header>
+
+  <!-- MAP AREA -->
+  <div id="map-wrapper">
+    <div id="main-map"></div>
+
+    <!-- Chart layer switcher -->
+    <div id="layer-switcher">
+      <button class="layer-btn active" data-layer="vfr">VFR Sec</button>
+      <button class="layer-btn" data-layer="ifr_low">IFR Low</button>
+      <button class="layer-btn" data-layer="ifr_high">IFR High</button>
+      <button class="layer-btn" data-layer="sat">Satellite</button>
+      <button class="layer-btn" data-layer="osm">Street</button>
+    </div>
+
+    <!-- Floating map controls -->
+    <div id="map-controls">
+      <button id="plan-mode-btn">✈ Plan</button>
+      <button id="fit-route-btn">⊙ Fit</button>
+    </div>
+
+    <!-- Drawer toggle tab -->
+    <button id="drawer-toggle">
+      <span id="drawer-arrow">▲</span> Flight Log
+    </button>
+  </div>
+
+  <!-- BOTTOM DRAWER -->
+  <div id="bottom-drawer">
+    <div id="drawer-tabs">
+      <button class="drawer-tab active" data-pane="log">Log</button>
+      <button class="drawer-tab" data-pane="weather">Weather</button>
+      <button class="drawer-tab" data-pane="airports">Airports</button>
+      <button class="drawer-tab" data-pane="terrain">Terrain</button>
+    </div>
+    <div id="drawer-content">
+
+      <!-- Log Pane -->
+      <div id="pane-log" class="drawer-pane active">
+        <div id="log-empty" class="pane-empty">Enter a route above and press Fly.</div>
+        <div id="log-content" style="display:none">
+          <div id="log-summary">
+            <div class="sum-item"><div class="sum-val" id="s-dist">--</div><div class="sum-lbl">NM</div></div>
+            <div class="sum-item"><div class="sum-val" id="s-time">--</div><div class="sum-lbl">MIN</div></div>
+            <div class="sum-item"><div class="sum-val" id="s-fuel">--</div><div class="sum-lbl">GAL</div></div>
+            <div class="sum-item"><div class="sum-val" id="s-winds">--</div><div class="sum-lbl">WINDS</div></div>
+          </div>
+          <div id="log-table-wrap">
+            <table id="log-table">
+              <thead><tr><th>FROM</th><th>TO</th><th>DIST</th><th>TC</th><th>WCA</th><th>MH</th><th>GS</th><th>TIME</th><th>FUEL</th></tr></thead>
+              <tbody id="log-tbody"></tbody>
+            </table>
+          </div>
+          <div id="fuel-breakdown">
+            <table id="fuel-table">
+              <tr><td>Taxi &amp; Takeoff</td><td id="ft-taxi">--</td></tr>
+              <tr><td>Climb</td><td id="ft-climb">--</td></tr>
+              <tr><td>Cruise</td><td id="ft-cruise">--</td></tr>
+              <tr><td>45-min Reserve</td><td id="ft-reserve">--</td></tr>
+              <tr class="fuel-total"><td>Total Required</td><td id="ft-total">--</td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Weather Pane -->
+      <div id="pane-weather" class="drawer-pane">
+        <div id="wx-empty" class="pane-empty">Weather loads automatically after route calculation.</div>
+        <div id="wx-content" style="display:none">
+          <div id="wx-metars"></div>
+          <div id="wx-tafs"></div>
+          <div id="wx-winds"></div>
+          <div id="wx-notams"></div>
+        </div>
+      </div>
+
+      <!-- Airports Pane -->
+      <div id="pane-airports" class="drawer-pane">
+        <div id="apt-empty" class="pane-empty">Airport details load after route calculation.</div>
+        <div id="apt-content" style="display:none"></div>
+      </div>
+
+      <!-- Terrain Pane -->
+      <div id="pane-terrain" class="drawer-pane">
+        <div id="trn-empty" class="pane-empty">Terrain profile loads after route calculation.</div>
+        <div id="trn-content" style="display:none">
+          <div id="trn-stats">
+            <span>Max Terrain: <strong id="trn-max">--</strong> ft</span>
+            <span>Min Clearance: <strong id="trn-clr">--</strong> ft AGL</span>
+            <span id="trn-status-badge"></span>
+          </div>
+          <div id="terrain-canvas-wrap">
+            <canvas id="terrain-canvas"></canvas>
+          </div>
+          <div id="trn-hover"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL: Startup disclaimer (no close button — must be acknowledged) -->
+  <div class="modal-overlay" id="modal-disclaimer" data-persistent="true" style="display:none">
+    <div class="modal-box" id="disclaimer-box" role="alertdialog" aria-modal="true" aria-labelledby="disclaimer-title">
+      <div class="modal-header disclaimer-header">
+        <span id="disclaimer-title">⚠ SIMULATION USE ONLY</span>
+      </div>
+      <div class="modal-body">
+        <p class="disclaimer-lede">
+          This planner is a flight-simulation tool. It is <strong>NOT</strong> for real-world
+          flight planning, navigation, or dispatch.
+        </p>
+        <ul class="disclaimer-list">
+          <li>Not an FAA-approved source of aeronautical information.</li>
+          <li>Charts, airport data, weather, and winds aloft may be stale, incomplete, or wrong. NOTAMs are not provided.</li>
+          <li>Performance and weight &amp; balance figures are estimates and are not a substitute for the aircraft POH/AFM.</li>
+          <li>For an actual flight, use current FAA charts, an official weather briefing, and the approved aircraft documents.</li>
+        </ul>
+        <p class="disclaimer-note">
+          A sample flight — <strong>KSEE → JLI → TRM → KPSP</strong> — is loaded so you can see how
+          things work. Replace it in the route box with any route you want to plan.
+        </p>
+        <button class="btn-calc" id="disclaimer-ack">I Understand — Simulation Use Only</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Performance -->
+  <div class="modal-overlay" id="modal-perf" style="display:none">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span>Performance — N499CP</span>
+        <button class="modal-close" data-modal="modal-perf">×</button>
+      </div>
+      <div class="modal-body modal-flex">
+        <div class="perf-half">
+          <h4>Takeoff</h4>
+          <div class="form-row"><label>Weight (lbs)</label><input type="number" id="to-weight" value="2550" max="2550"></div>
+          <div class="form-row"><label>Press Alt (ft)</label><input type="number" id="to-altitude" value="0" step="500"></div>
+          <div class="form-row"><label>Temp (°C)</label><input type="number" id="to-temp" value="15"></div>
+          <div class="form-row"><label>Headwind (kts)</label><input type="number" id="to-wind" value="0"></div>
+          <button class="btn-calc" id="calc-takeoff">Calculate</button>
+          <div id="takeoff-results" class="perf-results" style="display:none">
+            <div class="res-row"><span>Ground Roll</span><span id="to-ground-roll">--</span> ft</div>
+            <div class="res-row"><span>Over 50' Obstacle</span><span id="to-total">--</span> ft</div>
+          </div>
+        </div>
+        <div class="perf-half">
+          <h4>Landing</h4>
+          <div class="form-row"><label>Press Alt (ft)</label><input type="number" id="land-altitude" value="0" step="500"></div>
+          <div class="form-row"><label>Temp (°C)</label><input type="number" id="land-temp" value="15"></div>
+          <div class="form-row"><label>Headwind (kts)</label><input type="number" id="land-wind" value="0"></div>
+          <button class="btn-calc" id="calc-landing">Calculate</button>
+          <div id="landing-results" class="perf-results" style="display:none">
+            <div class="res-row"><span>Ground Roll</span><span id="land-ground-roll">--</span> ft</div>
+            <div class="res-row"><span>Over 50' Obstacle</span><span id="land-total">--</span> ft</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Weight & Balance -->
+  <div class="modal-overlay" id="modal-wb" style="display:none">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span>Weight &amp; Balance — N499CP</span>
+        <button class="modal-close" data-modal="modal-wb">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="wb-form-grid">
+          <div class="form-row"><label>Empty Weight (lbs)</label><input type="number" id="wb-empty-weight" value="1642"></div>
+          <div class="form-row"><label>Empty Moment (/1000)</label><input type="number" id="wb-empty-moment" value="62.6" step="0.1"></div>
+          <div class="form-row"><label>Pilot (lbs)</label><input type="number" id="wb-pilot" value="180"></div>
+          <div class="form-row"><label>Front Pax (lbs)</label><input type="number" id="wb-front-pax" value="0"></div>
+          <div class="form-row"><label>Rear Pax (lbs)</label><input type="number" id="wb-rear-pax" value="0"></div>
+          <div class="form-row"><label>Baggage (lbs)</label><input type="number" id="wb-baggage" value="0" max="120"></div>
+          <div class="form-row"><label>Fuel (gal)</label><input type="number" id="wb-fuel" value="53" max="53" step="0.1"></div>
+        </div>
+        <button class="btn-calc" id="calc-wb" style="margin-top:0.75rem">Calculate W&amp;B</button>
+        <div id="wb-results" style="display:none;margin-top:0.75rem">
+          <div id="wb-summary-grid">
+            <div class="wb-card"><div class="wb-val" id="wb-total-weight">--</div><div class="wb-lbl">Total Weight</div><div class="wb-limit">Max: 2550 lbs</div></div>
+            <div class="wb-card"><div class="wb-val" id="wb-cg">--</div><div class="wb-lbl">CG (in)</div><div class="wb-limit" id="wb-cg-limits">35.0 – 47.3</div></div>
+            <div class="wb-card"><div class="wb-val" id="wb-moment">--</div><div class="wb-lbl">Moment/1000</div></div>
+          </div>
+          <div id="wb-status-msg"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Reference -->
+  <div class="modal-overlay" id="modal-ref" style="display:none">
+    <div class="modal-box wide">
+      <div class="modal-header">
+        <span>N499CP Quick Reference</span>
+        <button class="modal-close" data-modal="modal-ref">×</button>
+      </div>
+      <div class="modal-body ref-body">
+        <div class="ref-card">
+          <h4>V-Speeds (KIAS)</h4>
+          <table><tr><td>Vx</td><td>62</td></tr><tr><td>Vy</td><td>74</td></tr><tr><td>Va (2550)</td><td>99</td></tr><tr><td>Vfe 10°</td><td>110</td></tr><tr><td>Vfe Full</td><td>85</td></tr><tr><td>Vno</td><td>129</td></tr><tr><td>Vne</td><td>163</td></tr><tr><td>Vso</td><td>40</td></tr><tr><td>Vs1</td><td>48</td></tr><tr><td>Best Glide</td><td>68</td></tr></table>
+        </div>
+        <div class="ref-card">
+          <h4>Weights</h4>
+          <table><tr><td>Max Ramp</td><td>2558 lbs</td></tr><tr><td>Max T/O</td><td>2550 lbs</td></tr><tr><td>Max Landing</td><td>2550 lbs</td></tr><tr><td>Baggage A</td><td>120 lbs</td></tr><tr><td>Baggage B</td><td>50 lbs</td></tr></table>
+        </div>
+        <div class="ref-card">
+          <h4>Fuel</h4>
+          <table><tr><td>Total</td><td>56 gal</td></tr><tr><td>Usable</td><td>53 gal</td></tr><tr><td>Weight</td><td>6.0 lbs/gal</td></tr><tr><td>Arm</td><td>FS 48.0</td></tr></table>
+        </div>
+        <div class="ref-card">
+          <h4>CG Limits</h4>
+          <table><tr><td>Fwd @ 1950 lb</td><td>35.0 in</td></tr><tr><td>Fwd @ 2550 lb</td><td>41.0 in</td></tr><tr><td>Aft (all)</td><td>47.3 in</td></tr></table>
+          <h4 style="margin-top:0.75rem">Stations (in)</h4>
+          <table><tr><td>Front seats</td><td>FS 37.0</td></tr><tr><td>Rear seats</td><td>FS 73.0</td></tr><tr><td>Baggage</td><td>FS 95.0</td></tr><tr><td>Fuel</td><td>FS 48.0</td></tr></table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Custom value (shared for alt / RPM / reserve) -->
+  <div class="modal-overlay" id="modal-custom-value" style="display:none">
+    <div class="modal-box narrow">
+      <div class="modal-header">
+        <span id="cv-title">Custom Value</span>
+        <button class="modal-close" id="cv-cancel">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <label id="cv-label">Value</label>
+          <div style="display:flex;gap:0.4rem;align-items:center">
+            <input type="number" id="cv-input" style="flex:1">
+            <span id="cv-unit" style="color:var(--text-dim);font-size:0.8rem;white-space:nowrap;min-width:2.5rem"></span>
+          </div>
+        </div>
+        <div id="cv-hint" style="font-size:0.7rem;color:var(--text-dim);margin-top:0.3rem;line-height:1.4"></div>
+        <button class="btn-calc" id="cv-confirm" style="margin-top:0.75rem">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: DB Update -->
+  <div class="modal-overlay" id="modal-db" style="display:none">
+    <div class="modal-box narrow">
+      <div class="modal-header"><span>Updating Aviation Database</span></div>
+      <div class="modal-body">
+        <div class="progress-bar"><div id="db-progress-fill" class="progress-fill"></div></div>
+        <p id="db-progress-msg" style="font-size:0.8rem;color:#888;text-align:center">Initializing...</p>
+      </div>
+    </div>
+  <!-- MODAL: CAP SAR Search Pattern Generator -->
+  <div class="modal-overlay" id="modal-sar" style="display:none">
+    <div class="modal-box medium" style="max-width:540px">
+      <div class="modal-header">
+        <span>CAP Search &amp; Rescue (SAR) Pattern Generator</span>
+        <button class="modal-close" id="sar-close">×</button>
+      </div>
+      <div class="modal-body">
+        <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem">
+          <button class="layer-btn active sar-tab" data-pattern="expanding_square" id="tab-ss">Expanding Sq (SS)</button>
+          <button class="layer-btn sar-tab" data-pattern="creeping_line" id="tab-cs">Creeping Line (CS)</button>
+          <button class="layer-btn sar-tab" data-pattern="parallel_track" id="tab-ps">Parallel Track (PS)</button>
+        </div>
+
+        <div class="form-row">
+          <label>Datum / LKP (Fix, Airport, or @Lat,Lon)</label>
+          <div style="display:flex;gap:0.4rem">
+            <input type="text" id="sar-datum" placeholder="e.g. KCRQ, @33.17,-117.0792" value="@33.1700,-117.0792" style="flex:1">
+            <button class="layer-btn" id="sar-pick-map" type="button" title="Click on map to pick datum">Pick on Map</button>
+          </div>
+        </div>
+
+        <div id="sar-options-ss">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+            <div class="form-row">
+              <label>Track Spacing (NM)</label>
+              <input type="number" id="sar-ss-spacing" value="1.0" step="0.25" min="0.25" max="5.0">
+            </div>
+            <div class="form-row">
+              <label>Search Legs</label>
+              <input type="number" id="sar-ss-legs" value="8" step="2" min="4" max="16">
+            </div>
+            <div class="form-row">
+              <label>Initial Heading (°T)</label>
+              <input type="number" id="sar-ss-hdg" value="0" min="0" max="359">
+            </div>
+            <div class="form-row">
+              <label>Turn Direction</label>
+              <select id="sar-ss-turn" style="width:100%;padding:0.35rem;background:#1e222b;border:1px solid #333;color:#fff;border-radius:4px">
+                <option value="right">Standard Right (90°)</option>
+                <option value="left">Left (90°)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div id="sar-options-cs" style="display:none">
+          <div class="form-row">
+            <label>End Point / Advance Axis (@lat,lon)</label>
+            <input type="text" id="sar-cs-end" placeholder="@33.3000,-116.9500" value="@33.2700,-116.9800">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+            <div class="form-row">
+              <label>Sweep Width (NM)</label>
+              <input type="number" id="sar-cs-width" value="3.0" step="0.5" min="1.0" max="10.0">
+            </div>
+            <div class="form-row">
+              <label>Track Spacing (NM)</label>
+              <input type="number" id="sar-cs-spacing" value="1.0" step="0.25" min="0.25" max="5.0">
+            </div>
+          </div>
+        </div>
+
+        <div id="sar-options-ps" style="display:none">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+            <div class="form-row">
+              <label>Box Length (NM)</label>
+              <input type="number" id="sar-ps-length" value="5.0" step="0.5" min="1.0">
+            </div>
+            <div class="form-row">
+              <label>Box Width (NM)</label>
+              <input type="number" id="sar-ps-width" value="4.0" step="0.5" min="1.0">
+            </div>
+            <div class="form-row">
+              <label>Search Axis Heading (°T)</label>
+              <input type="number" id="sar-ps-hdg" value="90" min="0" max="359">
+            </div>
+            <div class="form-row">
+              <label>Track Spacing (NM)</label>
+              <input type="number" id="sar-ps-spacing" value="1.0" step="0.25" min="0.25">
+            </div>
+          </div>
+        </div>
+
+        <!-- Pattern Summary -->
+        <div id="sar-summary" style="background:#13171f;padding:0.5rem;border-radius:4px;margin-top:0.75rem;font-size:0.8rem;line-height:1.4">
+          <span style="color:var(--accent)">Pattern:</span> <span id="sar-sum-type">Expanding Square</span> &bull; 
+          <span id="sar-sum-dist">0 NM</span> &bull; 
+          <span id="sar-sum-time">0 min</span> &bull; 
+          <span id="sar-sum-fuel">0 gal</span>
+        </div>
+
+        <!-- Action buttons -->
+        <div style="display:flex;gap:0.4rem;margin-top:0.75rem;flex-wrap:wrap">
+          <button class="btn-calc" id="sar-btn-preview" style="flex:1">Preview on Map</button>
+          <button class="btn-calc" id="sar-btn-apply" style="flex:1;background:#28a745">Apply to Route</button>
+        </div>
+        <div style="display:flex;gap:0.4rem;margin-top:0.4rem">
+          <button class="toolbar-btn" id="sar-btn-fms" style="flex:1">Export X-Plane .FMS</button>
+          <button class="toolbar-btn" id="sar-btn-vsar" style="flex:1;border-color:var(--gold);color:var(--gold)">Push to V-SAR Console</button>
+        </div>
+        <div id="sar-status-msg" style="font-size:0.75rem;color:var(--green);margin-top:0.4rem;text-align:center"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

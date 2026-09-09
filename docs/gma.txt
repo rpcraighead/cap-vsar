@@ -1,0 +1,794 @@
+G1000
+              TM
+
+
+
+
+audio panel pilot’s guide
+                                       Record of Revisions
+
+Revision Date of Revision Revision Page Range                           Description
+   A         08/20/04         6A-1 – 6A-18         Initial release.
+
+
+
+
+                               Garmin G1000 Audio Panel Pilot’s Guide                 190-00378-01 Rev. A
+                                                                                                             INTRODUCTION
+
+
+                       6A.1 INTRODUCTION                                     • The unit controls marker beacon receiver audio and
+                                                                               features marker beacon audio muting. In addition,
+              The G1000 audio panel, the GMA 1347, is a fully inte-            MASQTM (Master Avionics Squelch) processing helps
+           grated audio panel with digital capability that is designed         to de-emphasize ambient noise from the avionics
+           to enhance cockpit management by helping to reduce                  inputs, thereby improving cockpit communica-
+           cockpit workload via a number of integrated navigation              tions.
+           and communication channels.                                       • The GMA 1347 is equipped with a digital clear-
+                                                                               ance recorder with playback capability and up to
+                      NOTE: This audio panel is intended to be used            2.5 minutes of recording. Additionally, to enhance
+                      only as part of the G1000 Integrated Cockpit             safety of ﬂight, the unit provides the pilot with a
+                      System.
+                                                                               fail-safe mode to COM1.
+               • The unit features annunciated keys that control the         • As part of the G1000 Integrated Cockpit System,
+                 selection of both COM and NAV audio. The COM                  the GMA 1347 also controls display backup in the
+                 interface can support up to three (3) transceivers            event of display failure.
+                 and is designed to work in split COM mode (in
+                 certain aircraft) whereby both the pilot and copilot        • The GMA 1347 supports dual audio panel installa-
+                 can transmit and receive on separate COM radios.              tions. In dual panel installations, two (2) units can
+                                                                               be connected to the same radios using either the
+               • A telephone interface is built-in as an added com-            digital or analog interface.
+                 munication option. Moreover, speaker mode is
+                 available and allows the crew to both monitor the            This manual is intended to provide the user with both
+                 aircraft radios and make PA announcements.               a description of the GMA 1347 and directions as to its op-
+               • The GMA 1347 includes a six-place VOX intercom           eration. Upon installation, the unit may be conﬁgured in
+                 system (ICS) with four (4) selectable isolation          various ways depending on the aircraft type and the needs
+                 modes, dual stereo music inputs, and independent         of the user. A Garmin-authorized service center should be
+                 pilot and copilot/passenger volume control.              contacted for details on and/or assistance in altering the
+                                                                          conﬁguration settings of the GMA 1347.
+               • Each microphone input has an automatic squelch
+                 threshold. Manual squelch override as well as keyed               NOTE: Please see applicable G1000 Audio Panel
+                 ICS operation is also available. Each microphone has              Pilot’s Guide Supplement for aircraft-speciﬁc
+                 a dedicated VOX circuit to ensure that only the active            information.
+                 microphone is heard when squelch is broken.
+
+
+
+
+190-00378-01 Rev. A                                  Garmin G1000 Audio Panel Pilot’s Guide                                            1
+     DESCRIPTION
+
+
+            6A.2 UNIT DESCRIPTION                                  FRONT PANEL CONTROLS
+                                                                      • Transceiver audio selector keys
+        The GMA 1347 front panel measures 7.79 inches in
+                                                                        (COM1, COM2, COM3)
+    depth, 1.3 inches in width and 7.70 inches in height and
+                                                                      • Transmitter (audio/mic) selection keys
+    features the following three (3) major groups of keys in
+                                                                        (COM1 MIC, COM2 MIC, COM3 MIC)
+    descending order, as shown in Figure 6A.2.1:
+                                                                      • Split COM key
+       • Communication keys                                             (COM 1/2)
+       • Navigation keys                                              • Dedicated telephone interface key
+       • Intercom system (ICS) keys                                     (TEL)
+                                                                      • Passenger address key
+        Each key is labeled with a white inscription in its cen-
+                                                                        (PA)
+    ter, indicating the name of the associated channel. The
+                                                                      • Speaker key
+    triangular key annunciator lights are white when illumi-
+                                                                        (SPKR)
+    nated and point to the corresponding keys.
+                                                                      • Marker beacon receiver audio select/mute key
+       The dual knob located at the bottom of the unit                  (MKR/MUTE)
+    controls volume as well as squelch threshold levels.              • Marker beacon receiver high sensitivity key
+    The small knob adjusts the volume/squelch level associ-             (HI SENS)
+    ated with the pilot channel, while the large knob adjusts         • Aircraft radio audio selector keys
+    the volume/squelch level associated with the copilot/               (NAV1, NAV2, ADF, DME, AUX)
+    passenger channels. The red button situated below the             • Intercom manual squelch mode key
+    dual volume/squelch knob controls reversionary (backup)             (MAN SQ)
+    mode selection.                                                   • Digital recording playback key
+                                                                        (PLAY)
+                                                                      • Intercom system (ICS) isolation mode keys
+                                                                        (PILOT, COPLT)
+                                                                      • Volume/squelch knob
+                                                                        (VOL/SQ)
+                                                                      • Reversionary mode button
+                                                                        (DISPLAY BACKUP)
+
+
+
+
+2                                             Garmin G1000 Audio Panel Pilot’s Guide                             190-00378-01 Rev. A
+                                                                                                                      DESCRIPTION
+
+
+
+
+                                        Transmitters                                             Transceiver Audio
+
+
+
+
+                                          Split COM                                              Telephone
+
+                                   Passenger Address                                             Speaker
+
+                                Marker Beacon/Mute                                               Marker Beacon Signal Sensitivity
+
+
+
+                                                                                                 Aircraft Navigation Radio Audio
+                      Aircraft Navigation Radio Audio
+
+
+
+
+                                     Manual Squelch                                              Digital Recording Playback
+
+                                                                                                 ICS Isolation
+
+
+
+                                             VOL/SQ
+
+                                   VOL Annunciation                                              SQ Annunciation
+                                                                                                 Reversionary Mode
+
+
+
+                                                           Figure 6A.2.1 Front Panel Controls
+
+
+
+
+190-00378-01 Rev. A                                     Garmin G1000 Audio Panel Pilot’s Guide                                      3
+      DESCRIPTION
+
+
+    MICROPHONES                                                        In Conﬁguration mode, headset audio level can
+                                                                    be adjusted above or below a nominal value for
+       The GMA 1347 features six (6) different microphone           MUSIC 1, MUSIC 2, UNSWITCHED 1, UNSWITCHED
+    channeling modes:                                               2, UNSWITCHED 3 and ALTITUDE WARNING. Please
+       • COM1 MIC                                                   consult a Garmin-authorized service center for additional
+       • COM2 MIC                                                   information.
+       • COM3 MIC
+       • COM 1/2 (Split COM)                                        UNMUTED/UNSWITCHED INPUTS
+       • PA                                                            The unit provides four (4) unmuted/unswitched in-
+       • COM 1/2 and PA (Split COM and PA)                          puts that are always presented to the headsets or speakers
+                                                                    connected to the panel. These inputs are the following
+              NOTE: A push-to-talk (PTT) switch must be             aural warnings:
+              pressed to open the selected output channel.
+                                                                       • ALT warning
+       Each audio panel can accept up to six (6) microphone            • UNSWITCHED 1
+    inputs, thus allowing for a two-person crew and up to              • UNSWITCHED 2
+    four (4) passenger intercom stations in the aircraft.              • UNSWITCHED 3
+
+    MONO/STEREO HEADSETS
+        The GMA 1347 can accommodate up to six (6) head-
+    sets (pilot, copilot and up to four (4) passengers).
+
+              NOTE: The use of stereo headsets is highly
+              recommended. However, if monaural headsets
+              are plugged into stereo jacks that do not each
+              have a switch installed, the unit will not be dam-
+              aged.
+
+        Use of a monaural headset in a stereo jack shorts the
+    right headset channel output to ground. Thus, a person
+    listening on a monaural headset only hears the left chan-
+    nel in both ears. If a monaural headset is used at one of
+    the passenger positions, any other passenger listening on
+    a stereo headset hears audio in the left ear only, unless the
+    headset has a mono/stereo switch and the latter is set to
+    mono.
+
+
+
+4                                              Garmin G1000 Audio Panel Pilot’s Guide                                 190-00378-01 Rev. A
+                                                                                                                OPERATION
+
+
+                      6A.3 UNIT OPERATION                                  SELECTING AND DESELECTING KEYS
+
+                                                                           Selecting Keys
+           ON/OFF, POWER-UP SETTINGS AND                                      For all keys with the exception of the MKR/MUTE
+           FAIL-SAFE OPERATION                                             and PLAY keys, pressing a key activates the correspond-
+                                                                           ing channel and illuminates the associated triangular an-
+           ON/OFF Operation                                                nunciator light.
+              The GMA 1347 is powered on when the avionics                 Deselecting Keys
+           master switch is turned on and it is powered off when the
+           avionics master switch is turned off.                              For all keys with the exception of the COM MIC,
+                                                                           MKR/MUTE and PLAY keys, pressing the key again
+           Power-up Settings                                               deactivates the corresponding channel and turns off the
+               Upon power-up, the unit undergoes a self-test during        associated annunciator light.
+           which all panel annunciator lights illuminate for approxi-
+           mately two (2) seconds. Once the self-test is completed,                 NOTE: Operational details on the COM MIC,
+           the settings are restored to the settings that were current              MKR/MUTE and PLAY keys as well as the DIS-
+           before the unit was last powered off. For example, if the                PLAY BACKUP button are provided later in this
+           COM1 MIC, COM1, COM2, SPKR, NAV1, NAV2,                                  manual.
+           MKR/MUTE, HI SENS, and MAN SQ keys were se-
+           lected when the unit was last powered off, these keys will      LIGHTING
+           be automatically re-selected when the unit is powered              LED key annunciators and backlighting are controlled
+           back on.                                                        automatically by the G1000 Control Display Unit (CDU).
+           Fail-safe Mode
+                                                                                    NOTE: When a key is active during normal opera-
+               In the event of an audio panel failure, the unit switches
+                                                                                    tions, its corresponding annunciator LED is lit.
+           to fail-safe mode. In fail-safe mode, fail-safe audio is di-
+           rected to the pilot’s headset (left channel only). Fail-safe
+           mode bypasses the GMA 1347 circuits, with the exception
+           of the relay that switches the pilot’s MIC and the pilot’s
+           headset directly to COM1.
+
+
+
+
+190-00378-01 Rev. A                                   Garmin G1000 Audio Panel Pilot’s Guide                                           5
+       OPERATION
+
+
+    TRANSCEIVER KEYS                                                Pressing a COM Key
+        As illustrated below, the following eight (8) transceiver       Pressing COM1, COM2, or COM3 selects the cor-
+    keys appear at the top of the GMA 1347 front panel:             responding radio as the active audio source. Each audio
+    COM1 MIC, COM2 MIC, COM3 MIC, COM 1/2,                          source can be selected independently by pressing COM1,
+    COM1, COM2, COM3, and TEL. COM audio can be                     COM2, or COM3. If selected in this manner, the au-
+    selected by either pressing the desired COM key or by           dio source remains selected independently of the active
+    pressing the corresponding COM MIC key.                         microphone source selection. The active COM audio is
+                                                                    always heard through the headsets, and any combination
+              NOTE: A PTT switch must be pressed to allow           of audio sources can be selected simultaneously.
+              all microphone transmissions.                             During COM signal reception, a white RX indication
+                                                                    appears next to the corresponding COM frequency on
+                                                                    both the PFD and the MFD for the duration of the recep-
+                                                                    tion (this feature is not supported in all aircraft; please
+                                                                    refer to the G1000 aircraft-speciﬁc VHF NAV/COM Pilot’s
+                                                                    Guide for details).
+                                                                    Keying a Microphone
+                                                                        When a microphone is keyed, the active transceiver
+                                                                    MIC key annunciator blinks approximately once per sec-
+                                                                    ond to indicate that the transmission is active, and a white
+                                                                    TX indication appears next to the corresponding COM
+                                                                    frequency on both the PFD and the MFD for the duration
+                     Figure 6A.3.1 Transceivers
+                                                                    of the transmission.
+                                                                       When no further aircraft radio activity is detected by
+    Pressing a COM MIC Key                                          the unit, the amount of ambient background noise from
+        Pressing COM1 MIC, COM2 MIC, or COM3 MIC                    the radios is further reduced by the MASQTM (Master
+    selects the corresponding radio as the active microphone        Avionics Squelch) circuit (information on MASQTM is pre-
+    source (i.e., as the primary COM radio) and highlights          sented later in this manual).
+    the corresponding COM frequency in green in the active
+    frequency ﬁeld of the PFD and MFD.                                        NOTE: Audio level of the selected COM radio(s)
+                                                                              is controlled by the COM radio volume control
+        Only one microphone source can be selected at a time.                 located on both the PFD and MFD (see G1000
+    Thus, if COM1 MIC is pressed when COM2 MIC is al-                         VHF NAV/COM Pilot’s Guide for more informa-
+    ready selected, COM2 MIC is automatically deactivated                     tion).
+    and the COM2 MIC annunciator light is turned off. The
+    corresponding audio selection key (in this case, COM1)
+    becomes automatically selected if it is not already selected
+    at the time.
+6                                              Garmin G1000 Audio Panel Pilot’s Guide                                   190-00378-01 Rev. A
+                                                                                                               OPERATION
+
+
+           COM SWAP
+                                                                                   NOTE: Split COM performance varies signiﬁcantly
+               The GMA 1347 allows for the use of a remotely                       across installations and is affected by both the
+           mounted switch to alternately transfer the active micro-                distance between the antennas and the separa-
+           phone between COM1 MIC and COM2 MIC. The COM                            tion of the tuned frequencies. In small aircraft
+           swap switch is typically mounted on the yoke or control                 particularly, receiver sensitivity is typically
+           stick. If COM1 MIC is the active microphone (i.e., both                 reduced and squelch breaks are affected. Each
+           COM1 MIC and COM1 keys are annunciated), pressing                       installation should be individually examined to
+           the COM swap switch transfers the active microphone                     determine the expected performance of split
+           from COM1 MIC to COM2 MIC (i.e., both COM1 MIC                          COM.
+           and COM1 keys become deselected, and COM2 MIC
+           and COM2 keys become annunciated). Pressing the                         NOTE: Split COM can be disabled in Conﬁgura-
+           switch has no effect if COM3 is the active transceiver or if            tion mode.
+           COM 1/2 (split COM) is activated.
+              Please consult a Garmin-authorized service center for       OPTIONAL COM MUTING
+           details on the remote COM swap option.                            The COM muting on receive and COM muting on
+                                                                          transmit options can each be disabled in Conﬁguration
+           SPLIT COM                                                      mode.
+              Pressing the COM 1/2 key toggles the state of the split     COM Muting on Receive
+           COM function. During split COM operation, the COM1,
+           COM1 MIC, COM2 and COM2 MIC keys are annunci-                     When this option is enabled, all secondary COM au-
+           ated and thus active.                                          dio is muted upon detection of a received primary COM
+                                                                          signal.
+              When the COM 1/2 key is selected, COM1 becomes
+           dedicated solely to the pilot for MIC/audio, while COM2                 NOTE: If the COM muting on receive option
+           becomes dedicated to the copilot for MIC/audio. The                     is enabled, only the primary COM radio signal
+           COM1 MIC annunciator blinks when the pilot’s micro-                     receptions are recorded by the digital clearance
+           phone is keyed. The COM2 MIC annunciator blinks                         recorder.
+           when the copilot’s microphone is keyed.
+                                                                          COM Muting on Transmit
+              In this mode, both the pilot and the copilot can
+           simultaneously transmit over separate radios. Note that,          When this option is enabled, all secondary COM au-
+           while the pilot can still monitor COM3, NAV1, NAV2,            dio is muted during transmission over the primary COM
+           DME, ADF, AUX and MKR audio as selected, the copilot is        radio.
+           only able to monitor/hear COM2.
+              Split COM mode is cancelled by pressing the COM 1/2
+           key.
+
+
+190-00378-01 Rev. A                                  Garmin G1000 Audio Panel Pilot’s Guide                                           7
+       OPERATION
+
+
+    TELEPHONE INTERFACE
+        The unit contains a dedicated telephone interface that
+    is closely linked to the ICS operation and that is controlled
+    by the TEL key. Please see Table 6A.3.4 for a summary
+    of both the cellular telephone distribution and the various
+    ICS isolation modes.
+
+              NOTE: The ringer to the TEL channel is muted
+              during COM radio reception.
+
+
+              NOTE: The TEL channel may be disabled in
+              Conﬁguration mode. Please consult a Garmin-
+              authorized service center for details.
+
+    PA FUNCTION                                                               Figure 6A.3.2 Split COM, PA and Speaker
+
+       The passenger address function is provided via the PA
+    key. Push-to-talk (PTT) must be used to deliver PA an-          SPEAKER OUTPUT
+    nouncements.                                                       Pressing the SPKR key selects the aircraft radios to be
+                                                                    output to the cabin speaker. Pressing the SPKR key again
+              NOTE: PA volume is adjustable in Conﬁguration         deselects the speaker mode. When SPKR is selected, any
+              mode.                                                 and all of the following radios can be heard over the cabin
+                                                                    speaker: COM1, COM2, COM3, NAV1, NAV2, DME,
+    SPLIT COM AND PA                                                ADF, and AUX.
+       When in split COM mode (COM 1/2 activated), the                  Speaker output is muted when the PTT switch is
+    copilot can make PA announcements while the pilot con-          keyed. All of the unswitched/unmuted radio inputs can
+    tinues to use COM1 independently. When the PA key is            be heard over the speaker. In Conﬁguration mode, speak-
+    pressed after the split COM mode is activated, the copilot’s    er audio level is adjustable above and below a nominal
+    microphone is output over the cabin speaker when keyed.         value. Please consult a Garmin-authorized service center
+    Pressing the PA key again returns the copilot to normal         for details.
+    split COM operation.
+
+              NOTE: Only the copilot can make PA announce-
+              ments when in split COM and PA mode.
+
+
+
+
+8                                              Garmin G1000 Audio Panel Pilot’s Guide                                   190-00378-01 Rev. A
+                                                                                                                OPERATION
+
+
+           MARKER BEACON RECEIVER                                            The marker beacon audio level is aligned at the factory
+                                                                          to produce its rated audio output. Audio output level is
+           Description and Operation                                      also adjustable in Conﬁguration mode. Please consult a
+                                                                          Garmin-authorized service center for details.
+              The GMA 1347 provides a marker beacon receiver to
+           be used as part of an ILS approach. In addition to the
+                                                                                   NOTE: The unit provides output for driving
+           normal marker beacon receiver functions, the GMA 1347                   external marker beacon lamps and it provides
+           provides an audio muting capability. The marker bea-                    a middle marker sense output for use with an
+           con receiver is always ON and receives at 75 MHz.                       autopilot.
+               The receiver detects three (3) tones associated with the
+           outer, middle and inner approach markers, respectively,        Marker Beacon Signal Augmentation
+           and illuminates the appropriate marker beacon indicator            The HI SENS key can be pressed to augment marker
+           lights located to the left of the Altimeter on the PFD (Fig-   beacon signal reception sensitivity. The HI SENS function
+           ure 6A.3.4). The outer marker signal frequency is 400          is typically used either over airway markers or to receive
+           Hz, and a blue light indicates its reception. The middle       an earlier indication of a nearing outer marker during an
+           marker signal frequency is 1,300 Hz, and an amber light        approach.
+           indicates its reception. The inner marker signal frequency
+                                                                             The middle marker sense indicator provides input to
+           is 3,000 Hz, and a white light indicates its reception.
+                                                                          the autopilot.
+           Please refer to Table 6A.3.1 for a summary of the marker
+           beacon signal characteristics.                                    The lamp and audio keying of the marker beacon re-
+                                                                          ceiver are summarized in Table 6A.3.1.
+              When the MKR/MUTE key is selected, the
+           corresponding annunciator light becomes illuminated
+           and the audio signal can be heard over the headsets.
+               When the MKR/MUTE key is annunciated and a
+           marker beacon tone is received, pressing the MKR/MUTE                         Figure 6A.3.3 Marker Beacon
+           key mutes the audio but does not affect the corresponding
+           annunciator light. The audio returns when the next (dif-
+           ferent) marker signal is received. If the MKR/MUTE key                  NOTE: The marker beacon signal sensitivity
+           is pressed while the marker beacon audio is muted, the                  threshold can be set in Conﬁguration mode.
+           marker audio becomes deactivated and the MKR/MUTE                       Please consult a Garmin-authorized service
+                                                                                   center for details.
+           annunciator light is turned off.
+
+                      NOTE: The marker beacon receiver lights operate
+                      independently of the marker beacon audio and
+                      cannot be turned off.
+
+
+
+190-00378-01 Rev. A                                  Garmin G1000 Audio Panel Pilot’s Guide                                            9
+     OPERATION
+
+
+
+
+         Beacon               Audio Frequency          Audio Keying                   Rate                Lamp Color
+        Outer Marker               400 Hz                ———                  2 dashes per second            Blue
+                                                                            95 dot-dash combinations
+       Middle Marker              1,300 Hz               •—•—                                                Amber
+                                                                                  per minute
+     Airway/Inner Marker          3,000 Hz                 ••••                 6 dots per second             White
+                                       Table 6A.3.1 Marker Beacon Signal Characteristics
+
+
+
+
+               Inner Marker                              Middle Marker                             Outer Marker
+                                 Figure 6A.3.4 Marker Beacon Signal Indicator Lights on the PFD
+
+
+
+
+10                                           Garmin G1000 Audio Panel Pilot’s Guide                                   190-00378-01 Rev. A
+                                                                                                                 OPERATION
+
+
+           AIRCRAFT RADIO INPUTS                                           MUSIC 1
+               Pressing DME, ADF, AUX, NAV1, or NAV2 selects                  As summarized in Table 6A.3.3, MUSIC 1 can be heard
+           the corresponding audio source and activates the an-            by the pilot in COPILOT mode and in ALL mode, and it
+           nunciator. Pressing the selected audio source key again         can be heard by the copilot in PILOT mode and in ALL
+           deselects this audio source. Selected aircraft audio can be     mode.
+           heard over the appropriate headset and over the speakers           MUSIC 1 Muting
+           if SPKR is selected. Note that all aircraft radio keys can
+                                                                              MUSIC 1 muting occurs upon aircraft radio activity,
+           be selected concurrently.
+                                                                           marker beacon activity, or ICS activity generated by the
+              In Conﬁguration mode, the DME, ADF and AUX ra-               parties able to hear MUSIC 1.
+           dios may be disabled. Please consult a Garmin-authorized
+           service center for details.                                              NOTE: MUSIC 1 muting during ICS activity can
+                                                                                    be disabled; please consult a Garmin-authorized
+                                                                                    service center for details.
+
+                                                                               Muting of this input is also triggered by marker beacon
+                                                                           activity when in ALL, CREW, or COPILOT mode. After
+                                                                           the activty that initiated the muting ceases, MUSIC 1
+                                                                           gradually returns to its original volume level at the head-
+                                                                           set outputs; this characteristic is know as “soft mute.”
+                                                                           The time required for MUSIC 1 to return to its original
+                                                                           volume level at the headset outputs is between 0.5 and
+                           Figure 6A.3.5 Aircraft Radios                   4 seconds.
+
+              When no further aircraft radio activity is detected                   NOTE: If the MKR/MUTE key is pressed and
+           by the unit, the amount of ambient background noise                      held for approximately three (3) seconds, the
+           from the radios is further reduced by the Master Avionics                GMA 1347 toggles music muting during radio
+           Squelch (MASQTM) circuit.                                                signal receptions ON and OFF. Upon toggling of
+                                                                                    this option, either one (1) beep or two (2) beeps
+           AUXILIARY ENTERTAINMENT INPUTS                                           can be heard; one (1) beep indicates that music
+                                                                                    muting is enabled and two (2) beeps indicate
+               The current ICS isolation mode affects the distribution              that music muting is disabled.
+           of the entertainment inputs MUSIC 1 and MUSIC 2.
+                                                                           MUSIC 2
+                      NOTE: MUSIC 1 and MUSIC 2 cannot be com-                As summarized in Table 6A.3.3, MUSIC 2 can only be
+                      pletely turned off. Audio level for these inputs     heard by the passengers and it is never muted.
+                      can be set above and below a nominal value.
+                      Please consult a Garmin-authorized service
+                      center for details.
+
+190-00378-01 Rev. A                                   Garmin G1000 Audio Panel Pilot’s Guide                                             11
+        OPERATION
+
+
+     INTERCOM SYSTEM (ICS) ISOLATION
+         The intercom system (ICS) provides four (4) isolation
+     modes: ALL, PILOT, COPILOT, and CREW. The de-
+     sired mode can be selected or deselected using the PILOT                        Figure 6A.3.6 ICS Isolation
+     and COPLT keys.
+     PILOT Mode                                                     CREW Mode
+         PILOT mode is selected when only the PILOT key                CREW mode is selected when both the PILOT and
+     is annunciated. In PILOT mode, the pilot can hear the          COPLT keys are annunciated. In CREW mode, both the
+     selected radios, the copilot can hear MUSIC 1, the pas-        pilot and copilot can hear the selected radios and com-
+     sengers can hear MUSIC 2, and the copilot and passengers       municate with each other, while the passengers can only
+     can communicate with each other.                               hear MUSIC 2.
+     COPILOT Mode                                                   ALL Mode
+         COPILOT mode is selected when only the COPLT key              ALL mode is selected when neither the PILOT nor the
+     is annunciated. In COPILOT mode, the copilot is isolated       COPLT key is annunciated. In ALL mode, everyone hears
+     from everyone, whereas the pilot and passengers can hear       the selected radios and is able to communicate with every-
+     the selected radios and communicate with each other. In        one else. In this mode, both the pilot and copilot can hear
+     this mode, the pilot can hear MUSIC 1, while the passen-       MUSIC 1, whereas the passengers can hear MUSIC 2.
+     gers can hear MUSIC 2.
+
+
+
+
+         The transitions between the possible ICS isolation
+     states are summarized in the table below.
+
+
+                                                                 Current ICS Isolation State
+               Input                     PILOT                    COPILOT               CREW                        ALL
+          PILOT Key Press                 ALL                      CREW                COPILOT                      PILOT
+          COPLT Key Press                CREW                       ALL                 PILOT                      COPILOT
+                                            Table 6A.3.2 ICS Isolation Mode Transitions
+
+
+
+
+12                                           Garmin G1000 Audio Panel Pilot’s Guide                                          190-00378-01 Rev. A
+                                                                                                                       OPERATION
+
+
+              The following table summarizes the ICS operation for
+           the four (4) ICS isolation modes supported by the unit.
+
+
+                 ICS Isolation Mode              Pilot Hears                     Copilot Hears                    Passenger Hears
+                         PILOT            Selected radios; pilot            Copilot; passengers;              Copilot; passengers;
+                    (PILOT LED Lit)                                         MUSIC 1                           MUSIC 2
+                       COPILOT            Selected radios; pilot;           Copilot                           Selected radios; pilot;
+                   (COPLT LED Lit)        passengers; MUSIC 1                                                 passengers; MUSIC 2
+                        CREW              Selected radios; pilot; copilot   Selected radios; pilot; copilot   Passengers; MUSIC 2
+                    (Both LEDs Lit)
+                          ALL             Selected radios; pilot; copilot; Selected radios; pilot; copilot; Selected radios; pilot; copilot;
+                   (Both LEDs OFF)        passengers; MUSIC 1              passengers; MUSIC 1              passengers; MUSIC 2
+                                                       Table 6A.3.3 ICS Operation Modes
+
+
+
+
+190-00378-01 Rev. A                                Garmin G1000 Audio Panel Pilot’s Guide                                                      13
+      OPERATION
+
+
+               PILOT   COPLT     TEL                                                   Passenger
+      Mode                                   Pilot Hears         Copilot Hears                           Input to Phone
+                LED     LED      LED                                                      Hears
+                                            Selected radios;     Selected radios;   Selected radios;
+                                            pilot; copilot;      pilot; copilot;    pilot; copilot;
+                OFF     OFF       OFF                                                                    None
+                                            passengers;          passengers;        passengers;
+                                            MUSIC 1              MUSIC 1            MUSIC 2
+       ALL                                  Selected radios;     Selected radios;   Selected radios;
+                                            pilot; copilot;      pilot; copilot;    pilot; copilot;
+                                                                                                         Pilot; copilot;
+                OFF     OFF       ON        passengers;          passengers;        passengers;
+                                                                                                         passengers
+                                            MUSIC 1;             MUSIC 1;           MUSIC 2;
+                                            TEL audio            TEL audio          TEL audio
+                                                                 Copilot;           Copilot;
+                                            Selected radios;     passengers;        passengers;          Copilot;
+                ON      OFF       OFF
+                                            pilot                MUSIC 1;           MUSIC 2;             passengers
+                                                                 TEL audio          TEL audio
+      PILOT
+                                                                 Copilot;           Copilot;
+                                            Selected radios;
+                ON      OFF       ON                             passengers;        passengers;          Pilot
+                                            pilot; TEL audio
+                                                                 MUSIC 1            MUSIC 2
+
+                                            Selected radios;                        Selected radios;
+                                                                 Copilot;
+                OFF     ON        OFF       pilot; passengers;                      pilot; passengers;   Copilot
+                                                                 TEL audio
+                                            MUSIC 1                                 MUSIC 2
+     COPILOT
+                                            Selected radios;                        Selected radios;
+                                            pilot; passengers;                      pilot; passengers;
+                OFF     ON        ON                             Copilot                                 Pilot; passengers
+                                            MUSIC 1;                                MUSIC 2;
+                                            TEL audio                               TEL audio
+                                                                                    Passengers;
+                                            Selected radios;     Selected radios;
+                ON      ON        OFF                                               MUSIC 2;             Passengers
+                                            pilot; copilot       pilot; copilot
+                                                                                    TEL audio
+      CREW
+                                            Selected radios;     Selected radios;
+                                                                                    Passengers;
+                ON      ON        ON        pilot; copilot;      pilot; copilot;                         Pilot; copilot
+                                                                                    MUSIC 2
+                                            TEL audio            TEL audio
+
+                               Table 6A.3.4 ICS Isolation Modes & Telephone Distribution
+
+
+14                                      Garmin G1000 Audio Panel Pilot’s Guide                                        190-00378-01 Rev. A
+                                                                                                               OPERATION
+
+
+           VOLUME/SQUELCH CONTROL
+                                                                                   NOTE: When the MAN SQ key is deselected (i.e.,
+                When the GMA 1347 MAN SQ key is selected,                          auto-squelch is active), pressing the VOL/SQ
+           pressing the VOL/SQ knob toggles between volume and                     knob has no effect on the VOL/SQ selection state
+           squelch adjustment modes. When the unit is in volume                    of the unit and VOL is automatically annunci-
+           adjustment mode, the VOL annunciation on the lower                      ated.
+           left of the VOL/SQ knob is lit and volume can thus be
+           adjusted. Similarly, when the unit is in squelch mode, the         When transitioning from auto to manual squelch, the
+           SQ annunciation on the lower right of the VOL/SQ knob          unit “recalls” the previous VOL/SQ selection and sets the
+           is lit and squelch threshold level can thus be adjusted.       state of the unit accordingly (see table below).
+
+                                                                                   NOTE: The volume and squelch controls for the
+                                                                                   COM and NAV radios are located on the PFD
+                                                                                   and MFD bezels (please refer to the G1000 VHF
+                                                                                   NAV/COM Pilot’s Guide for details).
+
+                                                                          Intercom VOL/SQ State
+
+                                                                             Intercom Volume Control
+                                                                              Intercom volume can be controlled via the VOL/SQ
+                                                                          knob. The small knob controls the pilot ICS volume,
+                                                                          while the large knob controls the copilot/passenger ICS
+                                                                          volume. Turning either knob clockwise increases audio
+                                                                          level. Conversely, turning either knob counterclockwise
+                                                                          decreases audio level. When the MAN SQ key is not
+                      Figure 6A.3.7 Volume/Squelch Control
+                                                                          annunciated, volume adjustment mode is automatically
+                                                                          selected and the VOL annunciation is lit.
+                                                                             Current VOL/SQ State
+                        Input                      Auto, VOL selected       Manual, VOL selected  Manual, SQ selected
+                          Previous State:
+                                                        Manual, VOL
+                           Manual, VOL
+                                                         selected
+             MAN SQ          selected
+                                                                               Auto, VOL selected          Auto, VOL selected
+             Key Press    Previous State:
+                                                        Manual, SQ
+                            Manual, SQ
+                                                         selected
+                             selected
+              GMA 1347 VOL/SQ Knob Press             Auto, VOL selected       Manual, SQ selected         Manual, VOL selected
+                                          Table 6A.3.5 Transitioning from Auto to Manual Squelch Mode
+
+190-00378-01 Rev. A                                 Garmin G1000 Audio Panel Pilot’s Guide                                            15
+        OPERATION
+
+
+        To adjust ICS volume when the MAN SQ key
+        is not annunciated:                                                  NOTE: In manual squelch mode, all crew audio
+        1.    Turn the appropriate VOL/SQ knob.                              inputs can break squelch when the VOL/SQ knob
+                                                                             is adjusted to minimum. When the VOL/SQ knob
+        To adjust ICS volume when the MAN SQ key                             is adjusted to maximum, the ICS only produces
+        is annunciated, perform one of the following                         audio when the ICS PTT is pressed.
+        steps:
+        1a. If the unit is in manual squelch threshold                 To adjust squelch threshold level manually
+            adjustment mode (i.e., if the SQ annunciation              if the MAN SQ key is not annunciated:
+            at the lower right of the VOL/SQ knob is lit),             1.    Press the MAN SQ key and perform one of the
+            press the VOL/SQ knob to toggle to ICS volume                    following steps:
+            adjustment mode, and turn the appropriate                  2a. If the VOL annunciation is lit, press the VOL/SQ
+            VOL/SQ knob.                                                   knob to illuminate the SQ annunciation, and
+        1b. If the unit is already in ICS volume adjustment                turn the VOL/SQ knob.
+            mode (i.e., if the VOL annunciation at the lower           2b. If the SQ annunciation is already lit, turn the
+            left of the VOL/SQ knob is lit), turn the appropri-            VOL/SQ knob.
+            ate VOL/SQ knob.
+                                                                       To adjust squelch threshold level manually
+        Intercom Squelch Threshold Control                             if the MAN SQ key is already annunciated:
+        Each microphone input has an automatic squelch                 1a. If the VOL annunciation is lit, press the VOL/SQ
+     threshold. Manual squelch override as well as keyed ICS               knob to illuminate the SQ annunciation, and
+     operation (the latter to be used in noisier cockpit environ-          turn the VOL/SQ knob.
+     ments) is also available.                                         1b. If the SQ annunciation is already lit, turn the
+        Manual squelch threshold adjustments can be per-                   VOL/SQ knob.
+     formed via the VOL/SQ knob when the MAN SQ key
+                                                                    Volume Adjustments in Conﬁguration Mode
+     is annunciated and the SQ annunciation is lit. The
+     small VOL/SQ knob controls pilot squelch threshold                The audio level of various signals can be adjusted in
+     adjustments, while the large VOL/SQ knob controls              Conﬁguration mode (please consult a Garmin-authorized
+     copilot/passenger squelch threshold adjustments. Turn-         service center for details).
+     ing either knob clockwise increases the squelch threshold
+     level. Conversely, turning either knob counterclockwise                 NOTE: None of the signals that can be adjusted
+     decreases the squelch threshold level.                                  for audio level in Conﬁguration mode may be
+                                                                             turned completely off. Each one of these signals
+                                                                             can be adjusted for audio level only above and
+                                                                             below a nominal value.
+
+
+
+
+16                                             Garmin G1000 Audio Panel Pilot’s Guide                                190-00378-01 Rev. A
+                                                                                                                OPERATION
+
+
+           MASTER AVIONICS SQUELCH (MASQ)
+                                                                                    NOTE: In split COM mode, a conﬁguration input
+               In Conﬁguration mode, the Master Avionics Squelch                    controls whether the pilot’s or the copilot’s COM
+           (MASQTM) threshold level can be adjusted. By adjusting                   audio is recorded; playback is routed to the cor-
+           the MASQTM threshold level, one can control the level of                 responding headset. Please consult a Garmin-
+           aircraft radio input signal that is required to break mas-               authorized service center for details.
+           ter squelch (please see the G1000 PFD Pilot’s Guide for
+           details).                                                          The PLAY key controls the playback function.
+               In Conﬁguration mode, MASQTM may also be disabled.             • Pressing PLAY once plays back the latest recorded
+           Please consult a Garmin-authorized service center for de-            memory block, then returns to normal operation.
+           tails.                                                             • Pressing PLAY during playback of a memory block
+                                                                                halts the playback of this block, plays back the
+           DIGITAL CLEARANCE RECORDER WITH                                      preceding recorded block, then returns to normal
+           PLAYBACK CAPABILITY                                                  operation. The PLAY key can thus be used to back-
+                                                                                track through the recorded memory blocks in order
+              The unit provides a digital clearance recorder with               to reach and play back the desired block.
+           playback capability and up to 2.5 minutes of COM signal
+           recording. Recorded COM signals are stored in separate                   NOTE: Pressing the MKR/MUTE key during play-
+           memory blocks. Signals from all of the selected COM                      back halts playback and returns the recorder/
+           radios are recorded and can be played back. Anyone able                  playback circuit to normal operation.
+           to hear the selected COM radios is able to hear the COM
+           signal playback.                                                   If a COM input signal is detected during playback,
+                                                                           playback is halted and the new COM input signal is re-
+               Once the 2.5 minutes of recording time have been            corded as the latest block.
+           reached, the recorder begins recording over the stored
+           memory blocks, starting from the oldest block. Powering
+                                                                                    NOTE: During playback, the PLAY annunciator
+           off the unit automatically clears all recorded blocks.
+                                                                                    light blinks approximately once per second.
+
+
+                                                                                    NOTE: The recorder can be disabled both using
+                                                                                    an external switch and in Conﬁguration mode.
+                                                                                    Please consult a Garmin-authorized service
+                                                                                    center for details.
+
+                             Figure 6A.3.8 Playback
+                                                                                    NOTE: If the COM muting on receive option
+                                                                                    is enabled, only the primary COM radio signal
+                                                                                    receptions are recorded by the digital clearance
+                                                                                    recorder. Please consult a Garmin-authorized
+                                                                                    service center for details.
+
+190-00378-01 Rev. A                                   Garmin G1000 Audio Panel Pilot’s Guide                                            17
+        OPERATION
+
+
+     REVERSIONARY MODE                                             DUAL PANEL OPERATION
+         Pressing the red DISPLAY BACKUP button located                The GMA 1347 can be installed in a dual panel con-
+     at the bottom of the audio panel selects the reversionary     ﬁguration. In dual panel installations, each installed unit
+     (or backup) mode for all displays. Reversionary mode is       can be designated as a pilot or copilot unit for ICS activ-
+     a mode of operation in which both the PFD and MFD are         ity. Please consult a Garmin-authorized service center for
+     identically conﬁgured to display all of the important ﬂight   details.
+     parameters in the event of display failure.
+                                                                             NOTE: Two (2) audio panels can be connected
+                                                                             to the same radios using either the digital or
+                                                                             analog interface. If more than two (2) radios
+                                                                             are connected to the same audio panel, the
+                                                                             analog interface must be used for the additional
+                  Figure 6A.3.9 Reversionary Mode                            radios.
+
+                                                                       In dual digital shared installations, one unit is desig-
+              NOTE: In three-display conﬁgurations, rever-         nated as the master and the other one as the slave. The
+              sionary mode is only applied to two (2) of the       master unit routes the analog ICS transmission from the
+              displays.                                            slave unit through its digital interface with the radio. The
+                                                                   master unit has transmission priority on the radios.
+     INTERFACE TO COCKPIT VOICE RECORDER
+        The GMA 1347 provides an interface to the cockpit                    NOTE: In dual panel conﬁgurations, the pilot
+                                                                             always hears the audio selected on the pilot’s
+     voice recorder (CVR) equipment. The unsquelched pilot
+                                                                             audio panel, while the copilot hears the audio
+     microphone input (i.e., all vocal inputs from the pilot) is             selected on the copilot’s audio panel.
+     combined with all audio presented to the pilot’s headset as
+     well as the cabin speaker and is output on the pilot CVR
+     channel. The unsquelched copilot microphone input is
+     combined with all audio presented to the copilot’s headset
+     as well as the cabin speaker and is output on the copilot
+     CVR channel.
+
+
+
+
+18                                            Garmin G1000 Audio Panel Pilot’s Guide                                   190-00378-01 Rev. A
+190-00378-01 Rev. A   Garmin G1000 Audio Panel Pilot’s Guide
+                                         Garmin International, Inc.
+                                         1200 East 151st Street
+                                         Olathe, KS 66062, U.S.A.
+                                         p: 913.397.8200 f: 913.397.8282
+
+                                         Garmin AT, Inc.
+                                         2345 Turner Road SE
+                                         Salem, OR 97302, U.S.A.
+                                         p: 503.391.3411 f: 503.364.2138
+
+                                         Garmin (Europe) Ltd.
+                                         Unit 5, The Quadrangle
+                                         Abbey Park Industrial Estate
+                                         Romsey, SO51 9DL, U.K.
+                                         p: 44/1794.519944 f: 44/1794.519222
+
+                                         Garmin Corporation
+                                         No. 68, Jangshu 2nd Road
+                                         Shijr, Taipei County, Taiwan
+                                         p: 886/2.2642.9199 f: 886/2.2642.9099
+
+                                         www.garmin.com
+
+
+
+© 2004 Garmin Ltd. or its subsidiaries                           190-00378-01 Rev. A
+

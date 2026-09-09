@@ -1,0 +1,976 @@
+/* ==========================================================================
+   CAP V-SAR MISSION RADIO OPERATOR (MRO) BASE STATION RADIO CONSOLE
+   ========================================================================== */
+
+/* Top header radio selector tabs */
+.radio-selector {
+  display: flex;
+  gap: 6px;
+  margin-left: 20px;
+}
+
+.radio-tab {
+  background: #1e2430;
+  color: #9ab;
+  border: 1px solid #334055;
+  border-radius: 4px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.radio-tab:hover {
+  background: #283446;
+  color: #fff;
+  border-color: #4a5d7c;
+}
+
+.radio-tab.active {
+  background: #2e5496;
+  color: #fff;
+  border-color: #5c84cb;
+  box-shadow: 0 0 8px rgba(46,84,150,0.5);
+}
+
+/* Overall layout */
+.mro-layout {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 46px);
+  overflow-y: auto;
+  background: #0f1318;
+  padding: 12px 18px;
+  gap: 14px;
+  box-sizing: border-box;
+}
+
+/* ==========================================================================
+   EQUIPMENT RACK CONTAINER
+   ========================================================================== */
+.rack-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+/* Common Radio Chassis Base */
+.radio-chassis {
+  width: 100%;
+  max-width: 960px;
+  background: #1b1e23;
+  border: 2px solid #2d333b;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.15);
+  padding: 12px 16px;
+  box-sizing: border-box;
+  user-select: none;
+  position: relative;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+/* Visibility states based on selected tab */
+body[data-mode="apx"] #icomChassis { display: none; }
+body[data-mode="icom"] #apxChassis { display: none; }
+body[data-mode="dual"] .radio-chassis {
+  max-width: 900px;
+  margin-bottom: 2px;
+}
+
+/* Chassis Header Bar */
+.chassis-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #282e38;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+.brand-badge {
+  font-family: 'Arial Black', Impact, sans-serif;
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: #cfd8dc;
+  text-shadow: 0 1px 2px #000;
+}
+
+.brand-badge.icom-badge {
+  color: #5bb2ff;
+  letter-spacing: 1px;
+}
+
+.model-badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #8899a6;
+}
+
+.cap-net-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  background: #1a321a;
+  color: #4ade80;
+  border: 1px solid #2e7d32;
+}
+
+.cap-net-badge.icom-net {
+  background: #18283c;
+  color: #60a5fa;
+  border-color: #2563eb;
+}
+
+/* Front Panels */
+.apx-front-panel,
+.icom-front-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* Panel Sections */
+.panel-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 140px;
+  flex-shrink: 0;
+}
+
+.panel-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.panel-right {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 140px;
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   ROTARY KNOBS & STEPPERS (TOUCH FRIENDLY)
+   ========================================================================== */
+.knob-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.knob-group.knob-compact {
+  flex-direction: row;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.knob-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: #789;
+  text-transform: uppercase;
+}
+
+.knob-stepper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.step-btn {
+  background: #252a32;
+  color: #8fa0b5;
+  border: 1px solid #3d4552;
+  border-radius: 4px;
+  width: 26px;
+  height: 26px;
+  font-size: 12px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.step-btn:hover { background: #323844; color: #fff; border-color: #556073; }
+.step-btn:active { background: #191c22; transform: scale(0.95); }
+.step-btn.small { width: 20px; height: 20px; font-size: 10px; }
+
+.rotary-knob {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #3a414c, #1a1d22 75%);
+  border: 2px solid #111417;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.7), inset 0 1px 2px rgba(255,255,255,0.2);
+  position: relative;
+  cursor: pointer;
+  touch-action: none;
+  transition: transform 0.05s ease-out;
+}
+
+.rotary-knob.small {
+  width: 36px;
+  height: 36px;
+}
+
+.rotary-knob.knob-dial {
+  width: 64px;
+  height: 64px;
+}
+
+.knob-indicator {
+  position: absolute;
+  top: 5px;
+  left: calc(50% - 2px);
+  width: 4px;
+  height: 10px;
+  background: #e2e8f0;
+  border-radius: 2px;
+  box-shadow: 0 0 3px rgba(255,255,255,0.8);
+}
+
+.rotary-knob.small .knob-indicator {
+  top: 3px;
+  height: 7px;
+}
+
+.knob-val-label {
+  font-size: 10px;
+  font-family: monospace;
+  font-weight: bold;
+  color: #9ab;
+}
+
+/* ==========================================================================
+   STATUS LEDS
+   ========================================================================== */
+.led-cluster {
+  display: flex;
+  gap: 12px;
+  background: #14171b;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #252a32;
+}
+
+.led-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.led-bulb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #2a1111;
+  border: 1px solid #180808;
+  transition: all 0.1s;
+}
+
+.led-label {
+  font-size: 8px;
+  font-weight: bold;
+  color: #627282;
+}
+
+/* LED Active Glowing States */
+.led-bulb.led-tx.active {
+  background: radial-gradient(circle at 35% 35%, #ff7777, #e60000);
+  border-color: #ff3333;
+  box-shadow: 0 0 10px #ff2222, 0 0 16px rgba(255,0,0,0.8);
+}
+
+.led-bulb.led-rx.active {
+  background: radial-gradient(circle at 35% 35%, #77ff88, #00cc22);
+  border-color: #33ff55;
+  box-shadow: 0 0 10px #00ff33, 0 0 16px rgba(0,255,50,0.8);
+}
+
+.led-bulb.led-scan.active {
+  background: radial-gradient(circle at 35% 35%, #ffee77, #d99b00);
+  border-color: #ffcc00;
+  box-shadow: 0 0 10px #ffbb00, 0 0 16px rgba(255,180,0,0.8);
+}
+
+/* ==========================================================================
+   MOTOROLA APX 6500 OLED DISPLAY
+   ========================================================================== */
+.apx-display-bezel {
+  width: 100%;
+  background: #0d1013;
+  border: 3px solid #232831;
+  border-radius: 6px;
+  box-shadow: inset 0 2px 6px #000, 0 2px 4px rgba(255,255,255,0.08);
+  padding: 8px 12px;
+  box-sizing: border-box;
+}
+
+.apx-oled {
+  background: #02120e;
+  border-radius: 3px;
+  padding: 6px 12px;
+  border: 1px solid #082d24;
+  font-family: 'Courier New', Courier, monospace;
+  color: #1affc2;
+  text-shadow: 0 0 8px rgba(26,255,194,0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.apx-oled.off {
+  background: #050807;
+  color: #0b1c18;
+  text-shadow: none;
+}
+.apx-oled.off * { opacity: 0.1 !important; text-shadow: none !important; }
+
+.oled-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.oled-status {
+  font-size: 11px;
+  font-weight: bold;
+  border-bottom: 1px dashed rgba(26,255,194,0.25);
+  padding-bottom: 2px;
+}
+
+.oled-flag {
+  opacity: 0.25;
+}
+.oled-flag.active {
+  opacity: 1;
+  color: #38ef7d;
+}
+
+.oled-rssi {
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+  height: 10px;
+}
+.rssi-bar {
+  width: 3px;
+  background: rgba(26,255,194,0.2);
+  border-radius: 1px;
+}
+.rssi-bar:nth-child(1) { height: 3px; }
+.rssi-bar:nth-child(2) { height: 5px; }
+.rssi-bar:nth-child(3) { height: 7px; }
+.rssi-bar:nth-child(4) { height: 9px; }
+.rssi-bar:nth-child(5) { height: 11px; }
+.rssi-bar.active {
+  background: #1affc2;
+  box-shadow: 0 0 4px #1affc2;
+}
+
+.oled-main {
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  text-align: center;
+  justify-content: center;
+  padding: 4px 0;
+}
+
+.oled-sub {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6ee7b7;
+}
+
+/* APX Softkeys */
+.apx-softkeys {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  justify-content: center;
+}
+
+.apx-btn {
+  flex: 1;
+  max-width: 80px;
+  background: #252b35;
+  color: #8da2bb;
+  border: 1px solid #374151;
+  border-radius: 4px;
+  padding: 6px 2px;
+  font-size: 10px;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.1s;
+}
+
+.apx-btn:hover { background: #333b49; color: #fff; border-color: #4b5563; }
+.apx-btn:active { background: #1a1e24; color: #1affc2; transform: translateY(1px); }
+
+/* ==========================================================================
+   ICOM IC-A120 AVIATION LCD DISPLAY
+   ========================================================================== */
+.icom-display-bezel {
+  width: 100%;
+  background: #111417;
+  border: 3px solid #232932;
+  border-radius: 6px;
+  padding: 8px 12px;
+  box-sizing: border-box;
+}
+
+.icom-lcd {
+  background: #0e2030;
+  border: 1px solid #183e5c;
+  border-radius: 3px;
+  padding: 8px 12px;
+  font-family: 'Courier New', Courier, monospace;
+  color: #60c8ff;
+  text-shadow: 0 0 8px rgba(96,200,255,0.7);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.icom-lcd.off {
+  background: #090e13;
+  color: #121c25;
+  text-shadow: none;
+}
+.icom-lcd.off * { opacity: 0.1 !important; text-shadow: none !important; }
+
+.lcd-annunciators {
+  display: flex;
+  gap: 12px;
+  font-size: 10px;
+  font-weight: bold;
+  border-bottom: 1px solid rgba(96,200,255,0.25);
+  padding-bottom: 2px;
+}
+
+.lcd-flag {
+  opacity: 0.2;
+}
+.lcd-flag.active {
+  opacity: 1;
+  color: #93c5fd;
+}
+
+.lcd-freq-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.lcd-mem-ch {
+  font-size: 15px;
+  font-weight: bold;
+  color: #38bdf8;
+}
+
+.lcd-freq-main {
+  font-size: 32px;
+  font-weight: 900;
+  letter-spacing: 2px;
+}
+
+.lcd-unit {
+  font-size: 13px;
+  font-weight: bold;
+  color: #7dd3fc;
+}
+
+.lcd-bottom-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.lcd-alias {
+  letter-spacing: 1px;
+}
+
+.lcd-smeter {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+}
+
+.smeter-bars {
+  display: flex;
+  gap: 2px;
+}
+
+.sbar {
+  width: 4px;
+  height: 8px;
+  background: rgba(96,200,255,0.2);
+  border-radius: 1px;
+}
+.sbar.active {
+  background: #38bdf8;
+  box-shadow: 0 0 3px #38bdf8;
+}
+
+.icom-keys {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  justify-content: center;
+}
+
+.icom-key-btn {
+  flex: 1;
+  max-width: 80px;
+  background: #252d38;
+  color: #94a3b8;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  padding: 6px 2px;
+  font-size: 10px;
+  font-weight: bold;
+  cursor: pointer;
+  user-select: none;
+}
+.icom-key-btn:hover { background: #333d4b; color: #fff; }
+.icom-key-btn:active { background: #171d24; color: #38bdf8; }
+
+.icom-pwr-btn {
+  background: #222933;
+  color: #cbd5e1;
+  border: 1px solid #3d4959;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 10px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.pwr-led {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #0f3d17;
+  border: 1px solid #000;
+}
+.pwr-led.active {
+  background: #22c55e;
+  box-shadow: 0 0 8px #22c55e;
+}
+
+.dial-step-toggle {
+  background: #1e2430;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  border-radius: 3px;
+  font-size: 9px;
+  padding: 2px 6px;
+  cursor: pointer;
+  margin-top: 4px;
+}
+.dial-step-toggle:hover { background: #283446; color: #fff; }
+
+/* Mic Jack Socket */
+.mic-jack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.jack-port {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 40%, #15181d, #000);
+  border: 2px solid #333d4b;
+  box-shadow: inset 0 2px 4px #000;
+}
+.jack-label {
+  font-size: 8px;
+  font-weight: bold;
+  color: #64748b;
+}
+
+/* ==========================================================================
+   LOWER OPERATING CONSOLE
+   ========================================================================== */
+.console-lower {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 14px;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+@media (max-width: 960px) {
+  .console-lower {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ptt-station-card,
+.comms-station-card {
+  background: #161b22;
+  border: 1px solid #262c36;
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.station-card-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #8da2bb;
+  border-bottom: 1px solid #232a35;
+  padding-bottom: 6px;
+}
+
+/* Fist Mic representation */
+.mic-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.fist-mic {
+  width: 120px;
+  background: linear-gradient(135deg, #2b313b, #15181e);
+  border: 2px solid #3b4452;
+  border-radius: 20px 20px 30px 30px;
+  padding: 14px 10px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 8px 16px rgba(0,0,0,0.6);
+  position: relative;
+  user-select: none;
+}
+
+.mic-grille {
+  width: 44px;
+  height: 24px;
+  background: #0e1115;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  align-items: center;
+  border: 1px solid #2d3542;
+}
+
+.grille-line {
+  width: 32px;
+  height: 2px;
+  background: #394250;
+  border-radius: 1px;
+}
+
+.mic-cartridge-label {
+  font-size: 8px;
+  font-weight: bold;
+  color: #64748b;
+  text-align: center;
+  margin: 8px 0 4px;
+}
+
+.mic-ptt-lever {
+  position: absolute;
+  left: -8px;
+  top: 30px;
+  width: 14px;
+  height: 48px;
+  background: #3b4452;
+  border-radius: 4px 0 0 4px;
+  border: 1px solid #546277;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+
+.mic-ptt-lever span { display: none; }
+
+.fist-mic.transmitting {
+  border-color: #ef4444;
+  box-shadow: 0 0 16px rgba(239,68,68,0.5);
+}
+.fist-mic.transmitting .mic-ptt-lever {
+  left: -4px;
+  background: #ef4444;
+  box-shadow: 0 0 8px #ef4444;
+}
+
+/* Master PTT Controls */
+.ptt-controls {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.master-ptt-btn {
+  width: 100%;
+  padding: 14px 8px;
+  background: linear-gradient(to bottom, #2b323d, #1c2128);
+  border: 2px solid #475569;
+  border-radius: 6px;
+  color: #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  transition: all 0.1s ease-in-out;
+}
+
+.master-ptt-btn:hover {
+  background: linear-gradient(to bottom, #374151, #242c37);
+  border-color: #64748b;
+}
+
+.master-ptt-btn:active,
+.master-ptt-btn.transmitting {
+  background: linear-gradient(to bottom, #dc2626, #991b1b);
+  border-color: #ef4444;
+  color: #fff;
+  box-shadow: 0 0 14px rgba(239,68,68,0.6);
+  transform: scale(0.98);
+}
+
+.ptt-icon { font-size: 20px; }
+.ptt-text { font-size: 14px; font-weight: 800; letter-spacing: 1px; }
+.ptt-shortcut { font-size: 10px; color: #94a3b8; font-family: monospace; }
+.master-ptt-btn.transmitting .ptt-shortcut { color: #fecaca; }
+
+.ptt-mode-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: #94a3b8;
+  background: #111418;
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+
+.toggle-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.audio-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: #94a3b8;
+  background: #111418;
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+
+.chk-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   COMMS DISPATCH & CAP FORM 110 LOG
+   ========================================================================== */
+.canned-reports-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.canned-lbl {
+  font-size: 11px;
+  font-weight: 700;
+  color: #718096;
+}
+
+.canned-btn {
+  background: #1e2430;
+  color: #cbd5e1;
+  border: 1px solid #334155;
+  border-radius: 3px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.canned-btn:hover { background: #2b3648; border-color: #475569; color: #fff; }
+
+.transmit-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.input-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #111418;
+  border: 1px solid #28303b;
+  border-radius: 4px;
+  padding: 4px 8px;
+}
+
+.input-field label {
+  font-size: 10px;
+  font-weight: bold;
+  color: #64748b;
+}
+
+.input-field input {
+  background: transparent;
+  border: none;
+  color: #e2e8f0;
+  font-size: 13px;
+  outline: none;
+}
+
+.input-field.input-body { flex: 1; }
+.input-field.input-body input { width: 100%; }
+
+.btn-send {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+}
+.btn-send:hover { background: #1d4ed8; }
+.btn-send:active { background: #1e40af; }
+
+/* CAP Form 110 Table */
+.form110-wrapper {
+  background: #111418;
+  border: 1px solid #242c38;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  max-height: 240px;
+}
+
+.form110-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: #181d24;
+  border-bottom: 1px solid #283240;
+}
+
+.form-title {
+  font-size: 10px;
+  color: #94a3b8;
+  letter-spacing: 0.5px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-sm {
+  background: #252d38;
+  border: 1px solid #374151;
+  color: #94a3b8;
+  border-radius: 3px;
+  font-size: 10px;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+.btn-sm:hover { background: #323d4c; color: #fff; }
+
+.log-table-container {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.form110-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-family: monospace;
+}
+
+.form110-table th {
+  background: #151a21;
+  color: #718096;
+  font-weight: 600;
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid #242c38;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.form110-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid #1a202a;
+  color: #cbd5e1;
+}
+
+.form110-table tr:nth-child(even) {
+  background: #0e1115;
+}
+
+.form110-table tr.outgoing td {
+  color: #93c5fd;
+}
+
+.form110-table tr.incoming td {
+  color: #86efac;
+}
+

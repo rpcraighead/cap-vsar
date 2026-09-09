@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>CAP V-SAR Base Radio Console (MRO Station)</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/radio.css">
+</head>
+<body>
+
+<header>
+  <div class="brand"><b>CAP V-SAR</b> <span>Base Radio &middot; MRO Station</span></div>
+  <div id="status" class="status offline">connecting</div>
+
+  <div class="radio-selector">
+    <button id="selApx" class="radio-tab active" data-mode="apx">Motorola APX 6500 (VHF-FM)</button>
+    <button id="selIcom" class="radio-tab" data-mode="icom">Icom IC-A120 (VHF-AM)</button>
+    <button id="selDual" class="radio-tab" data-mode="dual">Dual Station Rack</button>
+  </div>
+
+  <div class="spacer"></div>
+  <a class="navlink" href="/">Instructor console</a>
+  <a class="navlink" href="/base">Mission Base</a>
+  <a class="navlink" href="/debrief">Debrief</a>
+  <a class="navlink nav-planner" href=":8090" target="_blank" title="N499CP Flight Planner">Flight Planner</a>
+  <div id="clock" class="mono"></div>
+</header>
+
+<main class="mro-layout">
+
+  <!-- TOP / MAIN SECTION: RADIO EQUIPMENT RACK -->
+  <section class="rack-container" id="rackContainer">
+
+    <!-- ============================================================== -->
+    <!-- RADIO 1: MOTOROLA APX 6500 (VHF-FM TACTICAL)                   -->
+    <!-- ============================================================== -->
+    <div class="radio-chassis apx-chassis" id="apxChassis">
+      <div class="chassis-header">
+        <div class="brand-badge">MOTOROLA</div>
+        <div class="model-badge">APX 6500 &middot; O5 CONTROL HEAD</div>
+        <div class="cap-net-badge" id="apxNetBadge">CAP VHF-FM TACTICAL NET</div>
+      </div>
+
+      <div class="apx-front-panel">
+        <!-- Left: Power / Volume knob & status LEDs -->
+        <div class="panel-left">
+          <div class="knob-group">
+            <label class="knob-label">VOL / PWR</label>
+            <div class="knob-stepper">
+              <button class="step-btn" id="apxVolDown" title="Decrease Volume">-</button>
+              <div class="rotary-knob knob-vol" id="apxVolKnob" title="Drag to adjust volume or click OFF">
+                <div class="knob-indicator"></div>
+              </div>
+              <button class="step-btn" id="apxVolUp" title="Increase Volume">+</button>
+            </div>
+            <div class="knob-val-label" id="apxVolDisplay">VOL 8</div>
+          </div>
+
+          <div class="led-cluster">
+            <div class="led-item">
+              <div class="led-bulb led-tx" id="apxLedTx"></div>
+              <span class="led-label">TX</span>
+            </div>
+            <div class="led-item">
+              <div class="led-bulb led-rx" id="apxLedRx"></div>
+              <span class="led-label">RX</span>
+            </div>
+            <div class="led-item">
+              <div class="led-bulb led-scan" id="apxLedScan"></div>
+              <span class="led-label">SCAN</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Center: Fluorescent Dot-Matrix Vacuum OLED Display & Softkeys -->
+        <div class="panel-center">
+          <div class="apx-display-bezel">
+            <div class="apx-oled" id="apxDisplay">
+              <!-- Annunciator Line 1 -->
+              <div class="oled-line oled-status">
+                <span class="oled-rssi" id="apxRssi">
+                  <span class="rssi-bar active"></span>
+                  <span class="rssi-bar active"></span>
+                  <span class="rssi-bar active"></span>
+                  <span class="rssi-bar active"></span>
+                  <span class="rssi-bar"></span>
+                </span>
+                <span class="oled-flag active" id="apxFlagPwr">H</span>
+                <span class="oled-flag" id="apxFlagDir">DIR</span>
+                <span class="oled-flag" id="apxFlagScan">Z</span>
+                <span class="oled-flag active" id="apxFlagSec">SEC</span>
+                <span class="oled-mode" id="apxZoneLabel">ZONE 1</span>
+              </div>
+              <!-- Channel Name Line 2 (Large Dot Matrix) -->
+              <div class="oled-line oled-main">
+                <span class="oled-channel" id="apxChanName">TAC 1</span>
+              </div>
+              <!-- Frequency / Tone Line 3 -->
+              <div class="oled-line oled-sub">
+                <span class="oled-freq" id="apxChanFreq">148.1500 MHz</span>
+                <span class="oled-tone" id="apxChanTone">N110.9</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- APX Softkeys -->
+          <div class="apx-softkeys">
+            <button class="apx-btn" id="apxBtnHome" title="Home Priority Channel">HOME</button>
+            <button class="apx-btn" id="apxBtnZoneUp" title="Next Zone">ZONE ▲</button>
+            <button class="apx-btn" id="apxBtnZoneDown" title="Previous Zone">ZONE ▼</button>
+            <button class="apx-btn" id="apxBtnScan" title="Toggle Scan">SCAN</button>
+            <button class="apx-btn" id="apxBtnMon" title="Monitor / Squelch Open">MON</button>
+            <button class="apx-btn" id="apxBtnDim" title="Display Brightness">DIM</button>
+          </div>
+        </div>
+
+        <!-- Right: 16-Position Channel Selector Knob -->
+        <div class="panel-right">
+          <div class="knob-group">
+            <label class="knob-label">CHANNEL</label>
+            <div class="knob-stepper">
+              <button class="step-btn" id="apxChanDown" title="Previous Channel">◀</button>
+              <div class="rotary-knob knob-chan" id="apxChanKnob" title="Drag to change channel">
+                <div class="knob-indicator"></div>
+              </div>
+              <button class="step-btn" id="apxChanUp" title="Next Channel">▶</button>
+            </div>
+            <div class="knob-val-label" id="apxChanIndexDisplay">CH 01</div>
+          </div>
+
+          <div class="mic-jack">
+            <div class="jack-port" title="Microphone Port"></div>
+            <span class="jack-label">MIC</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- RADIO 2: ICOM IC-A120 (VHF-AM AVIATION AIR-TO-GROUND)          -->
+    <!-- ============================================================== -->
+    <div class="radio-chassis icom-chassis" id="icomChassis">
+      <div class="chassis-header">
+        <div class="brand-badge icom-badge">iCOM</div>
+        <div class="model-badge">IC-A120 &middot; VHF AIR BAND TRANSCEIVER</div>
+        <div class="cap-net-badge icom-net">CAP AERONAUTICAL SAR NET</div>
+      </div>
+
+      <div class="icom-front-panel">
+        <!-- Left: Power switch, Volume & Squelch -->
+        <div class="panel-left icom-left">
+          <div class="icom-power-group">
+            <button class="icom-pwr-btn" id="icomPwrBtn" title="Power On/Off">
+              <span class="pwr-led" id="icomPwrLed"></span>
+              POWER
+            </button>
+          </div>
+
+          <div class="knob-group knob-compact">
+            <label class="knob-label">VOL</label>
+            <div class="knob-stepper">
+              <button class="step-btn small" id="icomVolDown">-</button>
+              <div class="rotary-knob knob-vol small" id="icomVolKnob">
+                <div class="knob-indicator"></div>
+              </div>
+              <button class="step-btn small" id="icomVolUp">+</button>
+            </div>
+          </div>
+
+          <div class="knob-group knob-compact">
+            <label class="knob-label">SQL</label>
+            <div class="knob-stepper">
+              <button class="step-btn small" id="icomSqlDown">-</button>
+              <div class="rotary-knob knob-sql small" id="icomSqlKnob">
+                <div class="knob-indicator"></div>
+              </div>
+              <button class="step-btn small" id="icomSqlUp">+</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Center: High-Contrast Aviation Segmented LCD & Keys -->
+        <div class="panel-center icom-center">
+          <div class="icom-display-bezel">
+            <div class="icom-lcd" id="icomDisplay">
+              <!-- Upper annunciators -->
+              <div class="lcd-annunciators">
+                <span class="lcd-flag" id="icomFlagTx">TX</span>
+                <span class="lcd-flag" id="icomFlagRx">RX</span>
+                <span class="lcd-flag" id="icomFlagSql">SQL</span>
+                <span class="lcd-flag" id="icomFlagPri">PRI</span>
+                <span class="lcd-flag" id="icomFlagScan">SCAN</span>
+                <span class="lcd-flag active" id="icomFlagAnl">ANL</span>
+                <span class="lcd-flag" id="icomFlagStep">1MHz</span>
+              </div>
+              <!-- Main 7-segment Frequency Readout -->
+              <div class="lcd-freq-row">
+                <span class="lcd-mem-ch" id="icomMemCh">CH 01</span>
+                <span class="lcd-freq-main" id="icomFreqMain">123.100</span>
+                <span class="lcd-unit">MHz</span>
+              </div>
+              <!-- Channel Alias / Alpha & S-meter -->
+              <div class="lcd-bottom-row">
+                <span class="lcd-alias" id="icomAlias">SAR PRI</span>
+                <div class="lcd-smeter" id="icomSmeter">
+                  <span class="smeter-lbl">SIG</span>
+                  <div class="smeter-bars">
+                    <span class="sbar active"></span>
+                    <span class="sbar active"></span>
+                    <span class="sbar active"></span>
+                    <span class="sbar active"></span>
+                    <span class="sbar"></span>
+                    <span class="sbar"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Icom Function Buttons -->
+          <div class="icom-keys">
+            <button class="icom-key-btn" id="icomBtnChWx" title="Toggle Memory Channel / Direct Frequency Mode">CH/WX</button>
+            <button class="icom-key-btn" id="icomBtnScan" title="Scan Channels">SCAN</button>
+            <button class="icom-key-btn" id="icomBtnPri" title="Priority Watch (121.500 Guard)">PRI</button>
+            <button class="icom-key-btn" id="icomBtnAnl" title="Automatic Noise Limiter">ANL</button>
+            <button class="icom-key-btn" id="icomBtnLock" title="Dial Lock">LOCK</button>
+          </div>
+        </div>
+
+        <!-- Right: Large Rotary Tuning Dial -->
+        <div class="panel-right icom-right">
+          <div class="knob-group">
+            <label class="knob-label">TUNING DIAL</label>
+            <div class="knob-stepper">
+              <button class="step-btn" id="icomDialDown" title="Tune Down">◀</button>
+              <div class="rotary-knob knob-dial" id="icomDialKnob" title="Rotate to tune; Click to toggle MHz/kHz steps">
+                <div class="knob-indicator"></div>
+              </div>
+              <button class="step-btn" id="icomDialUp" title="Tune Up">▶</button>
+            </div>
+            <button class="dial-step-toggle" id="icomDialStepBtn">STEP: 25kHz</button>
+          </div>
+
+          <div class="mic-jack">
+            <div class="jack-port" title="Aviation Mic Port"></div>
+            <span class="jack-label">MIC</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- LOWER SECTION: OPERATING CONSOLE, PTT & LOG -->
+  <section class="console-lower">
+
+    <!-- LEFT COLUMN: DESKTOP FIST MICROPHONE & PTT STATION -->
+    <div class="ptt-station-card">
+      <div class="station-card-title">MRO Palm Microphone &middot; PTT Station</div>
+
+      <div class="mic-wrapper">
+        <!-- SVG Palm Microphone Representation -->
+        <div class="fist-mic">
+          <div class="mic-grille">
+            <div class="grille-line"></div>
+            <div class="grille-line"></div>
+            <div class="grille-line"></div>
+          </div>
+          <div class="mic-cartridge-label" id="activeRadioLabel">MOTOROLA APX 6500 (VHF-FM)</div>
+          <div class="mic-ptt-lever" id="micPttLever">
+            <span>PUSH TO TALK</span>
+          </div>
+          <div class="mic-cable">
+            <svg viewBox="0 0 160 30" width="160" height="30">
+              <path d="M 0,15 Q 15,-5 30,15 Q 45,35 60,15 Q 75,-5 90,15 Q 105,35 120,15 Q 135,-5 150,15 L 160,15"
+                    fill="none" stroke="#222" stroke-width="6" stroke-linecap="round"/>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Master PTT Controls & Mode Switch -->
+        <div class="ptt-controls">
+          <button class="master-ptt-btn" id="masterPttBtn">
+            <span class="ptt-icon">🎙️</span>
+            <span class="ptt-text" id="pttBtnText">TRANSMIT (PTT)</span>
+            <span class="ptt-shortcut">[ Spacebar ]</span>
+          </button>
+
+          <div class="ptt-mode-toggle">
+            <label class="toggle-option">
+              <input type="radio" name="pttMode" value="momentary" id="modeMomentary" checked>
+              <span>Hold to Talk (Momentary)</span>
+            </label>
+            <label class="toggle-option">
+              <input type="radio" name="pttMode" value="latch" id="modeLatch">
+              <span>PTT Latch (Tap to Lock)</span>
+            </label>
+          </div>
+
+          <div class="audio-toggles">
+            <label class="chk-label" title="Generate authentic P25 chirp, AM squelch burst, and radio sidetones">
+              <input type="checkbox" id="chkAudioSfx" checked>
+              <span>Radio SFX (P25 chirp &amp; Squelch)</span>
+            </label>
+            <label class="chk-label" title="Use Web Speech to speak incoming aircraft reports with tactical radio filter">
+              <input type="checkbox" id="chkTts" checked>
+              <span>Radio Voice TTS (Incoming traffic)</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN: COMMS TRANSMITTER & CAP FORM 110 LOG -->
+    <div class="comms-station-card">
+      <div class="station-card-title">Tactical Comms Dispatch &middot; CAP Form 110 Radio Log</div>
+
+      <!-- Quick Canned Message Buttons for Rapid MRO Dispatch -->
+      <div class="canned-reports-bar">
+        <span class="canned-lbl">Quick Reports:</span>
+        <button class="canned-btn" data-msg="Radio check on this net, how do you copy?">Radio Check</button>
+        <button class="canned-btn" data-msg="Ops normal acknowledged. Report next at :30.">Ops Normal</button>
+        <button class="canned-btn" data-msg="Copy your bearing report. Plotting on sectional.">Copy Bearing</button>
+        <button class="canned-btn" data-msg="EXERCISE, EXERCISE, EXERCISE - Maintain radio silence.">Exercise Silence</button>
+        <button class="canned-btn" data-msg="Target beacon located by ground team. RTB.">Beacon Found / RTB</button>
+      </div>
+
+      <!-- Direct Message Input Row -->
+      <div class="transmit-input-row">
+        <div class="input-field input-to">
+          <label>TO:</label>
+          <input type="text" id="msgRecipient" value="ALL" placeholder="ALL / CAP499" size="8">
+        </div>
+        <div class="input-field input-body">
+          <label>MSG:</label>
+          <input type="text" id="msgBody" placeholder="Enter radio traffic or click Quick Report above...">
+        </div>
+        <button class="btn-send primary" id="btnSend">TRANSMIT</button>
+      </div>
+
+      <!-- Live CAP Form 110 Radio Communications Log Table -->
+      <div class="form110-wrapper">
+        <div class="form110-header">
+          <div class="form-title"><b>CAP FORM 110</b> &middot; COMMUNICATIONS LOG</div>
+          <div class="form-actions">
+            <button class="btn-sm" id="btnExportLog">Export Log</button>
+            <button class="btn-sm" id="btnClearLog">Clear Display</button>
+          </div>
+        </div>
+
+        <div class="log-table-container">
+          <table class="form110-table" id="logTable">
+            <thead>
+              <tr>
+                <th style="width:12%">Time (Z)</th>
+                <th style="width:20%">Channel / Freq</th>
+                <th style="width:18%">Station From</th>
+                <th style="width:14%">Station To</th>
+                <th style="width:36%">Message / Traffic</th>
+              </tr>
+            </thead>
+            <tbody id="logBody">
+              <!-- Populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+</main>
+
+<script src="/static/charts.js"></script>
+<script src="/static/radio.js"></script>
+</body>
+</html>
+
