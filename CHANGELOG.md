@@ -3,6 +3,63 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-09 — O-4/O-5/O-6 live on ms01; two independent git histories reconciled; NFS3 backup target
+
+**Status: deployed and verified on ms01 directly, not just tested locally.**
+
+Applying the Mumble work below to ms01 surfaced a problem bigger than the
+deploy itself: `/srv/capvsar` on ms01 had 6 local commits (beacon-truth/role
+tokens, base-view reset, radio audit findings, O-3) that had never reached
+Gitea - its `origin` remote had no working credential, so every push had
+presumably been failing silently or was never attempted. Generated a
+repo-scoped Gitea deploy key for ms01, fetched, and merged the two histories
+(both branched from `v0.1`) conflict by conflict rather than picking a side
+by default: `access.py`, `main.py`, `base.js`, and the test/engine files all
+resolved in favor of the desktop session's version after *confirming* -
+diffing directly, not trusting diffstat - that it was a strict superset of
+what ms01 had. `docs/bugs/tracker.json` the same way: 23 items differed in
+status, all 23 in the same direction. Re-ran the full test suite on ms01
+itself afterward, against its actual Python 3.12 and pinned production
+dependency versions, not assumed compatible from a different machine.
+
+Deploying then found two real bugs neither local testing nor code review had
+caught:
+
+- `provision_mumble.py` couldn't open `mumble-server.sqlite` as the deploying
+  user - it's owned by the mumble container's internal uid with group-only
+  read. `deploy.sh` now runs it under `sudo`; the Instructor/SET ACL, which
+  had silently never been written on the first deploy attempt because of
+  this, is now actually in ms01's live database.
+- The `radio-https` healthcheck (added below) was broken two ways at once:
+  `wget -k` is `--convert-links`, not a cert-bypass flag, and
+  `https://localhost` sends a TLS SNI the Caddyfile has no site block for, so
+  Caddy errored the handshake instead of serving anything. Neither had ever
+  actually been run against the container before landing. Fixed with
+  `curl --resolve`, pinned to loopback to also dodge a hairpin-NAT hang
+  connecting to the LAN IP from inside the container.
+
+Mounted NFS3 (WD NAS, `192.0.2.144:/mnt/HD/HD_a2/NFS3`, documented
+lab-wide for backups/cold storage) on ms01 for the first time - it had no
+client mount at all - and pointed the nightly backup cron
+(`0 3 * * *`, installed) at `/mnt/nfs3/capvsar/backups/exercise-db` instead
+of the same local disk `exercise.db` itself lives on. The very first live
+run against that freshly-touched NFS directory hit a one-off
+`sqlite3.OperationalError` from inside `Connection.backup()` - confirmed
+transient (the next two manual attempts succeeded immediately) but real:
+`backup_exercise_db.py` now retries transient failures and cleans up any
+partial file on every failed attempt, not only a successful-but-empty one.
+
+### Verification
+
+- `sudo python3 scripts/preflight.py` on ms01: **ALL PASS** (console health,
+  full Mumble tree, the Instructor/SET ACL, tile source, CA cert).
+- `docker compose ps`: all four services healthy, including `radio-https`
+  for the first time since it gained a healthcheck.
+- A real backup landed on the real NFS3 mount (262144 bytes, read back and
+  verified), then removed as a test artifact.
+- No one was connected to Mumble at deploy time (checked first); the actual
+  interruption was under two minutes.
+
 ## 2026-09-09 — Mumble infrastructure: provisioned tree, ACLs, callsign integrity, backups, preflight (O-4, O-5, O-6)
 
 **Status: code complete and tested locally. NOT yet applied to ms01's live
