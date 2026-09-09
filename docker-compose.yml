@@ -109,9 +109,22 @@ services:
       - radio_caddy_config:/config
     # O-6: this container had no healthcheck at all, so a Caddy that stopped
     # proxying (TLS handshake failure, backend unreachable) looked identical
-    # to a healthy one to `docker compose ps`. Self-signed cert, hence -k.
+    # to a healthy one to `docker compose ps`.
+    #
+    # Two real mistakes fixed here after actually testing on ms01, not just
+    # writing a command that looked plausible:
+    #  - wget's cert-bypass flag is --no-check-certificate; -k is
+    #    --convert-links, an unrelated option, that wget flat-out rejects.
+    #  - https://localhost gets a TLS SNI of "localhost", which matches none
+    #    of the Caddyfile's site names (ms01/ms01.local/192.0.2.151) and
+    #    Caddy errors the handshake rather than falling back. Hitting the LAN
+    #    IP directly from inside the container instead hangs on Docker's
+    #    bridge networking (hairpin NAT back to the host's own published
+    #    port). curl --resolve pins the connection to loopback while still
+    #    presenting the SNI Caddy actually has a site block for.
     healthcheck:
-      test: ["CMD", "wget", "-k", "-q", "-O", "/dev/null", "https://localhost/api/health"]
+      test: ["CMD", "curl", "-sk", "--resolve", "ms01.local:443:127.0.0.1",
+             "-o", "/dev/null", "https://ms01.local/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3

@@ -10,7 +10,12 @@ failure prints exactly what's wrong and, where there's an obvious one, the
 fix.
 
 Usage:
-    python3 scripts/preflight.py [--host HOST] [--mumble-db PATH]
+    sudo python3 scripts/preflight.py [--host HOST] [--mumble-db PATH]
+
+sudo because mumble-server.sqlite is owned by the mumble container's
+internal uid with group-only read - a plain user gets a permission error
+opening it that reads exactly like a transient lock, so this needs root to
+actually check the thing it's checking.
 
 Run this from ms01 (or anywhere on the LAN, with --host) before an exercise,
 and again if anything about the stack changes mid-day.
@@ -61,8 +66,15 @@ def check_mumble_channels(db_path: Path) -> None:
         present = {row[0] for row in cur.fetchall()}
         con.close()
     except sqlite3.OperationalError as exc:
-        check("mumble channel tree", False, f"could not read {db_path}: {exc}",
-              fix="is Mumble mid-write? re-run in a few seconds")
+        # The far more common cause on ms01 isn't a transient lock - it's
+        # that mumble-server.sqlite is owned by the container's internal uid
+        # with group-only read, and the invoking user just isn't in that
+        # group. Confirmed by testing: plain python3 fails with exactly
+        # "unable to open database file"; sudo python3 succeeds immediately.
+        fix = ("permission denied opening a mumble-owned file - re-run this "
+               "script with sudo" if "unable to open database file" in str(exc)
+               else "is Mumble mid-write? re-run in a few seconds")
+        check("mumble channel tree", False, f"could not read {db_path}: {exc}", fix=fix)
         return
     expected = {name for name, _ in walk_tree()}
     missing = expected - present

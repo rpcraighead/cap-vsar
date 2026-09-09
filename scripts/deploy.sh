@@ -46,9 +46,15 @@ docker compose up -d
 # already-provisioned tree (including ms01's hand-made one) is left alone,
 # so stopping mumble briefly on every deploy is the only real cost of running
 # this unconditionally.
+#
+# mumble-server.sqlite is owned by the container's internal uid (10000:10000
+# in the image, shows up as a bare numeric uid on the host since a bind mount
+# doesn't remap it) mode 640 - the deploying user normally cannot open it at
+# all, let alone write it. sudo, not a chmod/chown on data a running database
+# depends on the ownership of.
 echo "==> mumble channel tree"
 docker compose stop mumble
-python3 scripts/provision_mumble.py mumble/data/mumble-server.sqlite
+sudo python3 scripts/provision_mumble.py mumble/data/mumble-server.sqlite
 docker compose start mumble
 
 # ------------------------------------------------------- browser radio trust
