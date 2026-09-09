@@ -617,7 +617,7 @@ def generate_xplane_fms_content(departure, destination, waypoints, cruise_alt=65
     lines = [
         "I",
         "1100 Version",
-        "CYCLE 2401",
+        f"CYCLE {get_utc_now().strftime('%y%m')}",
         f"ADEP {departure.upper()}",
         f"ADES {destination.upper()}",
         f"NUMENR {len(waypoints) + 2}"
@@ -630,10 +630,10 @@ def generate_xplane_fms_content(departure, destination, waypoints, cruise_alt=65
     lines.append(f"1 {departure.upper()} ADEP {float(dep_elev):.1f} {dep_lat:.6f} {dep_lon:.6f}")
     
     for wpt in waypoints:
-        ident = wpt.get('identifier', 'WPT')
         lat = wpt.get('lat', 0.0)
         lon = wpt.get('lon', 0.0)
-        lines.append(f"11 {ident} {float(cruise_alt):.1f} {lat:.6f} {lon:.6f}")
+        ident = f"{lat:+.3f}_{lon:+.3f}"
+        lines.append(f"28 {ident} DRCT {float(cruise_alt):.6f} {lat:.6f} {lon:.6f}")
         
     dest_apt = get_airport(destination.upper())
     dest_lat = dest_apt['latitude'] if dest_apt else (waypoints[-1]['lat'] if waypoints else 0.0)

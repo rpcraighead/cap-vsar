@@ -118,7 +118,7 @@ function addMessage(m) {
 $('brgAdd').onclick = async () => {
   const cs = $('brgCallsign').value.trim(), v = parseFloat($('brgValue').value);
   if (!cs || isNaN(v)) return;
-  const r = await fetch('/api/bearings', {method:'POST', headers:{'Content-Type':'application/json'},
+  const r = await vsarFetch('/api/bearings', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({callsign: cs, bearing_true: v, note: $('brgNote').value.trim()})});
   if (r.ok) { $('brgValue').value = ''; $('brgNote').value = ''; }
   else { alert('That callsign is not reporting a position yet.'); }
@@ -128,7 +128,7 @@ $('brgValue').addEventListener('keydown', e => { if (e.key === 'Enter') $('brgAd
 $('msgSend').onclick = async () => {
   const body = $('msgBody').value.trim();
   if (!body) return;
-  const r = await fetch('/api/messages', {method:'POST', headers:{'Content-Type':'application/json'},
+  const r = await vsarFetch('/api/messages', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({recipient: $('msgTo').value.trim() || 'ALL', body})});
   if (r.ok) $('msgBody').value = '';
 };

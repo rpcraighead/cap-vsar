@@ -7,26 +7,65 @@ the X-Plane sim bridge will implement in Phase 4.
 """
 from __future__ import annotations
 import asyncio, json, math, os, sqlite3, time, uuid
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from urllib.parse import urlsplit
+
+from fastapi import (Depends, FastAPI, HTTPException, Request, WebSocket,
+                     WebSocketDisconnect)
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
-from . import propagation, radio
+from . import access, propagation, radio
 
 DB = os.environ.get("CAPVSAR_DB", "/data/exercise.db")
 STATIC = Path(__file__).parent / "static"
 
 
 # ---------------------------------------------------------------- persistence
+@contextmanager
 def db():
-    c = sqlite3.connect(DB)
+    """A connection that commits on success, rolls back on error, and closes.
+
+    `with sqlite3.connect(...)` commits but never closes, which leaked a
+    connection per request. The timeout matters because the radio bridge shares
+    this process: a lock wait here is a gap in someone's transmission.
+    """
+    c = sqlite3.connect(DB, timeout=5.0)
     c.row_factory = sqlite3.Row
-    return c
+    try:
+        yield c
+        c.commit()
+    except Exception:
+        c.rollback()
+        raise
+    finally:
+        c.close()
+
+
+def _exec(sql: str, params: tuple = ()):
+    with db() as c:
+        c.execute(sql, params)
+
+
+def _fetchone(sql: str, params: tuple = ()):
+    with db() as c:
+        return c.execute(sql, params).fetchone()
+
+
+async def db_call(fn, *args):
+    """Run a blocking database function off the event loop.
+
+    Every handler here shares one loop with the Mumble bridge's 20 ms audio
+    frames (radio.py). A synchronous commit fsyncing on a bind mount stalls
+    that loop, trips the bridge's buffer check and unkeys the operator
+    mid-transmission, so database work belongs in a worker thread.
+    """
+    return await run_in_threadpool(fn, *args)
 
 
 ALERT_COLUMNS = [
@@ -38,6 +77,11 @@ ALERT_COLUMNS = [
 def init_db():
     Path(DB).parent.mkdir(parents=True, exist_ok=True)
     with db() as c:
+        # WAL lets the 1 Hz ticker and the debrief read while a sortie writes,
+        # instead of serialising behind it. The setting lives in the database
+        # file, so this runs once and every later connection inherits it.
+        c.execute("PRAGMA journal_mode=WAL")
+        c.execute("PRAGMA synchronous=NORMAL")
         c.executescript("""
         CREATE TABLE IF NOT EXISTS scenarios (
             id TEXT PRIMARY KEY, name TEXT NOT NULL, notes TEXT,
@@ -94,8 +138,39 @@ SEED = {
 }
 
 
+# ------------------------------------------------------------- truth filtering
+# The beacon position is the answer to the exercise. Every response that could
+# carry it goes through public_scenario(), so there is one place to audit
+# rather than a decision at each endpoint — the bug this replaces was three
+# endpoints that each returned the row straight from SQLite.
+TRUTH_FIELDS = ("beacon_lat", "beacon_lon", "beacon_elev_ft")
+
+
+def public_scenario(sc: dict, *, include_truth: bool) -> dict:
+    """A scenario safe to send to a browser. Truth only when explicitly allowed."""
+    d = dict(sc)
+    if not include_truth:
+        for f in TRUTH_FIELDS:
+            d.pop(f, None)
+    return d
+
+
+def role_gate(role: str):
+    def dep(request: Request) -> None:
+        access.enforce(role, request)
+    return dep
+
+
+instructor_only = Depends(role_gate("instructor"))
+base_or_instructor = Depends(role_gate("base"))
+plugin_only = Depends(role_gate("plugin"))
+
+
 # ------------------------------------------------------------------ live state
 class Hub:
+    SEND_TIMEOUT_S = 1.0        # a console that cannot take a frame in a second
+                                # is not going to catch up on the next one
+
     def __init__(self):
         self.clients: set[WebSocket] = set()
         self.aircraft: dict[str, dict] = {}
@@ -104,14 +179,26 @@ class Hub:
         self.messages: list[dict] = []
 
     async def broadcast(self, msg: dict):
-        dead = []
-        for ws in list(self.clients):
+        """Send to every console at once, and drop anyone who cannot keep up.
+
+        Sequential awaits meant one wedged tablet blocked the 1 Hz ticker and
+        every handler that broadcasts. A half-open socket never raises, so it
+        needs a timeout rather than an exception to be noticed.
+        """
+        if not self.clients:
+            return
+        text = json.dumps(msg)
+
+        async def send(ws):
             try:
-                await ws.send_text(json.dumps(msg))
+                await asyncio.wait_for(ws.send_text(text), self.SEND_TIMEOUT_S)
             except Exception:
-                dead.append(ws)
-        for ws in dead:
-            self.clients.discard(ws)
+                return ws          # dead, wedged, or too slow - same outcome
+            return None
+
+        for ws in await asyncio.gather(*(send(w) for w in list(self.clients))):
+            if ws is not None:
+                self.clients.discard(ws)
 
     def snapshot(self, include_truth: bool = False) -> dict:
         s = {
@@ -121,17 +208,45 @@ class Hub:
             "server_time": time.time(),
         }
         if self.scenario:
-            sc = dict(self.scenario)
             revealed = bool(self.sortie and self.sortie.get("revealed"))
-            if not (include_truth or revealed):
-                # beacon truth is withheld from the console until reveal
-                sc.pop("beacon_lat", None)
-                sc.pop("beacon_lon", None)
-            s["scenario"] = sc
+            s["scenario"] = public_scenario(
+                self.scenario, include_truth=include_truth or revealed)
         return s
 
 
 hub = Hub()
+
+
+def rehydrate():
+    """Reload the running sortie into memory at startup.
+
+    Live state was in-process only, so a container restart mid-exercise
+    orphaned the sortie: positions were discarded because hub.sortie was None,
+    /api/messages answered empty because it reads memory rather than the table,
+    and the row kept stopped=NULL forever. An exercise cannot depend on the
+    console never restarting.
+    """
+    with db() as c:
+        row = c.execute("SELECT * FROM sorties WHERE stopped IS NULL"
+                        " ORDER BY started DESC LIMIT 1").fetchone()
+        if not row:
+            return
+        sc = c.execute("SELECT * FROM scenarios WHERE id=?",
+                       (row["scenario_id"],)).fetchone()
+        if not sc:
+            return
+        hub.sortie = dict(row)
+        hub.scenario = row_to_scenario(sc)
+        hub.messages = [
+            {"type": "message", **dict(m)} for m in reversed(c.execute(
+                "SELECT t, sender, recipient, body FROM messages"
+                " WHERE sortie_id=? ORDER BY t DESC LIMIT 100",
+                (row["id"],)).fetchall())]
+    # Aircraft are deliberately not restored: their positions are seconds old
+    # and the plugins will re-report within a few seconds anyway. A stale
+    # aircraft on the map is worse than a briefly empty one.
+    print(f"[capvsar] resumed sortie {hub.sortie['id']} "
+          f"({len(hub.messages)} messages)", flush=True)
 
 
 @asynccontextmanager
@@ -146,6 +261,13 @@ async def lifespan(app: FastAPI):
                  SEED["band"], SEED["power"], json.dumps(SEED["effects"]), time.time(),
                  SEED["alert_kind"], SEED["alert_text"],
                  SEED["alert_lat"], SEED["alert_lon"], SEED["alert_radius_nm"]))
+    wide_open = access.unconfigured()
+    if wide_open:
+        print("[capvsar] WARNING: no token configured for "
+              f"{', '.join(wide_open)} - those endpoints accept anyone who can "
+              "reach this console. Set CAPVSAR_TOKEN_INSTRUCTOR / _BASE / "
+              "_PLUGIN in .env before an exercise.", flush=True)
+    rehydrate()
     asyncio.create_task(ticker())
     yield
 
@@ -206,13 +328,17 @@ def row_to_scenario(r) -> dict:
 
 
 @app.get("/api/scenarios")
-def list_scenarios():
+def list_scenarios(request: Request):
+    """Scenario definitions. Beacon positions only for a presented instructor
+    token — the picker needs names and notes, not the answer."""
+    truth = access.is_instructor(request)
     with db() as c:
-        return [row_to_scenario(r) for r in
+        rows = [row_to_scenario(r) for r in
                 c.execute("SELECT * FROM scenarios ORDER BY created")]
+    return [public_scenario(r, include_truth=truth) for r in rows]
 
 
-@app.post("/api/scenarios")
+@app.post("/api/scenarios", dependencies=[instructor_only])
 def create_scenario(s: ScenarioIn):
     sid = str(uuid.uuid4())[:8]
     with db() as c:
@@ -223,7 +349,7 @@ def create_scenario(s: ScenarioIn):
     return {"id": sid}
 
 
-@app.delete("/api/scenarios/{sid}")
+@app.delete("/api/scenarios/{sid}", dependencies=[instructor_only])
 def delete_scenario(sid: str):
     with db() as c:
         c.execute("DELETE FROM scenarios WHERE id=?", (sid,))
@@ -231,56 +357,73 @@ def delete_scenario(sid: str):
 
 
 # --------------------------------------------------------------------- sorties
-@app.post("/api/sorties")
+@app.post("/api/sorties", dependencies=[instructor_only])
 async def start_sortie(body: dict):
     sid = body.get("scenario_id")
-    with db() as c:
-        r = c.execute("SELECT * FROM scenarios WHERE id=?", (sid,)).fetchone()
-        if not r:
-            raise HTTPException(404, "no such scenario")
-        oid = str(uuid.uuid4())[:8]
-        c.execute("INSERT INTO sorties (id, scenario_id, name, started) VALUES (?,?,?,?)",
-                  (oid, sid, body.get("name") or r["name"], time.time()))
-    hub.scenario = row_to_scenario(r)
-    hub.sortie = {"id": oid, "scenario_id": sid, "name": body.get("name") or r["name"],
-                  "started": time.time(), "stopped": None, "revealed": 0}
+    started = time.time()
+
+    def go():
+        with db() as c:
+            r = c.execute("SELECT * FROM scenarios WHERE id=?", (sid,)).fetchone()
+            if not r:
+                return None, None
+            # Close out anything still open. Starting a second sortie used to
+            # leave the first with stopped=NULL forever, so the debrief list
+            # showed two running exercises and rehydrate() would resume the
+            # wrong one.
+            c.execute("UPDATE sorties SET stopped=? WHERE stopped IS NULL",
+                      (started,))
+            oid = str(uuid.uuid4())[:8]
+            c.execute("INSERT INTO sorties (id, scenario_id, name, started)"
+                      " VALUES (?,?,?,?)",
+                      (oid, sid, body.get("name") or r["name"], started))
+            return oid, row_to_scenario(r)
+
+    oid, scenario = await db_call(go)
+    if oid is None:
+        raise HTTPException(404, "no such scenario")
+    hub.scenario = scenario
+    hub.sortie = {"id": oid, "scenario_id": sid,
+                  "name": body.get("name") or scenario["name"],
+                  "started": started, "stopped": None, "revealed": 0}
     hub.aircraft.clear()
     hub.messages.clear()
     await hub.broadcast({"type": "state", **hub.snapshot()})
     return hub.sortie
 
 
-@app.post("/api/sorties/stop")
+@app.post("/api/sorties/stop", dependencies=[instructor_only])
 async def stop_sortie():
     if not hub.sortie:
         raise HTTPException(400, "no sortie running")
-    with db() as c:
-        c.execute("UPDATE sorties SET stopped=? WHERE id=?", (time.time(), hub.sortie["id"]))
-    hub.sortie["stopped"] = time.time()
+    stopped = time.time()
+    await db_call(lambda: _exec("UPDATE sorties SET stopped=? WHERE id=?",
+                                (stopped, hub.sortie["id"])))
+    hub.sortie["stopped"] = stopped
     await hub.broadcast({"type": "state", **hub.snapshot()})
     return hub.sortie
 
 
-@app.post("/api/sorties/reveal")
+@app.post("/api/sorties/reveal", dependencies=[instructor_only])
 async def reveal():
     """Debrief: expose beacon truth to every connected console."""
     if not hub.sortie:
         raise HTTPException(400, "no sortie running")
-    with db() as c:
-        c.execute("UPDATE sorties SET revealed=1 WHERE id=?", (hub.sortie["id"],))
+    await db_call(lambda: _exec("UPDATE sorties SET revealed=1 WHERE id=?",
+                                (hub.sortie["id"],)))
     hub.sortie["revealed"] = 1
     await hub.broadcast({"type": "state", **hub.snapshot()})
     return {"revealed": True}
 
 
-@app.post("/api/sorties/effects")
+@app.post("/api/sorties/effects", dependencies=[instructor_only])
 async def set_effects(body: dict):
     if not hub.scenario:
         raise HTTPException(400, "no sortie running")
     hub.scenario["effects"].update(body)
-    with db() as c:
-        c.execute("UPDATE scenarios SET effects=? WHERE id=?",
-                  (json.dumps(hub.scenario["effects"]), hub.scenario["id"]))
+    await db_call(lambda: _exec("UPDATE scenarios SET effects=? WHERE id=?",
+                                (json.dumps(hub.scenario["effects"]),
+                                 hub.scenario["id"])))
     await hub.broadcast({"type": "state", **hub.snapshot()})
     return hub.scenario["effects"]
 
@@ -308,16 +451,22 @@ def track(oid: str):
             (oid,)).fetchall()
         s = c.execute("SELECT * FROM sorties WHERE id=?", (oid,)).fetchone()
         sc = c.execute("SELECT * FROM scenarios WHERE id=?", (s["scenario_id"],)).fetchone() if s else None
+    # Truth belongs to the debrief. Until this sortie is revealed the replay
+    # gets no beacon, which is what the debrief view's "never revealed"
+    # message was always written for.
+    revealed = bool(s and s["revealed"])
     return {
         "positions": [dict(r) for r in rows],
         "bearings": [dict(r) for r in brgs],
         "messages": [dict(r) for r in msgs],
-        "beacon": ({"lat": sc["beacon_lat"], "lon": sc["beacon_lon"]} if sc else None),
+        "revealed": revealed,
+        "beacon": ({"lat": sc["beacon_lat"], "lon": sc["beacon_lon"]}
+                   if (sc and revealed) else None),
     }
 
 
 # ------------------------------------------------------- position ingest (sim)
-@app.post("/api/positions")
+@app.post("/api/positions", dependencies=[plugin_only])
 async def ingest(p: PositionIn):
     """
     Sim bridge -> here. Phase 4 contract.
@@ -350,29 +499,47 @@ async def ingest(p: PositionIn):
                   "distance_nm": round(r.distance_nm, 2), "in_cone": r.in_cone,
                   "note": r.note}
         ac["df"] = df
-        with db() as c:
-            c.execute("INSERT INTO positions VALUES (?,?,?,?,?,?,?)",
-                      (hub.sortie["id"], p.callsign, now, p.lat, p.lon, p.alt_ft, p.hdg_true))
+        await db_call(lambda: _exec(
+            "INSERT INTO positions VALUES (?,?,?,?,?,?,?)",
+            (hub.sortie["id"], p.callsign, now, p.lat, p.lon, p.alt_ft, p.hdg_true)))
 
     hub.aircraft[p.callsign] = ac
     return {"ok": True, "df": df}
 
 
-@app.post("/api/bearings")
+@app.post("/api/bearings", dependencies=[base_or_instructor])
 async def log_bearing(b: BearingIn):
     """Mission base logs a bearing the crew reported. Draws a line on the map."""
-    if not hub.sortie:
+    if not hub.sortie or hub.sortie.get("stopped"):
         raise HTTPException(400, "no sortie running")
-    ac = hub.aircraft.get(b.callsign)
-    if not ac:
-        raise HTTPException(404, "no such aircraft reporting")
-    with db() as c:
-        c.execute("INSERT INTO bearings (sortie_id, callsign, t, lat, lon, bearing_true, note)"
-                  " VALUES (?,?,?,?,?,?,?)",
-                  (hub.sortie["id"], b.callsign, time.time(), ac["lat"], ac["lon"],
-                   b.bearing_true, b.note))
+    now = time.time()
+
+    def go():
+        ac = hub.aircraft.get(b.callsign)
+        if ac:
+            lat, lon = ac["lat"], ac["lon"]
+        else:
+            # The aircraft expires from the live map after 30 s of silence, but
+            # a bearing passed over voice is often typed in well after that.
+            # Fall back to its last recorded position for this sortie rather
+            # than refusing a report the crew actually made.
+            row = _fetchone(
+                "SELECT lat, lon FROM positions WHERE sortie_id=? AND callsign=?"
+                " ORDER BY t DESC LIMIT 1", (hub.sortie["id"], b.callsign))
+            if not row:
+                return None
+            lat, lon = row["lat"], row["lon"]
+        _exec("INSERT INTO bearings (sortie_id, callsign, t, lat, lon, bearing_true, note)"
+              " VALUES (?,?,?,?,?,?,?)",
+              (hub.sortie["id"], b.callsign, now, lat, lon, b.bearing_true, b.note))
+        return lat, lon
+
+    where = await db_call(go)
+    if where is None:
+        raise HTTPException(404, "no position on record for that aircraft")
+    lat, lon = where
     await hub.broadcast({"type": "bearing", "callsign": b.callsign,
-                         "lat": ac["lat"], "lon": ac["lon"],
+                         "lat": lat, "lon": lon,
                          "bearing_true": b.bearing_true, "note": b.note})
     return {"ok": True}
 
@@ -383,14 +550,17 @@ class MessageIn(BaseModel):
     body: str
 
 
-@app.post("/api/messages")
+@app.post("/api/messages", dependencies=[base_or_instructor])
 async def send_message(m: MessageIn):
     """Retasking and coordination text. Supplements voice and leaves a record."""
     now = time.time()
-    if hub.sortie:
-        with db() as c:
-            c.execute("INSERT INTO messages (sortie_id, t, sender, recipient, body)"
-                      " VALUES (?,?,?,?,?)", (hub.sortie["id"], now, m.sender, m.recipient, m.body))
+    if hub.sortie and not hub.sortie.get("stopped"):
+        # After a sortie is stopped its record is closed: late traffic is
+        # broadcast to whoever is still watching but not written into it.
+        await db_call(lambda: _exec(
+            "INSERT INTO messages (sortie_id, t, sender, recipient, body)"
+            " VALUES (?,?,?,?,?)",
+            (hub.sortie["id"], now, m.sender, m.recipient, m.body)))
     msg = {"type": "message", "t": now, "sender": m.sender,
            "recipient": m.recipient, "body": m.body}
     hub.messages.append(msg)
@@ -406,6 +576,24 @@ def list_messages():
 @app.get("/api/state")
 def state():
     return hub.snapshot()
+
+
+@app.get("/api/plugin/scenario")
+def plugin_scenario(request: Request):
+    """Beacon truth for the in-sim propagation engine.
+
+    The X-Plane plugin is the authoritative DF engine and cannot work without
+    the real beacon position — it has to compute bearing, terrain masking and
+    signal strength from it. So this is the one endpoint that serves truth
+    before the instructor reveals, and it is gated on CAPVSAR_TOKEN_PLUGIN
+    rather than on a role default: with no key configured it returns 503, so
+    it can never be open by accident.
+
+    The shape matches /api/state deliberately, so the plugin's net thread only
+    changes which URL it polls and gains one header.
+    """
+    access.require_plugin(request)
+    return hub.snapshot(include_truth=True)
 
 # Aeronautical chart tile services -- the same ones the N499CP flight planner
 # uses. Served rather than hardcoded in the page so a wing running its own tile
@@ -446,6 +634,12 @@ def health():
 
 @app.websocket("/ws")
 async def ws(sock: WebSocket):
+    # Same-origin only, matching the radio stream's check: a browser on another
+    # site should not be able to open a live feed of the exercise.
+    origin = sock.headers.get("origin")
+    if origin and urlsplit(origin).netloc != sock.headers.get("host"):
+        await sock.close(code=1008)
+        return
     await sock.accept()
     hub.clients.add(sock)
     try:

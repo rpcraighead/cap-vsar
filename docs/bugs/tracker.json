@@ -1,0 +1,1516 @@
+{
+  "meta": {
+    "title": "CAP V-SAR bug tracker",
+    "generated_from": "docs/PROJECT_REVIEW_2026-09-08.md",
+    "opened": "2026-09-08",
+    "id_scheme": "IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.",
+    "priority": {
+      "P0": "Blocks an exercise from running, or corrupts training integrity (truth leak, wrong physics). Fix before the first rehearsal session.",
+      "P1": "Degrades an exercise in progress or loses data. Fix before the full-mission rehearsal.",
+      "P2": "Correctness, robustness or realism gap that a participant would notice but work around.",
+      "P3": "Cleanup, tooling, docs. No exercise impact."
+    },
+    "waves": {
+      "0": "Now \u2014 make the work safe to do at all.",
+      "1": "Before session 1 (base stand-up). Nothing flies; base, planner and comms must work.",
+      "2": "Before session 2 (full mission, three aircraft, injected effects).",
+      "3": "Before session 3 (dress rehearsal) and the live SAREX.",
+      "4": "After the SAREX \u2014 architecture, tooling, CalTopo phase 2."
+    },
+    "wave_dates_note": "Wave dates track the illustrative calendar in docs/USE_CASE_SAREX_REHEARSAL.md (T-14/T-7/T-2 before a 17 Oct 2026 SAREX). Re-anchor to the real exercise date."
+  },
+  "clusters": {
+    "C1": {
+      "name": "Repo & release hygiene",
+      "owner_hint": "whoever holds the git remote"
+    },
+    "C2": {
+      "name": "Truth integrity & roles",
+      "owner_hint": "one agent only \u2014 touches main.py and the plugin together"
+    },
+    "C3": {
+      "name": "Propagation engine correctness",
+      "owner_hint": "single-file: xplane/PI_capvsar_df.py"
+    },
+    "C4": {
+      "name": "Station identity & onboarding kit",
+      "owner_hint": "plugin + scripts/"
+    },
+    "C5": {
+      "name": "Deployment bootstrap & voice provisioning",
+      "owner_hint": "infra; coordinate with ms01"
+    },
+    "C6": {
+      "name": "Offline mission base",
+      "owner_hint": "static assets, low conflict"
+    },
+    "C7": {
+      "name": "Console robustness",
+      "owner_hint": "main.py \u2014 conflicts with C2, sequence them"
+    },
+    "C8": {
+      "name": "Base view & debrief",
+      "owner_hint": "static/*.js"
+    },
+    "C9": {
+      "name": "Radio console hardening",
+      "owner_hint": "Codex \u2014 it owns mission-radio.js/radio.py"
+    },
+    "C10": {
+      "name": "Flight planner correctness",
+      "owner_hint": "services/flightplanner/app.py"
+    },
+    "C11": {
+      "name": "Flight planner security & dependencies",
+      "owner_hint": "same file as C10 \u2014 sequence"
+    },
+    "C12": {
+      "name": "Instrument runtime",
+      "owner_hint": "instruments/*/logic.lua"
+    },
+    "C13": {
+      "name": "Instrument tooling & shared libs",
+      "owner_hint": "scripts/ + tests/"
+    },
+    "C14": {
+      "name": "Contract & documentation truth",
+      "owner_hint": "docs only, safe in parallel"
+    },
+    "C15": {
+      "name": "Service boundaries (architecture)",
+      "owner_hint": "after C2 and C7 land"
+    }
+  },
+  "issues": [
+    {
+      "id": "O-1",
+      "title": "Repo has no working git history",
+      "type": "task",
+      "severity": "critical",
+      "priority": "P0",
+      "wave": 0,
+      "effort": "S",
+      "component": "infra",
+      "cluster": "C1",
+      "status": "in-progress",
+      "files": [
+        "repo root"
+      ],
+      "problem": "Codex published a v0.1 baseline to Gitea and GitHub on 2026-09-08 with ignore rules covering credentials, runtime state and build output. But this working tree still has no `.git/` and `git` is not installed on this machine, so agents editing here still cannot diff, revert or see what another tool changed \u2014 which is the actual failure mode the finding was about.",
+      "fix": "Install git on this machine and make /home/ron/Projects/cap-vsar the checkout of the pushed repository (or document where the canonical checkout lives so agents work there).",
+      "verify": "`git log` and `git status` work in the directory the agents actually edit.",
+      "depends_on": []
+    },
+    {
+      "id": "O-1a",
+      "title": "Generated handbook committed deliberately",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 4,
+      "effort": "S",
+      "component": "infra",
+      "cluster": "C1",
+      "status": "resolved",
+      "files": [
+        ".gitignore",
+        "docs/manual/"
+      ],
+      "problem": "`docs/manual/*.odt|docx` are ignored but the 3.3 MB `.pdf` and `.html` are not, although scripts/generate_manual.py regenerates both on every run.",
+      "fix": "Resolved by decision: Codex's v0.1 baseline entry states the generated handbook PDF/HTML are tracked deliberately as the published artefact. No change needed; expect churn in those two files on every manual rebuild.",
+      "verify": "Decision recorded in the CHANGELOG v0.1 baseline entry.",
+      "depends_on": [
+        "O-1"
+      ]
+    },
+    {
+      "id": "X-1",
+      "title": "Beacon truth leaks through three unauthenticated endpoints",
+      "type": "bug",
+      "severity": "critical",
+      "priority": "P0",
+      "wave": 1,
+      "effort": "M",
+      "component": "console-api",
+      "cluster": "C2",
+      "status": "fixed",
+      "files": [
+        "services/exercise/app/main.py:116-131",
+        "services/exercise/app/main.py:208-212",
+        "services/exercise/app/main.py:297-316"
+      ],
+      "problem": "Hub.snapshot() is the only place truth is filtered and only /api/state and /ws use it. GET /api/scenarios returns every beacon_lat/lon; GET /api/sorties/{id}/track returns `beacon` for a running unrevealed sortie; snapshot() pops lat/lon but leaves beacon_elev_ft. Any participant reads the answer in one request, defeating the design's core teaching mechanism.",
+      "fix": "Fixed 2026-09-08: one public_scenario() serializer in main.py strips beacon_lat/lon/elev_ft unless truth is explicitly allowed; /api/scenarios returns truth only for a presented instructor token; /api/sorties/{id}/track returns beacon only once that sortie is revealed, and now also reports `revealed` so the debrief's 'never revealed' branch is reachable. Regression test tests/test_console.py walks every scenario/sortie response for a value within ~100 m of truth.",
+      "verify": "Automated test: with a running unrevealed sortie, no response body from any GET endpoint contains a coordinate within 100 m of truth.",
+      "depends_on": []
+    },
+    {
+      "id": "P-2",
+      "title": "Plugin can never receive beacon truth, so the in-sim DF is deaf",
+      "type": "bug",
+      "severity": "critical",
+      "priority": "P0",
+      "wave": 1,
+      "effort": "M",
+      "component": "plugin",
+      "cluster": "C2",
+      "status": "fixed",
+      "files": [
+        "xplane/PI_capvsar_df.py:947-967",
+        "services/exercise/app/main.py:406-408"
+      ],
+      "problem": "The plugin polls /api/state, which withholds truth until reveal, then sets active=1 with lat/lon at 0/0 or the previous exercise's beacon. Distance to Null Island exceeds the radio horizon, so the authoritative DF engine produces nothing for the whole exercise unless the instructor reveals at the start.",
+      "fix": "Fixed 2026-09-08, both halves. Console: GET /api/plugin/scenario returns the running sortie with truth, gated on CAPVSAR_TOKEN_PLUGIN, 503 when no key is configured so it cannot be open by accident. Plugin: net_worker now polls that endpoint with the key (PLUGIN_KEY, from CAPVSAR_TOKEN_PLUGIN; O-2 will move it into the station config alongside CONSOLE and CALLSIGN) and sends the same key on /api/positions, which is now gated too. A refused channel (403/503/404) clears scn['active'] so the DF goes silent instead of homing on a null beacon, and logs the reason once per transition.",
+      "verify": "tests/test_plugin_net.py (9 checks) covers the endpoint choice, the key header, and each refusal path; tests/test_console.py asserts the payload carries every field the plugin reads. Still to confirm in the sim: a bearing appears on the DF head during an unrevealed sortie.",
+      "depends_on": [
+        "X-1"
+      ]
+    },
+    {
+      "id": "P-1",
+      "title": "Terrain line-of-sight ray is mirrored",
+      "type": "bug",
+      "severity": "critical",
+      "priority": "P0",
+      "wave": 1,
+      "effort": "S",
+      "component": "plugin",
+      "cluster": "C3",
+      "status": "fixed",
+      "files": [
+        "xplane/PI_capvsar_df.py:595-599"
+      ],
+      "problem": "interp() walks aircraft to beacon with `fr`, but `ray = b_ft + (ac_ft - b_ft) * fr` puts the beacon's altitude at the aircraft end. Ridges near the beacon never block; high ground near the aircraft falsely blocks. Terrain masking \u2014 a headline training effect \u2014 is inverted.",
+      "fix": "ray = ac_ft + (b_ft - ac_ft) * fr.",
+      "verify": "New test with a non-flat terrain stub (ridge at 30/60/90 % of path) asserting blocked vs clear in both directions.",
+      "depends_on": []
+    },
+    {
+      "id": "X-2",
+      "title": "No authentication or role separation on any console endpoint",
+      "type": "bug",
+      "severity": "critical",
+      "priority": "P0",
+      "wave": 1,
+      "effort": "L",
+      "component": "console-api",
+      "cluster": "C2",
+      "status": "in-progress",
+      "files": [
+        "services/exercise/app/main.py",
+        "docker-compose.yml:73"
+      ],
+      "problem": "Any LAN/WireGuard participant can stop a sortie, reveal the beacon, delete scenarios or rewrite injected effects. Only the radio stream has an access code and it defaults to empty. /ws has no origin check although the radio socket does.",
+      "fix": "Mechanism landed 2026-09-08 (services/exercise/app/access.py): role tokens instructor/base/plugin via X-CAPVSAR-Token header or ?token=, enforced on every mutating route, instructor satisfies base, /ws origin-checked, and the instructor and base consoles send the token via vsarFetch(). Deliberately open when a role has no token configured, so deploying this could not lock operators out of the running stack - the service logs a warning naming every open role at startup. REMAINING: set CAPVSAR_TOKEN_INSTRUCTOR/_BASE/_PLUGIN in .env on ms01 and restart; until then the endpoints are still open.",
+      "verify": "With tokens configured, a base token gets 403 on reveal/stop and DELETE /api/scenarios (covered by tests/test_console.py::RoleGates) AND the ms01 .env actually carries the three tokens.",
+      "depends_on": []
+    },
+    {
+      "id": "F-1",
+      "title": "Mission-base pages are blank without internet (Leaflet from CDN)",
+      "type": "bug",
+      "severity": "critical",
+      "priority": "P0",
+      "wave": 1,
+      "effort": "S",
+      "component": "console-ui",
+      "cluster": "C6",
+      "status": "fixed",
+      "files": [
+        "services/exercise/app/static/base.html:5,62",
+        "services/exercise/app/static/index.html:5,109",
+        "services/exercise/app/static/debrief.html:5,54"
+      ],
+      "problem": "Leaflet 1.9.4 loads from unpkg.com with no local copy. On a base LAN with no internet base.js:4 throws on `L` being undefined, so the WebSocket never connects and the status board and bearing log are gone \u2014 the whole view, not just the map.",
+      "fix": "Fixed 2026-09-08: Leaflet 1.9.4 vendored to services/exercise/app/static/vendor/leaflet/ (js, css and the five dist images leaflet.css references, 192 KB) and the three views point at it. tests/test_console.py::OfflineAssets asserts no view pulls a remote script or stylesheet, that the vendored files are served at the paths the pages request, and that the CSS's images/ resolve. The planner's own CDN and tile dependency is separate and still open (L-8).",
+      "verify": "Load /base with outbound internet blocked: map tiles may be blank but aircraft, status board and bearing log work.",
+      "depends_on": []
+    },
+    {
+      "id": "O-3",
+      "title": "Fresh deploy crash-loops; repo is not the deployment",
+      "type": "bug",
+      "severity": "critical",
+      "priority": "P0",
+      "wave": 1,
+      "effort": "M",
+      "component": "infra",
+      "cluster": "C5",
+      "status": "open",
+      "files": [
+        "docker-compose.yml:120",
+        "services/flightplanner/app.py:113"
+      ],
+      "problem": "Compose bind-mounts ./services/flightplanner/data/aviation_data.db as a file; the path does not exist in the repo, so Docker creates a directory and sqlite3.connect fails at import, crash-looping gunicorn. Several other host paths compose expects (mumble/data, services/exercise/data, radio-public/) exist only on ms01.",
+      "fix": "Mount the data/ directory rather than the file; init_database() creates the file; add a `make bootstrap` that creates every host path compose expects.",
+      "verify": "`git clone` into an empty dir, run bootstrap, `docker compose up` \u2014 all four services healthy.",
+      "depends_on": []
+    },
+    {
+      "id": "O-2",
+      "title": "Plugin hardcodes console address and callsign \u2014 multi-aircraft not deployable",
+      "type": "bug",
+      "severity": "critical",
+      "priority": "P0",
+      "wave": 1,
+      "effort": "L",
+      "component": "plugin",
+      "cluster": "C4",
+      "status": "open",
+      "files": [
+        "xplane/PI_capvsar_df.py:86-87",
+        "scripts/deploy_xplane_plugin.py",
+        "scripts/deploy_mo_panel.py",
+        "scripts/build_c182t_package.py"
+      ],
+      "problem": "CONSOLE and CALLSIGN='CAP-1' are source constants with no env or config override, so three aircraft means three hand-edited plugin copies. Deploy scripts are Linux-and-/home/ron only; there is no participant install path at all (no kit, no checklist, no WireGuard peer doc).",
+      "fix": "capvsar_station.ini beside the plugin (console URL, callsign, plugin key). Kit zip: plugin + station.ini + four instruments + MO panel + C182T package + CA cert + WireGuard peer + one-page checklist. Windows paths in the deploy scripts.",
+      "verify": "Three stations with different station.ini files appear as three distinct aircraft on /base simultaneously.",
+      "depends_on": [
+        "P-2"
+      ]
+    },
+    {
+      "id": "O-4",
+      "title": "Mumble channel tree exists only as hand-made rows in a runtime volume",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 2,
+      "effort": "M",
+      "component": "infra",
+      "cluster": "C5",
+      "status": "open",
+      "files": [
+        "services/exercise/app/radio.py:29-34,181",
+        "docker-compose.yml",
+        "vault: Projects/as-built/AsBuilt_CAPVSAR.md"
+      ],
+      "problem": "Corrected 2026-09-08 against the vault as-built: the channels DO exist on ms01 (CAP V-SAR / Briefing Room / Mission Base / Mission Net PRIMARY / ALTERNATE / Aircraft > CAP-1..3 Intercom / Instructor - SET), created by hand directly in mumble-server.sqlite on 2026-09-06, so joins work today. But nothing in the repo creates them: the volume is gitignored runtime state, so a rebuilt or lost Mumble volume, or any second host, silently loses the whole voice net with no way to recreate it except by hand from a document outside the repo. radio.py's four hardcoded names must also stay in step with those rows manually.",
+      "fix": "scripts/provision_mumble.py that creates the documented tree (and ACLs, O-5) idempotently; call it from bootstrap; make radio.py's channel list read the same source.",
+      "verify": "Delete the Mumble volume, bootstrap, and join all four nets from the radio console without touching the database.",
+      "depends_on": [
+        "O-3"
+      ]
+    },
+    {
+      "id": "O-2a",
+      "title": "Participant CONNECT.md cited by the as-built does not exist",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P1",
+      "wave": 1,
+      "effort": "S",
+      "component": "docs",
+      "cluster": "C4",
+      "status": "open",
+      "files": [
+        "docs/ (missing CONNECT.md)",
+        "vault: Projects/as-built/AsBuilt_CAPVSAR.md"
+      ],
+      "problem": "The as-built tells participants their instructions are at docs/CONNECT.md in the repository. That file does not exist, so the one pointer a new member is given leads nowhere \u2014 the same onboarding gap as O-2, but already promised in writing.",
+      "fix": "Write docs/CONNECT.md as the participant-facing page: WireGuard peer, Mumble server and net, radio console URL plus CA cert install, and where the station kit comes from.",
+      "verify": "A member who has never seen the project can get onto the voice net and the base console from that page alone.",
+      "depends_on": [
+        "O-2"
+      ]
+    },
+    {
+      "id": "F-5",
+      "title": "Radio console blocks: CA cert directory and setup note missing",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P0",
+      "wave": 1,
+      "effort": "S",
+      "component": "infra",
+      "cluster": "C5",
+      "status": "open",
+      "files": [
+        "services/exercise/radio-public/ (missing)",
+        "docker-compose.yml:67",
+        "services/exercise/app/static/mission-radio.html:52,54"
+      ],
+      "problem": "Caddy serves /radio-ca.crt from a directory that does not exist in the repo, so tablets cannot reach the secure context getUserMedia requires and the console blocks at mission-radio.js:148. radio-art/README.md, linked as the setup notes, does not exist either.",
+      "fix": "Create the path in bootstrap (it is correctly gitignored as generated trust material) and write the participant setup note.",
+      "verify": "A tablet with no prior trust can download the CA from /radio-ca.crt, install it, and key the radio.",
+      "depends_on": [
+        "O-3"
+      ]
+    },
+    {
+      "id": "L-1",
+      "title": "X-Plane .fms export is malformed",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P0",
+      "wave": 1,
+      "effort": "M",
+      "component": "planner",
+      "cluster": "C10",
+      "status": "fixed",
+      "files": [
+        "services/flightplanner/app.py:620,636",
+        "services/flightplanner/tests/test_sar.py:115"
+      ],
+      "problem": "The v1100 waypoint line is `type ident airway|DRCT altitude lat lon`; the code emits `11 SS01 5500.0 lat lon`, dropping DRCT so the altitude is parsed as the airway. Type 11 means a named fix in the navdata, but SS01/DATUM do not exist. CYCLE 2401 is hardcoded. The test asserts the broken format, locking it in.",
+      "fix": "Emit type 28 with a +lat_lon ident and the DRCT column for user waypoints; derive CYCLE from the date; fix the test to assert the real format.",
+      "verify": "Load an exported pattern in X-Plane 12 and fly the first two legs from the G1000 flight plan page.",
+      "depends_on": []
+    },
+    {
+      "id": "P-3",
+      "title": "Scan mode destroys TIMEHOLD on 406",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 2,
+      "effort": "S",
+      "component": "plugin",
+      "cluster": "C3",
+      "status": "fixed",
+      "files": [
+        "xplane/PI_capvsar_df.py:645-652,755-759,693"
+      ],
+      "problem": "Scan steps the receiver to alt1/alt2 between bursts; the next tick finds it untuned and calls silent(), clearing `held`. With scan_enable=1 \u2014 the 517's normal 406 posture \u2014 the bearing vanishes the instant each 440 ms burst ends instead of holding, which is exactly the behaviour the training relies on.",
+      "fix": "Fixed 2026-09-08. The untuned path now distinguishes scan stepping from being parked on the wrong channel. When scan has stepped off the crew's channel between bursts it calls silent(keep_hold=True) then hold_or_drop(), the same treatment the between-bursts gap already got, so TIMEHOLD carries the bearing across the step. Tuning away by hand still drops it. Added tuned_hz() so 'what the crew selected' and 'what the receiver is on this instant' are separate questions rather than duplicated logic.",
+      "verify": "New test: 406 beacon with scan enabled holds a bearing between bursts.",
+      "depends_on": []
+    },
+    {
+      "id": "P-4",
+      "title": "Radio horizon is one-sided",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 2,
+      "effort": "S",
+      "component": "plugin",
+      "cluster": "C3",
+      "status": "fixed",
+      "files": [
+        "xplane/PI_capvsar_df.py:738",
+        "services/exercise/app/propagation.py:37-40"
+      ],
+      "problem": "Uses sqrt(max(alt - beacon_elev, 0)), which is zero when the aircraft is below the beacon: an aircraft in a valley 500 ft below a ridge-top beacon 1 NM away hears nothing.",
+      "fix": "Fixed 2026-09-08. Both ends of the path now raise the horizon: 1.23*(sqrt(h_ac)+sqrt(h_bcn)) in feet MSL, in the plugin and in the server's propagation.py fallback, kept identical. The old form used the aircraft's height above the beacon, which went to zero the moment the beacon sat higher - an aircraft in a valley below a ridge-top beacon 1 NM away was ruled out of range. Terrain between the two remains a separate question, answered by the LOS probe.",
+      "verify": "Test with the aircraft below beacon elevation at 1 NM: signal present.",
+      "depends_on": []
+    },
+    {
+      "id": "P-5",
+      "title": "Plugin disable/enable cycle kills the console link permanently",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 2,
+      "effort": "S",
+      "component": "plugin",
+      "cluster": "C3",
+      "status": "fixed",
+      "files": [
+        "xplane/PI_capvsar_df.py:555-560,945"
+      ],
+      "problem": "XPluginDisable sets self.stop and never clears it, so the thread started by XPluginEnable exits immediately. Datarefs keep publishing stale state with no console link and no error.",
+      "fix": "Fixed 2026-09-08. XPluginEnable creates a fresh threading.Event, so a disable/enable cycle no longer starts a worker that exits on its first check. XPluginDisable joins with a 1 s timeout - bounded because the worker may be inside a 4 s urlopen and X-Plane must not block on it; it is a daemon and the event is set, so it exits regardless.",
+      "verify": "Reload the plugin in X-Plane; positions resume on /base.",
+      "depends_on": []
+    },
+    {
+      "id": "X-3",
+      "title": "SQLite writes block the event loop that carries radio audio",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 2,
+      "effort": "M",
+      "component": "console-api",
+      "cluster": "C7",
+      "status": "fixed",
+      "files": [
+        "services/exercise/app/main.py:26-29,237,257,269,281,353,369,391",
+        "services/exercise/app/radio.py:223-243"
+      ],
+      "problem": "Synchronous sqlite3 calls inside async handlers share the loop with 20 ms PCM frames for the Mumble bridge. Every commit fsyncs on a bind mount; a stalled commit trips the audio buffer check and unkeys the operator mid-transmission. No WAL, no timeout, connections never closed.",
+      "fix": "Fixed 2026-09-08. db() is now a context manager that commits, rolls back and CLOSES (it leaked a connection per request), opens with timeout=5s, and the database is in WAL mode with synchronous=NORMAL. Every write in an async handler now goes through db_call() -> run_in_threadpool, so no commit runs on the loop carrying the Mumble bridge's 20 ms frames. The sync handlers were already threadpooled by FastAPI. Only startup seeding still touches the database on the loop, before any traffic.",
+      "verify": "Hold PTT while an instructor starts a sortie and logs bearings: no audio dropout, no 'connection delayed' notice.",
+      "depends_on": []
+    },
+    {
+      "id": "X-4",
+      "title": "Console restart mid-exercise orphans the sortie",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 2,
+      "effort": "M",
+      "component": "console-api",
+      "cluster": "C7",
+      "status": "fixed",
+      "files": [
+        "services/exercise/app/main.py:98-104,137-150,334,401-403"
+      ],
+      "problem": "hub.sortie/scenario/aircraft/messages live only in process and are never rehydrated from SQLite on startup. After a restart the plugin's positions are discarded, /api/messages returns empty because it reads memory not the table, and the DB row keeps stopped=NULL forever.",
+      "fix": "Fixed 2026-09-08. rehydrate() runs in lifespan: the most recent sortie with stopped IS NULL is reloaded with its scenario and last 100 messages. Aircraft are deliberately NOT restored - their positions are seconds stale and plugins re-report within seconds; a stale aircraft on the map is worse than a briefly empty one.",
+      "verify": "Restart the container mid-sortie: aircraft reappear and the sortie can still be stopped and revealed.",
+      "depends_on": []
+    },
+    {
+      "id": "X-5",
+      "title": "One wedged WebSocket client stalls every broadcast",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 2,
+      "effort": "S",
+      "component": "console-api",
+      "cluster": "C7",
+      "status": "fixed",
+      "files": [
+        "services/exercise/app/main.py:106-114"
+      ],
+      "problem": "Hub.broadcast awaits send_text sequentially with no timeout, so one wedged tablet blocks the 1 Hz ticker and every HTTP handler that broadcasts. Half-open sockets never raise and are never dropped.",
+      "fix": "Fixed 2026-09-08. broadcast() now sends to all clients concurrently with a 1 s per-client timeout (Hub.SEND_TIMEOUT_S) and drops anyone who times out or raises. A half-open socket never raises, so a timeout rather than an exception is what notices it.",
+      "verify": "Suspend a tablet mid-exercise; other consoles keep updating.",
+      "depends_on": []
+    },
+    {
+      "id": "F-2",
+      "title": "Base view keeps the previous sortie's alert circle and tracks",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 2,
+      "effort": "S",
+      "component": "console-ui",
+      "cluster": "C8",
+      "status": "open",
+      "files": [
+        "services/exercise/app/static/base.js:43,83-85",
+        "services/exercise/app/static/app.js:144-145"
+      ],
+      "problem": "alertCircle is created once and never updated or removed and `centred` never resets; trackLines/bearingLayer are never cleared on a new sortie. Base staff plot against the previous scenario's search area. Expired aircraft also leak their trackLines entry.",
+      "fix": "Reset layers on a sortie change in the snapshot, the way app.js already does.",
+      "verify": "Run two sorties with different scenarios back to back; the second shows only its own alert area.",
+      "depends_on": []
+    },
+    {
+      "id": "F-3",
+      "title": "Debrief conflates all aircraft into one track",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 2,
+      "effort": "M",
+      "component": "console-ui",
+      "cluster": "C8",
+      "status": "open",
+      "files": [
+        "services/exercise/app/static/debrief.js:45,68-72,90-98",
+        "services/exercise/app/main.py:301"
+      ],
+      "problem": "/track returns callsign per position but the debrief treats them as one track: with three aircraft the polyline zigzags between them, 'track flown' sums inter-aircraft jumps and closest approach is meaningless \u2014 the scoring the SET relies on. Heading is also derived via atan2(dlon, dlat) with no cos(lat), ~10 deg bias at 33 N, although hdg_true is stored and simply not returned.",
+      "fix": "Group by callsign; return hdg_true from /track.",
+      "verify": "Three-aircraft debrief shows three separate tracks with per-aircraft CPA and efficiency.",
+      "depends_on": []
+    },
+    {
+      "id": "F-4",
+      "title": "Radio console does not rejoin after a network blip",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 2,
+      "effort": "M",
+      "component": "console-ui",
+      "cluster": "C9",
+      "status": "open",
+      "files": [
+        "services/exercise/app/static/mission-radio.js:184",
+        "services/exercise/app/static/base.js:19-30"
+      ],
+      "problem": "The radio deliberately does not auto-reconnect, so a Wi-Fi blip silently drops the base station off the voice net with only a text notice. Base and legacy reconnect but lose bearings and messages broadcast during the outage: messages are fetched only at page load and bearings have no list endpoint at all.",
+      "fix": "Rejoin with backoff plus an audible alarm on the radio; add GET /api/bearings?since= and ?since= on messages; refetch on reconnect.",
+      "verify": "Drop the tablet's Wi-Fi for 30 s: the radio rejoins audibly and the base view backfills what it missed.",
+      "depends_on": []
+    },
+    {
+      "id": "L-2",
+      "title": "Unauthenticated scenario push and CSRF-able database wipe",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 2,
+      "effort": "M",
+      "component": "planner",
+      "cluster": "C11",
+      "status": "open",
+      "files": [
+        "services/flightplanner/app.py:1406,816"
+      ],
+      "problem": "/api/sar/export-vsar has no auth or rate limit and its free-text fields flow unbounded into scenario name/notes/alert_text and a broadcast to every console. /api/update-database takes no body, so a plain cross-site form POST triggers a DB wipe and reload. The README still advertises Cloud Run --allow-unauthenticated.",
+      "fix": "Require the base token on the push; JSON-only with a CSRF-safe method on update-database; length caps on all free text.",
+      "verify": "Unauthenticated push returns 401; a cross-site form POST to update-database is rejected.",
+      "depends_on": [
+        "X-2"
+      ]
+    },
+    {
+      "id": "L-3",
+      "title": "Parallel-track generator can be driven into a 100M-iteration loop",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 2,
+      "effort": "S",
+      "component": "planner",
+      "cluster": "C10",
+      "status": "open",
+      "files": [
+        "services/flightplanner/app.py:591,1360-1361"
+      ],
+      "problem": "num_legs is capped and spacing floored, but length_nm/width_nm are unbounded: width_nm=1e7 with spacing 0.1 is 1e8 sweeps, from an endpoint reachable without auth.",
+      "fix": "Cap width and length (<= 60 NM) and total legs.",
+      "verify": "Oversized request returns 400 quickly.",
+      "depends_on": []
+    },
+    {
+      "id": "L-4",
+      "title": "Both gunicorn workers race to rebuild the aviation database",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 2,
+      "effort": "S",
+      "component": "planner",
+      "cluster": "C10",
+      "status": "open",
+      "files": [
+        "services/flightplanner/app.py:357,300,317,334",
+        "services/flightplanner/Dockerfile"
+      ],
+      "problem": "auto_update_if_empty() runs at import in both workers, so two threads concurrently DELETE/INSERT the same SQLite file; lock errors are swallowed by bare except: pass, silently dropping rows. update_status is per-process so /api/update-status answers inconsistently.",
+      "fix": "Do the update once (a CLI command or a lock file); log exceptions instead of swallowing them.",
+      "verify": "Cold start with an empty DB twice: row counts match the source both times.",
+      "depends_on": []
+    },
+    {
+      "id": "I-1",
+      "title": "DF faceplates repaint ~8 Hz regardless of change",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 2,
+      "effort": "M",
+      "component": "instruments",
+      "cluster": "C12",
+      "status": "open",
+      "files": [
+        "instruments/becker-sar-df-517/logic.lua:755-758",
+        "instruments/rhotheta-rt-600/logic.lua:574-577",
+        "instruments/*/lib/cap_df.lua:95"
+      ],
+      "problem": "The 250 ms tick repaints unconditionally and df.on_change fires redraw() from all three subscription groups every engine tick \u2014 roughly 8 Hz of ~100 _txt calls each rebuilding a style string, whether anything changed or not. This is CPU the MO station spends for nothing and it widens the canvas_draw reentrancy window.",
+      "fix": "Redraw only when the whole-second last_signal/burst_age or the state snapshot actually changes.",
+      "verify": "Air Manager CPU drops measurably with a static signal; display still updates within 250 ms of a real change.",
+      "depends_on": []
+    },
+    {
+      "id": "I-2",
+      "title": "pcall around canvas_draw hides real errors",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 2,
+      "effort": "S",
+      "component": "instruments",
+      "cluster": "C12",
+      "status": "open",
+      "files": [
+        "instruments/becker-sar-df-517/logic.lua:163",
+        "instruments/rhotheta-rt-600/logic.lua:141"
+      ],
+      "problem": "The pcall was added for a reentrancy error the Air Manager log shows only twice, each immediately followed by the missing-callback signature that was separately fixed \u2014 and zero occurrences since. It now silently swallows every synchronous canvas_draw failure.",
+      "fix": "Drop it, or keep it and log the error. Correct the CHANGELOG entry that claims the error still occurs.",
+      "verify": "Exercise pages 1-3 and scan mode; Air Manager log stays clean.",
+      "depends_on": []
+    },
+    {
+      "id": "O-5",
+      "title": "Mumble server has no per-role ACLs and images float",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 3,
+      "effort": "M",
+      "component": "infra",
+      "cluster": "C5",
+      "status": "open",
+      "files": [
+        "docker-compose.yml (mumble service)",
+        "services/exercise/app/radio.py:307"
+      ],
+      "problem": "CERTREQUIRED=false, ALLOWHTML=true, a single shared server password, no channel ACLs, USERS=100, and mumble-server:latest / caddy:2 unpinned. The radio console's callsign is free-form, so a student can present as MISSION BASE on the net.",
+      "fix": "Pin images; per-role channel ACLs; derive the radio callsign from the role token.",
+      "verify": "A base-token user cannot join an instructor-only channel and cannot self-declare another station's callsign.",
+      "depends_on": [
+        "X-2",
+        "O-4"
+      ]
+    },
+    {
+      "id": "O-6",
+      "title": "No backup, monitoring or pre-exercise smoke check",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 2,
+      "effort": "M",
+      "component": "infra",
+      "cluster": "C5",
+      "status": "open",
+      "files": [
+        "docker-compose.yml",
+        "ms01"
+      ],
+      "problem": "ms01 carries all services, the SQLite database and the voice bridge; the router carries everyone's WireGuard; there is no backup of exercise.db, no monitoring, and radio-https has no healthcheck. An exercise-day failure loses the record with no warning.",
+      "fix": "Nightly exercise.db copy; healthcheck on radio-https; scripts/preflight.py checking /api/health, Mumble channels, tile reachability and the CA cert.",
+      "verify": "preflight passes on a cold stack and fails loudly with one service stopped.",
+      "depends_on": [
+        "O-3"
+      ]
+    },
+    {
+      "id": "O-7b",
+      "title": "G1000 MFD video stream never re-arms after a reconnect",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 2,
+      "effort": "M",
+      "component": "instruments",
+      "cluster": "C12",
+      "status": "open",
+      "files": [
+        "Air Manager stock G1000 instrument logic.lua:90-100",
+        "~/Air Manager/log.txt"
+      ],
+      "problem": "SimVideoStreamClient loses the connection every few minutes; the stock instrument calls video_stream_add() once at load, so after a reconnect the MFD tile is frozen on its last frame. Every MO station hits this.",
+      "fix": "Wrapper instrument that re-arms the stream on reconnect, or a watchdog timer that re-calls video_stream_add when frames stop arriving.",
+      "verify": "A one-hour session with no frozen MFD; log shows reconnects with recovered video.",
+      "depends_on": []
+    },
+    {
+      "id": "O-7a",
+      "title": "Air Manager seat count for three MO stations unconfirmed",
+      "type": "task",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 3,
+      "effort": "S",
+      "component": "infra",
+      "cluster": "C5",
+      "status": "open",
+      "files": [
+        "Plan v0.8 \u00a79.4"
+      ],
+      "problem": "The containerization entry says to confirm spare AM4 licences against AM4_COMPAT.md, which does not exist. Three MO seats are assumed, not verified \u2014 a blocker discovered on exercise day would be expensive.",
+      "fix": "Confirm seat entitlement in writing with Sim Innovations; record it in docs/.",
+      "verify": "Three MO stations activate simultaneously in a rehearsal.",
+      "depends_on": []
+    },
+    {
+      "id": "X-7",
+      "title": "Sortie lifecycle leaks state between exercises",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P1",
+      "wave": 2,
+      "effort": "M",
+      "component": "console-api",
+      "cluster": "C7",
+      "status": "fixed",
+      "files": [
+        "services/exercise/app/main.py:234-250,364,390,158-160"
+      ],
+      "problem": "Starting a sortie while one runs leaves the old row un-stopped; after /stop, hub.sortie persists so bearings and messages keep attaching to the stopped sortie; log_bearing 404s for an aircraft whose last position is older than 30 s, which is plausible in real ops.",
+      "fix": "Fixed 2026-09-08. Starting a sortie closes any still-open one (they used to keep stopped=NULL forever, so the debrief list showed two running and rehydrate would resume the wrong one). Bearings and messages no longer attach to a stopped sortie. A bearing whose aircraft has expired from the live map now falls back to that aircraft's last recorded position for the sortie instead of 404ing - a bearing passed over voice is often typed in after the 30 s expiry. DEVIATION from the tracker's suggested fix: hub.sortie is deliberately NOT cleared on stop, because reveal happens at debrief AFTER stop and needs it. POST /api/exercise/reset was not added; nothing needs it yet.",
+      "verify": "Back-to-back sorties produce clean, separable records.",
+      "depends_on": []
+    },
+    {
+      "id": "P-6",
+      "title": "121.5 beacons produce a COSPAS-SARSAT decode",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "S",
+      "component": "plugin",
+      "cluster": "C3",
+      "status": "open",
+      "files": [
+        "xplane/PI_capvsar_df.py:824"
+      ],
+      "problem": "decode_tick is called without the on_406 gate used elsewhere, so an analog beacon shows SYNC OK and a hex ident \u2014 teaching a student that a 121.5 signal carries beacon identity.",
+      "fix": "Gate decode_tick on the 406 band.",
+      "verify": "121.5 scenario shows no decoded ident.",
+      "depends_on": []
+    },
+    {
+      "id": "P-7",
+      "title": "Signal bar stays lit between 406 bursts",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "S",
+      "component": "plugin",
+      "cluster": "C3",
+      "status": "open",
+      "files": [
+        "xplane/PI_capvsar_df.py:783,805"
+      ],
+      "problem": "cap/df/signal is published before the burst gate, so the bar shows full strength while nothing is being received, and squelch evaluates the continuous value rather than the gated one.",
+      "fix": "Publish the gated value; evaluate squelch against it.",
+      "verify": "Signal bar pulses with the 50 s burst cadence.",
+      "depends_on": []
+    },
+    {
+      "id": "P-8",
+      "title": "Terrain masking is only -12 dB",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "S",
+      "component": "plugin",
+      "cluster": "C3",
+      "status": "open",
+      "files": [
+        "xplane/PI_capvsar_df.py:772"
+      ],
+      "problem": "Blocked paths attenuate by *0.06, so a fully masked beacon at 2 NM still yields signal 0.375 and a valid bearing. Real knife-edge diffraction loss is 20-40 dB, so the masking effect barely teaches anything inside ~4 NM.",
+      "fix": "Deepen the loss to a realistic knife-edge range and recheck the existing masking tests.",
+      "verify": "Masked beacon at 2 NM drops below squelch.",
+      "depends_on": [
+        "P-1"
+      ]
+    },
+    {
+      "id": "P-9",
+      "title": "Fixed 24 terrain probes, no earth curvature",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 4,
+      "effort": "M",
+      "component": "plugin",
+      "cluster": "C3",
+      "status": "open",
+      "files": [
+        "xplane/PI_capvsar_df.py:94,593"
+      ],
+      "problem": "24 probes means 1.25 NM spacing at 30 NM, skipping narrow ridges, and the straight ray ignores the ~200 ft mid-path curvature bulge at that range.",
+      "fix": "Scale probe count with distance; add the curvature term.",
+      "verify": "A narrow ridge at 25 NM blocks.",
+      "depends_on": [
+        "P-1"
+      ]
+    },
+    {
+      "id": "P-10",
+      "title": "DATAREF_CONTRACT.md does not match what the plugin publishes",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 4,
+      "effort": "M",
+      "component": "docs",
+      "cluster": "C14",
+      "status": "open",
+      "files": [
+        "docs/DATAREF_CONTRACT.md:43,59,67-74,107"
+      ],
+      "problem": "The contract is the interface between the plugin and every faceplate, and it is wrong in five places: cap/scenario/* is documented writable for offline testing but active is read-only; bearing extremes are documented as +/- spread/2 but published one-sided; 'slant range' is ground great-circle; BYTE[15] returns length 0 undecoded; and five effect names are undocumented.",
+      "fix": "Correct the contract to the code, or change the code where the contract is the better design (writable scenario datarefs are genuinely useful offline).",
+      "verify": "A faceplate author can work from the contract alone.",
+      "depends_on": []
+    },
+    {
+      "id": "P-11",
+      "title": "Server fallback propagation diverges from the plugin",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 4,
+      "effort": "M",
+      "component": "console-api",
+      "cluster": "C15",
+      "status": "open",
+      "files": [
+        "services/exercise/app/propagation.py:37-71"
+      ],
+      "problem": "The server model uses a 1.5 s burst window against the plugin's 0.44 s, never invalidates between bursts, matches band as the string '406', and has no squelch, averaging, timehold, tuning, terrain or airframe modelling. It runs whenever the plugin omits df, so an instructor can be shown a different DF picture than the sim computes.",
+      "fix": "Shrink propagation.py to the mock-bridge stub it effectively is and make the plugin authoritative everywhere, per existing policy.",
+      "verify": "Instructor HUD matches the cockpit in a sim-connected exercise.",
+      "depends_on": []
+    },
+    {
+      "id": "P-12",
+      "title": "Plugin reporting cadence and heading source are off",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 4,
+      "effort": "S",
+      "component": "plugin",
+      "cluster": "C3",
+      "status": "open",
+      "files": [
+        "xplane/PI_capvsar_df.py:432,962,972,1018"
+      ],
+      "problem": "REPORT_S=2 but the loop sleeps 3 s; the first report is (0,0,0) before any flight loop; psi is the OpenGL-frame heading where true_psi is correct; a null in scenario JSON would throw in the dataref accessor.",
+      "fix": "Align the sleep with REPORT_S, skip the first empty report, use true_psi, coerce nulls.",
+      "verify": "Track starts at the aircraft's real position with 2 s spacing.",
+      "depends_on": []
+    },
+    {
+      "id": "P-13",
+      "title": "Signal model has no dB calibration and multipath is scripted",
+      "type": "enhancement",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 4,
+      "effort": "L",
+      "component": "plugin",
+      "cluster": "C3",
+      "status": "open",
+      "files": [
+        "xplane/PI_capvsar_df.py:770,828-830"
+      ],
+      "problem": "25/d^2 saturates at 5 NM for every band, so a 0.1 W 121.5 beacon and a 5 W 406 beacon differ only in cadence and decode, not range. Multipath is a deterministic 40 deg step for 12 of every 36 s, independent of terrain or range, so it reads as a scripted glitch rather than a reflection.",
+      "fix": "Calibrate to a real link budget per band; drive multipath from the terrain probe that already runs.",
+      "verify": "Detection ranges differ per band and match published ELT figures within a training tolerance.",
+      "depends_on": [
+        "P-1"
+      ]
+    },
+    {
+      "id": "X-6",
+      "title": "Untyped request bodies mutate scenario definitions",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "M",
+      "component": "console-api",
+      "cluster": "C7",
+      "status": "open",
+      "files": [
+        "services/exercise/app/main.py:235,277-283,143,219"
+      ],
+      "problem": "start_sortie and set_effects take raw dicts, bypassing Pydantic; set_effects merges arbitrary keys straight into the scenario row, so a mid-exercise effect change permanently rewrites the scenario definition for every future sortie. No lat/lon range checks. Positional INSERT ... VALUES (?x15) breaks on the next schema change.",
+      "fix": "Pydantic models; store effects on the sortie, not the scenario; range-check coordinates; named columns.",
+      "verify": "Changing effects mid-sortie leaves the scenario row untouched.",
+      "depends_on": []
+    },
+    {
+      "id": "X-8",
+      "title": "Console operational hygiene: retention, logging, health, shutdown, root",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "M",
+      "component": "console-api",
+      "cluster": "C7",
+      "status": "open",
+      "files": [
+        "services/exercise/app/main.py:300-302,442-444,149",
+        "services/exercise/Dockerfile"
+      ],
+      "problem": "Partly addressed 2026-09-08: connections now close (was a leak per request) and X-3 added WAL. STILL OPEN: positions has no retention and /track is unpaginated; main.py has no logging (two print() calls aside); the healthcheck never touches the database; the ticker task is not cancelled on shutdown; the container runs as root.",
+      "fix": "Retention policy plus pagination; structured logging; DB-touching healthcheck; cancel the ticker in lifespan; non-root user.",
+      "verify": "A long exercise does not grow /track unboundedly; logs show sortie lifecycle events.",
+      "depends_on": []
+    },
+    {
+      "id": "X-9",
+      "title": "One Mumble client per browser socket, 16 max",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "M",
+      "component": "console-api",
+      "cluster": "C9",
+      "status": "open",
+      "files": [
+        "services/exercise/app/radio.py:141"
+      ],
+      "problem": "Each browser socket spawns a pymumble thread at a 10 ms loop rate against a 16-session cap. A base desk running two radio faces consumes two of the sixteen and appears as two users on the net.",
+      "fix": "Share one Mumble client per operator across their radio faces, or raise and document the cap with measured CPU.",
+      "verify": "A dual-radio desk appears once on the net.",
+      "depends_on": []
+    },
+    {
+      "id": "F-6",
+      "title": "Unescaped server strings in four views (HTML injection)",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "S",
+      "component": "console-ui",
+      "cluster": "C8",
+      "status": "open",
+      "files": [
+        "services/exercise/app/static/base.js:114",
+        "services/exercise/app/static/debrief.js:105",
+        "services/exercise/app/static/app.js:80",
+        "services/exercise/app/static/radio.js:453"
+      ],
+      "problem": "Message bodies, senders and channel names are interpolated into innerHTML unescaped, and any LAN client can POST /api/messages with markup.",
+      "fix": "Escape on render, as legacy radio.js:467 already does.",
+      "verify": "A message containing a script tag renders as text.",
+      "depends_on": []
+    },
+    {
+      "id": "F-7",
+      "title": "Legacy console: precedence bug and autoplay-blocked audio",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "S",
+      "component": "console-ui",
+      "cluster": "C9",
+      "status": "open",
+      "files": [
+        "services/exercise/app/static/radio.js:530,535-559"
+      ],
+      "problem": "a && b || c.startsWith() throws when sender is undefined (masked today by a server default), and incoming traffic resumes the AudioContext and speaks outside a user gesture, so iPad Safari stays silent until something is clicked.",
+      "fix": "Fix the precedence; require a gesture to arm audio, as the new console correctly does. If /radio-legacy is retired (C9) this closes with it.",
+      "verify": "iPad hears the first incoming call after joining.",
+      "depends_on": []
+    },
+    {
+      "id": "F-8",
+      "title": "No bearing intersection maths despite the README",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "M",
+      "component": "console-ui",
+      "cluster": "C8",
+      "status": "open",
+      "files": [
+        "services/exercise/app/static/base.js:99-102",
+        "README.md"
+      ],
+      "problem": "Bearings are drawn as flat-earth 40 NM rays (fine at that scale) but nothing computes intersections or a confidence area, although the README advertises 'bearing logging & intersection cuts'. Base staff must eyeball the crossing. Bearing entry also requires typing the callsign rather than picking a reporting aircraft.",
+      "fix": "Compute pairwise intersections and a simple confidence polygon; add a callsign dropdown.",
+      "verify": "Three bearings produce a plotted cut area matching a hand plot.",
+      "depends_on": []
+    },
+    {
+      "id": "F-9",
+      "title": "New radio console has no Form 110 log",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "M",
+      "component": "console-ui",
+      "cluster": "C9",
+      "status": "open",
+      "files": [
+        "services/exercise/app/static/mission-radio.html",
+        "services/exercise/app/static/radio.js:471-495"
+      ],
+      "problem": "The CAPF-110 communications log lives only in /radio-legacy, which is the console nobody is meant to use now. Its export also has no date column, misaligns rows because padEnd does not truncate, and never revokes the blob URL. The MRO role in the CONOPS depends on this log.",
+      "fix": "Port the logger onto the Mumble console with the export fixes; then retire /radio-legacy.",
+      "verify": "An exercise produces a Form 110 export from /radio with correctly aligned dated rows.",
+      "depends_on": []
+    },
+    {
+      "id": "L-5",
+      "title": "Search patterns leave uncovered ground and truncate silently",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "M",
+      "component": "planner",
+      "cluster": "C10",
+      "status": "open",
+      "files": [
+        "services/flightplanner/app.py:591-595,543,532,554"
+      ],
+      "problem": "Parallel track places int(width/spacing) tracks starting on the box edge, so a 4 NM box at 1 NM spacing leaves the last mile unsearched and wastes half the first track; CAP practice is tracks at S/2, 3S/2. Creeping line silently truncates at max_legs with no warning that coverage is incomplete. heading_mag is emitted for expanding square but not the other two.",
+      "fix": "Half-spacing offset and ceil; return a coverage-truncated flag; emit heading_mag consistently.",
+      "verify": "Generated coverage matches the requested box within one track spacing.",
+      "depends_on": []
+    },
+    {
+      "id": "L-6",
+      "title": "Performance tables extrapolate silently and ignore tailwind",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "M",
+      "component": "planner",
+      "cluster": "C10",
+      "status": "open",
+      "files": [
+        "services/flightplanner/app.py:711,736-740,665,937"
+      ],
+      "problem": "get_cruise is nearest-neighbour rather than interpolating; takeoff/landing clamp to the last table row, understating distance above 6000 ft or 30 C; negative headwind (tailwind) is ignored; and when wind >= TAS ground speed clamps to zero and the leg then reports zero time and fuel, so an impossible leg looks cheap.",
+      "fix": "Interpolate; refuse or flag beyond-table inputs; handle tailwind; error on GS <= 0.",
+      "verify": "A leg with a 100 kt headwind reports an error, not zero fuel.",
+      "depends_on": []
+    },
+    {
+      "id": "L-7",
+      "title": "Flight planner ships 172S performance data under a 182T label",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "M",
+      "component": "planner",
+      "cluster": "C10",
+      "status": "open",
+      "files": [
+        "services/flightplanner/app.py:64-102",
+        "services/flightplanner/README.md"
+      ],
+      "problem": "AIRCRAFT_DATABASE holds 2550 lb / 53 gal 172S figures while the aircraft, the handbook and the simulator package are all a 3100 lb / 87 gal 182T. Fuel and endurance planning for every sortie is computed from the wrong airframe.",
+      "fix": "Replace with 182T POH data (matching the .acf the build script produces), or relabel the profile honestly.",
+      "verify": "Planned endurance matches the handbook's 5.5 h figure.",
+      "depends_on": []
+    },
+    {
+      "id": "L-8",
+      "title": "Planner has no offline map path",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "M",
+      "component": "planner",
+      "cluster": "C6",
+      "status": "open",
+      "files": [
+        "services/flightplanner/templates/index.html:8,447",
+        "services/flightplanner/static/js/app.js:83-97",
+        "services/flightplanner/app.py:1490"
+      ],
+      "problem": "Leaflet and Google Fonts load from CDNs and tiles come straight from ArcGIS. The server-side tile cache only runs under __main__, never under gunicorn, and the frontend never requests /tiles/ anyway, so the charts volume is dead weight and USER_GUIDE.md's claim that cached tiles are used first is false.",
+      "fix": "Vendor Leaflet and fonts; wire the frontend to /tiles/; pre-cache the exercise area into the existing volume.",
+      "verify": "Plan a route with outbound internet blocked.",
+      "depends_on": [
+        "F-1"
+      ]
+    },
+    {
+      "id": "L-9",
+      "title": "API returns HTML 500s and misreports push status",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "M",
+      "component": "planner",
+      "cluster": "C10",
+      "status": "open",
+      "files": [
+        "services/flightplanner/app.py:894-897,1001-1008,1397,1438,1463"
+      ],
+      "problem": "Unguarded int()/float() on client JSON returns Werkzeug HTML that the JS then fails to parse. The 'no sortie running' branch is dead because the console no longer 400s, so the UI always claims the message was broadcast to an active sortie even when nothing was persisted. The push also sets beacon_elev_ft to 0.0 (sea level, which the propagation model then uses) and places the beacon exactly on the planned datum, handing the trainee the answer.",
+      "fix": "Guard parsing and return JSON errors; report persisted vs broadcast honestly; carry a real beacon elevation; offset the beacon from the datum.",
+      "verify": "Bad input returns JSON 400; a pushed scenario does not sit on the planned datum.",
+      "depends_on": []
+    },
+    {
+      "id": "L-10",
+      "title": "Planner dependency and container hygiene",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 4,
+      "effort": "M",
+      "component": "planner",
+      "cluster": "C11",
+      "status": "open",
+      "files": [
+        "services/flightplanner/requirements.txt",
+        "services/flightplanner/Dockerfile",
+        "services/flightplanner/app.py:807"
+      ],
+      "problem": "requests==2.31.0 carries CVE-2024-35195 and CVE-2024-47081; gunicorn and Werkzeug are unpinned; the container runs as root; the healthcheck hits / rather than a DB-verifying endpoint; serve_tile accepts .. in chart_type (not currently exploitable but unnecessary); _winds_cache grows unbounded; the aviation DB is OurAirports, not FAA NASR, with no cycle date shown.",
+      "fix": "Bump and pin; non-root user; /api/health; whitelist chart_type; bound the cache; display the data cycle.",
+      "verify": "pip-audit clean; health endpoint fails when the DB is missing.",
+      "depends_on": []
+    },
+    {
+      "id": "I-3",
+      "title": "Becker tone suppression bleeds across bands",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "S",
+      "component": "instruments",
+      "cluster": "C12",
+      "status": "open",
+      "files": [
+        "instruments/becker-sar-df-517/logic.lua:712-717,615"
+      ],
+      "problem": "tone_suppressed clears only when STORE is pressed on the FM band, so suppressing on 121.5 and then turning to CH16 leaves the rose showing 3K- with no bearing on a band where the filter is intrinsic.",
+      "fix": "Reset tone_suppressed in the frequency handler.",
+      "verify": "Suppress on 121.5, change band, bearing returns.",
+      "depends_on": []
+    },
+    {
+      "id": "I-4",
+      "title": "Stored 406 frame falls through to live data",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "S",
+      "component": "instruments",
+      "cluster": "C12",
+      "status": "open",
+      "files": [
+        "instruments/becker-sar-df-517/logic.lua:378,392,402"
+      ],
+      "problem": "`msg and msg.has_pos or s.cs_has_pos` means a STORED frame without a position displays the live frame's position \u2014 the student reads a stored beacon as having a position it never carried.",
+      "fix": "Explicit if/else on the stored message.",
+      "verify": "Store a positionless frame; page 4 shows no position.",
+      "depends_on": []
+    },
+    {
+      "id": "I-5",
+      "title": "RT-600 long-press timers survive power-off",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "S",
+      "component": "instruments",
+      "cluster": "C12",
+      "status": "open",
+      "files": [
+        "instruments/rhotheta-rt-600/logic.lua:479-481,386"
+      ],
+      "problem": "Release returns early when the unit is unpowered, leaving press_at armed, and power_off does not stop the timers, so f1_long fires clear_average() after shutdown.",
+      "fix": "Stop timers in power_off and on the early-return path.",
+      "verify": "Hold F1, power off, release: no averaging reset.",
+      "depends_on": []
+    },
+    {
+      "id": "I-6",
+      "title": "DF heads and TDFM ignore the electrical bus",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "M",
+      "component": "instruments",
+      "cluster": "C12",
+      "status": "open",
+      "files": [
+        "instruments/becker-sar-df-517/logic.lua:588",
+        "instruments/cap-fm-tdfm-136b/logic.lua:353-358",
+        "instruments/mo-audio-panel-gma1347/logic.lua:389"
+      ],
+      "problem": "Both DF heads and the TDFM power up with the battery and avionics master off; only the GMA follows avionics_power_on, and even it ignores bus_volts. For a trainer whose value is procedural traps, the most basic one is missing.",
+      "fix": "Gate all four instruments on the avionics bus and bus voltage.",
+      "verify": "Cold aircraft: no instrument lights until the master is on.",
+      "depends_on": []
+    },
+    {
+      "id": "I-7",
+      "title": "Shared instrument libraries are copy-pasted",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 4,
+      "effort": "M",
+      "component": "instruments",
+      "cluster": "C13",
+      "status": "open",
+      "files": [
+        "instruments/*/lib/cap_df.lua",
+        "instruments/*/lib/lcd.lua",
+        "instruments/*/lib/dcu.lua",
+        "tests/test_faceplate.py:126-129"
+      ],
+      "problem": "cap_df.lua, cap_df_audio.lua, dcu.lua, lcd.lua and three WAVs are byte-identical across the Becker and RT-600 (lcd.lua also in the TDFM). A test enforces the DF pair but not the TDFM copy, so that one can drift silently.",
+      "fix": "instruments/_shared/ copied in by the deploy scripts, with a test asserting installed copies match the shared source.",
+      "verify": "Editing _shared updates all instruments on deploy; drift fails the test.",
+      "depends_on": []
+    },
+    {
+      "id": "I-8",
+      "title": "Panel registrar writes Air Manager's database on hardcoded assumptions",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 4,
+      "effort": "M",
+      "component": "instruments",
+      "cluster": "C13",
+      "status": "open",
+      "files": [
+        "scripts/register_mo_panel.py:25,50,97-100,107-168,171-172,182"
+      ],
+      "problem": "It hardcodes 26 panel columns and magic values, syncs sqlite_sequence for two of four tables, pkills Air Manager without confirmation, relaunches from a /home/ron path, and never updates an existing layout so position edits never propagate. Panel geometry is triplicated across info.xml, this script and generate_assets.py with no cross-check. Streaming=true is set only through the SQLite path, so the --zip route ships a dead MFD.",
+      "fix": "Confirm before killing; parameterise the DB path; update existing layouts; single source for geometry; put Streaming in info.xml.",
+      "verify": "The zip route produces a working MFD on a second machine.",
+      "depends_on": [
+        "O-2"
+      ]
+    },
+    {
+      "id": "I-9a",
+      "title": "No Lua execution harness in the repo",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 4,
+      "effort": "M",
+      "component": "instruments",
+      "cluster": "C13",
+      "status": "open",
+      "files": [
+        "scripts/luacheck.py",
+        "tests/test_lcd_text.py"
+      ],
+      "problem": "The ctypes Lua 5.4 harness the CHANGELOG describes as the independent verification route is not in the repo; luacheck.py is syntax-only and nothing executes any logic.lua. Page and scan state machines, audio state, press handling and the TDFM/GMA handshake have no tests at all.",
+      "fix": "Commit the harness and add state-machine tests, including shuffled lib/ load order.",
+      "verify": "All four instruments load, power on and draw in CI.",
+      "depends_on": []
+    },
+    {
+      "id": "I-9b",
+      "title": "cap_fm_* variables have no producer and no contract",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 4,
+      "effort": "S",
+      "component": "instruments",
+      "cluster": "C14",
+      "status": "open",
+      "files": [
+        "instruments/cap-fm-tdfm-136b/logic.lua:480-525",
+        "instruments/mo-audio-panel-gma1347/logic.lua:78-79"
+      ],
+      "problem": "cap_fm_ptt, cap_fm_main_rx and cap_fm_guard_rx are consumed but nothing writes them and they are absent from DATAREF_CONTRACT.md, so the TDFM/GMA handshake is undocumented and half-wired.",
+      "fix": "Document them in the contract and implement the producer, or remove the consumers.",
+      "verify": "Contract lists every si_variable both instruments use.",
+      "depends_on": []
+    },
+    {
+      "id": "I-9c",
+      "title": "Deploy coverage and manifest claims are wrong",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 4,
+      "effort": "S",
+      "component": "instruments",
+      "cluster": "C13",
+      "status": "open",
+      "files": [
+        "scripts/deploy_df_instruments.py:14-17,47",
+        "instruments/*/info.xml:20-25"
+      ],
+      "problem": "The deploy script handles two of four instruments although the website claims it deploys all four; TDFM and GMA have no deploy script; stale target files are never removed; and every info.xml claims FSX/P3D/FS2020 support although all four are X-Plane only.",
+      "fix": "Deploy all four, prune stale files, correct the manifests.",
+      "verify": "One command deploys four instruments to a clean Air Manager.",
+      "depends_on": []
+    },
+    {
+      "id": "D-1",
+      "title": "CHANGELOG entries contradict the code they describe",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "S",
+      "component": "docs",
+      "cluster": "C14",
+      "status": "open",
+      "files": [
+        "CHANGELOG.md"
+      ],
+      "problem": "The pymumble bridge is marked 'proposed only' in two entries although it is implemented; the '/radio' APX 6500 entry now describes /radio-legacy; the Becker pcall entry claims an error the log does not show; '55 engine checks' is 51; '/api/messages rejects the push (400)' is no longer true. The changelog is the coordination protocol between three tools, so a stale entry actively misleads the next agent.",
+      "fix": "Add superseded-by notes to the affected entries.",
+      "verify": "A fresh reader following the changelog reaches the same conclusions as the code.",
+      "depends_on": []
+    },
+    {
+      "id": "D-2",
+      "title": "README and website contradict the code",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "M",
+      "component": "docs",
+      "cluster": "C14",
+      "status": "open",
+      "files": [
+        "README.md:25",
+        "website/technical.html:441,453",
+        "website/deployment.html:136,295-298",
+        "website/operations.html:63-98",
+        "website/index.html:67-72",
+        "services/flightplanner/README.md:25"
+      ],
+      "problem": "The site calls the Flask planner 'Node.js / Vite', cites a docker-compose.prod.yml that does not exist, lists firewall ports 49000/49001 nothing uses, advertises APX 6500 where the code serves APX 4500, claims cloud/multi-aircraft topology that compose explicitly disclaims, quotes unsourced 85%/100% ROI figures and an unmeasured 'sub-20 ms' latency. The planner README still says Cloud Run.",
+      "fix": "Correct each claim or remove it.",
+      "verify": "Every deployment command on the site runs as written.",
+      "depends_on": []
+    },
+    {
+      "id": "D-3",
+      "title": "CONOPS and referenced infra docs are missing from the repo",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "S",
+      "component": "docs",
+      "cluster": "C14",
+      "status": "open",
+      "files": [
+        "CHANGELOG.md (7 citations)",
+        "docker-compose.yml:4,131"
+      ],
+      "problem": "Corrected 2026-09-08: CONOPS-cap-vsar.md is not missing, it lives in the vault at Projects/architecture/CONOPS-cap-vsar.md \u2014 but outside the repo, so the agents that the CHANGELOG points at it cannot read it, and it has already drifted from the code it describes. AM4_COMPAT.md and infra/ROUTER.md are still cited as authoritative and still resolve nowhere.",
+      "fix": "Copy the vault CONOPS into docs/CONOPS.md (vault stays the author's copy, repo carries the agent-readable one) and reconcile it with Plan v0.8 \u00a74; write or remove the other two references.",
+      "verify": "Every document the repo cites resolves from inside the repo.",
+      "depends_on": []
+    },
+    {
+      "id": "D-4",
+      "title": "No LICENSE despite deriving from Laminar assets",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "S",
+      "component": "docs",
+      "cluster": "C14",
+      "status": "open",
+      "files": [
+        "repo root",
+        "scripts/build_c182t_package.py"
+      ],
+      "problem": "There is no LICENSE file, and the aircraft package is built by copying and patching Laminar Research's shipped C172SP. Now that the repo is going to GitHub this needs an answer: what is redistributable, and what must be built locally from the user's own X-Plane install.",
+      "fix": "Add a LICENSE for the project's own code and a NOTICE stating that Laminar assets are not redistributed and the package is generated from a local install.",
+      "verify": "The public repo contains no Laminar-derived binary.",
+      "depends_on": [
+        "O-1"
+      ]
+    },
+    {
+      "id": "C15-1",
+      "title": "Split the console into store + routers with role middleware",
+      "type": "task",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 4,
+      "effort": "L",
+      "component": "console-api",
+      "cluster": "C15",
+      "status": "open",
+      "files": [
+        "services/exercise/app/main.py",
+        "services/missionbase/",
+        "services/tracking/"
+      ],
+      "problem": "main.py holds scenario truth, telemetry ingest, the WebSocket hub, SQLite and (via radio.py) the real-time voice bridge on one event loop. X-3 is the symptom, and the CalTopo relay and IC/AOBD views both land here next. The empty services/missionbase/ and services/tracking/ directories are the right instinct.",
+      "fix": "store.py (SQLite, WAL, rehydration, truth serializer) plus exercise / tracking / missionbase / radio routers behind one app; move the Mumble bridge off the main loop.",
+      "verify": "Same behaviour, with the truth serializer provably applied in one place.",
+      "depends_on": [
+        "X-1",
+        "X-2",
+        "X-3"
+      ]
+    },
+    {
+      "id": "C15-2",
+      "title": "Consolidate five geodesy implementations",
+      "type": "task",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 4,
+      "effort": "M",
+      "component": "console-api",
+      "cluster": "C15",
+      "status": "open",
+      "files": [
+        "services/flightplanner/app.py",
+        "services/exercise/app/propagation.py",
+        "services/exercise/mock_bridge.py",
+        "services/exercise/app/static/debrief.js",
+        "xplane/PI_capvsar_df.py"
+      ],
+      "problem": "Bearing/distance is implemented five times with the same R_NM constant; debrief.js has already drifted (missing cos(lat) in heading).",
+      "fix": "One shared Python geodesy module for the two services; the plugin keeps its standalone copy tested against it; the JS uses one helper.",
+      "verify": "A cross-implementation test agrees within 1 m over 100 NM.",
+      "depends_on": []
+    },
+    {
+      "id": "L-1a",
+      "title": "Search-pattern labels are lost in the FMS export",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 2,
+      "effort": "S",
+      "component": "planner",
+      "cluster": "C10",
+      "status": "open",
+      "files": [
+        "services/flightplanner/app.py:635",
+        "services/flightplanner/app.py:517-554"
+      ],
+      "problem": "Found reviewing the L-1 fix. The pattern generators label points DATUM, SS01..SSnn, CS01, PS01, and the AOBD briefs the crew on those names - but the FMS writer now derives the identifier purely from coordinates, so the G1000 shows '+33.187_-117.079' for every leg. The brief says 'turn at SS04' and nothing in the cockpit says SS04. The plan still flies the correct positions; only the label is lost.",
+      "fix": "Determine whether X-Plane 12 accepts an arbitrary identifier on a type 28 record and treats the lat/lon columns as authoritative. If it does, emit the generator's label (sanitised to the character set the FMS allows) and keep the coordinates in the columns. If it does not, say so in the user guide so the AOBD briefs coordinates instead.",
+      "verify": "Load an exported pattern in X-Plane 12 and read the leg names on the G1000 flight plan page.",
+      "depends_on": [
+        "L-1"
+      ]
+    },
+    {
+      "id": "L-11",
+      "title": "Unknown departure/destination silently becomes a waypoint position",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "S",
+      "component": "planner",
+      "cluster": "C10",
+      "status": "open",
+      "files": [
+        "services/flightplanner/app.py:626-628",
+        "services/flightplanner/app.py:639-641"
+      ],
+      "problem": "Pre-existing, surfaced while generating a sample for the L-1 review. When get_airport() misses - an unknown identifier, or the aviation database still downloading - the export falls back to the first/last waypoint's coordinates and elevation 0.0, and emits them under the requested airport code. The observed sample put KSEE at 33.170,-117.079 (a search waypoint) instead of Gillespie Field, with no warning anywhere. A crew loading that plan departs from the wrong place.",
+      "fix": "Return a 400 naming the identifier that could not be resolved, or emit the record only when the lookup succeeds. Never substitute an unrelated position under an airport code.",
+      "verify": "Exporting with an unknown ADEP returns an error rather than a plausible-looking file.",
+      "depends_on": []
+    }
+  ]
+}

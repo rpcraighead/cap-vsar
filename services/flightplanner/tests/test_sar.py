@@ -7,6 +7,8 @@ import unittest
 import math
 import sys
 import os
+from datetime import datetime, timezone
+from unittest.mock import patch
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -107,13 +109,37 @@ class TestSARPatterns(unittest.TestCase):
             {'identifier': 'SS01', 'lat': 33.1866, 'lon': -117.0792},
             {'identifier': 'SS02', 'lat': 33.1866, 'lon': -117.0593}
         ]
-        fms = generate_xplane_fms_content('KSEE', 'KCRQ', wpts, cruise_alt=5500)
+        with patch('app.get_utc_now', return_value=datetime(2026, 9, 8, tzinfo=timezone.utc)):
+            fms = generate_xplane_fms_content('KSEE', 'KCRQ', wpts, cruise_alt=5500)
         
         self.assertIn("1100 Version", fms)
+        self.assertIn("CYCLE 2609", fms)
         self.assertIn("ADEP KSEE", fms)
         self.assertIn("ADES KCRQ", fms)
-        self.assertIn("11 SS01 5500.0 33.186600 -117.079200", fms)
-        self.assertIn("11 SS02 5500.0 33.186600 -117.059300", fms)
+        self.assertIn("28 +33.187_-117.079 DRCT 5500.000000 33.186600 -117.079200", fms)
+        self.assertIn("28 +33.187_-117.059 DRCT 5500.000000 33.186600 -117.059300", fms)
+        self.assertNotIn('\r', fms)
+        self.assertTrue(fms.endswith('\n'))
+
+    def test_xplane_fms_waypoint_record_structure(self):
+        wpts = [
+            {'identifier': 'DATUM', 'lat': 33.1700, 'lon': -117.0792},
+            {'identifier': 'SS01', 'lat': 33.1866, 'lon': -117.0792}
+        ]
+        fms = generate_xplane_fms_content('KSEE', 'KCRQ', wpts, cruise_alt=5500)
+        lines = fms.splitlines()
+        numenr_index = next(i for i, line in enumerate(lines) if line.startswith('NUMENR '))
+        records = lines[numenr_index + 1:]
+        waypoint_records = records[1:-1]
+
+        self.assertEqual(int(lines[numenr_index].split()[1]), len(records))
+        self.assertEqual(len(records), len(wpts) + 2)
+        for record in waypoint_records:
+            fields = record.split()
+            self.assertEqual(len(fields), 6)
+            self.assertEqual(fields[0], '28')
+            self.assertEqual(fields[2], 'DRCT')
+            self.assertEqual(fields[3], '5500.000000')
 
 if __name__ == '__main__':
     unittest.main()

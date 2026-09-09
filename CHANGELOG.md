@@ -3,6 +3,450 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-08 — DF engine: scan holds, horizon has two ends, plugin reloads (P-3, P-4, P-5)
+
+**Status: implemented.** Cluster C3's wave-2 items. All three are things a crew
+would experience as "the equipment is broken" without any error appearing
+anywhere.
+
+**P-3 — scan mode no longer destroys TIMEHOLD on 406.** The 517's normal 406
+posture is scan on: surveil the burst, listen to the continuous channels in the
+50 s gap (§3.3.3). But the untuned check treated *any* frequency mismatch as
+loss of signal and called `silent()`, which clears the held bearing — so with
+scan enabled the bearing vanished the instant each 440 ms burst ended, which is
+the exact opposite of what TIMEHOLD exists for. The path now distinguishes scan
+stepping from being parked on the wrong channel: stepping gets
+`silent(keep_hold=True)` followed by `hold_or_drop()`, the same treatment the
+between-bursts gap already received. Tuning away by hand still drops the
+bearing, and audio (`rx_open`) correctly stays closed while the bearing is
+merely held. Added `tuned_hz()` so "what the crew selected" and "what the
+receiver is on this instant" stop being duplicated logic.
+
+**P-4 — the radio horizon has two ends.** Now
+`1.23*(sqrt(h_ac) + sqrt(h_bcn))` in feet MSL. The old form used the aircraft's
+height *above the beacon*, which collapsed to a zero-mile horizon the moment
+the beacon sat higher — an aircraft in a valley 500 ft below a ridge-top beacon
+one mile away was ruled out of range and heard nothing. This is why it went
+unnoticed: for a beacon at sea level the two forms are identical, and the seed
+scenario's beacon is at 700 ft. Fixed identically in the server's
+`propagation.py` fallback so the instructor's view cannot disagree with the
+sim. Terrain between the two remains a separate question, answered by the
+line-of-sight probe.
+
+**P-5 — reloading the plugin brings the console link back.** `XPluginDisable`
+set `self.stop` and nothing ever cleared it, so the thread `XPluginEnable`
+started exited on its first check: datarefs kept publishing stale state with no
+link to the console and nothing said so. `XPluginEnable` now creates a fresh
+`Event`, and `XPluginDisable` joins with a 1 s bound — bounded deliberately,
+because the worker may be inside a 4 s `urlopen` and X-Plane must not block on
+it; the thread is a daemon and the event is set, so it exits regardless.
+
+### Validation
+
+Engine suite grows to 66 checks, plugin-net to 11. Verified against the
+pre-fix code: `bearing is held while scan is stepped away` fails with
+`valid=0`, `aircraft below a ridge-top beacon at 1 NM still hears it` fails
+with `signal 0.000`, and `test_enable_after_disable_leaves_a_live_worker`
+fails. The P-3 tests also pin the two things that must NOT change — the
+bearing is still dropped once TIMEHOLD expires, and tuning away by hand still
+drops it immediately.
+
+Whole repo green: console 29, plugin-net 11, radio 12, engine 66, faceplate,
+panel 7, planner 8.
+
+### Still open in this cluster
+
+P-6 (121.5 producing a COSPAS-SARSAT decode), P-7 (signal bar lit between
+bursts), P-8 (terrain masking only −12 dB), P-9 (fixed 24 probes, no curvature),
+P-12 (report cadence, heading source) and P-13 (no dB calibration, scripted
+multipath) are wave 3 and 4 and untouched.
+
+## 2026-09-08 — The console survives an exercise (X-3, X-4, X-5, X-7)
+
+**Status: implemented.** Cluster C7's wave-2 half. Each of these fails during
+a running exercise rather than at deploy time, which is why they are grouped.
+
+**X-3 — database work off the audio loop.** `db()` is now a context manager
+that commits, rolls back *and closes*: `with sqlite3.connect(...)` commits but
+never closes, so the console leaked a connection per request. Connections open
+with a 5 s timeout and the database runs in WAL with `synchronous=NORMAL`.
+Every write in an `async` handler goes through `db_call()` →
+`run_in_threadpool`. This matters because `radio.py` shares this event loop:
+a commit fsyncing on a bind mount stalls the Mumble bridge, trips its buffer
+check and unkeys the operator mid-transmission. The sync handlers were already
+threadpooled by FastAPI; only startup seeding still touches the database on the
+loop, before any traffic exists.
+
+**X-4 — a restart resumes the sortie.** Live state was in-process only, so a
+container restart mid-exercise orphaned everything: positions discarded,
+`/api/messages` empty, and the row left `stopped=NULL` forever. `rehydrate()`
+in the lifespan hook reloads the newest sortie with `stopped IS NULL`, its
+scenario, and the last 100 messages. Aircraft are deliberately *not* restored —
+their positions are seconds stale and the plugins re-report within seconds; a
+stale aircraft on the map is worse than a briefly empty one.
+
+**X-5 — one wedged console no longer stalls the rest.** Sends now run
+concurrently with a 1 s per-client timeout, and anyone who times out or raises
+is dropped. A half-open TCP socket never raises, which is why a timeout rather
+than an exception is what has to notice it. Measured against the old code, a
+single suspended tablet blocked the broadcast for the full 30 s of the test's
+wedged client.
+
+**X-7 — sortie lifecycle.** Starting a sortie now closes any still-open one;
+previously they kept `stopped=NULL` forever, so the debrief list showed two
+running exercises and `rehydrate()` would have resumed the wrong one. Bearings
+and messages no longer attach to a stopped sortie. And a bearing whose aircraft
+has already expired from the live map now falls back to that aircraft's last
+recorded position for the sortie rather than returning 404 — a bearing passed
+over voice is routinely typed in more than 30 s later, and refusing it loses a
+report the crew actually made.
+
+Two deliberate deviations from the fix the tracker proposed for X-7:
+`hub.sortie` is **not** cleared on stop, because reveal happens at debrief
+*after* stop and needs it; and `POST /api/exercise/reset` was not added,
+because nothing needs it yet.
+
+### Validation
+
+`tests/test_console.py` grows to 29 checks with a `SurvivesAnExercise` class.
+Verified against the pre-C7 behaviour: **6 of its 8 fail**, including the
+wedged-broadcast case taking 30.03 s. The two that pass are guards that should
+pass either way (an unknown callsign is still refused; nothing resumes when
+nothing was running). The restart tests deliberately drive the real
+`TestClient` lifespan rather than calling `rehydrate()` directly, so unwiring
+it from startup fails them.
+
+Whole repo green: console 29, plugin-net 9, radio 12, engine ALL PASS,
+faceplate ALL PASS, panel 7, planner 8.
+
+### Still open in this cluster
+
+X-6 (untyped bodies mutating scenario definitions) and the rest of X-8 —
+positions retention, `/track` pagination, real logging, a DB-touching
+healthcheck, cancelling the ticker on shutdown, non-root container — are wave
+3 and untouched. X-8's tracker entry now records which parts this closed.
+
+## 2026-09-08 — Review of the L-1 FMS fix: accepted, two follow-ups raised
+
+**Status: review only, no code changed. L-1 stands as implemented.**
+
+Independent check of the L-1 fix rather than a re-read of its entry.
+
+**Verified.** Every enroute record now carries six fields; generated points are
+type 28 with `DRCT` and a coordinate-derived identifier; `CYCLE` comes from the
+UTC date (`2609`); `NUMENR` matches the records actually emitted; LF endings.
+The airport records were already correct and were left alone. Generated a real
+KSEE-KCRQ sample with three pattern points and audited every line's field count
+by hand, rather than trusting the string assertions. The replacement test is a
+genuine improvement on the one it replaced: it checks field count, record type,
+the `DRCT` column and `NUMENR` structurally, so a future column shift fails
+even if the substring happens to match. Eight planner tests pass.
+
+**Scope was respected.** L-3, L-5 and L-7 sit untouched in the same file, and
+nothing outside `services/flightplanner/` was modified while two other agents
+were working — confirmed by diffing the plugin and `main.py` against my copies.
+
+**The honesty was right.** The entry states plainly that the published grammar
+does not prescribe the identifier text for an unnamed lat/lon point, and that
+in-simulator acceptance is unverified. Both are true and both matter.
+
+**Two follow-ups raised, neither a defect in the fix:**
+
+- **L-1a — the pattern label no longer reaches the cockpit.** The generators
+  name points `DATUM`, `SS01`..`SSnn`, `CS01`, `PS01`, and the AOBD briefs
+  those names; the writer now derives the identifier from coordinates, so the
+  G1000 shows `+33.187_-117.079` on every leg. The aircraft flies the right
+  positions, but the brief says "turn at SS04" and nothing in the cockpit says
+  SS04. Whether this is fixable depends on the open question the entry
+  identified: if X-Plane accepts an arbitrary identifier on a type 28 record
+  and treats the columns as authoritative, the label can be kept.
+- **L-11 — an unresolved airport silently becomes a waypoint.** Pre-existing,
+  surfaced by generating the sample. With the aviation database empty, `KSEE`
+  was emitted at 33.170,-117.079 — the first search waypoint — with elevation
+  0.0 and no warning. A crew loading that plan departs from the wrong place.
+
+Also noted, not tracked: the identifier is rounded to three decimals (~110 m)
+while the coordinate columns carry six. Harmless if X-Plane reads the columns,
+a per-waypoint offset if it reads the label — the same in-sim check settles
+both this and L-1a.
+
+## 2026-09-08 — Plugin now receives beacon truth (P-2 complete)
+
+**Status: implemented. Both halves of P-2 are now in; the remaining step is
+deployment, not code.**
+
+Closes the half deferred this morning while another agent held the plugin.
+`net_worker()` polled `/api/state` — the endpoint that deliberately withholds
+the beacon until reveal — so it set `active=1` with the beacon at 0,0. Null
+Island is past any radio horizon, so the authoritative in-sim DF engine
+produced nothing for an entire exercise unless the instructor revealed at the
+start, which defeats the exercise.
+
+- `fetch_scenario()` polls `GET /api/plugin/scenario` with the plugin key
+  (`PLUGIN_KEY`, from `CAPVSAR_TOKEN_PLUGIN`). `CONSOLE` and `CALLSIGN` are
+  deliberately left hardcoded — moving all three into a per-station config is
+  O-2's job and inventing a second mechanism here would collide with it.
+- `/api/positions` carries the same key, since the console now gates ingest on
+  the plugin role. Without this, position reporting would have broken the
+  moment tokens were set on ms01.
+- A refused channel clears `active`, so the DF goes **silent** rather than
+  homing on a stale or null beacon: a DF that confidently points at nothing
+  teaches the crew something false. Each refusal is logged once per
+  transition, with the cause distinguished — 503 (console has no key set),
+  403 (this station's key rejected), 404 (console predates the endpoint, so
+  update it) — because "why can't they hear it" is answered here, and the old
+  code swallowed every network error identically.
+
+### Validation
+
+`tests/test_plugin_net.py`, 9 checks, the first tests to touch the network
+thread at all: endpoint choice, key header, each refusal path, that a refusal
+is logged once rather than every three seconds, and that recovery is logged.
+Confirmed they catch the defect — against the pre-P-2 plugin they fail on
+`no object exposes fetch_scenario()`.
+
+`tests/test_console.py` gained a contract test asserting the payload carries
+every field the plugin reads (`beacon_lat/lon/elev_ft`, `band`, `power`,
+`effects`, `sortie.stopped`). That seam is precisely what broke: a future
+refactor of `snapshot()` that drops a field would otherwise degrade the DF
+quietly in the sim instead of failing a test.
+
+Whole repo green: console 21, plugin-net 9, engine ALL PASS (58), faceplate
+ALL PASS, panel 7, radio 12.
+
+### Not verified
+
+Nothing here has run against a real X-Plane or the live console. The in-sim
+confirmation is: start a sortie, do **not** reveal, and check a bearing
+appears on the DF head while `/base` still shows no beacon. That needs
+`CAPVSAR_TOKEN_PLUGIN` set identically on ms01 and on the station — until it
+is set on both, the console returns 503 and the DF is silent by design.
+
+## 2026-09-08 — L-1 X-Plane FMS export record corrected
+
+**Status: implemented.**
+
+The flight planner emitted generated search-pattern points as five-field type
+11 records. That both omitted the required via/special field and claimed that
+labels such as `SS01` were named fixes in X-Plane's navigation database. It also
+hardcoded `CYCLE 2401`.
+
+`generate_xplane_fms_content()` now emits generated points as six-field type 28
+records with a coordinate-derived identifier, `DRCT`, six-decimal altitude and
+the existing six-decimal latitude/longitude. The cycle is derived from the
+current UTC date as four-digit `YYMM`. `NUMENR` remains the total emitted record
+count, including departure and destination. The test now checks the corrected
+records and cycle, plus structurally verifies every generated waypoint's field
+count, type, `DRCT` column and altitude and verifies `NUMENR` against the records.
+
+Verification passed: `py_compile`, all eight flight-planner unit tests, tracker
+rendering, and manual inspection of a generated KSEE–KCRQ sample with two pattern
+points. Laminar's published v11 `.fms` grammar confirms type 28 and the six
+columns but does not prescribe the identifier text or precision for an unnamed
+lat/lon point; the tracker-requested signed latitude/longitude identifier rounded
+to three decimals was used. The result has not been loaded into X-Plane 12, so
+conformance to the published grammar is verified but in-simulator acceptance
+remains a maintainer step.
+
+## 2026-09-08 — Mission base works without internet (F-1)
+
+**Status: implemented.**
+
+Leaflet 1.9.4 is vendored to `services/exercise/app/static/vendor/leaflet/`
+(js, css, and the five dist images `leaflet.css` references — 192 KB total),
+and the instructor, mission base and debrief views load it from there instead
+of unpkg.
+
+This was worse than a missing map. `base.js` touches `L` on its first line, so
+with no internet the script threw before opening its WebSocket and the whole
+view went blank — no status board, no aircraft, no bearing log. A mission base
+frequently has no connectivity, which is exactly when the console matters.
+
+Three checks in `tests/test_console.py::OfflineAssets`: no view references a
+remote script or stylesheet, the vendored files are served at the paths the
+pages actually request, and `leaflet.css`'s `images/` resolve (a wrong vendor
+path would have reproduced the original blank page silently). Verified they
+catch it: pointing the views back at unpkg fails the first check, restoring
+passes 20/20.
+
+Map *tiles* are still remote, so an offline base gets a blank basemap with
+working aircraft, bearings and controls over it. Pre-caching tiles into the
+existing `charts` volume is tracked separately. The flight planner has the same
+CDN and tile problem in its own files and is untouched here — that is L-8.
+
+## 2026-09-08 — Truth containment and role tokens on the exercise console (X-1, X-2, P-2 server half)
+
+**Status: implemented for X-1. X-2 and P-2 are partly done — each has one
+remaining step named below; do not read them as closed.**
+
+Cluster C2 of the remediation plan. The console's teaching mechanism is that
+nobody on the exercise net can look up the beacon; three endpoints were handing
+it over on request, and nothing authenticated any caller.
+
+**X-1 — truth containment (fixed).** All beacon filtering now goes through one
+`public_scenario()` serializer in `main.py`, so there is a single place to
+audit instead of a decision per endpoint:
+
+- `/api/scenarios` returns beacon fields only for a presented instructor token.
+- `/api/sorties/{id}/track` returns `beacon` only once that sortie is revealed,
+  and now also returns `revealed`, which makes the debrief view's
+  "beacon truth was never revealed" branch reachable for the first time.
+- `beacon_elev_ft` is stripped alongside lat/lon. The previous filter popped
+  only lat/lon, so elevation leaked from `/api/state` and `/ws` on every tick.
+
+**X-2 — role tokens (mechanism in, deployment step remaining).** New
+`services/exercise/app/access.py`: three roles (instructor, base, plugin), one
+shared secret each, presented as `X-CAPVSAR-Token` or `?token=`. An instructor
+token also satisfies the base role. Every mutating route is gated; `/ws` now
+does the same-origin check the radio stream already did. The instructor and
+base consoles send the token through a `vsarFetch()` helper in `charts.js`,
+prompting once per browser and retrying a rejected token.
+
+Two deliberately different defaults, because the failure modes are not
+symmetrical: **secrecy fails closed** (truth needs a *configured* instructor
+token, so a half-configured console withholds rather than leaks) while
+**availability fails open** (a role with no token set is unenforced, so
+deploying this could not lock operators out of the running ms01 stack before
+its `.env` exists). Every open role is named in a startup warning.
+**Remaining: set `CAPVSAR_TOKEN_INSTRUCTOR` / `_BASE` / `_PLUGIN` in `.env` on
+ms01 and restart.** Until then the endpoints are still open; the variables are
+wired through `docker-compose.yml` ready for it.
+
+**P-2 — plugin truth channel (server half).** New `GET /api/plugin/scenario`
+serves the running sortie *with* truth, gated on `CAPVSAR_TOKEN_PLUGIN` and
+returning 503 when no key is configured, so it cannot be open by accident. Its
+response shape matches `/api/state` deliberately, so the plugin change is a URL
+swap plus one header. **Remaining: `PI_capvsar_df.py:947-967` must poll it** —
+deferred because another agent held the plugin file for P-1.
+
+### Validation
+
+New `tests/test_console.py` — 17 checks, and the first automated tests
+`main.py` has ever had. The leak test walks every scenario/sortie response
+recursively for any number within ~100 m of the beacon, so a future endpoint
+that forgets the serializer fails it; `leak_endpoints()` is the list to extend
+when adding routes. Verified the tests actually catch the defect rather than
+just passing: reverted to the pre-fix behaviour and **9 of 17 failed**
+(`/api/state` and `/api/scenarios` leaking, `/track` returning a beacon on an
+unrevealed sortie, `beacon_elev_ft` present, and every role gate answering 200
+instead of 403); restored, 17/17 pass. `tests/test_radio.py` still passes 12/12,
+so the Mumble bridge is unaffected.
+
+Tested against fastapi 0.141.1 / pydantic 2.13.5 in a scratch venv, not the
+container's pinned fastapi 0.115.6 / pydantic 2.10.4 — this machine has no
+docker and no pip for the system Python. Nothing in the change depends on
+version-specific behaviour, but the suite has not run against the pinned set.
+
+### Notes for whoever picks this up
+
+- `docs/bugs/tracker.json` is now formatted with a uniform `json.dumps(indent=2)`,
+  which puts every `"status"` on its own line and makes concurrent targeted
+  edits safer. Statuses set by other agents were preserved.
+- The scenarios table has no `beacon_freq_hz` or `cs` column, but the plugin
+  reads both from the scenario it polls, so they are always absent and it
+  silently uses defaults. Contract drift, tracked under P-10; not fixed here.
+- Running the console tests surfaced `ResourceWarning: unclosed database` from
+  `with db() as c`, which commits but never closes. That is X-8, left alone.
+
+## 2026-09-08 — Fix terrain line-of-sight ray mirroring (P-1)
+
+**Status: implemented**
+
+- **Item ID:** `P-1` (Priority P0, Cluster C3).
+- **What was wrong:** In `xplane/PI_capvsar_df.py`, `line_of_sight_blocked()` walked `fr` from 0 (aircraft) to 1 (beacon), but computed `ray = b_ft + (ac_ft - b_ft) * fr`. This mirrored the line-of-sight ray vertically, assigning the beacon altitude to the aircraft position and aircraft altitude to the beacon position. Consequently, terrain ridges near the beacon were compared against high aircraft altitudes and failed to mask the signal, while ridges near the aircraft were compared against low beacon altitudes and falsely blocked reception.
+- **What was changed:**
+  - In `xplane/PI_capvsar_df.py` line 599, corrected the ray interpolation to `ray = ac_ft + (b_ft - ac_ft) * fr`.
+  - In `tests/xp.py`, extended the test stub by adding `TERRAIN_FN` callable support (`(lat, lon) -> elevation in feet`) and threaded coordinates through `worldToLocal`, `probeTerrainXYZ`, and `localToWorld` while preserving the fallback to constant `TERRAIN_FT`.
+  - In `tests/test_engine.py`, added regression tests with an aircraft at 6000 ft MSL, a beacon at 1000 ft MSL, and a 5000 ft ridge band tested near the beacon (80–95% along path; blocks) and near the aircraft (5–20% along path; clears).
+- **What was verified:**
+  - Verified regression tests fail with the buggy expression (`blocked=0` near beacon, `blocked=1` near aircraft) and pass when fixed (`blocked=1` near beacon, `blocked=0` near aircraft).
+  - All 57 checks in `tests/test_engine.py` pass cleanly.
+  - Full test suites `test_faceplate.py` and `test_panel.py` pass with zero regressions.
+  - Python byte-compilation succeeds via `py_compile`.
+  - Updated `docs/bugs/tracker.json` (marked `P-1` as fixed) and regenerated `docs/BUG_TRACKER.md`.
+
+## 2026-09-08 — Bug tracker and remediation plan
+
+**Status: tracking artefacts only; no defect is fixed yet.**
+
+Turned the 2026-09-08 review into a worked tracker. `docs/bugs/tracker.json`
+is the tracker of record (IDs are the review's finding IDs, so the review,
+the handbook and this log all still resolve); `scripts/render_bug_tracker.py`
+renders `docs/BUG_TRACKER.md` from it, so the two cannot drift. Edit the JSON,
+run the script.
+
+68 items: 8 critical / 21 high / 29 medium / 10 low, or by fix-order 10 P0,
+21 P1, 28 P2, 9 P3. Compound findings were split where the parts would be
+worked separately (X-8, I-9, O-7); nothing was dropped.
+
+A filterable triage board renders the same JSON at
+`https://claude.ai/code/artifact/b37f0b6f-caaf-469a-9862-a103f7025db9`
+(grouped by wave, with the critical path). It is a **read view for humans and
+is account-private** — Codex and Gemini cannot open it. Agents work from
+`docs/BUG_TRACKER.md` and `docs/bugs/tracker.json`; ticks on the board are
+browser-local and its *Copy status JSON* button exists to paste status back
+into the JSON, which stays the only record.
+
+### Reconciled against the vault as-built
+
+Checked the tracker against `Projects/as-built/AsBuilt_CAPVSAR.md`
+(vault, deployed 2026-09-06) rather than trusting the repo alone, and
+corrected three items:
+
+- **O-4 was wrong.** The Mumble channel tree does exist on ms01 — `CAP V-SAR`
+  with Briefing Room, Mission Base, Mission Net PRIMARY and ALTERNATE,
+  Aircraft with CAP-1..3 Intercom, and Instructor - SET — created by hand in
+  `mumble-server.sqlite` on 2026-09-06, so joins work today. The real defect
+  is reproducibility: those rows live only in a gitignored runtime volume,
+  nothing in the repo recreates them, and `radio.py`'s four hardcoded names
+  must be kept in step manually. Rebuild or lose the volume and the voice net
+  is gone with no scripted recovery. Downgraded P0 to P1, moved to wave 2.
+- **D-3 was wrong.** `CONOPS-cap-vsar.md` is not missing; it is in the vault
+  at `Projects/architecture/CONOPS-cap-vsar.md`. It is simply outside the
+  repo, so the agents this log points at it cannot read it. The fix is to
+  copy it into `docs/CONOPS.md`, not to write it. `AM4_COMPAT.md` and
+  `infra/ROUTER.md` still resolve nowhere.
+- **New O-2a.** The as-built tells participants their instructions are at
+  `docs/CONNECT.md`; that file does not exist, so the one pointer a new
+  member is given leads nowhere.
+
+The as-built itself needs three updates that cannot be made from this
+machine (the vault is not mounted here and ragd is search-only): the
+container table is missing `capvsar-flightplanner` (8090) and
+`capvsar-radio-https` (8743); the console view list predates `/radio` being a
+real Mumble voice bridge with `/radio-legacy` holding the old text console;
+and the channel tree needs the reproducibility caveat above. A paste-ready
+block covering all three, plus a new Quality tracking section pointing at the
+tracker, was handed to the maintainer.
+
+Two groupings, because they answer different questions:
+
+- **15 clusters** are PR-sized units that share files, with an owner hint per
+  cluster. Two orderings are load-bearing: C2 (truth and roles) must land
+  before C7 (console robustness) since both rewrite `main.py`, and C10 before
+  C11 in the planner. The plugin and docs clusters are safe fully parallel.
+- **5 waves** are scheduling, anchored to the rehearsal calendar in
+  `docs/USE_CASE_SAREX_REHEARSAL.md`: wave 0 version control, wave 1 what
+  session 1 needs, wave 2 what a three-aircraft full mission needs, wave 3
+  dress rehearsal and live day, wave 4 architecture and CalTopo phase 2.
+  Where severity and wave disagree the wave wins — O-5 is high severity but
+  nothing before the dress rehearsal needs it, while L-1 is a step lower and
+  is wave 1 because the AOBD exports `.fms` in session 1.
+
+`docs/REMEDIATION_PLAN.md` carries the critical path (X-1, P-2 and X-2 are one
+piece of work and one PR — doing them apart means writing the truth serializer
+twice), a per-wave exit test, the multi-agent working rules, and the three
+checks that should become permanent regression tests: the truth-leak test, a
+non-flat terrain stub, and a preflight smoke script. Waves 0 to 2 — the point
+at which a three-aircraft rehearsal is genuinely possible — are about nine to
+ten focused days.
+
+Status corrections from the entry below: O-1 is **in progress, not closed** —
+the v0.1 baseline is pushed, but this working tree still has no `.git/` and
+`git` is not installed on this machine, so agents editing here still cannot
+diff or revert. O-1a is **resolved by decision** (the generated handbook is
+tracked deliberately as the published artefact).
+
 ## 2026-09-08 — Project baseline v0.1 placed under version control
 
 **Status: implemented.**

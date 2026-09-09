@@ -467,5 +467,137 @@ settle(e, 80)
 check("training scan finds a beacon on the training VHF channel",
       bool(xp.read("cap/df/valid")), "holding %.3f MHz" % xp.read("cap/df/band"))
 
+print("\n== terrain masking: line-of-sight ray geometry (P-1) ==")
+# Test geometry: aircraft at 6000 ft MSL, beacon on the ground at 1000 ft MSL.
+# Horizontal distance ~6.0 NM (lat 39.1 to 39.0).
+# Ridge band elevation is 5000 ft MSL (base elevation is 1000 ft MSL).
+# LOS_SAMPLES is 24, so probes sample at fr = k/24 for k = 1..23.
+ac_lat, ac_lon, ac_alt_ft = 39.1, -105.0, 6000.0
+b_lat, b_lon, b_alt_ft = 39.0, -105.0, 1000.0
+
+
+def make_ridge_fn(fr_min, fr_max, ridge_ft=5000.0, base_ft=1000.0):
+    def terrain(lat, lon):
+        fr = (ac_lat - lat) / (ac_lat - b_lat)
+        if fr_min <= fr <= fr_max:
+            return ridge_ft
+        return base_ft
+    return terrain
+
+
+# (a) Ridge near the beacon (fr 0.80..0.95):
+# Probes land at fr = 20/24 (~0.833), 21/24 (0.875), 22/24 (~0.917).
+# Correct ray is 1417..1833 ft, so the 5000 ft ridge MUST block the signal.
+# Mirrored buggy ray is 5167..5583 ft and falsely passes above the ridge.
+e = new_engine(beacon_lat=b_lat, beacon_lon=b_lon, beacon_ft=b_alt_ft,
+               band=121.5, beacon_hz=121_500_000,
+               effects={"terrain_masking": True})
+xp.SIM.update({"lat": ac_lat, "lon": ac_lon,
+               "elev_m": ac_alt_ft / 3.28084, "psi": 180.0,
+               "phi": 0.0, "theta": 0.0})
+xp.write("cap/df/power", 1)
+xp.write("cap/df/head_type", mod.HEAD_517)
+xp.write("cap/df/active_freq_hz", 121_500_000)
+
+xp.TERRAIN_FN = make_ridge_fn(0.80, 0.95)
+e.compute()
+check("ridge near beacon (80-95 % of path) blocks low beacon",
+      xp.read("cap/df/blocked") == 1,
+      "blocked=%d" % xp.read("cap/df/blocked"))
+
+# (b) Ridge near the aircraft (fr 0.05..0.20):
+# Probes land at fr = 2/24 (~0.083), 3/24 (0.125), 4/24 (~0.167).
+# Correct ray is 5167..5583 ft, so aircraft at 6000 ft clears the 5000 ft ridge.
+# Mirrored buggy ray is 1417..1833 ft and falsely reports blocked.
+xp.TERRAIN_FN = make_ridge_fn(0.05, 0.20)
+e.compute()
+check("ridge near aircraft (5-20 % of path) clears high aircraft",
+      xp.read("cap/df/blocked") == 0,
+      "blocked=%d" % xp.read("cap/df/blocked"))
+
+xp.TERRAIN_FN = None
+
+print("\n== 406 with scan on: TIMEHOLD across the scan step (P-3) ==")
+# The 517's normal 406 posture is scan on: surveil the burst, listen to the
+# continuous channels in the 50 s gap. Stepping away is the receiver doing its
+# job, and TIMEHOLD is what carries the bearing across the gap - so a bearing
+# must survive the step, not vanish the instant each 440 ms burst ends.
+e = new_engine(beacon_hz=406_025_000, band=406.0,
+               effects={"burst_cadence": True, "terrain_masking": False})
+xp.write("cap/df/power", 1)
+xp.write("cap/df/head_type", mod.HEAD_517)
+xp.write("cap/df/active_freq_hz", 406_025_000)
+xp.write("cap/df/scan_enable", 1)
+xp.write("cap/df/timehold_sec", 30.0)
+force_burst(e, True)
+settle_burst(e, 12)
+check("406 burst acquired with scan enabled", bool(xp.read("cap/df/valid")))
+held_bearing = xp.read("cap/df/bearing_rel")
+
+force_burst(e, False)          # burst over; scan steps to a continuous channel
+clock.advance(mod.LOOP_S)
+e.compute()
+check("scan steps off 406 between bursts",
+      abs(xp.read("cap/df/band") - 406.025) > 0.01,
+      "listening on %.3f MHz" % xp.read("cap/df/band"))
+check("bearing is held while scan is stepped away",
+      bool(xp.read("cap/df/valid")) and
+      abs(mod.ang_diff(xp.read("cap/df/bearing_rel"), held_bearing)) < 1.0,
+      "valid=%d bearing %.1f vs held %.1f"
+      % (xp.read("cap/df/valid"), xp.read("cap/df/bearing_rel"), held_bearing))
+check("audio does not follow the held bearing while stepped away",
+      xp.read("cap/df/rx_open") == 0)
+
+# Past TIMEHOLD it must still give up.
+for _ in range(4):
+    clock.advance(10.0)
+    e.compute()
+check("held bearing is dropped once TIMEHOLD expires",
+      not bool(xp.read("cap/df/valid")))
+
+# A head genuinely parked on the wrong channel still gets nothing held.
+e = new_engine(beacon_hz=406_025_000, band=406.0,
+               effects={"burst_cadence": True, "terrain_masking": False})
+xp.write("cap/df/power", 1)
+xp.write("cap/df/head_type", mod.HEAD_517)
+xp.write("cap/df/active_freq_hz", 406_025_000)
+xp.write("cap/df/scan_enable", 1)
+xp.write("cap/df/timehold_sec", 30.0)
+force_burst(e, True)
+settle_burst(e, 12)
+xp.write("cap/df/active_freq_hz", 121_500_000)   # crew tunes away deliberately
+xp.write("cap/df/scan_enable", 0)
+clock.advance(mod.LOOP_S)
+e.compute()
+check("tuning away by hand drops the bearing rather than holding it",
+      not bool(xp.read("cap/df/valid")))
+
+print("\n== radio horizon has two ends (P-4) ==")
+# Aircraft in a valley 500 ft BELOW a ridge-top beacon, 1 NM away. The old
+# one-sided form used height above the beacon, so this collapsed to a zero-mile
+# horizon and the set heard nothing at all.
+e = new_engine(beacon_lat=39.0, beacon_lon=-105.0, beacon_ft=9000.0,
+               beacon_hz=121_500_000, band=121.5,
+               effects={"radio_horizon": True, "terrain_masking": False,
+                        "burst_cadence": False})
+xp.SIM.update({"lat": 39.0 + 0.0167, "lon": -105.0,      # ~1 NM north
+               "elev_m": 8500.0 / 3.28084, "psi": 180.0,
+               "phi": 0.0, "theta": 0.0})
+xp.write("cap/df/power", 1)
+xp.write("cap/df/head_type", mod.HEAD_517)
+xp.write("cap/df/active_freq_hz", 121_500_000)
+settle(e, 20)
+check("aircraft below a ridge-top beacon at 1 NM still hears it",
+      bool(xp.read("cap/df/valid")) and xp.read("cap/df/signal") > 0.0,
+      "signal %.3f" % xp.read("cap/df/signal"))
+
+# ...and the horizon still bites at long range.
+xp.SIM.update({"lat": 39.0 + 6.0, "lon": -105.0,          # ~360 NM north
+               "elev_m": 1000.0 / 3.28084})
+settle(e, 20)
+check("beyond the two-ended horizon it is still silent",
+      not bool(xp.read("cap/df/valid")),
+      "signal %.3f at %.0f NM" % (xp.read("cap/df/signal"), xp.read("cap/df/distance_nm")))
+
 print("\n" + ("ALL PASS" if not FAILED else "FAILURES: " + ", ".join(FAILED)))
 sys.exit(1 if FAILED else 0)
