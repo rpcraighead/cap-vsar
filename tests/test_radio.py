@@ -1,5 +1,7 @@
 """PTT, channel isolation and browser bridge contract regressions."""
 import asyncio
+import os
+import tempfile
 from pathlib import Path
 import sys
 from types import SimpleNamespace
@@ -9,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'services/exercise'))
-from app import radio
+from app import radio, access
 
 RADIO_JS = (Path(__file__).resolve().parents[1] /
             'services/exercise/app/static/mission-radio.js')
@@ -90,6 +92,35 @@ def test_server_enforces_access_code(sockets,monkeypatch):
         sock.send_json({'action':'join','callsign':'TEST BASE','accessCode':'wrong'})
         assert sock.receive_json()['type']=='error'
     assert clients==[]
+
+
+def test_authenticated_session_callsign_overrides_the_claimed_one(sockets, monkeypatch):
+    """O-5: a base-role student typing "MISSION BASE" or "INSTRUCTOR" as their
+    radio callsign must not be able to impersonate another station - the
+    authenticated session's own callsign wins instead."""
+    client, clients = sockets
+    db = tempfile.NamedTemporaryFile(suffix='.db', delete=False)
+    db.close()
+    monkeypatch.setenv('CAPVSAR_DB', db.name)
+    try:
+        access.init_auth_db()
+        sess_id = access.create_session('MRO-1', 'base', 'Mission Radio Operator 1', callsign='MRO-1')
+        with client.websocket_connect('/api/radio/stream', cookies={access.SESSION_COOKIE: sess_id}) as sock:
+            sock.send_json({'action': 'join', 'callsign': 'INSTRUCTOR', 'channel': 'primary'})
+            sock.receive_json()
+            assert [r.callsign for r in radio.SESSIONS] == ['MRO-1']
+    finally:
+        os.unlink(db.name)
+
+
+def test_no_session_falls_back_to_the_claimed_callsign(sockets):
+    """RBAC not configured for this exercise (the common case today) must not
+    break the radio - the client-supplied callsign is trusted as before."""
+    client, clients = sockets
+    with join(client) as sock:
+        sock.send_json({'action': 'join', 'callsign': 'TEST BASE', 'channel': 'primary'})
+        sock.receive_json()
+        assert [r.callsign for r in radio.SESSIONS] == ['TEST BASE']
 
 
 def test_config_does_not_disclose_credentials(sockets,monkeypatch):

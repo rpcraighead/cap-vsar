@@ -7,7 +7,10 @@ services:
 
   # ---- Voice: CAP mission net (NOT ATC - ATC is PilotEdge) ----------------
   mumble:
-    image: mumblevoip/mumble-server:latest
+    # O-5: pinned to what was already running and tested on ms01
+    # (mumblevoip/mumble-server:latest resolved 2026-09-09, Mumble 1.5/24.04
+    # base), not "latest" silently drifting under a live voice net.
+    image: mumblevoip/mumble-server@sha256:b2d6b2d44b712232af90bdef37bfcbbf4e2f9819aee6bf8b7f46588b34973f6f
     container_name: capvsar-mumble
     restart: unless-stopped
     ports:
@@ -91,7 +94,9 @@ services:
   # Browser microphones require a trusted secure context on tablets/other PCs.
   # LAN/WireGuard only, like the exercise service; no router port forwarding.
   radio-https:
-    image: caddy:2
+    # O-5: pinned to what was already running and tested on ms01
+    # (caddy:2 resolved 2026-09-09), not "latest" silently drifting under it.
+    image: caddy@sha256:df7f1c2fb114453b951de51a98efc010db1655a92c2e86be6706714e2417a78d
     container_name: capvsar-radio-https
     restart: unless-stopped
     depends_on:
@@ -102,6 +107,15 @@ services:
       - ./services/exercise/Caddyfile:/etc/caddy/Caddyfile:ro
       - radio_caddy_data:/data
       - radio_caddy_config:/config
+    # O-6: this container had no healthcheck at all, so a Caddy that stopped
+    # proxying (TLS handshake failure, backend unreachable) looked identical
+    # to a healthy one to `docker compose ps`. Self-signed cert, hence -k.
+    healthcheck:
+      test: ["CMD", "wget", "-k", "-q", "-O", "/dev/null", "https://localhost/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   # ---- N499CP Flight Planner: pre-flight planning + CAP search patterns ----
   # Composited here (rather than its standalone Cloud Run deployment) so it

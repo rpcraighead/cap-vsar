@@ -1,11 +1,13 @@
 # Mumble channel structure
 
-**The channels below already exist** - they were inserted into the server
-database at deploy time. Mumble has no config-file channel definition, so they
-were created by writing to `mumble-server.sqlite` with the server stopped.
-
-The one thing still to do by hand is the ACL on the instructor channel, in
-step 4 below.
+**The channels below already exist**, and (O-4) that is no longer just true
+of ms01's hand-provisioned database - it's true of any deployment.
+`services/exercise/app/mumble_channels.py` is the single source of truth for
+this tree; `scripts/provision_mumble.py` creates it (and the Instructor/SET
+ACL below) directly in `mumble-server.sqlite`, idempotently, and
+`scripts/deploy.sh` runs it on every deploy. Mumble has no config-file
+channel definition, so - same as when this was done by hand - it works by
+writing to the database with the server stopped.
 
 ```
 CAP V-SAR                       (root)
@@ -17,8 +19,12 @@ CAP V-SAR                       (root)
 │   ├── CAP-1 Intercom          crew-internal for aircraft 1
 │   ├── CAP-2 Intercom
 │   └── CAP-3 Intercom
-└── Instructor / SET            restricted - scenario control and adjudication
+└── Instructor - SET            restricted - scenario control and adjudication
 ```
+
+(The tree above previously said "Instructor / SET" here while the setup steps
+below already said "Instructor - SET" - the real name in the database. That
+inconsistency is what `mumble_channels.py` now exists to prevent.)
 
 ## Why this shape
 
@@ -35,13 +41,21 @@ both realistic and a courtesy to the controllers.
 
 ## Remaining setup
 
-1. Connect as **SuperUser** (right-click server -> **Change username**), using
-   the SuperUser password from `.env`.
-2. On **Instructor - SET**, right-click -> **Edit** -> **ACL**: deny `Enter`
-   for `@all`, then grant it to the instructor accounts or a group containing
-   them. Until this is done the channel is visible to everyone.
-3. Register participants as they first connect (right-click user ->
+`scripts/provision_mumble.py` now handles the channel tree and the
+Instructor/SET ACL (deny `Enter` for `@all`, grant it back to an `instructor`
+group it also creates) on every deploy. What's left, and can't be automated
+because it requires knowing who's actually connecting:
+
+1. Register participants as they first connect (right-click user ->
    **Register**) so identities persist between sessions.
+2. Add the real instructor accounts to the **instructor** group (right-click
+   user -> **Add to group**) once they've registered. Until this is done, no
+   one - instructor included - can enter Instructor - SET; the deny applies
+   to everyone until someone is explicitly a member of the group carved out
+   from it.
+3. Connect as **SuperUser** (right-click server -> **Change username**, using
+   the SuperUser password from `.env`) if you need to do either of the above,
+   or to inspect/adjust the provisioned ACL by hand.
 
 Participant-facing instructions are in `docs/CONNECT.md` - that is the document
 to hand to aircrew and mission base staff.

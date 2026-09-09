@@ -20,18 +20,19 @@ from urllib.parse import urlsplit
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from . import access
+from .mumble_channels import browser_nets
+
 router = APIRouter()
 log = logging.getLogger(__name__)
 RATE = 48000
 FRAME_BYTES = 1920
 MAX_TX_SECONDS = 60
 LEASE_SECONDS = 1.5
-CHANNELS = [
-    {"id": "primary", "label": "PRIMARY", "name": "Mission Net PRIMARY"},
-    {"id": "alternate", "label": "ALTERNATE", "name": "Mission Net ALTERNATE"},
-    {"id": "base", "label": "MISSION BASE", "name": "Mission Base"},
-    {"id": "briefing", "label": "BRIEFING", "name": "Briefing Room"},
-]
+# O-4: was its own hardcoded copy of four channel names, independently of the
+# provisioning script and liable to silently disagree with it. Both now read
+# services/exercise/app/mumble_channels.py.
+CHANNELS = browser_nets()
 SESSIONS: set = set()
 CHANNEL_ACTIVITY: dict[str, float] = {}
 
@@ -379,9 +380,19 @@ async def stream(sock: WebSocket):
         name = hello.get('callsign')
         if not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9 ._-]{2,32}', name.strip()):
             raise ValueError('Use a callsign of 2–32 letters, numbers, spaces, dots or dashes.')
+        name = name.strip()
+        # O-5: an authenticated RBAC session's callsign always overrides
+        # whatever the client claims, so a base-role student can't type
+        # "MISSION BASE" or "INSTRUCTOR" and impersonate another station on
+        # the net. No session - RBAC not configured for this exercise - falls
+        # back to the client-supplied name, matching access.py's fail-open
+        # design elsewhere: this stays usable with no login system engaged.
+        session = access.get_session_from_request(sock)
+        if session and session.get('callsign'):
+            name = session['callsign']
         if len(SESSIONS) >= int(os.getenv('CAPVSAR_RADIO_MAX_SESSIONS', '16')):
             raise ValueError('All browser radio connections are occupied.')
-        radio = MumbleRadio(sock, name.strip())
+        radio = MumbleRadio(sock, name)
         SESSIONS.add(radio)
         await radio.connect(hello.get('channel', 'primary'))
         tasks = [asyncio.create_task(fn()) for fn in (radio.sender, radio.receiver, radio.watchdog)]

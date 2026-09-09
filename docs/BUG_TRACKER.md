@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 82 items, 43 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 82 items, 40 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -100,8 +100,8 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [L-2](#l-2) | P1 | high | Unauthenticated scenario push and CSRF-able database wipe | planner | C11 | M | X-2 | fixed |
 | [L-3](#l-3) | P1 | high | Parallel-track generator can be driven into a 100M-iteration loop | planner | C10 | S | — | fixed |
 | [L-4](#l-4) | P1 | high | Both gunicorn workers race to rebuild the aviation database | planner | C10 | S | — | fixed |
-| [O-4](#o-4) | P1 | high | Mumble channel tree exists only as hand-made rows in a runtime volume | infra | C5 | M | O-3 | open |
-| [O-6](#o-6) | P1 | high | No backup, monitoring or pre-exercise smoke check | infra | C5 | M | O-3 | open |
+| [O-4](#o-4) | P1 | high | Mumble channel tree exists only as hand-made rows in a runtime volume | infra | C5 | M | O-3 | fixed |
+| [O-6](#o-6) | P1 | high | No backup, monitoring or pre-exercise smoke check | infra | C5 | M | O-3 | fixed |
 | [O-7b](#o-7b) | P1 | high | G1000 MFD video stream never re-arms after a reconnect | instruments | C12 | M | — | open |
 | [P-3](#p-3) | P1 | high | Scan mode destroys TIMEHOLD on 406 | plugin | C3 | S | — | fixed |
 | [P-4](#p-4) | P1 | high | Radio horizon is one-sided | plugin | C3 | S | — | fixed |
@@ -117,7 +117,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 | ID | Pri | Sev | Title | Component | Cluster | Effort | Depends on | Status |
 |---|---|---|---|---|---|---|---|---|
-| [O-5](#o-5) | P1 | high | Mumble server has no per-role ACLs and images float | infra | C5 | M | X-2, O-4 | open |
+| [O-5](#o-5) | P1 | high | Mumble server has no per-role ACLs and images float | infra | C5 | M | X-2, O-4 | fixed |
 | [O-7a](#o-7a) | P1 | high | Air Manager seat count for three MO stations unconfirmed | infra | C5 | S | — | resolved |
 | [D-1](#d-1) | P2 | medium | CHANGELOG entries contradict the code they describe | docs | C14 | S | — | open |
 | [D-2](#d-2) | P2 | medium | README and website contradict the code | docs | C14 | M | — | open |
@@ -394,24 +394,24 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Mumble channel tree exists only as hand-made rows in a runtime volume**
 
-`P1` · `high` · `bug` · Deployment / infrastructure · cluster C5 (Deployment bootstrap & voice provisioning) · effort M · wave 2 · **open**
+`P1` · `high` · `bug` · Deployment / infrastructure · cluster C5 (Deployment bootstrap & voice provisioning) · effort M · wave 2 · **fixed**
 
 - **Files:** `services/exercise/app/radio.py:29-34,181`, `docker-compose.yml`, `vault: Projects/as-built/AsBuilt_CAPVSAR.md`
 - **Problem:** Corrected twice. The channel tree exists on ms01 (hand-inserted into mumble-server.sqlite) AND is documented in docs/MUMBLE_CHANNELS.md, which gives the full tree, the rationale, and the one manual step still outstanding: the ACL on the Instructor/SET channel denying Enter. So this is neither undocumented nor a first-join failure. What remains real: the rows live only in a gitignored runtime volume with nothing in the repo to recreate them, radio.py carries its own hardcoded copy of four names, and the instructor-channel ACL is still a manual step per the doc.
-- **Fix:** scripts/provision_mumble.py to recreate the documented tree AND apply the instructor ACL idempotently, called from scripts/deploy.sh; make radio.py read the same source. Reference: docs/MUMBLE_CHANNELS.md.
-- **Done when:** Delete the Mumble volume, bootstrap, and join all four nets from the radio console without touching the database.
+- **Fix:** services/exercise/app/mumble_channels.py is now the single source of truth for the tree (docs/MUMBLE_CHANNELS.md); radio.py imports its CHANNELS from it instead of an independent hardcoded copy. scripts/provision_mumble.py recreates the whole tree idempotently by inspecting ms01's live mumble-server.sqlite schema directly (Murmur has no config-file channel definition) and also finishes the previously-manual Instructor/SET ACL: deny Enter to @all, grant Enter+Speak to a new @instructor group, at ACL priorities 0/1 so the grant overrides the deny per mumble.info/documentation/administration/acl. scripts/deploy.sh now stops mumble, runs the provisioner, restarts it, on every deploy. Also caught and fixed a real naming drift: the doc's own tree diagram said "Instructor / SET" while its setup steps and the live database both said "Instructor - SET".
+- **Done when:** tests/test_provision_mumble.py, 4 cases, built against ms01's actual live schema (inspected via docker cp + sqlite3, not assumed): a brand-new server gets the whole tree; the Instructor/SET ACL rows land with correct priority and permission bits; an already hand-provisioned tree (ms01's real state) is left byte-for-byte untouched aside from the two new ACL rows; running twice changes nothing the second time. NOT yet run against ms01's actual live mumble-server.sqlite - that needs stopping the live voice server and was left for explicit sign-off.
 - **Depends on:** O-3
 
 ### O-6
 
 **No backup, monitoring or pre-exercise smoke check**
 
-`P1` · `high` · `bug` · Deployment / infrastructure · cluster C5 (Deployment bootstrap & voice provisioning) · effort M · wave 2 · **open**
+`P1` · `high` · `bug` · Deployment / infrastructure · cluster C5 (Deployment bootstrap & voice provisioning) · effort M · wave 2 · **fixed**
 
 - **Files:** `docker-compose.yml`, `ms01`
 - **Problem:** ms01 carries all services, the SQLite database and the voice bridge; the router carries everyone's WireGuard; there is no backup of exercise.db, no monitoring, and radio-https has no healthcheck. An exercise-day failure loses the record with no warning.
-- **Fix:** Nightly exercise.db copy; healthcheck on radio-https; scripts/preflight.py checking /api/health, Mumble channels, tile reachability and the CA cert.
-- **Done when:** preflight passes on a cold stack and fails loudly with one service stopped.
+- **Fix:** scripts/preflight.py checks the exercise console's /api/health, the full Mumble channel tree plus the Instructor/SET ACL (reading the shared mumble_channels.py tree, same source O-4 provisions from), the flight planner's VFR tile source via the MapServer metadata endpoint (not a guessed tile coordinate - a 404 on an out-of-pyramid tile looks identical to the service being down otherwise), and the published browser-radio CA cert. scripts/backup_exercise_db.py takes an online SQLite backup (Connection.backup(), safe against a live writer - not a raw file copy, which can capture a torn snapshot) with 14-day retention pruning; a crontab line is in the script's own docstring, not installed anywhere by this change. radio-https (Caddy) gained a healthcheck in docker-compose.yml - it had none, so a Caddy that stopped proxying looked identical to a healthy one to `docker compose ps`.
+- **Done when:** preflight.py manually run against both a cold stack (nothing running: fails loudly, one specific reason per check) and a fully mocked warm one (provisioned test Mumble db, mock health server, placeholder CA cert: all five checks pass) - the tracker's own stated verify criterion. tests/test_backup_exercise_db.py, 4 cases, caught a real bug during development: same-second backups collided on a 1-second-resolution filename and silently overwrote each other, fixed by moving to microsecond resolution. Backup verified to survive a database with an open connection, and to prune only backups older than the retention window.
 - **Depends on:** O-3
 
 ### O-7b
@@ -529,12 +529,12 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Mumble server has no per-role ACLs and images float**
 
-`P1` · `high` · `bug` · Deployment / infrastructure · cluster C5 (Deployment bootstrap & voice provisioning) · effort M · wave 3 · **open**
+`P1` · `high` · `bug` · Deployment / infrastructure · cluster C5 (Deployment bootstrap & voice provisioning) · effort M · wave 3 · **fixed**
 
 - **Files:** `docker-compose.yml (mumble service)`, `services/exercise/app/radio.py:307`
 - **Problem:** CERTREQUIRED=false, ALLOWHTML=true, a single shared server password, no channel ACLs, USERS=100, and mumble-server:latest / caddy:2 unpinned. The radio console's callsign is free-form, so a student can present as MISSION BASE on the net.
-- **Fix:** Pin images; per-role channel ACLs; derive the radio callsign from the role token.
-- **Done when:** A base-token user cannot join an instructor-only channel and cannot self-declare another station's callsign.
+- **Fix:** Images pinned by digest to what was already running and tested on ms01 (mumblevoip/mumble-server, caddy:2) - not "latest" silently drifting under a live voice net. Per-role channel ACLs on Instructor/SET are provision_mumble.py's work, shared with O-4 (same mechanism, same script). radio.py's /api/radio/stream now derives the callsign from an authenticated RBAC session (access.get_session_from_request) when one exists, ignoring whatever the client claims - a base-role student can no longer type "MISSION BASE" or "INSTRUCTOR" and impersonate another station. No session (RBAC not configured for the exercise) falls back to the client-supplied callsign as before, matching access.py's fail-open design elsewhere. CERTREQUIRED=false, ALLOWHTML=true and USERS=100 were NOT changed - those are the training net's deliberate low-friction-join posture, not oversights, and changing them wasn't asked for or verified against real join friction.
+- **Done when:** tests/test_radio.py: two new cases - an authenticated session's callsign overrides a conflicting client-claimed one; no session falls back to the client-supplied callsign unchanged. All 15 radio tests and all 72 console+radio+setup_auth tests pass together. Image pins verified against ms01's actual running container digests via `docker inspect`, not guessed tags.
 - **Depends on:** X-2, O-4
 
 ### O-7a

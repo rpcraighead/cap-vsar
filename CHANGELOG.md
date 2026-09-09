@@ -3,6 +3,87 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-09 — Mumble infrastructure: provisioned tree, ACLs, callsign integrity, backups, preflight (O-4, O-5, O-6)
+
+**Status: code complete and tested locally. NOT yet applied to ms01's live
+Mumble server or scheduled on ms01 - see "Still needs a live decision" below.**
+
+Inspected ms01's actual `mumble-server.sqlite` directly (via `docker cp` and
+Python's `sqlite3`, not assumed) before writing anything, since Murmur's ACL
+schema (`grantpriv`/`revokepriv` bitmasks, not simple allow/deny columns) and
+permission bit values aren't things worth guessing for a security control.
+That inspection also surfaced a real naming drift: `docs/MUMBLE_CHANNELS.md`'s
+own tree diagram said "Instructor / SET" while its setup steps, and the live
+database, both already said "Instructor - SET".
+
+**O-4 - the channel tree now has one source of truth.**
+`services/exercise/app/mumble_channels.py` holds it; `radio.py` reads its
+`CHANNELS` from there instead of an independent hardcoded four-name copy.
+`scripts/provision_mumble.py` recreates the whole tree idempotently in
+`mumble-server.sqlite` (every write checks for the exact row it would create
+first) and finishes the ACL step `docs/MUMBLE_CHANNELS.md` always said was
+still manual: deny `Enter` to `@all` on Instructor/SET, grant it back to a new
+`instructor` group, at ACL priorities 0/1 so the grant overrides the deny for
+whoever's actually in that group (per mumble.info's admin docs: later/higher
+priority overrides earlier for the same permission bit). `scripts/deploy.sh`
+now stops mumble, runs the provisioner, restarts it, on every deploy.
+
+**O-5 - images pinned, callsigns can't be forged.** `mumblevoip/mumble-server`
+and `caddy` are pinned by digest to what was already running and verified on
+ms01 (`docker inspect`), not `:latest` silently drifting under a live voice
+net. `/api/radio/stream` now resolves an authenticated RBAC session
+(`access.get_session_from_request`, which works unmodified against a
+WebSocket - Starlette's `WebSocket` and `Request` share the same
+`HTTPConnection` base for `.cookies`/`.headers`/`.query_params`) and uses
+*that* callsign, ignoring whatever the client claims, when a session exists.
+A base-role student can no longer type "MISSION BASE" or "INSTRUCTOR" into
+the browser radio and impersonate another station. No session - RBAC not
+configured for the exercise, the common case today - falls back to the
+client-supplied callsign exactly as before. `CERTREQUIRED`/`ALLOWHTML`/
+`USERS=100` were deliberately left alone: that's this training net's
+low-friction-join posture, not an oversight, and changing it wasn't asked for.
+
+**O-6 - a stack that fails loudly instead of silently.**
+`scripts/preflight.py` checks the console's `/api/health`, the full Mumble
+tree plus the Instructor/SET ACL, the flight planner's VFR tile source (via
+the MapServer metadata endpoint - a 404 on an out-of-pyramid tile coordinate
+looks identical to the service being down, so that's not what this checks),
+and the published browser-radio CA cert. `scripts/backup_exercise_db.py`
+takes an online SQLite backup (`Connection.backup()`, safe against a database
+a live process still has open - not a raw file copy, which can capture a torn
+snapshot) with 14-day retention pruning; a crontab line lives in the script's
+own docstring, nothing installed by this change. `radio-https` (Caddy) gained
+a `docker-compose.yml` healthcheck - it had none, so a Caddy that stopped
+proxying looked identical to a healthy one to `docker compose ps`.
+
+### Validation
+
+- `tests/test_provision_mumble.py` (4 cases) against fixtures built from
+  ms01's real schema: fresh-server tree creation, correct ACL priority/bits,
+  an already-hand-provisioned tree left byte-for-byte untouched aside from
+  the two new ACL rows, and idempotency on a second run.
+- `tests/test_radio.py` gained 2 cases for the session-callsign override and
+  its fallback; all 15 pass, all 72 console+radio+setup_auth tests pass
+  together.
+- `tests/test_backup_exercise_db.py` (4 cases) **caught a real bug**: backups
+  taken in the same second collided on a 1-second-resolution filename and
+  silently overwrote each other - exactly the failure mode worse than no
+  backup. Fixed by moving to microsecond resolution before this shipped.
+- `preflight.py` run by hand against a cold stack (fails loudly, one specific
+  reason per check, matching O-6's own stated verify criterion) and a fully
+  mocked warm one (provisioned test Mumble db, mock health endpoint,
+  placeholder CA cert - all five checks pass).
+
+### Still needs a live decision
+
+Nothing above touched ms01. Applying it means: `docker compose pull` (new
+pinned digests), stopping mumble to run `provision_mumble.py` against the
+real `mumble-server.sqlite`, and redeploying `radio-https`/`exercise` for the
+healthcheck and callsign-integrity code - a real, if brief, interruption to
+anyone currently on the voice net. Scheduling the nightly backup cron job is
+a separate, similarly live decision. Both were left for explicit sign-off
+rather than done unasked.
+
 ## 2026-09-09 — This tree is now a real git checkout (O-1)
 
 **Status: complete.**
