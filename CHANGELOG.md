@@ -3,6 +3,67 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-08 — Deployment live on ms01; wave 1 and wave 2 items running
+
+**Status: implemented. Committed on ms01 (`9dcafb5`) and containers running live.**
+
+### The local working tree is a subset of the repo
+
+The important finding of the day, and it invalidates five items in the review.
+`/home/ron/Projects/cap-vsar` — the tree all three agents have been editing —
+is **missing files the canonical repo on ms01 has**. A `--delete` rsync dry run
+is what caught it; running that sync would have destroyed them. Corrected:
+
+- **O-2a → resolved.** `docs/CONNECT.md` exists and is a complete participant
+  guide (Mumble client per platform, server, nets, PTT). Not missing.
+- **O-7a → resolved.** `docs/AM4_COMPAT.md` exists and records the licence
+  position, including the Air Manager vs Air Player distinction for
+  display-only crew stations. The CHANGELOG citation resolved all along.
+- **D-3 → resolved.** `CONOPS-cap-vsar.md`, `AM4_COMPAT.md` and
+  `infra/ROUTER.md` all exist in the repo. The vault notes are published into
+  it by `docs/ragd/ragd_ingest.py`, so agents can read them.
+- **O-4 → narrowed.** `docs/MUMBLE_CHANNELS.md` documents the whole channel
+  tree, the rationale, and the one manual step left (the Instructor/SET ACL).
+  Neither undocumented nor a first-join failure. What stands: the rows exist
+  only in a gitignored volume, nothing recreates them, and `radio.py` keeps its
+  own hardcoded copy of four names.
+- **O-2 → narrowed.** Onboarding is not absent: `scripts/wg-peer.sh` prints a
+  participant's WireGuard peer config and QR, `scripts/deploy.sh` is an
+  idempotent stack deploy. What stands: the plugin still hardcodes CONSOLE and
+  CALLSIGN, the deploy scripts are Linux-only, and there is no single station
+  kit.
+
+All the missing files have been pulled into the local tree. **Agents working
+in `/home/ron/Projects/cap-vsar` should treat `/srv/capvsar` on ms01 as
+canonical** until O-1 makes the local tree a real checkout — this is the same
+root cause as O-1, wearing a different hat, and it has now produced five wrong
+findings in one review.
+
+### Deployment: live on ms01
+
+1. Synced work to `/srv/capvsar` — checksum-based, no `--delete`, preserving
+   canonical repository files.
+2. Built `exercise` and `flightplanner` images.
+3. **Ran the console suite inside the built image: 29/29 against the pinned
+   fastapi 0.115.6 / pydantic 2.10.4.** This closes the version-gap caveat
+   carried on every entry today.
+4. **Committed and running:** Committed on ms01 (`9dcafb5` *Fix beacon-truth leak,
+   role tokens, engine defects and console robustness*) and deployed via
+   `docker compose up -d exercise flightplanner`. Both containers are healthy
+   and running the updated builds.
+
+### P-4 sanity check: no practical effect on existing scenarios
+
+Ran the old and new horizon formulas against the three scenarios on the live
+console. Both flight-planner scenarios have `beacon_elev_ft` 0.0, so the
+result is **identical** (which incidentally confirms L-9: the planner pushes
+beacons at sea level). The seed scenario's beacon at 700 ft gains 1.3–1.7x
+range, but the horizon there was already 59–167 nm against a 12 nm search
+radius, so it was never the limiting effect. The earlier caution that scenarios
+might "feel too easy" was overstated: terrain masking and signal strength do
+the work in these, and P-4 only bites when a beacon sits materially above the
+aircraft — which none of these do.
+
 ## 2026-09-08 — DF engine: scan holds, horizon has two ends, plugin reloads (P-3, P-4, P-5)
 
 **Status: implemented.** Cluster C3's wave-2 items. All three are things a crew
