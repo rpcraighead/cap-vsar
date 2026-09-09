@@ -71,7 +71,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 | ID | Pri | Sev | Title | Component | Cluster | Effort | Depends on | Status |
 |---|---|---|---|---|---|---|---|---|
-| [O-1](#o-1) | P0 | critical | Repo has no working git history | infra | C1 | S | — | in-progress |
+| [O-1](#o-1) | P0 | critical | Repo has no working git history | infra | C1 | S | — | fixed |
 
 ### Wave 1 — Before session 1 (base stand-up). Nothing flies; base, planner and comms must work.
 
@@ -180,12 +180,12 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Repo has no working git history**
 
-`P0` · `critical` · `task` · Deployment / infrastructure · cluster C1 (Repo & release hygiene) · effort S · wave 0 · **in-progress**
+`P0` · `critical` · `task` · Deployment / infrastructure · cluster C1 (Repo & release hygiene) · effort S · wave 0 · **fixed**
 
 - **Files:** `repo root`
 - **Problem:** Codex published a v0.1 baseline to Gitea and GitHub on 2026-09-08 with ignore rules covering credentials, runtime state and build output. But this working tree still has no `.git/` and `git` is not installed on this machine, so agents editing here still cannot diff, revert or see what another tool changed — which is the actual failure mode the finding was about.
-- **Fix:** Install git on this machine and make /home/ron/Projects/cap-vsar the checkout of the pushed repository (or document where the canonical checkout lives so agents work there).
-- **Done when:** `git log` and `git status` work in the directory the agents actually edit.
+- **Fix:** This directory is now a real checkout: git init in place, origin set to ssh://git@192.0.2.121:2222/ron/capvsar.git (git.rpc-cyberflight.com does not resolve from this host - use the IP), local main tracking origin/main. Everything that had accumulated in the working tree since v0.1 (RBAC/setup wizard, O-2, radio/DF work, docs, tests) was captured as one commit on top of v0.1 without checking out or discarding anything already on disk, then pushed. .env.example, missing on disk with no explanation, was reconstructed from the env vars the code actually reads and committed separately. Pushed to Gitea only - not mirrored to GitHub here, since this repo's IP-redaction convention (if any, cf. flight-planner-n499cp-v2 scripts/redact_ips.py) was not established before pushing somewhere public.
+- **Done when:** git log and git status work in /home/ron/Projects/cap-vsar (this directory), confirmed. origin/main on Gitea matches local main (pushed c517617). GitHub mirroring is a separate, deliberately deferred decision.
 
 ### F-1
 

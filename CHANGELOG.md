@@ -3,6 +3,45 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-09 — This tree is now a real git checkout (O-1)
+
+**Status: complete.**
+
+`git` is installed on this machine (wasn't as of the 2026-09-08 correction
+below), but `/home/ron/Projects/cap-vsar` still had no `.git/` even though
+`v0.1` had been pushed to Gitea and GitHub — so no agent editing here could
+diff, revert, or see what another tool changed, which was the actual failure
+mode O-1 tracked regardless of whether a baseline existed somewhere else.
+
+Looked up the real Gitea remote via its API with a token (`ron/capvsar`,
+private; `git.rpc-cyberflight.com` doesn't resolve from this host, use
+`192.0.2.121` directly) rather than guess one. `git init` in place, added
+`origin`, fetched, then pointed local `main` at `origin/main` **without a
+checkout** — `git branch main origin/main` + `git symbolic-ref HEAD
+refs/heads/main` populates history and moves HEAD without touching a single
+file on disk, so nothing already in the working tree could be silently
+overwritten by files coming from `v0.1`. Diffed the resulting stage against
+known secret patterns before committing.
+
+Everything that had accumulated since `v0.1` — RBAC/setup wizard, O-2,
+radio/DF fidelity work, docs, tests, 67 files — landed in one commit,
+`6c2b3d4`. Separately noticed and restored `.env.example`, which was missing
+from the working tree with nothing in this log explaining why; rebuilt from
+the env vars the code actually reads rather than guessed, committed as
+`c517617`. Both pushed to Gitea's `origin/main`.
+
+**Deliberately not done here: GitHub.** `flight-planner-n499cp-v2` mirrors to
+GitHub through an IP-redaction pass (`scripts/redact_ips.py`) before
+anything public sees it; whether `cap-vsar` needs the same treatment wasn't
+established, so pushing to a public mirror was left alone rather than assumed
+safe.
+
+### Verification
+
+- `git log`, `git status`, `git diff` all work in this directory now —
+  O-1's stated verify criterion.
+- `git status` is clean and `up to date with 'origin/main'` after the push.
+
 ## 2026-09-09 — Per-station config: capvsar_station.ini and a kit builder (O-2)
 
 **Status: complete.**
