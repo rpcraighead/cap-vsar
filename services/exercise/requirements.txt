@@ -1,3 +1,6 @@
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 pydantic==2.10.4
+
+# Pinned upstream includes Python 3.12 SSLContext support absent from PyPI 1.6.1.
+pymumble @ https://github.com/azlux/pymumble/archive/a560e6013dfbccb3666ce8756e1ca6b790bf05c8.tar.gz

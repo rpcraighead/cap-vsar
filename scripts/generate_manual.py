@@ -1,0 +1,990 @@
+#!/usr/bin/env python3
+"""
+Generate the CAP V-SAR Flight Operations Handbook and Multi-Station Training Manual.
+Produces completely self-contained, publication-ready:
+  1. OpenDocument Text (.odt) - with embedded, perfectly sized figures (max 6.2in width)
+  2. Microsoft Word (.docx)   - with embedded, perfectly sized figures
+  3. Print-Ready PDF (.pdf)   - with embedded, perfectly sized figures
+  4. Formatted HTML (.html)
+"""
+
+import os
+import re
+import zipfile
+import subprocess
+from PIL import Image
+
+MANUAL_DIR = "/home/ron/Projects/cap-vsar/docs/manual"
+FIGURES_DIR = "/home/ron/Projects/cap-vsar/docs/figures/manual"
+
+HTML_PATH = os.path.join(MANUAL_DIR, "CAP_VSAR_Flight_Operations_Handbook.html")
+ODT_PATH = os.path.join(MANUAL_DIR, "CAP_VSAR_Flight_Operations_Handbook.odt")
+DOCX_PATH = os.path.join(MANUAL_DIR, "CAP_VSAR_Flight_Operations_Handbook.docx")
+PDF_PATH = os.path.join(MANUAL_DIR, "CAP_VSAR_Flight_Operations_Handbook.pdf")
+
+HTML_CONTENT = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CAP V-SAR Flight Operations Handbook & Training Manual</title>
+<style>
+  @page {{
+    size: letter;
+    margin: 1.0in 0.8in 1.0in 0.8in;
+    @bottom-center {{
+      content: "Page " counter(page);
+    }}
+  }}
+  body {{
+    font-family: 'Liberation Sans', 'Calibri', 'Helvetica Neue', Arial, sans-serif;
+    font-size: 11pt;
+    line-height: 1.5;
+    color: #222222;
+    background: #ffffff;
+    margin: 0;
+    padding: 0;
+  }}
+  
+  /* Cover / Title Page */
+  .cover {{
+    text-align: center;
+    padding-top: 2.5in;
+    padding-bottom: 2.5in;
+    page-break-after: always;
+  }}
+  .org-header {{
+    font-size: 14pt;
+    font-weight: bold;
+    color: #00204E;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }}
+  .doc-title {{
+    font-size: 26pt;
+    font-weight: 800;
+    color: #00204E;
+    line-height: 1.2;
+    margin: 0 0 15px 0;
+  }}
+  .doc-subtitle {{
+    font-size: 16pt;
+    font-weight: 600;
+    color: #BA0C2F;
+    margin: 0 0 40px 0;
+  }}
+  .meta-box {{
+    display: inline-block;
+    border: 2px solid #00204E;
+    padding: 15px 30px;
+    background: #F8F9FA;
+    text-align: left;
+    margin-top: 40px;
+  }}
+  .meta-row {{
+    font-size: 10pt;
+    margin: 4px 0;
+  }}
+  .meta-label {{
+    font-weight: bold;
+    color: #00204E;
+    display: inline-block;
+    width: 140px;
+  }}
+  
+  /* Headings */
+  h1 {{
+    font-size: 17pt;
+    font-weight: 800;
+    color: #00204E;
+    border-bottom: 2.5px solid #00204E;
+    padding-bottom: 5px;
+    margin-top: 35px;
+    margin-bottom: 15px;
+    page-break-after: avoid;
+  }}
+  h2 {{
+    font-size: 13.5pt;
+    font-weight: 700;
+    color: #00204E;
+    margin-top: 25px;
+    margin-bottom: 10px;
+    page-break-after: avoid;
+  }}
+  h3 {{
+    font-size: 11.5pt;
+    font-weight: 700;
+    color: #BA0C2F;
+    margin-top: 18px;
+    margin-bottom: 8px;
+    page-break-after: avoid;
+  }}
+  
+  /* Paragraphs and Lists */
+  p {{
+    margin: 0 0 10px 0;
+    text-align: justify;
+  }}
+  ul, ol {{
+    margin: 5px 0 15px 25px;
+    padding: 0;
+  }}
+  li {{
+    margin-bottom: 5px;
+  }}
+  
+  /* Callout Boxes */
+  .callout {{
+    margin: 15px 0;
+    padding: 12px 16px;
+    border-left: 5px solid;
+    border-radius: 3px;
+    font-size: 10pt;
+    line-height: 1.45;
+  }}
+  .callout-note {{
+    background-color: #EBF3FB;
+    border-color: #0056B3;
+    color: #003875;
+  }}
+  .callout-tip {{
+    background-color: #EBF8F2;
+    border-color: #1E7A3C;
+    color: #125528;
+  }}
+  .callout-caution {{
+    background-color: #FDF2F2;
+    border-color: #BA0C2F;
+    color: #7A081F;
+  }}
+  .callout-title {{
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+    display: block;
+  }}
+  
+  /* Tables */
+  table {{
+    width: 100%;
+    border-collapse: collapse;
+    margin: 15px 0;
+    font-size: 9.5pt;
+    page-break-inside: avoid;
+  }}
+  th, td {{
+    border: 1px solid #D0D5DD;
+    padding: 6px 9px;
+    text-align: left;
+  }}
+  th {{
+    background-color: #00204E;
+    color: #ffffff;
+    font-weight: 700;
+  }}
+  tr:nth-child(even) {{
+    background-color: #F8F9FA;
+  }}
+  
+  /* Figures - Constrained cleanly to standard 6.2in printable text width */
+  .figure-container {{
+    text-align: center;
+    margin: 18px 0;
+    page-break-inside: avoid;
+  }}
+  .figure-img {{
+    width: 6.2in;
+    max-width: 6.2in;
+    height: auto;
+    border: 1px solid #CBD5E1;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }}
+  .figure-caption {{
+    font-size: 9pt;
+    font-weight: 600;
+    color: #475569;
+    margin-top: 5px;
+    text-align: center;
+  }}
+  
+  /* Page breaks */
+  .page-break {{
+    page-break-before: always;
+  }}
+</style>
+</head>
+<body>
+
+<!-- COVER PAGE -->
+<div class="cover">
+  <div class="org-header">Civil Air Patrol &bull; United States Air Force Auxiliary</div>
+  <div class="doc-title">CAP V-SAR SIMULATION SYSTEM</div>
+  <div class="doc-subtitle">Flight Operations Handbook & Multi-Station Training Manual</div>
+  <p style="font-size: 12pt; color: #475569; max-width: 500px; margin: 0 auto;">
+    Standardized procedures for Civil Air Patrol electronic search and rescue training,
+    featuring the Cessna 182T NAV III Mission Observer station, N499CP flight planning,
+    and distributed exercise simulation.
+  </p>
+  
+  <div class="meta-box">
+    <div class="meta-row"><span class="meta-label">Document ID:</span> CAP-VSAR-FOH-2026-01</div>
+    <div class="meta-row"><span class="meta-label">Revision:</span> 1.3 (Training Progression: SAREX Rehearsal)</div>
+    <div class="meta-row"><span class="meta-label">Target Airframe:</span> Cessna 182T NAV III / G1000</div>
+    <div class="meta-row"><span class="meta-label">Simulator Target:</span> X-Plane 12 & Air Manager 4.2+</div>
+    <div class="meta-row"><span class="meta-label">Exercise Host:</span> ms01:8700 (Composite Stack)</div>
+    <div class="meta-row"><span class="meta-label">Date:</span> September 2026</div>
+  </div>
+</div>
+
+<!-- SECTION 1 -->
+<h1>1. System Overview & Operational Architecture</h1>
+<p>
+The Civil Air Patrol Virtual Search & Rescue (CAP V-SAR) training simulator provides end-to-end,
+procedurally authentic training for CAP aircrews, Mission Observers (MO), Mission Radio Operators (MRO),
+and Incident Command staff. The architecture separates simulation physics from instrument display
+and exercise coordination.
+</p>
+
+<h2>1.1 Distributed Multi-Station Architecture</h2>
+<p>
+Unlike single-seat flight simulators where one user controls all aircraft systems, CAP V-SAR implements
+a true crew-resource-management (CRM) environment partitioned across distinct functional layers:
+</p>
+<ul>
+  <li><b>Flight Deck / Simulator (X-Plane 12):</b> Runs aircraft aerodynamics and the custom <code>PI_capvsar_df.py</code> Python plugin, probing real terrain for line-of-sight propagation, cone of confusion, and 406 MHz burst cadences.</li>
+  <li><b>Mission Observer (MO) Station:</b> Runs on a dedicated secondary monitor or laptop via Air Manager / Air Player, presenting the G1000 MFD, GMA 1347 Audio Panel, Direction Finder head, and Technisonic TDFM-136B radio.</li>
+  <li><b>Mission Planning Module (N499CP Flight Planner):</b> Runs as a containerized service on <code>ms01:8090</code>, generating geodetic search patterns and pushing flight plans to the simulator and exercise server.</li>
+  <li><b>Exercise Control & Mission Base (Web Console):</b> Hosted on <code>ms01:8700</code>, providing real-time radar positions, scenario fault injection, message logging, and debrief track analysis.</li>
+</ul>
+
+<div class="callout callout-note">
+  <span class="callout-title">Operational Note &mdash; Voice Communications</span>
+  Inter-crew and mission base communications are routed via an authentic radio emulation layer backed by a dedicated Mumble server (port 64738 on ms01). The MO transmits on CAP FM frequencies through the TDFM-136B and GMA 1347 COM3 channel.
+</div>
+
+<!-- SECTION 2 -->
+<div class="page-break"></div>
+<h1>2. Flight Planning & Search Pattern Module</h1>
+<p>
+Pre-flight mission planning and in-flight search pattern execution are powered by the <b>N499CP Flight Planner</b>
+(deployed on <code>ms01:8090</code>). The planner combines FAA sectional raster charts with real-time performance
+polar calculations for the Cessna 182T / 172S NAV III.
+</p>
+
+<div class="figure-container">
+  <img class="figure-img" src="{FIGURES_DIR}/fig_flightplanner_main.png" style="width:6.2in;height:3.88in;" width="595" height="372" alt="Flight Planner Moving Map">
+  <div class="figure-caption">Figure 1: N499CP Flight Planner Moving Map with FAA Sectional Overlay & Nav-Log Drawer</div>
+</div>
+
+<h2>2.1 CAP Search Pattern Generators</h2>
+<p>
+Clicking the <b>SAR</b> button on the main navigation toolbar launches the geodetic pattern generation tool.
+Three standardized CAP search patterns are supported:
+</p>
+
+<h3>Expanding Square (SS)</h3>
+<p>
+Used when searching for an Emergency Locator Transmitter (ELT) or missing aircraft with a known Last Known Position (LKP)
+or distress alert datum. The pattern expands outward in concentric squares:
+</p>
+<ul>
+  <li><b>Leg Lengths:</b> Successive legs follow the progression <i>1&times;S, 1&times;S, 2&times;S, 2&times;S, 3&times;S, 3&times;S...</i> where <i>S</i> is track spacing.</li>
+  <li><b>Track Spacing:</b> Configurable between 0.5 NM and 2.0 NM depending on terrain, visibility, and target size.</li>
+  <li><b>Turns:</b> Selectable Right (standard) or Left turns at precise 90&deg; cardinal angles.</li>
+</ul>
+
+<h3>Creeping Line (CS)</h3>
+<p>
+Used to sweep an elongated search corridor, highway, valley floor, or river drainage where the wreckage is suspected along a route axis:
+</p>
+<ul>
+  <li>Flies cross-track sweeps perpendicular to the advance axis.</li>
+  <li>Sweeps alternate left and right across the track corridor (default width 3.0 NM).</li>
+  <li>Advances along the route by track spacing <i>S</i> after each cross sweep.</li>
+</ul>
+
+<h3>Parallel Track (PS)</h3>
+<p>
+Used for large-area systematic searches across CAP quadrangles. The aircraft sweeps parallel tracks back and forth across
+a rectangular search box defined by corner coordinates, axis heading, length, and width.
+</p>
+
+<h2>2.2 Simulator & Console Export Bridges</h2>
+<p>
+Once generated, the search pattern provides two immediate export capabilities:
+</p>
+<ol>
+  <li><b>Export X-Plane 12 (.fms):</b> Generates a standard FMS 1100 format flight plan containing departure, enroute fixes, and all generated search pattern waypoints (e.g. <code>SS01</code>, <code>SS02</code>...). The pilot can load this directly into the G1000 MFD flight plan catalog.</li>
+  <li><b>Push to V-SAR Console:</b> Transmits the planned search corridor over LAN to the exercise console (<code>http://exercise:8700</code>). The server creates a live scenario entry and, if an exercise sortie is active, broadcasts a tasking message to Mission Base.</li>
+</ol>
+
+<div class="callout callout-tip">
+  <span class="callout-title">Flight Tip &mdash; Fuel Reserves & Ops Normal</span>
+  The nav-log drawer computes true airspeed, ground speed, and fuel burn for the search pattern based on current GFS winds aloft. Always ensure estimated fuel allows for the mandatory CAP 1-hour daytime VFR reserve before committing to deep valley creeping-line searches.
+</div>
+
+<!-- SECTION 3 -->
+<div class="page-break"></div>
+<h1>3. Mission Observer (MO) Cockpit & Avionics Guide</h1>
+<p>
+The Mission Observer occupies the right cockpit seat of the Cessna 182T NAV III. The dedicated MO panel
+(Air Manager UUID <code>a4c8e710-5646-49e1-931f-4aeeb51e4490</code>) consolidates the entire mission observer
+workstation onto a single 1920&times;1080 canvas.
+</p>
+
+<div class="figure-container">
+  <img class="figure-img" src="{FIGURES_DIR}/fig_panel_becker517.png" style="width:6.2in;height:3.49in;" width="595" height="335" alt="MO Panel Layout 1">
+  <div class="figure-caption">Figure 2: Dedicated C182T MO Station &mdash; Layout 1 (Becker SAR-DF 517 & TDFM-136B)</div>
+</div>
+
+<h2>3.1 Instrument Arrangement & Functional Roles</h2>
+<table>
+  <tr>
+    <th style="width:25%">Instrument</th>
+    <th style="width:25%">Model & UUID</th>
+    <th>Operational Function</th>
+  </tr>
+  <tr>
+    <td><b>Garmin G1000 MFD</b></td>
+    <td>Overlay (0b852ee1...)</td>
+    <td>Multi-Function Display showing synthetic vision, moving map, terrain alerts, and flight plan waypoints. Features transparent active screen cutout for popouts or video streaming.</td>
+  </tr>
+  <tr>
+    <td><b>MO Audio Panel</b></td>
+    <td>Garmin GMA 1347 (1337420b...)</td>
+    <td>Copilot/Observer audio control. Manages headphone volume, ICS intercom, and separate COM1 / COM2 / COM3 receiver and microphone routing.</td>
+  </tr>
+  <tr>
+    <td><b>Direction Finder</b></td>
+    <td>Becker 517 / RT-600</td>
+    <td>Precision multi-band electronic homing receiver for 121.5 MHz VHF, 243.0 MHz military UHF, and 406.025 MHz COSPAS/SARSAT digital beacons.</td>
+  </tr>
+  <tr>
+    <td><b>Mission Radio</b></td>
+    <td>Technisonic TDFM-136B (26df5da8...)</td>
+    <td>Tactical VHF-FM transceiver operating on 136&ndash;174 MHz. Used for air-to-ground tactical coordination with CAP ground teams and mission base.</td>
+  </tr>
+</table>
+
+<h2>3.2 The Critical GMA 1347 Audio Panel Trap</h2>
+<p>
+The Civil Air Patrol <i>Mission Observer Guide</i> emphasizes that nearly every reported in-flight radio failure
+is actually an audio panel configuration error. The GMA 1347 enforces strict separation between receiver audio
+and transmitter microphone selection:
+</p>
+<ul>
+  <li><b>Listening to COM3:</b> Pressing the <b>COM3</b> audio key lights the annunciator and routes VHF-FM radio audio to your headset. <i>This does NOT allow you to transmit on COM3!</i></li>
+  <li><b>Transmitting on COM3:</b> You must press the <b>COM3 MIC</b> button on the top row. The illuminated microphone button dictates which transmitter receives your PTT signal.</li>
+</ul>
+
+<div class="callout callout-caution">
+  <span class="callout-title">Critical Cockpit Trap &mdash; Audio vs. Mic Selection</span>
+  Selecting COM3 audio enables you to hear mission traffic, but keying the flight yoke or hand mic will transmit on COM1 (VHF Airband / ATC) if the COM1 MIC button remains selected. Always verify both the COM3 Audio and COM3 MIC annunciators are illuminated before making tactical transmissions.
+</div>
+
+<h2>3.3 Direction Finder: Becker SAR-DF 517 vs. RHOTHETA RT-600</h2>
+<p>
+A primary training objective of the CAP V-SAR simulator is demonstrating the operational coverage difference
+between the legacy Becker 517 and the modern fleet-standard RHOTHETA RT-600:
+</p>
+
+<div class="figure-container">
+  <img class="figure-img" src="{FIGURES_DIR}/fig_panel_rt600.png" style="width:6.2in;height:3.49in;" width="595" height="335" alt="MO Panel Layout 2">
+  <div class="figure-caption">Figure 3: Dedicated C182T MO Station &mdash; Layout 2 (RHOTHETA RT-600 & TDFM-136B)</div>
+</div>
+
+<ul>
+  <li><b>Becker SAR-DF 517 (Emergency Mode):</b> The 406 COSPAS/SARSAT receiver is locked to a <i>single fixed frequency: 406.025 MHz</i>. If a modern beacon transmits on 406.037 MHz, the Becker in Emergency mode receives <b>zero signal</b>.</li>
+  <li><b>RHOTHETA RT-600 (CPSAR Groups):</b> The RT-600 receiver features seven broad-band CPSAR groups (A through S) covering 19 distinct 3 kHz channels. When set to <b>CPSAR2</b>, the RT-600 detects beacons across 406.031, 406.034, and 406.037 MHz simultaneously without retuning.</li>
+  <li><b>Becker Training Mode:</b> When switched to Training Mode, the Becker becomes freely tunable across 400&ndash;410 MHz, allowing the observer to manually tune to 406.037 MHz to re-acquire signal.</li>
+</ul>
+
+<!-- SECTION 4 -->
+<div class="page-break"></div>
+<h1>4. Instructor & Exercise Control Console</h1>
+<p>
+The Instructor Console (hosted on <code>http://ms01:8700/</code>) gives training officers comprehensive control
+over simulated flight exercises, real-time aircraft tracking, and dynamic environmental failure injection.
+</p>
+
+<div class="figure-container">
+  <img class="figure-img" src="{FIGURES_DIR}/fig_instructor_console.png" style="width:6.2in;height:3.88in;" width="595" height="372" alt="Instructor Console">
+  <div class="figure-caption">Figure 4: Instructor Control Console with Sectional Basemap & Dynamic Failure Controls</div>
+</div>
+
+<h2>4.1 Scenario Selection & Interactive Creation</h2>
+<p>
+Instructors can activate pre-scripted training sorties (e.g., Palomar ILS ESCON ELT) or construct custom scenarios
+using the built-in <b>New Scenario</b> panel:
+</p>
+<ol>
+  <li>Click the <b>New scenario</b> accordion.</li>
+  <li>Click <b>Pick on map</b> and click anywhere on the FAA VFR Sectional chart to drop the beacon pin.</li>
+  <li>Drag the amber pin to fine-tune placement (e.g. into a narrow box canyon or behind a ridge).</li>
+  <li>Specify transmitter power (watts), ground elevation (ft MSL), and transmission band (121.5 / 243 / 406 MHz).</li>
+  <li>Click <b>Create scenario</b> &mdash; the new sortie is immediately registered and ready to fly.</li>
+</ol>
+
+<h2>4.2 Injected Propagation Effects</h2>
+<p>
+To build realistic electronic search skills, instructors can toggle discrete radio propagation effects during flight:
+</p>
+<ul>
+  <li><b>Radio Horizon (Line-of-Sight):</b> Computes spherical earth curvature and terrain shielding. The DF receiver remains silent until the crew climbs above the visual radio horizon.</li>
+  <li><b>406 Burst Cadence & Timehold:</b> Emulates true 406 MHz beacon behavior &mdash; an instantaneous 0.5-second burst every 50 seconds. The DF head holds the decoded bearing during the 50-second silence.</li>
+  <li><b>Cone of Confusion:</b> When the aircraft flies directly over the beacon, the relative bearing needle spins and the signal drops momentarily, confirming station passage.</li>
+  <li><b>Multipath Reflections:</b> Injects mountain-ridge reflections that deflect the apparent bearing by up to 40&deg;, testing the crew's ability to cross-check bearings.</li>
+</ul>
+
+<!-- SECTION 5 -->
+<div class="page-break"></div>
+<h1>5. Mission Base & Debrief Modules</h1>
+
+<h2>5.1 Mission Base Operator View</h2>
+<p>
+The Mission Base console (<code>http://ms01:8700/base</code>) represents the situational map for the Mission Radio
+Operator (MRO) and Air Operations Branch Director (AOBD). In accordance with CAP training standards,
+<b>beacon truth is hidden</b> on this view.
+</p>
+
+<div class="figure-container">
+  <img class="figure-img" src="{FIGURES_DIR}/fig_mission_base.png" style="width:6.2in;height:3.88in;" width="595" height="372" alt="Mission Base Console">
+  <div class="figure-caption">Figure 5: Mission Base Console with Aircraft Radar Track and Tactical Message Log</div>
+</div>
+
+<p>
+As the aircrew radios in "Ops Normal" reports and bearing lines, Mission Base operators log the cuts into the console.
+The system projects colored bearing rays across the sectional map, allowing the staff to visualize the intersection
+box and direct ground search teams.
+</p>
+
+<h2>5.2 Post-Flight Debrief Replay</h2>
+<p>
+After the sortie is terminated, the instructor and aircrew open the <b>Debrief Console</b> (<code>http://ms01:8700/debrief</code>).
+The debrief engine replays the recorded flight second-by-second against the unmasked beacon truth:
+</p>
+
+<div class="figure-container">
+  <img class="figure-img" src="{FIGURES_DIR}/fig_debrief_console.png" style="width:6.2in;height:3.88in;" width="595" height="372" alt="Debrief Replay Console">
+  <div class="figure-caption">Figure 6: Debrief Console with Flight Track Scoring & Bearing Error Analysis</div>
+</div>
+
+<ul>
+  <li><b>Closest Point of Approach (CPA):</b> Exact distance in nautical miles and timestamp of closest approach.</li>
+  <li><b>Track Efficiency:</b> Compares total miles flown against direct-line distance to evaluate pattern discipline.</li>
+  <li><b>Bearing Cut Accuracy:</b> Displays reported cockpit bearings against truth vectors to demonstrate multi-path errors and averaging lag.</li>
+</ul>
+
+<h2>5.3 Mission Radio Operator (MRO) Base Station Radio Console</h2>
+<p>
+De-coupled from the situational radar map, the <b>Base Radio Console</b> (<code>http://ms01:8700/radio</code>) provides
+a standalone, touch- and mouse-operable communications station for Mission Radio Operators using tablets (e.g. iPad)
+or laptops. The application emulates the two primary ground radio systems deployed across Civil Air Patrol base stations:
+</p>
+
+<h3>Motorola APX 6500 (VHF-FM Tactical & Land Mobile Net)</h3>
+<p>
+The standard CAP tactical mobile and base transceiver, providing digital P25 and analog FM communications across
+136&ndash;174 MHz. Used by the MRO to manage the primary mission net, coordinate ground search teams, and
+maintain air-to-ground tactical contact with the Mission Observer on the airborne Technisonic TDFM-136B radio:
+</p>
+<ul>
+  <li><b>Zone 1 (Tactical Net):</b> <code>TAC 1</code> (148.150 MHz), <code>TAC 2</code> (148.125 MHz), <code>CC 1</code> (150.225 MHz P25 NAC $293), <code>CC 2</code> (149.275 MHz P25), <code>AIR 1</code> (150.5375 MHz), <code>AIR 2</code>, <code>SAR 1</code>, and <code>GUARD</code>.</li>
+  <li><b>Physical Controls & Display:</b> High-contrast vacuum-fluorescent green-cyan OLED display with RSSI signal meter; rotary VOL/PWR and CHANNEL knobs with touch steppers; illuminated softkeys (<code>HOME</code>, <code>ZONE ▲/▼</code>, <code>SCAN</code>, <code>MON</code>, <code>DIM</code>); and tri-color TX/RX/SCAN LEDs.</li>
+  <li><b>Acoustic Simulation:</b> Authentic Motorola 3-tone P25 talkgroup permit chirp (941/1336/1209 Hz) upon keying PTT, followed by digital squelch tail on release.</li>
+</ul>
+
+<div class="figure-container">
+  <img class="figure-img" src="{FIGURES_DIR}/fig_radio_apx.png" style="width:6.2in;height:3.88in;" width="595" height="372" alt="Motorola APX 6500 Base Radio Console">
+  <div class="figure-caption">Figure 7: Motorola APX 6500 VHF-FM Tactical Base Radio & MRO Dispatch Console</div>
+</div>
+
+<h3>Icom IC-A120 (VHF-AM Aeronautical Transceiver)</h3>
+<p>
+The standard desktop and vehicle aviation transceiver deployed at CAP base stations, staging hangars, and flight line
+dispatch to communicate directly with search aircraft on aeronautical VHF-AM frequencies (118.000&ndash;136.975 MHz):
+</p>
+<ul>
+  <li><b>Channel Presets:</b> Pre-programmed CAP aeronautical channels: <code>CH 01</code> (123.100 MHz &mdash; SAR Primary), <code>CH 02</code> (122.900 MHz &mdash; SAR Secondary / Multicom), <code>CH 03</code> (121.500 MHz &mdash; Emergency Guard / ELT Monitor), <code>CH 04</code> (122.775 MHz &mdash; Air-to-Air), <code>CH 05</code> (123.050 MHz &mdash; Unicom), and <code>CH 06</code> (126.200 MHz &mdash; Military SAR).</li>
+  <li><b>VFO Tuning & Display:</b> Ice-blue backlit LCD with large 7-segment frequency digits, memory alias, audio bar meter, and rotary tuning dial with 25 kHz / 1 MHz push-toggle stepping.</li>
+  <li><b>Acoustic Simulation:</b> Authentic VHF-AM mechanical relay click, 1000 Hz sidetone hiss, and squelch noise burst (*shhh-klick*).</li>
+</ul>
+
+<div class="figure-container">
+  <img class="figure-img" src="{FIGURES_DIR}/fig_radio_icom.png" style="width:6.2in;height:3.88in;" width="595" height="372" alt="Icom IC-A120 Aviation Base Radio Console">
+  <div class="figure-caption">Figure 8: Icom IC-A120 VHF-AM Aeronautical Air-to-Ground Base Station Console</div>
+</div>
+
+<h3>Dual Station Equipment Rack & CAP Form 110 Comms Log</h3>
+<p>
+The console supports a <b>Dual Station Rack View</b> (<code>/radio?mode=dual</code>) running both radios concurrently for dual watch.
+The dispatch section includes a live <b>CAP Form 110 Communications Log</b> that automatically records all transmissions
+with UTC timestamps and network tags, one-touch tactical canned reports, and a plain-text log export tool.
+</p>
+
+<!-- SECTION 6 -->
+<div class="page-break"></div>
+<h1>6. Dedicated Civil Air Patrol Cessna 182T NAV III (G1000 CAP) Aircraft</h1>
+
+<p>
+To fulfill the operational need for an authentic, high-performance search platform in X-Plane 12, a dedicated
+<b>Cessna 182T Skylane NAV III</b> (tail number <code>N499CP</code>) has been engineered as a standalone airframe package.
+Adapted from Laminar Research's high-fidelity Cessna 172SP G1000 base model via <code>scripts/build_c182t_package.py</code>,
+the package incorporates complete Lycoming IO-540 flight dynamics, a 3-blade constant-speed propeller, and automatic
+Garmin G1000 Manifold Pressure EIS instrumentation.
+</p>
+
+<div class="figure-container">
+  <img class="figure-img" src="{FIGURES_DIR}/fig_c182t_aircraft.png" style="width:6.2in;height:3.49in;" width="595" height="335" alt="Cessna 182T NAV III CAP Aircraft Selection">
+  <div class="figure-caption">Figure 9: Civil Air Patrol Cessna 182T NAV III (N499CP) Aircraft Package & Selection Banner</div>
+</div>
+
+<h3>Powerplant & Propeller Integration</h3>
+<ul>
+  <li><b>Lycoming IO-540-AB1A5 Engine:</b> 230 HP @ 2,400 RPM (541 cu in, fuel-injected, direct-drive).</li>
+  <li><b>McCauley 3-Blade Constant-Speed Propeller:</b> Modeled with governor blade pitch ranges from 10&deg; to 40&deg;.</li>
+  <li><b>G1000 EIS Manifold Pressure Auto-Activation:</b> In X-Plane 12, configuring a constant-speed propeller (<code>_prop_type = 1</code>) automatically instructs the Garmin G1000 MFD to render the <b>Manifold Pressure (<code>MAN IN HG</code>)</b> gauge alongside engine <b>RPM</b>, presenting identical indications to the real C182T NAV III cockpit.</li>
+  <li><b>Cowl Flaps:</b> Manual cowl flap system modeled for thermal and aerodynamic climb management.</li>
+</ul>
+
+<h3>Airframe Specifications & Performance Envelope</h3>
+<table>
+  <tr>
+    <th style="width:40%">Specification / Parameter</th>
+    <th>Operational Value</th>
+    <th>Flight Envelope Note</th>
+  </tr>
+  <tr>
+    <td>Maximum Takeoff Weight (MTOW)</td>
+    <td>3,100 lbs (1,406 kg)</td>
+    <td>Certified gross weight for full 3-person crew + mission gear</td>
+  </tr>
+  <tr>
+    <td>Basic Empty Weight</td>
+    <td>1,970 lbs (894 kg)</td>
+    <td>Useful load of 1,130 lbs</td>
+  </tr>
+  <tr>
+    <td>Total Usable Fuel</td>
+    <td>87 gal (522 lbs / 100LL)</td>
+    <td>5.5+ hour search endurance at 65% power loiter</td>
+  </tr>
+  <tr>
+    <td>Stall Speed &mdash; Clean (V<sub>S</sub>)</td>
+    <td>51 KIAS</td>
+    <td>Flaps up, gross weight stall threshold</td>
+  </tr>
+  <tr>
+    <td>Stall Speed &mdash; Flaps Full (V<sub>S0</sub>)</td>
+    <td>41 KIAS</td>
+    <td>Slow-flight search loiter safe margin</td>
+  </tr>
+  <tr>
+    <td>Best Angle of Climb (V<sub>X</sub>)</td>
+    <td>65 KIAS</td>
+    <td>Short-field and mountain ridge clearance</td>
+  </tr>
+  <tr>
+    <td>Best Rate of Climb (V<sub>Y</sub>)</td>
+    <td>80 KIAS</td>
+    <td>Enroute altitude attainment (approx 924 fpm @ sea level)</td>
+  </tr>
+  <tr>
+    <td>Best Glide Speed (V<sub>BG</sub>)</td>
+    <td>76 KIAS</td>
+    <td>Engine-out maximum gliding range</td>
+  </tr>
+  <tr>
+    <td>Flap Extension Speeds (V<sub>FE</sub>)</td>
+    <td>140 KIAS (10&deg;) / 100 KIAS (20&deg;&ndash;30&deg;)</td>
+    <td>Approach and pattern deceleration gate</td>
+  </tr>
+  <tr>
+    <td>Max Structural Cruising (V<sub>NO</sub>)</td>
+    <td>140 KIAS</td>
+    <td>Smooth-air search transit speed</td>
+  </tr>
+  <tr>
+    <td>Never Exceed Speed (V<sub>NE</sub>)</td>
+    <td>175 KIAS</td>
+    <td>Airframe structural dive limitation</td>
+  </tr>
+</table>
+
+<!-- SECTION 7 -->
+<div class="page-break"></div>
+<h1>7. Training Progression: Rehearsing a SAREX Before Flying It</h1>
+<p>
+A Search and Rescue Exercise (SAREX) is Civil Air Patrol's structured training event: a mission base under an
+Incident Commander (IC) tasks aircrews and ground teams against a scripted incident. CAP V-SAR is designed so that
+the SAREX is the <b>second</b> time a crew flies its missions, not the first. The exercise director writes the
+incident once; the wing runs it three times on the simulator — two weeks out, one week out and two days out —
+and then flies it for real. The live exercise reinforces skills learned at home instead of introducing them.
+</p>
+
+<h2>7.1 Writing the Incident Once</h2>
+<p>
+The scripted incident is built the way a real IC builds ICS 204 assignments. Example: a rented C182 is overdue on
+a VFR flight from Carlsbad (KCRQ) to Thermal (KTRM); its registered 406 MHz ELT has produced a COSPAS-SARSAT
+composite position in the mountains east of Julian. Three air tasks fall out of that:
+</p>
+<table>
+  <tr>
+    <th style="width:12%">Sortie</th>
+    <th style="width:22%">Task</th>
+    <th style="width:36%">Pattern (Handbook §2.1)</th>
+    <th>Purpose</th>
+  </tr>
+  <tr>
+    <td>A</td>
+    <td>Route search</td>
+    <td>Creeping line along the intended route, 1 nm spacing</td>
+    <td>Visual search for the aircraft along its planned track</td>
+  </tr>
+  <tr>
+    <td>B</td>
+    <td>ELT search</td>
+    <td>Transit to the composite; home on the 406 burst and 121.5 signal; expanding square from station passage</td>
+    <td>A position good enough to hand to a ground team</td>
+  </tr>
+  <tr>
+    <td>C</td>
+    <td>Grid search</td>
+    <td>Parallel track of a 15-minute grid quadrant, 1 nm spacing</td>
+    <td>Cover the case where the ELT position is wrong</td>
+  </tr>
+</table>
+<p>
+The instructor creates the scenario in the Exercise Control Console (§4): beacon on a ridge, 406.025 MHz training
+frequency, and an initial effect set of <i>radio horizon</i> and <i>terrain masking</i> only. Beacon truth is
+withheld from every other view until debrief.
+</p>
+
+<h2>7.2 The Three Sessions</h2>
+<table>
+  <tr>
+    <th style="width:22%">Session</th>
+    <th style="width:38%">What happens</th>
+    <th>What is learned</th>
+  </tr>
+  <tr>
+    <td><b>1 — T-14 days</b><br>Mission base stands up</td>
+    <td>Nothing is flown. The AOBD builds the three patterns in the Flight Planner from the ICS 204s, exports each
+        as an X-Plane <code>.fms</code> and pushes it to the base map; the terrain profile catches a leg with poor
+        clearance. The MRO joins the mission net and works the channel plan. The MOs drill the MO station: GMA 1347
+        COM3 MIC selection (§3.2), TDFM-136B channel entry, DF head power-up, squelch, scan, and tuning 406.025 not
+        406.037. Radio checks and the first 30-minute ops-normal cycle.</td>
+    <td>Every seat's equipment and the base's communications rhythm are familiar before the mission starts.</td>
+  </tr>
+  <tr>
+    <td><b>2 — T-7 days</b><br>Full mission</td>
+    <td>The IC briefs on Mumble. Sortie A flies the creeping line and calls each leg; Sortie C flies the grid and
+        meets <i>wing blanking</i> in a turn. Sortie B homes on the 406 burst; the instructor injects <i>cone of
+        confusion</i> as the aircraft nears the beacon, then <i>multipath</i>. The MO takes one bad bearing; the
+        AOBD's plotted cut disagrees with the previous three and the base asks the crew to re-fly the leg. The IC
+        retasks Sortie A onto a second grid through the MRO. Debrief reveals the beacon and scores every bearing
+        against truth.</td>
+    <td>Recognising station passage and multipath; base staff cross-checking the cockpit; retasking and
+        ops-normal discipline with three aircraft airborne. The SET notes which SQTR tasks were demonstrated.</td>
+  </tr>
+  <tr>
+    <td><b>3 — T-2 days</b><br>Dress rehearsal</td>
+    <td>Everything is now exactly as it will be on the live day: real callsigns, the real communications plan,
+        the real grid numbers and timing, the same base staff in the same roles, and the composite position moved
+        to where the practice beacon will actually be. Crews fly it cold; the instructor injects the effects that
+        gave trouble in Session 2.</td>
+    <td>Confirmation. Sortie B finds the beacon on the first expanding square; the bearing plot has no rejected
+        cuts; ops-normal reports are on time for all three aircraft.</td>
+  </tr>
+  <tr>
+    <td><b>Live SAREX</b></td>
+    <td>The same three assignments against a real practice beacon on 121.775 MHz, with real terrain, weather,
+        radios and a ground team.</td>
+    <td>Every procedure has been performed at least twice; the live day adds the airplane, the weather and the
+        pressure. The SET signs off tasks demonstrated on both the rehearsal and the live sortie.</td>
+  </tr>
+</table>
+
+<h2>7.3 What the System Measures Across the Sessions</h2>
+<table>
+  <tr>
+    <th style="width:40%">Measure</th>
+    <th style="width:25%">Source</th>
+    <th>What it tells the SET</th>
+  </tr>
+  <tr>
+    <td>Bearing error per report (degrees)</td>
+    <td>Debrief Console (§5.2)</td>
+    <td>DF technique; multipath and cone recognition</td>
+  </tr>
+  <tr>
+    <td>Closest point of approach; time to first good cut</td>
+    <td>Debrief Console</td>
+    <td>Homing effectiveness</td>
+  </tr>
+  <tr>
+    <td>Track efficiency against the assigned pattern</td>
+    <td>Debrief Console</td>
+    <td>Pattern discipline</td>
+  </tr>
+  <tr>
+    <td>Ops-normal report timing per aircraft</td>
+    <td>Form 110 / message log (§5.3)</td>
+    <td>Communications discipline at base and in the cockpit</td>
+  </tr>
+  <tr>
+    <td>Rejected or corrected cuts</td>
+    <td>Base bearing log (§5.1)</td>
+    <td>Whether base staff cross-check the cockpit</td>
+  </tr>
+  <tr>
+    <td>Session-to-session change in all of the above</td>
+    <td>Three debriefs</td>
+    <td>Whether the rehearsal worked</td>
+  </tr>
+</table>
+<p>
+The full narrative, including the current system limitations that apply to a three-aircraft rehearsal, is in
+<code>docs/USE_CASE_SAREX_REHEARSAL.md</code>.
+</p>
+
+<h1>8. Quick Reference Checklists (QRC)</h1>
+
+<h2>Mission Radio Operator (MRO) Base Station Checklist</h2>
+<table>
+  <tr>
+    <th style="width:40%">Item</th>
+    <th>Action / Setting</th>
+  </tr>
+  <tr>
+    <td>1. MRO Console URL</td>
+    <td>Open <code>http://ms01:8700/radio</code> on tablet or dispatch laptop</td>
+  </tr>
+  <tr>
+    <td>2. Radio Mode Selection</td>
+    <td>Select <b>Motorola APX 6500</b> (FM Tactical), <b>Icom IC-A120</b> (AM Aviation), or <b>Dual Station Rack</b></td>
+  </tr>
+  <tr>
+    <td>3. Power & Volume Check</td>
+    <td>Turn VOL knob clockwise; verify display illuminates and audio sidetone is active</td>
+  </tr>
+  <tr>
+    <td>4. APX 6500 Tactical Net</td>
+    <td>Verify Zone 1, select <code>TAC 1</code> (148.150 MHz) or assigned mission net</td>
+  </tr>
+  <tr>
+    <td>5. IC-A120 Airband Net</td>
+    <td>Verify <code>CH 01</code> (123.100 MHz SAR PRI) or assigned air-to-ground frequency</td>
+  </tr>
+  <tr>
+    <td>6. Squelch Adjustment</td>
+    <td>Adjust SQL knob until background receiver hiss cuts; verify SQL flag clears</td>
+  </tr>
+  <tr>
+    <td>7. Comms Check with Sortie</td>
+    <td>Click <b>Radio Check</b> or key PTT (Spacebar): <i>"CAP499, Mission Base: Radio check, how do you copy?"</i></td>
+  </tr>
+  <tr>
+    <td>8. CAP Form 110 Logging</td>
+    <td>Confirm transmission appears in Form 110 log; export text log upon sortie termination</td>
+  </tr>
+</table>
+
+<h2>Mission Observer (MO) Cockpit Pre-Flight Checklist</h2>
+<table>
+  <tr>
+    <th style="width:40%">Item</th>
+    <th>Action / Setting</th>
+  </tr>
+  <tr>
+    <td>1. Air Manager Panel</td>
+    <td>Launch "Cessna 182T MO Station", select Becker 517 or RT-600 layout</td>
+  </tr>
+  <tr>
+    <td>2. G1000 MFD Display</td>
+    <td>Verify MFD function, map orientation North-Up, 360-degree Arc</td>
+  </tr>
+  <tr>
+    <td>3. GMA 1347 Audio Panel</td>
+    <td>COM3 Audio ON (green LED), ICS Intercom VOX set, volume comfortable</td>
+  </tr>
+  <tr>
+    <td>4. GMA 1347 Mic Selector</td>
+    <td>COM3 MIC selected for tactical ground team comms; COM1 for ATC</td>
+  </tr>
+  <tr>
+    <td>5. TDFM-136B Power / Channel</td>
+    <td>Power knob ON, select mission channel, squelch open check</td>
+  </tr>
+  <tr>
+    <td>6. Direction Finder Power</td>
+    <td>PAGE knob clockwise from OFF to Page 1, display illuminates</td>
+  </tr>
+  <tr>
+    <td>7. DF Band & Frequency</td>
+    <td>Set 121.500 MHz (VHF) or 406.025 / CPSAR2 (COSPAS/SARSAT)</td>
+  </tr>
+  <tr>
+    <td>8. DF Squelch Setting</td>
+    <td>Rotate SQUELCH knob until audio hiss cuts, verify SQL annunciator</td>
+  </tr>
+</table>
+
+<h2>In-Flight Electronic Search & Homing Flow</h2>
+<table>
+  <tr>
+    <th style="width:40%">Step</th>
+    <th>Procedure</th>
+  </tr>
+  <tr>
+    <td>1. Initial Detection</td>
+    <td>Notice DF audio sweep tone; verify signal level bars > 0</td>
+  </tr>
+  <tr>
+    <td>2. Bearing Confirmation</td>
+    <td>Observe relative bearing pointer; confirm spread is under 20 degrees</td>
+  </tr>
+  <tr>
+    <td>3. Pilot Coordination</td>
+    <td>Call heading correction to pilot: <i>"Observer to Pilot: steer right 020 to home"</i></td>
+  </tr>
+  <tr>
+    <td>4. 406 MHz Burst Hold</td>
+    <td>Note timehold indicator; maintain heading between 50-second bursts</td>
+  </tr>
+  <tr>
+    <td>5. Station Passage (Cone)</td>
+    <td>Watch for bearing needle spin and rapid signal dip; call <i>"Station passage, over target"</i></td>
+  </tr>
+  <tr>
+    <td>6. Mission Base Report</td>
+    <td>Key COM3 MIC on TDFM-136B: <i>"Mission Base, CAP499 has target located at..."</i></td>
+  </tr>
+</table>
+
+</body>
+</html>
+"""
+
+def embed_and_resize_odt_images(odt_path, max_width_in=6.2):
+    """
+    1. Embeds all referenced PNG images directly into the ODT zip archive under Pictures/.
+    2. Explicitly recalculates and sets svg:width and svg:height on every <draw:frame>
+       to fit within max_width_in (6.2 inches), preventing any image overflow on pages.
+    """
+    print(f"[*] Embedding figures and enforcing max {max_width_in}in width in ODT package...")
+    zin = zipfile.ZipFile(odt_path, "r")
+    content_xml = zin.read("content.xml").decode("utf-8")
+    manifest_xml = zin.read("META-INF/manifest.xml").decode("utf-8")
+
+    img_refs = set(re.findall(r'xlink:href="([^"]+\.png)"', content_xml))
+    embedded_files = {}
+
+    for ref in img_refs:
+        fname = os.path.basename(ref)
+        abs_path = os.path.join(FIGURES_DIR, fname)
+        if os.path.exists(abs_path):
+            with open(abs_path, "rb") as f:
+                data = f.read()
+            target_in_odt = f"Pictures/{fname}"
+            embedded_files[target_in_odt] = data
+            content_xml = content_xml.replace(f'xlink:href="{ref}"', f'xlink:href="{target_in_odt}"')
+            manifest_entry = f'<manifest:file-entry manifest:full-path="{target_in_odt}" manifest:media-type="image/png"/>'
+            if target_in_odt not in manifest_xml:
+                manifest_xml = manifest_xml.replace("</manifest:manifest>", f"  {manifest_entry}\n</manifest:manifest>")
+
+            # Compute proportional dimensions for max_width_in
+            try:
+                with Image.open(abs_path) as im:
+                    orig_w, orig_h = im.size
+                    ratio = orig_h / float(orig_w)
+                    new_w = max_width_in
+                    new_h = round(new_w * ratio, 2)
+                    print(f"    - {fname}: {orig_w}x{orig_h} -> {new_w}in x {new_h}in (embedded {len(data):,} bytes)")
+            except Exception as e:
+                print(f"    - Warning reading image size for {fname}: {e}")
+
+    # Now rewrite any oversized draw:frame tags in content.xml
+    # Replace svg:width="...in" svg:height="...in"
+    def fix_frame_dims(match):
+        tag = match.group(0)
+        w_match = re.search(r'svg:width="([0-9.]+)in"', tag)
+        h_match = re.search(r'svg:height="([0-9.]+)in"', tag)
+        if w_match and h_match:
+            w = float(w_match.group(1))
+            h = float(h_match.group(1))
+            if w > max_width_in:
+                new_h = round((h / w) * max_width_in, 2)
+                tag = re.sub(r'svg:width="[0-9.]+in"', f'svg:width="{max_width_in}in"', tag)
+                tag = re.sub(r'svg:height="[0-9.]+in"', f'svg:height="{new_h}in"', tag)
+        return tag
+
+    content_xml = re.sub(r'<draw:frame[^>]+>', fix_frame_dims, content_xml)
+
+    temp_odt = odt_path + ".tmp"
+    with zipfile.ZipFile(temp_odt, "w", compression=zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.infolist():
+            if item.filename == "content.xml":
+                zout.writestr(item, content_xml.encode("utf-8"))
+            elif item.filename == "META-INF/manifest.xml":
+                zout.writestr(item, manifest_xml.encode("utf-8"))
+            else:
+                zout.writestr(item, zin.read(item.filename))
+        for target_path, data in embedded_files.items():
+            zout.writestr(target_path, data)
+
+    zin.close()
+    os.replace(temp_odt, odt_path)
+    print(f"[+] ODT package finalized with embedded and clamped figures.")
+
+def main():
+    print("[*] Generating HTML document with 6.2in-clamped image styling...")
+    with open(HTML_PATH, "w", encoding="utf-8") as f:
+        f.write(HTML_CONTENT)
+    print(f"[+] Written: {HTML_PATH}")
+
+    print("[*] Converting HTML to OpenDocument Text (.odt) via LibreOffice...")
+    cmd_odt = [
+        "libreoffice", "--headless", "--convert-to", "odt",
+        HTML_PATH, "--outdir", MANUAL_DIR
+    ]
+    subprocess.check_call(cmd_odt)
+    
+    # Embed images and enforce strict 6.2in max width
+    embed_and_resize_odt_images(ODT_PATH, max_width_in=6.2)
+
+    print("[*] Converting self-contained ODT to Microsoft Word (.docx) via LibreOffice...")
+    cmd_docx = [
+        "libreoffice", "--headless", "--convert-to", "docx",
+        ODT_PATH, "--outdir", MANUAL_DIR
+    ]
+    subprocess.check_call(cmd_docx)
+    print(f"[+] Written: {DOCX_PATH}")
+
+    print("[*] Converting self-contained ODT to Print-Ready PDF (.pdf) via LibreOffice...")
+    cmd_pdf = [
+        "libreoffice", "--headless", "--convert-to", "pdf",
+        ODT_PATH, "--outdir", MANUAL_DIR
+    ]
+    subprocess.check_call(cmd_pdf)
+    print(f"[+] Written: {PDF_PATH}")
+
+    # Copy to user's Documents folder
+    user_docs = "/home/ron/Documents"
+    if os.path.isdir(user_docs):
+        for ext in [".odt", ".docx", ".pdf"]:
+            src = os.path.join(MANUAL_DIR, f"CAP_VSAR_Flight_Operations_Handbook{ext}")
+            dst = os.path.join(user_docs, f"CAP_VSAR_Flight_Operations_Handbook{ext}")
+            import shutil
+            shutil.copy2(src, dst)
+        print(f"[+] Synchronized to {user_docs}")
+
+    print("\n[✓] All publication formats generated successfully!")
+    for p in [ODT_PATH, DOCX_PATH, PDF_PATH, HTML_PATH]:
+        size_kb = os.path.getsize(p) / 1024.0
+        print(f"    - {os.path.basename(p)}: {size_kb:,.1f} KB")
+
+if __name__ == "__main__":
+    main()

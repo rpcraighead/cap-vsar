@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<pluginstrument>
+  <aircraft>Cessna 182T</aircraft>
+  <type>Becker SAR-DF 517</type>
+  <uuid>faefb90d-5704-48c7-8deb-c683d94b4eb3</uuid>
+  <author>CAP V-SAR</author>
+  <description>Four-band precision direction finder (121.5 / 156.8 / 243 / 406.025 MHz) for CAP electronic search training. Includes receiver audio, bearing, spread, signal level, squelch gating, COSPAS/SARSAT decode and the six display pages. Signal propagation is supplied by the CAP V-SAR engine plugin through the cap/df/* datarefs.</description>
+  <compatibleFSX>false</compatibleFSX>
+  <compatibleP3D>false</compatibleP3D>
+  <compatibleXPL>true</compatibleXPL>
+  <compatibleFS2>false</compatibleFS2>
+  <compatibleFS2020>false</compatibleFS2020>
+  <version>2</version>
+  <configVersion>1</configVersion>
+  <pluginInterfaceVersion>100</pluginInterfaceVersion>
+  <prefWidth>520</prefWidth>
+  <prefHeight>520</prefHeight>
+  <source>PERSONAL</source>
+  <platforms>
+    <platform>WINDOWS</platform>
+    <platform>MAC</platform>
+    <platform>LINUX</platform>
+    <platform>RASPBERRY_PI</platform>
+  </platforms>
+  <tiers>
+    <tier>HOME_USE_STANDARD</tier>
+  </tiers>
+</pluginstrument>

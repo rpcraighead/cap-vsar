@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import propagation
+from . import propagation, radio
 
 DB = os.environ.get("CAPVSAR_DB", "/data/exercise.db")
 STATIC = Path(__file__).parent / "static"
@@ -68,6 +68,9 @@ DEFAULT_EFFECTS = {
     "radio_horizon": True, "burst_cadence": True,
     "cone_of_confusion": True, "multipath": False,
     "multipath_offset_deg": 40.0,
+    "airframe_shadowing": False,
+    "df_antenna_profile": "c182_belly",
+    "wing_null_max_loss_db": 24.0,
 }
 
 SEED = {
@@ -186,6 +189,7 @@ class PositionIn(BaseModel):
     lon: float
     alt_ft: float
     hdg_true: float = 0.0
+    df: dict[str, Any] | None = None
 
 
 class BearingIn(BaseModel):
@@ -328,17 +332,23 @@ async def ingest(p: PositionIn):
 
     df = None
     if hub.sortie and not hub.sortie.get("stopped") and hub.scenario:
-        sc = hub.scenario
-        elapsed = now - hub.sortie["started"]
-        r = propagation.compute(
-            ac,
-            {"lat": sc["beacon_lat"], "lon": sc["beacon_lon"],
-             "elev_ft": sc["beacon_elev_ft"], "band": sc["band"], "power": sc["power"]},
-            sc["effects"], elapsed)
-        df = {"valid": r.valid, "bearing_rel": r.bearing_rel,
-              "bearing_true": r.bearing_true, "signal": round(r.signal, 4),
-              "distance_nm": round(r.distance_nm, 2), "in_cone": r.in_cone,
-              "note": r.note}
+        if p.df is not None:
+            # The X-Plane plugin is authoritative when it reports receiver
+            # state. It alone has real aircraft attitude and terrain probes.
+            df = dict(p.df)
+        else:
+            # Backward-compatible path for the mock bridge and older plugins.
+            sc = hub.scenario
+            elapsed = now - hub.sortie["started"]
+            r = propagation.compute(
+                ac,
+                {"lat": sc["beacon_lat"], "lon": sc["beacon_lon"],
+                 "elev_ft": sc["beacon_elev_ft"], "band": sc["band"], "power": sc["power"]},
+                sc["effects"], elapsed)
+            df = {"valid": r.valid, "bearing_rel": r.bearing_rel,
+                  "bearing_true": r.bearing_true, "signal": round(r.signal, 4),
+                  "distance_nm": round(r.distance_nm, 2), "in_cone": r.in_cone,
+                  "note": r.note}
         ac["df"] = df
         with db() as c:
             c.execute("INSERT INTO positions VALUES (?,?,?,?,?,?,?)",
@@ -376,12 +386,11 @@ class MessageIn(BaseModel):
 @app.post("/api/messages")
 async def send_message(m: MessageIn):
     """Retasking and coordination text. Supplements voice and leaves a record."""
-    if not hub.sortie:
-        raise HTTPException(400, "no sortie running")
     now = time.time()
-    with db() as c:
-        c.execute("INSERT INTO messages (sortie_id, t, sender, recipient, body)"
-                  " VALUES (?,?,?,?,?)", (hub.sortie["id"], now, m.sender, m.recipient, m.body))
+    if hub.sortie:
+        with db() as c:
+            c.execute("INSERT INTO messages (sortie_id, t, sender, recipient, body)"
+                      " VALUES (?,?,?,?,?)", (hub.sortie["id"], now, m.sender, m.recipient, m.body))
     msg = {"type": "message", "t": now, "sender": m.sender,
            "recipient": m.recipient, "body": m.body}
     hub.messages.append(msg)
@@ -398,6 +407,37 @@ def list_messages():
 def state():
     return hub.snapshot()
 
+# Aeronautical chart tile services -- the same ones the N499CP flight planner
+# uses. Served rather than hardcoded in the page so a wing running its own tile
+# cache can repoint the console without editing JS. FAA's ArcGIS caches are
+# {z}/{y}/{x}; OSM is {z}/{x}/{y}.
+TILE_SOURCES = {
+    "vfr": os.environ.get(
+        "CAPVSAR_TILES_VFR",
+        "https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services"
+        "/VFR_Sectional/MapServer/tile/{z}/{y}/{x}"),
+    "ifr_low": os.environ.get(
+        "CAPVSAR_TILES_IFR_LOW",
+        "https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services"
+        "/IFR_AreaLow/MapServer/tile/{z}/{y}/{x}"),
+    "ifr_high": os.environ.get(
+        "CAPVSAR_TILES_IFR_HIGH",
+        "https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services"
+        "/IFR_High/MapServer/tile/{z}/{y}/{x}"),
+    "sat": os.environ.get(
+        "CAPVSAR_TILES_SAT",
+        "https://server.arcgisonline.com/ArcGIS/rest/services"
+        "/World_Imagery/MapServer/tile/{z}/{y}/{x}"),
+    "osm": os.environ.get(
+        "CAPVSAR_TILES_OSM",
+        "https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
+}
+
+
+@app.get("/api/tile-sources")
+def tile_sources():
+    """Basemap URLs for the map views. Override any of them with CAPVSAR_TILES_*."""
+    return TILE_SOURCES
 
 @app.get("/api/health")
 def health():
@@ -416,6 +456,9 @@ async def ws(sock: WebSocket):
         pass
     finally:
         hub.clients.discard(sock)
+
+
+app.include_router(radio.router)
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
@@ -437,3 +480,25 @@ def mission_base():
     """Mission base view: no instructor controls, never shows beacon truth
     until the instructor reveals it."""
     return FileResponse(STATIC / "base.html")
+
+
+@app.get("/radio")
+def base_radio():
+    """Mission base headset radio: APX 4500 / EFJohnson 5300, live Mumble voice."""
+    return FileResponse(STATIC / "mission-radio.html")
+
+
+@app.get("/radio-legacy")
+def legacy_radio():
+    """Previous APX6500 / Icom text-message training console."""
+    return FileResponse(STATIC / "radio.html")
+
+
+@app.get("/radio-ca.crt")
+def radio_certificate():
+    """Public local HTTPS trust certificate; no private keys are served."""
+    path = Path("/radio-public/mission-base-ca.crt")
+    if not path.is_file():
+        raise HTTPException(404, "The local HTTPS certificate has not been installed yet.")
+    return FileResponse(path, media_type="application/x-x509-ca-cert",
+                        filename="cap-vsar-mission-base-ca.crt")

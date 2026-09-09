@@ -1,0 +1,13 @@
+{
+    auto_https disable_redirects
+    # IP-address clients omit SNI; Docker's local IP differs from the LAN IP.
+    default_sni 192.0.2.151
+    admin off
+}
+
+# Local mission-network HTTPS. Add another local DNS name here if required.
+ms01, ms01.local, 192.0.2.151 {
+    tls internal
+    encode zstd gzip
+    reverse_proxy exercise:8700
+}

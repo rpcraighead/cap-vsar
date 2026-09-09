@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cockpit & Avionics — CAP V-SAR</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Navigation Bar -->
+  <header class="navbar">
+    <div class="container navbar-inner">
+      <a href="index.html" class="brand">
+        <span class="brand-badge">CAP V-SAR</span>
+        <div class="brand-title-group">
+          <span class="brand-name">Civil Air Patrol V-SAR</span>
+          <span class="brand-subtitle">Virtual Search & Rescue Simulator</span>
+        </div>
+      </a>
+
+      <ul class="nav-links">
+        <li><a href="index.html" class="nav-link">Overview</a></li>
+        <li><a href="cockpit.html" class="nav-link active">Cockpit & Avionics</a></li>
+        <li><a href="operations.html" class="nav-link">Base & Operations</a></li>
+        <li><a href="technical.html" class="nav-link">Engineering Specs</a></li>
+        <li><a href="deployment.html" class="nav-link">Deployment</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <div class="system-status-indicator">
+          <span class="status-dot"></span>
+          <span>Simulation Active</span>
+        </div>
+        <a href="deployment.html" class="btn btn-primary btn-sm">Get Started</a>
+      </div>
+
+      <button class="mobile-toggle" aria-label="Toggle navigation">☰</button>
+    </div>
+  </header>
+
+  <!-- Cockpit Header Banner -->
+  <section class="hero" style="padding: 50px 0 40px 0;">
+    <div class="container">
+      <div class="hero-tag-group">
+        <span class="badge badge-navy">Flight Deck & Avionics Layer</span>
+        <span class="badge badge-red">Air Manager 4.2+ & X-Plane 12</span>
+      </div>
+      <h1 class="hero-title" style="margin-top: 14px; font-size: 2.7rem;">
+        Cockpit & Tactical Avionics Systems
+      </h1>
+      <p class="hero-description" style="max-width: 800px; margin-top: 10px;">
+        An authentic high-fidelity environment built around the primary Civil Air Patrol workhorse: the <b>Cessna 182T Skylane NAV III</b>. Re-engineered with authentic Lycoming IO-540 performance, Garmin G1000 EIS instrumentation, and an observer station equipped with Becker 517 and RHOTHETA RT-600 direction finders.
+      </p>
+    </div>
+  </section>
+
+  <!-- Airframe Section -->
+  <section class="section" id="airframe-specs">
+    <div class="container">
+      <div class="spotlight-row">
+        <div class="spotlight-img-frame" data-lightbox="images/fig_c182t_aircraft.png" data-caption="Cessna 182T NAV III Skylane (N499CP) - Dedicated Standalone Aircraft Package for X-Plane 12">
+          <img src="images/fig_c182t_aircraft.png" alt="Cessna 182T NAV III Aircraft Selection Banner">
+        </div>
+        <div class="spotlight-content">
+          <span class="section-kicker">Airframe Engineering</span>
+          <h2 class="spotlight-title">Cessna 182T Skylane NAV III (N499CP)</h2>
+          <p class="spotlight-desc">
+            X-Plane 12 natively includes only the C172SP Skyhawk. To fulfill authentic CAP mission profiles requiring mountain performance, 5.5+ hour loiter endurance, and constant-speed propeller operation, we engineered an automated package builder (<code>scripts/build_c182t_package.py</code>) that transforms the high-fidelity base airframe into a dedicated Skylane.
+          </p>
+          <ul class="feature-list">
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Powerplant:</b> 230 HP Lycoming IO-540-AB1A5 (541 cu in, fuel-injected, 2,400 RPM redline).</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Constant-Speed Propeller:</b> McCauley 3-blade governor-controlled propeller (10° low / 40° high pitch).</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Garmin G1000 EIS Auto-Integration:</b> Setting constant-speed prop type automatically triggers the G1000 MFD to display the dual <b>Manifold Pressure (MAN IN HG)</b> and <b>Tachometer (RPM)</b> gauges with authentic C182T green/yellow/red arcs.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span><b>Cooling & Drag:</b> Manual cowl flaps modeled for climb thermal management and descent airspeed control.</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Airframe Specifications Table -->
+      <div class="table-responsive" style="margin-top: 32px;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Performance / Aerodynamic Metric</th>
+              <th>Cessna 182T NAV III (CAP V-SAR)</th>
+              <th>Operational Significance for Search Missions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>Maximum Takeoff Weight (MTOW)</b></td>
+              <td><code>3,100 lbs</code> (1,406 kg)</td>
+              <td>Supports full 3-person crew (Pilot, MO, Scanner) + survival gear & mission fuel</td>
+            </tr>
+            <tr>
+              <td><b>Basic Empty Weight</b></td>
+              <td><code>1,970 lbs</code> (Useful load: 1,130 lbs)</td>
+              <td>Realistic weight & balance with authentic forward/aft CG limits</td>
+            </tr>
+            <tr>
+              <td><b>Fuel Capacity (Usable)</b></td>
+              <td><code>87 gal</code> (522 lbs / 100LL Avgas)</td>
+              <td>5.5+ hour search loiter endurance at 65% power (12.2 gph)</td>
+            </tr>
+            <tr>
+              <td><b>Stall Speed &mdash; Clean (V<sub>S</sub>)</b></td>
+              <td><code>51 KIAS</code></td>
+              <td>Gross-weight flaps-up stall speed</td>
+            </tr>
+            <tr>
+              <td><b>Stall Speed &mdash; Flaps Full (V<sub>S0</sub>)</b></td>
+              <td><code>41 KIAS</code></td>
+              <td>Safe margin during tight slow-flight canyon turns</td>
+            </tr>
+            <tr>
+              <td><b>Best Angle of Climb (V<sub>X</sub>)</b></td>
+              <td><code>65 KIAS</code></td>
+              <td>Short-field and mountain terrain ridge clearance speed</td>
+            </tr>
+            <tr>
+              <td><b>Best Rate of Climb (V<sub>Y</sub>)</b></td>
+              <td><code>80 KIAS</code></td>
+              <td>High climb performance (~924 fpm @ sea level) for transit to search grid</td>
+            </tr>
+            <tr>
+              <td><b>Best Glide Speed (V<sub>BG</sub>)</b></td>
+              <td><code>76 KIAS</code></td>
+              <td>Engine-out maximum glide range airspeed</td>
+            </tr>
+            <tr>
+              <td><b>Flap Extension Range (V<sub>FE</sub>)</b></td>
+              <td><code>140 KIAS</code> (10°) / <code>100 KIAS</code> (20°–30°)</td>
+              <td>Pre-search deceleration gate into search pattern</td>
+            </tr>
+            <tr>
+              <td><b>Max Structural Cruising (V<sub>NO</sub>)</b></td>
+              <td><code>140 KIAS</code></td>
+              <td>Maximum airspeed in turbulent search air</td>
+            </tr>
+            <tr>
+              <td><b>Never Exceed Speed (V<sub>NE</sub>)</b></td>
+              <td><code>175 KIAS</code></td>
+              <td>Structural airframe dive limit</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Mission Observer Station Section -->
+  <section class="section section-alt" id="mo-station">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-kicker">Observer Avionics</span>
+        <h2 class="section-title">Dedicated Mission Observer Station Panel</h2>
+        <p class="section-lead">
+          Designed on a 1920×1080 canvas for multi-monitor simulator stations, touchscreen tablets, or Air Player LAN streaming to an observer's secondary laptop.
+        </p>
+      </div>
+
+      <!-- Tabbed Views: Becker 517 vs RT-600 -->
+      <div class="tabs-container">
+        <div class="tab-nav">
+          <button class="tab-btn active" data-target="tab-becker">Layout 1: Becker SAR-DF 517 Station</button>
+          <button class="tab-btn" data-target="tab-rt600">Layout 2: RHOTHETA RT-600 Modernization</button>
+          <button class="tab-btn" data-target="tab-instruments">Individual Mission Instruments</button>
+        </div>
+
+        <!-- Tab 1: Becker 517 -->
+        <div class="tab-pane active" id="tab-becker">
+          <div class="spotlight-row">
+            <div class="spotlight-img-frame" data-lightbox="images/fig_panel_becker517.png" data-caption="Cessna 182T Mission Observer Station with Becker SAR-DF 517, G1000 MFD, GMA 1347 Audio Panel, and TDFM-136B Radio">
+              <img src="images/fig_panel_becker517.png" alt="Becker 517 MO Station Panel">
+            </div>
+            <div class="spotlight-content">
+              <span class="badge badge-navy">Fleet Standard</span>
+              <h3 class="spotlight-title">Becker SAR-DF 517 Station Panel</h3>
+              <p class="spotlight-desc">
+                The primary electronic homing head across the Civil Air Patrol fleet. Monitored alongside the Garmin G1000 MFD and Garmin GMA 1347 audio panel.
+              </p>
+              <ul class="feature-list">
+                <li class="feature-list-item">
+                  <span class="feature-check-icon">✓</span>
+                  <span><b>Display Cutout:</b> Transparent region (196, 136, 787×592) allows popped-out X-Plane MFD windows or Air Player video streams to show cleanly behind bezel controls.</span>
+                </li>
+                <li class="feature-list-item">
+                  <span class="feature-check-icon">✓</span>
+                  <span><b>Four-Band Homing:</b> 121.500 MHz (VHF civilian), 243.000 MHz (UHF military), 156.800 MHz (Maritime CH 16), and 406.025 MHz (COSPAS-SARSAT).</span>
+                </li>
+                <li class="feature-list-item">
+                  <span class="feature-check-icon">✓</span>
+                  <span><b>True Six-Page DCU:</b> Page 1 Bearing & Spread, Page 2 360° Compass Rose, Page 3 406.025 MHz emergency burst decode, Page 6 adjustable frequency tables.</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: RT-600 -->
+        <div class="tab-pane" id="tab-rt600">
+          <div class="spotlight-row">
+            <div class="spotlight-img-frame" data-lightbox="images/fig_panel_rt600.png" data-caption="Cessna 182T Mission Observer Station with RHOTHETA RT-600 Modernization Head, G1000 MFD, GMA 1347, and TDFM-136B">
+              <img src="images/fig_panel_rt600.png" alt="RT-600 MO Station Panel">
+            </div>
+            <div class="spotlight-content">
+              <span class="badge badge-red">Modernization Fleet</span>
+              <h3 class="spotlight-title">RHOTHETA RT-600 Modernization Panel</h3>
+              <p class="spotlight-desc">
+                Replicates the modern multi-band Doppler DF system currently being fielded across upgraded CAP search airframes.
+              </p>
+              <ul class="feature-list">
+                <li class="feature-list-item">
+                  <span class="feature-check-icon">✓</span>
+                  <span><b>Full 19-Channel 406 Grid:</b> Seven pre-programmed CPSAR groups covering 406.022 MHz to 406.076 MHz in 3 kHz increments.</span>
+                </li>
+                <li class="feature-list-item">
+                  <span class="feature-check-icon">✓</span>
+                  <span><b>Concurrent Dual-Band Scan (3.3.3):</b> Automatically sweeps between assigned VHF civilian frequency (121.500 or 121.600 MHz) and UHF 406 MHz channels.</span>
+                </li>
+                <li class="feature-list-item">
+                  <span class="feature-check-icon">✓</span>
+                  <span><b>Direct Hardware Rotary Control:</b> Tuning, squelch thresholding, and page switching operable via mouse wheel, touch drag, or physical Knobster USB hardware.</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Individual Instruments -->
+        <div class="tab-pane" id="tab-instruments">
+          <div class="grid-4" style="margin-top: 10px;">
+            <div class="card" style="padding: 20px;">
+              <img src="images/preview_becker-sar-df-517.png" alt="Becker 517" style="border-radius: var(--radius-sm); margin-bottom: 14px;">
+              <h4 style="font-size: 1.1rem; color: var(--cap-navy-dark); margin-bottom: 6px;">Becker SAR-DF 517</h4>
+              <p style="font-size: 0.88rem; color: var(--text-secondary);">4-band precision DF head with 128×64 LCD dot-matrix, spread bar, and COSPAS-SARSAT decode.</p>
+            </div>
+            <div class="card" style="padding: 20px;">
+              <img src="images/preview_rhotheta-rt-600.png" alt="RT-600" style="border-radius: var(--radius-sm); margin-bottom: 14px;">
+              <h4 style="font-size: 1.1rem; color: var(--cap-navy-dark); margin-bottom: 6px;">RHOTHETA RT-600</h4>
+              <p style="font-size: 0.88rem; color: var(--text-secondary);">Modern Doppler DF with 19 COSPAS-SARSAT channels (CPSAR 1–7) and automated dual-watch sweep.</p>
+            </div>
+            <div class="card" style="padding: 20px;">
+              <img src="images/preview_cap-fm-tdfm-136b.png" alt="TDFM-136B" style="border-radius: var(--radius-sm); margin-bottom: 14px;">
+              <h4 style="font-size: 1.1rem; color: var(--cap-navy-dark); margin-bottom: 6px;">TDFM-136B Radio</h4>
+              <p style="font-size: 0.88rem; color: var(--text-secondary);">VHF-FM tactical transceiver (136–174 MHz) with authentic 24×2 dot matrix display and 12-key pad.</p>
+            </div>
+            <div class="card" style="padding: 20px;">
+              <img src="images/preview_mo-audio-panel-gma1347.png" alt="GMA 1347" style="border-radius: var(--radius-sm); margin-bottom: 14px;">
+              <h4 style="font-size: 1.1rem; color: var(--cap-navy-dark); margin-bottom: 6px;">Garmin GMA 1347</h4>
+              <p style="font-size: 0.88rem; color: var(--text-secondary);">Observer audio panel with COM3 audio and COM3 MIC isolation, ICS intercom volume, and squelch.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Crew Resource Management Section -->
+  <section class="section" id="crm-workflow">
+    <div class="container-narrow">
+      <div class="section-header">
+        <span class="section-kicker">Operational Workflow</span>
+        <h2 class="section-title">Cockpit Coordination & Search Execution</h2>
+        <p class="section-lead">The authentic division of responsibilities during airborne homing.</p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-icon-header">👨‍✈️</div>
+          <h3 class="card-title">Search Pilot Duties</h3>
+          <ul class="feature-list">
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span>Fly assigned search altitude (typically 1,000–1,500 ft AGL) and search airspeed (80–90 KIAS).</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span>Execute heading corrections called by the Mission Observer (<i>"Steer right 020 to home"</i>).</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span>Maintain outside visual scan, terrain clearance, and ATC communication on COM1.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span>Manage engine cowl flaps and CHT cooling during low-speed search loitering.</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-icon-header red">🎧</div>
+          <h3 class="card-title">Mission Observer Duties</h3>
+          <ul class="feature-list">
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span>Operate DF head: select band (121.5 VHF or 406 MHz), adjust squelch, and monitor spread bars.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span>Call directional corrections to pilot based on relative bearing pointers and signal strength.</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span>Identify station passage (antenna cone of confusion needle swing and rapid signal dip).</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span>Log coordinates on G1000 MFD and transmit beacon position to Mission Base on TDFM-136B.</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Lightbox Modal -->
+  <div class="lightbox-modal" id="lightboxModal">
+    <div class="lightbox-container">
+      <button class="lightbox-close" aria-label="Close image preview">&times;</button>
+      <img src="" alt="" class="lightbox-image">
+      <div class="lightbox-caption"></div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-bottom">
+        <div>&copy; 2026 Civil Air Patrol V-SAR Project. Developed for Virtual Search and Rescue Training.</div>
+        <div><a href="index.html" style="color: #94a3b8;">Back to Home</a> &bull; <a href="operations.html" style="color: #94a3b8;">Next: Base Operations →</a></div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
+

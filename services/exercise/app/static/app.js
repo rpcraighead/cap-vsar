@@ -1,13 +1,13 @@
 const $ = id => document.getElementById(id);
 const map = L.map('map').setView([33.15, -117.18], 11);
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-  {maxZoom: 18, attribution: '&copy; OpenStreetMap'}).addTo(map);
+capvsarCharts(map, {view: 'instructor'});
 
 const EFFECTS = [
   ['radio_horizon',     'Radio horizon',      'Nothing until you climb'],
   ['burst_cadence',     '406 burst cadence',  'Needle updates ~every 50 s, then holds'],
   ['cone_of_confusion', 'Cone of confusion',  'Bearing indeterminate overhead'],
   ['multipath',         'Multipath',          'A confident, wrong bearing'],
+  ['airframe_shadowing','Wing blanking',      'Banking can shield the selected antenna'],
 ];
 
 let state = {}, acLayers = {}, trackLines = {}, beaconMarker = null;
@@ -50,7 +50,12 @@ function render() {
     $('effects').dataset.for = sc.id || '';
     $('effects').innerHTML = EFFECTS.map(([k, label, hint]) =>
       `<label title="${hint}"><input type="checkbox" data-k="${k}" ${sc.effects[k] ? 'checked' : ''}> ${label}</label>`
-    ).join('');
+    ).join('') + `<label title="Physical antenna installation used by the propagation engine">DF antenna
+      <select id="liveAntennaProfile"><option value="c182_belly">C182 belly</option><option value="c182_top">C182 top</option></select></label>`;
+    $('liveAntennaProfile').value = sc.effects.df_antenna_profile || 'c182_belly';
+    $('liveAntennaProfile').onchange = e =>
+      fetch('/api/sorties/effects', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({df_antenna_profile: e.target.value})});
     $('effects').querySelectorAll('input').forEach(i => i.onchange = () =>
       fetch('/api/sorties/effects', {method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({[i.dataset.k]: i.checked})}));
@@ -61,9 +66,17 @@ function render() {
   $('aircraft').innerHTML = list.length ? list.map(a => {
     const d = a.df;
     let df = '<span class="no">no DF</span>';
-    if (d) df = d.valid
-      ? `<span class="ok">BRG ${d.bearing_rel.toFixed(0)}&deg; rel</span> &middot; ${d.distance_nm} nm &middot; sig ${(d.signal*100).toFixed(0)}%${d.note ? ` <span class="tag">${d.note}</span>` : ''}`
-      : `<span class="no">${d.note || 'no signal'}</span> &middot; ${d.distance_nm} nm`;
+    if (d) {
+      const detail = [];
+      if (Number.isFinite(d.roll_deg)) detail.push(`bank ${d.roll_deg.toFixed(0)}&deg;`);
+      if (d.airframe_shadowed)
+        detail.push(`airframe ${Number(d.airframe_attenuation_db || 0).toFixed(0)} dB`);
+      if (d.rx_open === false && d.valid) detail.push('RX closed / bearing held');
+      const suffix = detail.length ? ` &middot; ${detail.join(' &middot; ')}` : '';
+      df = d.valid
+        ? `<span class="ok">BRG ${Number(d.bearing_rel).toFixed(0)}&deg; rel</span> &middot; ${d.distance_nm} nm &middot; sig ${(d.signal*100).toFixed(0)}%${suffix}${d.note ? ` <span class="tag">${d.note}</span>` : ''}`
+        : `<span class="no">${d.note || 'no signal'}</span> &middot; ${d.distance_nm} nm${suffix}`;
+    }
     return `<div class="ac"><b>${a.callsign}</b> <span class="df">${a.alt_ft.toFixed(0)} ft &middot; hdg ${a.hdg_true.toFixed(0)}&deg;</span>
             <div class="df">${df}</div></div>`;
   }).join('') : 'none reporting';
@@ -114,9 +127,10 @@ function addBearing(m) {
 const fmtDur = s => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(Math.floor(s%60)).padStart(2,'0')}`;
 
 // -------------------------------------------------------------------- wiring
-async function loadScenarios() {
+async function loadScenarios(selectId) {
   const r = await fetch('/api/scenarios'); const list = await r.json();
   $('scenarioSel').innerHTML = list.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+  if (selectId) $('scenarioSel').value = selectId;
   const show = () => {
     const s = list.find(x => x.id === $('scenarioSel').value);
     $('scenarioNotes').textContent = s ? s.notes : '';
@@ -142,5 +156,115 @@ $('brgAdd').onclick = async () => {
   if (r.ok) $('brgValue').value = '';
 };
 
+// ------------------------------------------------------------- new scenario
+// Two ways in, because an instructor has coordinates sometimes and a chart the
+// rest of the time: type lat/lon, or pick the point off the sectional. The pin
+// is amber so it is never mistaken for the red truth marker, which still only
+// appears after the beacon is revealed.
+const pinIcon = L.divIcon({className:'', iconSize:[18,18], iconAnchor:[9,9], html:
+  `<div style="width:14px;height:14px;border-radius:50%;background:#e8a33d;
+     border:2px solid #8a5a00;box-shadow:0 0 0 2px rgba(255,255,255,.75)"></div>`});
+
+let pickPin = null, picking = false;
+
+const nsMsg = (t, bad) => {
+  $('nsMsg').textContent = t || '';
+  $('nsMsg').className = 'notes' + (bad ? ' nsMsg-err' : '');
+};
+
+function nsMovePin(lat, lon) {
+  if (!pickPin) {
+    pickPin = L.marker([lat, lon], {icon: pinIcon, draggable: true, zIndexOffset: 500})
+      .addTo(map).bindTooltip('new beacon', {direction:'right'});
+    pickPin.on('drag', e => {
+      const ll = e.target.getLatLng();
+      $('nsLat').value = ll.lat.toFixed(6);
+      $('nsLon').value = ll.lng.toFixed(6);
+    });
+  } else {
+    pickPin.setLatLng([lat, lon]);
+  }
+}
+
+function nsSetPicking(on) {
+  picking = on;
+  $('nsPick').textContent = on ? 'Click the map\u2026' : 'Pick on map';
+  $('nsPick').classList.toggle('active', on);
+  map.getContainer().classList.toggle('picking', on);
+}
+
+map.on('click', e => {
+  if (!picking) return;
+  $('nsLat').value = e.latlng.lat.toFixed(6);
+  $('nsLon').value = e.latlng.lng.toFixed(6);
+  nsMovePin(e.latlng.lat, e.latlng.lng);
+  nsSetPicking(false);
+  nsMsg('');
+});
+
+// Typing coordinates moves the pin, but never rewrites what is being typed.
+['nsLat', 'nsLon'].forEach(id => $(id).addEventListener('input', () => {
+  const la = parseFloat($('nsLat').value), lo = parseFloat($('nsLon').value);
+  if (isFinite(la) && isFinite(lo) && Math.abs(la) <= 90 && Math.abs(lo) <= 180)
+    nsMovePin(la, lo);
+}));
+
+$('nsPick').onclick = () => nsSetPicking(!picking);
+
+$('nsClear').onclick = () => {
+  ['nsName', 'nsLat', 'nsLon', 'nsNotes'].forEach(id => $(id).value = '');
+  $('nsElev').value = '0';
+  if (pickPin) { map.removeLayer(pickPin); pickPin = null; }
+  nsSetPicking(false);
+  nsMsg('');
+};
+
+function nsRenderEffects() {
+  const on = {radio_horizon: true, burst_cadence: true, cone_of_confusion: true,
+              multipath: false, airframe_shadowing: false};
+  $('nsEffects').innerHTML = EFFECTS.map(([k, label, hint]) =>
+    `<label title="${hint}"><input type="checkbox" data-k="${k}" ${on[k] ? 'checked' : ''}> ${label}</label>`
+  ).join('');
+}
+
+$('nsCreate').onclick = async () => {
+  const name = $('nsName').value.trim();
+  const lat  = parseFloat($('nsLat').value);
+  const lon  = parseFloat($('nsLon').value);
+  const elev = parseFloat($('nsElev').value);
+
+  if (!name)  return nsMsg('Give the scenario a name.', true);
+  if (!isFinite(lat) || Math.abs(lat) > 90)
+    return nsMsg('Latitude must be a number between -90 and 90.', true);
+  if (!isFinite(lon) || Math.abs(lon) > 180)
+    return nsMsg('Longitude must be a number between -180 and 180.', true);
+  if (!isFinite(elev))
+    return nsMsg('Ground elevation must be a number, in feet MSL.', true);
+
+  // The offset is what multipath swings the false bearing by; the server keeps
+  // it alongside the on/off switches.
+  const effects = {multipath_offset_deg: 40.0, wing_null_max_loss_db: 24.0,
+                   df_antenna_profile: $('nsAntennaProfile').value};
+  $('nsEffects').querySelectorAll('input').forEach(i => effects[i.dataset.k] = i.checked);
+
+  nsMsg('creating\u2026');
+  const r = await fetch('/api/scenarios', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      name, notes: $('nsNotes').value.trim(),
+      beacon_lat: lat, beacon_lon: lon, beacon_elev_ft: elev,
+      band: $('nsBand').value, power: 1.0, effects,
+    })});
+
+  if (!r.ok) return nsMsg(`Create failed (${r.status}). Check the coordinates and band.`, true);
+
+  const {id} = await r.json();
+  await loadScenarios(id);
+  if (pickPin) { map.removeLayer(pickPin); pickPin = null; }
+  nsSetPicking(false);
+  nsMsg(`Created and selected. Press Start sortie to fly it.`);
+  $('nsName').value = ''; $('nsNotes').value = '';
+};
+
 setInterval(() => $('clock').textContent = new Date().toUTCString().slice(17, 25) + 'Z', 1000);
-loadScenarios(); connect();
+nsRenderEffects(); loadScenarios(); connect();

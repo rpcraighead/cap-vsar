@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<pluginstrument>
+  <aircraft>Cessna 182T</aircraft>
+  <type>RHOTHETA RT-600</type>
+  <uuid>d783d409-9bfa-49f2-ad5d-883af29848d6</uuid>
+  <author>CAP V-SAR</author>
+  <description>Wideband airborne radio direction finder, the CAP fleet replacement for the Becker SAR-DF 517. Full 406 MHz channel coverage, receiver audio, DF and FRQ pages, dual-function softkeys and auto-squelch. Driven by the same cap/df/* engine datarefs as the 517 so the two heads can be flown side by side.</description>
+  <compatibleFSX>false</compatibleFSX>
+  <compatibleP3D>false</compatibleP3D>
+  <compatibleXPL>true</compatibleXPL>
+  <compatibleFS2>false</compatibleFS2>
+  <compatibleFS2020>false</compatibleFS2020>
+  <version>2</version>
+  <configVersion>1</configVersion>
+  <pluginInterfaceVersion>100</pluginInterfaceVersion>
+  <prefWidth>520</prefWidth>
+  <prefHeight>520</prefHeight>
+  <source>PERSONAL</source>
+  <platforms>
+    <platform>WINDOWS</platform>
+    <platform>MAC</platform>
+    <platform>LINUX</platform>
+    <platform>RASPBERRY_PI</platform>
+  </platforms>
+  <tiers>
+    <tier>HOME_USE_STANDARD</tier>
+  </tiers>
+</pluginstrument>

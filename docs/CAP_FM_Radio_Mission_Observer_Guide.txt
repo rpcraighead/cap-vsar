@@ -1,0 +1,150 @@
+CIVIL AIR PATROL  •  CALIFORNIA WING
+Using the CAP FM Radio as a Mission Observer
+Procedures for G1000 and non-G1000 (round-dial) CAP aircraft
+Scope. The CAP VHF-FM radio is normally operated by the observer or scanner, not the pilot. This guide covers what the Mission Observer does with it: setting up the audio panel, selecting the briefed channel, making the required reports, and troubleshooting the four or five failures that actually happen in flight. It does not cover programming the radio, which is a wing communications function.
+PREREQUISITE.  Members whose duties include unsupervised operation of radios on CAP frequencies must complete Introductory Communications User Training (ICUT), which is delivered online and followed by a skills evaluation with a mentor or evaluator. Until that is signed off, operate only under the supervision of a qualified operator.
+
+FREQUENCIES ARE NOT IN THIS DOCUMENT.  The CAP communications plan is access-restricted through eServices, and channel plans differ between aircraft. Work from the channel card in the aircraft and the comm plan given at the mission briefing. Verify the two match before you deploy.
+
+1.  The equipment
+Most CAP aircraft carry a Technisonic TDFM-136 or TDFM-136B: a P25-capable VHF-FM airborne transceiver covering 136–174 MHz in 2.5 kHz increments, with up to 200 operator-accessible memory positions. Each memory holds a receive frequency, a transmit frequency, tones for each, an alphanumeric channel name, and squelch information. Some of the programmed channels are CAP frequencies assigned by the Air Force and used to talk to mission bases and ground teams; others are programmed at the direction of the wing communications officer (mutual aid, fire, law enforcement, forest service) and almost always require prior permission from the controlling agency before use.
+Older round-dial aircraft may still carry a NAT NPX-138 instead. The controls differ, but the audio-panel logic in Section 2 is the same.
+
+Figure 1 — The two-line display. Main on top, Guard below.
+The radio displays two channels at once. The upper line is the Main (MN) channel and the lower is the Guard (GD) channel. You normally transmit and receive on Main while continuing to receive Guard, so mission base can reach you at any time regardless of what you are working. Guard channels are preset; you should not need to change them.
+What you touch, and what you leave alone
+Control
+Observer use
+Volume / squelch
+Yes. Set volume for a comfortable level and leave squelch where it opens on a briefed channel.
+Channel select (CHAN key, or scroll up/down)
+Yes. This is how you move to the briefed channel.
+MN/GD switch
+Yes, briefly — it determines whether the Main or Guard line is the one being acted on.
+HI/LO power switch
+Yes. Low power for short range; high power when working a distant base or repeater.
+SCAN
+Only if the briefing calls for it. Scan runs the scan list the current Main channel belongs to, and it locks out most of the keypad while running.
+Frequency, tone, talkgroup, NAC, scan-list edits
+No. These are wing communications functions. Editing them in flight is how an aircraft ends up unable to reach anyone.
+
+IF YOU GET LOST IN A MENU.  The radio drops back to normal operating level automatically if no command is selected within about five seconds. Press ESC to back out, and stop touching the keypad. If the keypad has been locked, press and hold ESC for two seconds to unlock.
+
+
+2.  The audio panel is the real control
+Nearly every “the radio is broken” report in flight is an audio panel selection. The panel is the hub for all communication and navigation audio and is normally set up by the pilot or the observer. In both CAP panel types the FM radio is selected as COM 3.
+
+Figure 2 — Audio routing. The mic selector decides what you transmit on; the audio keys decide what you hear.
+The single most important distinction: selecting a radio's audio lets you listen to it. Selecting its microphone position is what lets you talk on it. Hearing the ground team perfectly and getting no reply is almost always a mic-selection problem, not a radio problem.
+Non-G1000 aircraft — PMA7000MS panel
+This panel was custom-designed for CAP SAR requirements and is built to work with the TDFM-136. Points that matter to the observer:
+Power. The unit is turned on and off by pushing the Volume knob. That switch also controls the audio selector functions, the intercom, and the marker beacon receiver.
+Fail-safe. With the panel off or failed, the pilot is connected directly to COM 1 so ATC capability survives. If you lose all intercom and hear only COM 1 in the left seat, suspect the panel, not the radios.
+Mic selection. Unless the mic selector is in COM 3, at least one of the selected audio LEDs (COM 1 or COM 2) will be lit. COM 3 is the FM radio.
+Intercom. The panel includes a voice-activated (VOX) stereo intercom. The Volume knob adjusts intercom loudness for the pilot and observer only — it does not change radio audio levels or the scanners' volume.
+G1000 aircraft — GMA 1347 (or GMA 1360D in NXi aircraft)
+The FM radio is a separate box; it is not part of the G1000. Nothing about the CAP channel appears in the PFD COM window, and the G1000 frequency-transfer conventions do not apply to it. The audio panel is the only G1000-side control that matters.
+To hear the FM radio, press the COM3 audio key. Audio selected this way stays selected independently of which microphone is active, and any combination of COM audio can be heard at once.
+To talk on the FM radio, press COM3 MIC. Only one microphone source can be selected at a time — pressing COM3 MIC takes the mic away from COM1, and pressing COM1 MIC takes it back.
+Active COM audio is always heard in the headsets, so selecting COM3 MIC also brings you FM audio whether or not the COM3 audio key is lit.
+Intercom isolation. The PILOT and CREW (copilot) ICS keys control who hears whom. If your scanners suddenly go silent, check isolation before you check anything else.
+Reversionary mode. The red button on the audio panel is display reversion, not a radio control. Leave it alone unless the pilot calls for it.
+AIRFRAME VARIATION.  Some installations route the FM radio through a separate PTT position, a toggle switch, or a dedicated observer PTT rather than the standard COM3 MIC selection. Confirm on the ground, on your first flight in an unfamiliar tail number, that you can both hear and be heard — do not discover it airborne.
+
+
+3.  Observer procedure — ground setup
+At the mission briefing, write down the comm plan: primary channel, alternate, the station you report to, the reporting interval, and whether ground teams are on a separate channel. Do not accept “the usual one.”
+At the aircraft, compare the briefed channels against the channel card in that specific airframe. Channel numbers and names differ between aircraft. If they do not match, resolve it before engine start.
+Power up the audio panel and the FM radio after the avionics master, per the aircraft checklist.
+Select the Main channel: enter the channel number directly with the CHAN key, or scroll to it. Confirm the channel name on the display matches the briefed name, not just the number.
+Check the Guard line shows the expected guard channel.
+Set the audio panel: COM3 audio on so you can hear FM, and confirm you know how to move the mic between COM1 and COM3 without looking down.
+Radio check with the station named in the briefing before taxi, using the proword RADIO CHECK. Report actual reception in plain words.
+Brief the crew: who talks to whom, what the reporting interval is, and what you will say if you need the pilot to stop talking.
+
+Figure 3 — Where FM traffic falls across a typical sortie.
+4.  Observer procedure — in flight
+Division of labor. The pilot works ATC on COM 1. You work mission traffic on COM 3. Do not answer mission base during a frequency change, an approach, or any phase where the pilot needs the pilot's attention — take the call and answer thirty seconds later.
+Ops normal. Report at the interval briefed by mission staff — usually every 30 minutes. Missing them starts an overdue-aircraft sequence you will have to unwind.
+Standard report content to base or the high bird: sortie number, grid, sectional, aircraft number, takeoff time, in-grid, out-of-grid, landing, Hobbs, and fuel. Read it from your log, not from memory.
+Repeater versus simplex. Repeater channels are duplex with a tone and give range; simplex is direct aircraft-to-station. If the briefed repeater does not answer, try the briefed simplex alternate before assuming an equipment failure — but do not go channel-hunting on your own.
+Altitude is your antenna. VHF-FM is line of sight. A ground team in a canyon may be unreadable at 1,000 AGL and perfectly readable a ridge crossing later. Aircraft frequently serve as the relay between mission base and ground teams for exactly this reason.
+Sterile cockpit. Non-essential radio work stops during taxi, takeoff, approach, and landing. Mission base can wait; terrain cannot.
+Phraseology (CAPR 100-3)
+Use the assigned tactical call sign or functional designator, stated at the beginning of a series of transmissions. Identify at least once per hour.
+Calling procedure is [called station] THIS IS [calling station], OVER. Once contact is established, abbreviated procedure is acceptable.
+ICAO phonetic alphabet only. No amateur Q or Z signals, and no police ten-codes.
+End transmissions with OVER, OUT, WAIT, or WAIT OUT. ROGER means received and understood.
+Signal reports are plain descriptions — “weak but readable,” “loud but distorted.” Not “five by five” and not “Lima Charlie.”
+RADIO CHECK asks for a report of actual reception, not whether the other station likes your radio.
+5.  Troubleshooting, in the order to try it
+Symptom
+Check, in this order
+Hear nothing on FM
+COM3 audio key not selected (G1000) or mic selector not showing FM audio (PMA7000MS) → audio panel powered on (push the Volume knob) → radio volume → squelch set too tight → wrong channel selected.
+Hear them, they cannot hear you
+Mic not on COM 3 — the most common cause by far → PTT wiring or a separate FM PTT position in that airframe → HI/LO power switch on LO → wrong channel, so your transmit tone does not open their repeater.
+Nothing works, and only the pilot has COM 1
+Audio panel is off or in fail-safe. Push the Volume knob to restore panel power.
+Scanners cannot hear the crew
+Intercom isolation (PILOT / CREW keys on the G1000 panel), then individual headset volume.
+Radio is scanning and the keypad will not respond
+Scan locks out most keys. Press SCAN to stop it, or move the MN/GD switch, which terminates scan and restores normal key and switch operation.
+You keyed and nothing happened after a while
+The PTT timer will cut a transmission at its configured limit (typically 30, 60, or 90 seconds). Release, pause, and key again — and check for a stuck mic.
+Suspected stuck mic
+Everyone stops talking. Unkey all PTTs, deselect COM 3 mic, and check the crew's yoke and hand PTTs. A stuck mic blocks the whole channel and no one can tell you about it on that channel.
+Cannot reach base at all
+Climb or reposition — line of sight first. Then try the briefed alternate. Then use the aircraft's other radio and relay via ATC or another CAP aircraft. Report the failure at debrief so maintenance sees it.
+
+DO NOT REPROGRAM IN FLIGHT.  It is faster to relay through another aircraft than to rebuild a channel from the keypad, and an edited memory position leaves the next crew with a radio that no longer matches the channel card. Write the discrepancy down and hand it to maintenance and the wing communications officer.
+
+6.  Side-by-side quick reference
+
+Non-G1000 (round dial)
+G1000
+Audio panel
+PMA7000MS, CAP-specific
+GMA 1347 (GMA 1360D in NXi)
+Panel power
+Push the Volume knob
+Avionics bus; self-test on power-up
+Hear the CAP radio
+Select FM audio on the panel
+Press the COM3 audio key
+Transmit on the CAP radio
+Mic selector to COM 3
+Press COM3 MIC
+Fail-safe behavior
+Pilot connected directly to COM 1
+Reversion is display-side; COM audio follows panel
+Intercom
+VOX stereo intercom; Volume knob affects pilot and observer only
+ICS isolation via PILOT / CREW keys
+FM frequency shown on the PFD?
+n/a
+No — the FM radio is a separate box
+CAP radio itself
+TDFM-136 / 136B, or NPX-138 in older aircraft
+TDFM-136 / 136B
+
+7.  Training checklist for the trainee
+ICUT complete in the Learning Management System, plus the skills evaluation, recorded in OPS QUALS.
+Can state where the mission comm plan comes from and why frequencies are not published in training material.
+Can power up the audio panel and FM radio unaided in both aircraft types.
+Can select a briefed channel by number and confirm it by name.
+Can demonstrate hearing versus transmitting — talk on COM 3, then hand the mic back to COM 1 without looking down.
+Can pass a radio check, a departure report, and an ops normal using correct prowords.
+Can diagnose the top three failures from Section 5 out loud, on the ramp, in under a minute.
+Knows what not to touch.
+
+References
+CAPR 100-1, Communications  —  Communications policy, ICUT requirement and prerequisites, and access to the restricted communications plan (Chapter 5).https://www.gocivilairpatrol.com/media/cms/R100_001_162D77B8183A1.pdf
+CAPR 100-3, Radiotelephone Procedures  —  Call signs, calling procedure, prowords, phonetic alphabet, radio checks and signal reporting.https://www.gocivilairpatrol.com/media/cms/R100_003_4C83447E87350.pdf
+MART Vol. II — Mission Observer / SAR-DR Mission Pilot Reference Text  —  Chapter 2 covers aircraft communications; Chapter 4 covers TDFM-136 operation in the aircrew context.https://www.gocivilairpatrol.com/media/cms/CAP_MO__MP_Ref_Text_Rev_Dec_2017_18C3F2D723FEA.pdf
+Mission Observer Task Guides  —  The graded performance measures for setting up and using the aircraft radios and audio panel — written around the TDFM-136 with the PMA7000MS panel.https://nesa.cap.gov/media/cms/Mission_Observer_Task_Guides_Dec14__8B699EA4755EA.pdf
+Technisonic TDFM-136 Operator's Guide  —  Manufacturer keypad and command reference. Read it to understand the display; leave the Level 2 and Level 3 commands to the wing communications officer.https://royalcharter.cap.gov/media/cms/TDFM136_1266A452BB9C6.pdf
+Garmin G1000 Audio Panel Pilot's Guide (GMA 1347)  —  COM audio versus COM MIC selection, ICS isolation modes, and marker beacon functions.https://tx435.cap.gov/media/cms/CE182T_Cessna_G1000_Audio_Panel_7C7_DF1C1B60C2DD7.pdf
+
+Currency and airframe caution. Regulation editions change and CAP has been renumbering publications; verify the current CAPR 100-1 and 100-3 editions before quoting paragraph numbers. More importantly, installations vary between tail numbers even within a wing. Where this guide and the aircraft's own channel card, checklist, or supplement disagree, the aircraft documentation and the mission comm plan win.
+

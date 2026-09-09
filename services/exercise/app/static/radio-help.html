@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Headset setup · CAP V-SAR</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#171d1c;color:#e9ece5;font:17px/1.65 system-ui,sans-serif}main{max-width:850px;margin:auto;padding:36px 24px 80px}h1{font-size:clamp(32px,6vw,52px);line-height:1.15}h2{font-size:24px;margin-top:42px}a{color:#c8e796}li{margin:12px 0}code{overflow-wrap:anywhere}small{color:#b9c1b6}.button{display:inline-block;background:#c8e796;color:#172315;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:650}details{padding:12px 0;border-bottom:1px solid #394039}summary{cursor:pointer;font-weight:650}figure{margin:20px 0}img{width:100%;height:auto}aside{padding:16px 20px;background:#252d27;border-left:3px solid #a8c783}
+</style>
+<main>
+<a href="/radio">← Mission base radio</a>
+<h1>Connect your headset.<br>Join the mission net.</h1>
+<p>Use the web radio on the mission network or its VPN. Browser operators and Mumble crews can speak together when they select the same net.</p>
+<h2>First visit: trust the mission server</h2>
+<p>The microphone needs a trusted HTTPS connection. This local server uses its own certificate authority. Download and install the mission server’s public certificate once on each device, then reopen the secure radio page.</p>
+<p><a class="button" href="/radio-ca.crt">Download mission certificate</a></p>
+<details><summary>iPad / iPhone</summary><p>Download in Safari. Open Settings → General → VPN &amp; Device Management and install the downloaded certificate profile. Then open Settings → General → About → Certificate Trust Settings and enable full trust for the Caddy local authority. Restart Safari if necessary. See <a href="https://support.apple.com/en-us/102390">Apple’s certificate trust instructions</a>.</p></details>
+<details><summary>Windows</summary><p>Open the downloaded certificate → Install Certificate → Current User. Choose “Place all certificates in the following store” and select “Trusted Root Certification Authorities.” Finish the import, then restart your browser. A managed computer may require your administrator.</p></details>
+<details><summary>Mac</summary><p>Open the downloaded certificate in Keychain Access and add it to your login keychain. Open the certificate’s Trust settings and trust it for SSL. Reopen your browser. See <a href="https://support.apple.com/guide/keychain-access/change-the-trust-settings-of-a-certificate-kyca11871/mac">Apple’s Keychain guide</a>.</p></details>
+<details><summary>Android / other devices</summary><p>Install the downloaded file as a CA certificate in the device’s security or certificate settings. The menu varies by manufacturer. Restart the browser. On a managed tablet, ask its administrator to install the mission server certificate.</p></details>
+<p><a class="button" href="https://192.0.2.151:8743/radio">Open secure mission radio ↗</a></p>
+<h2>Start a radio session</h2>
+<ol>
+<li>Pair your Bluetooth headset in the tablet or computer’s settings. Select it for both microphone and sound output. A wired headset also works.</li>
+<li>Open the secure radio page, enter your callsign and select your mission net. Choose either radio face.</li>
+<li>Press <strong>Join mission net</strong> and allow microphone access. Choose the headset microphone from the list after permission is granted.</li>
+<li>Press <strong>Test headset sound</strong>. If sound comes from the device, select the headset in the app’s output list or in the device’s audio controls. Some browsers use only the system output selection.</li>
+<li>Hold the large <strong>HOLD TO TALK</strong> button to transmit. On a computer, you can hold the <strong>spacebar</strong> when you are not typing or adjusting a control. Release to listen.</li>
+</ol>
+<aside>Keep the radio page visible and the device awake. Switching apps, locking the screen or losing the connection ends transmission. After 60 seconds, release PTT before speaking again. Bluetooth headset call buttons are not assigned as PTT.</aside>
+<h2>Radio faces and controls</h2>
+<p>The Motorola APX 4500 O2 and EFJohnson 5300 represent two CAP-documented mobile/base radio families. CAP training references show these families; they do not establish a nationwide ranking of the two most numerous models.</p>
+<figure><img src="/static/radio-art/apx4500.svg" alt="Motorola APX 4500 O2 instrument face"><figcaption>Motorola APX 4500 · O2 control head</figcaption></figure>
+<figure><img src="/static/radio-art/efj5300.svg" alt="EFJohnson 5300 instrument face"><figcaption>EFJohnson 5300 · mobile/base control head</figcaption></figure>
+<p>The displays show training net names and your callsign. Power, net selection, home and volume controls operate the web station. The two faces share one active radio connection. Printed scan, squelch, monitor and emergency controls are artwork; those hardware functions are not simulated. This station listens to one selected net at a time.</p>
+<p>Mission audio travels through the existing Mumble server. It does not transmit over an actual VHF radio or provide an ATC connection. Use exercise traffic procedures.</p>
+<h2>References</h2>
+<ul>
+<li><a href="https://www.member.lawg.cap.gov/PDF%20Docs/Comms/ICUT%20Practical%20Exam%20Review%20Guide.pdf">CAP Louisiana Wing ICUT practical review</a> — legacy EFJohnson mobile photograph (PDF page 34) and Motorola APX 4500 base/mobile controls (pages 47–48).</li>
+<li><a href="https://slideplayer.com/slide/4644303/">CAP New Hampshire Wing ACUT presentation</a> — EFJohnson 5300 series mobile identification (slide 36; third-party hosting).</li>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia">Browser microphone requirements</a> and <a href="https://developer.mozilla.org/en-US/docs/Web/API/AudioContext/setSinkId">browser sound output selection</a>.</li>
+</ul>
+<small>CAP V-SAR · Mission base training station</small>
+</main>
+</html>

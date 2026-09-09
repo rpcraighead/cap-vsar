@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<pluginstrument>
+  <aircraft>Cessna 182T</aircraft>
+  <type>MO Audio Panel (GMA 1347)</type>
+  <uuid>1337420b-7420-4843-80eb-9d10c57a97d1</uuid>
+  <author>CAP V-SAR</author>
+  <description>Garmin GMA 1347 audio panel for the Mission Observer station. Drives the copilot side of X-Plane's audio system: MIC selection, per-source audio monitoring, split COM, marker beacon and the four ICS isolation modes. COM3 is the CAP VHF-FM mission radio and routes to the Mumble mission net rather than to a simulated transceiver.</description>
+  <compatibleFSX>false</compatibleFSX>
+  <compatibleP3D>false</compatibleP3D>
+  <compatibleXPL>true</compatibleXPL>
+  <compatibleFS2>false</compatibleFS2>
+  <compatibleFS2020>false</compatibleFS2020>
+  <version>1</version>
+  <configVersion>1</configVersion>
+  <pluginInterfaceVersion>100</pluginInterfaceVersion>
+  <prefWidth>240</prefWidth>
+  <prefHeight>1422</prefHeight>
+  <source>PERSONAL</source>
+  <platforms>
+    <platform>WINDOWS</platform>
+    <platform>MAC</platform>
+    <platform>LINUX</platform>
+    <platform>RASPBERRY_PI</platform>
+  </platforms>
+  <tiers>
+    <tier>HOME_USE_STANDARD</tier>
+  </tiers>
+</pluginstrument>

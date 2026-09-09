@@ -1,6 +1,32 @@
+# Local credentials and machine-specific agent state
 .env
-mumble/data/
-*.log
+.env.*
+!.env.example
+.agents/
+.codex/
+.claude/
+
+# Python and test caches
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
 .venv/
+
+# Runtime state and locally generated trust material
+mumble/data/
+services/*/data/
+services/flightplanner/charts/
+services/exercise/radio-public/
+backups/
+*.log
+
+# Rebuildable output and packages
+output/
+*.zip
+*.tar.gz
+docs/manual/*.odt
+docs/manual/*.docx
+
+# Editor and operating-system files
+.DS_Store
+*~

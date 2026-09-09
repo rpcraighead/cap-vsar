@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CAP V-SAR — Virtual Search & Rescue Training Platform</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Navigation Bar -->
+  <header class="navbar">
+    <div class="container navbar-inner">
+      <a href="index.html" class="brand">
+        <span class="brand-badge">CAP V-SAR</span>
+        <div class="brand-title-group">
+          <span class="brand-name">Civil Air Patrol V-SAR</span>
+          <span class="brand-subtitle">Virtual Search & Rescue Simulator</span>
+        </div>
+      </a>
+
+      <ul class="nav-links">
+        <li><a href="index.html" class="nav-link active">Overview</a></li>
+        <li><a href="cockpit.html" class="nav-link">Cockpit & Avionics</a></li>
+        <li><a href="operations.html" class="nav-link">Base & Operations</a></li>
+        <li><a href="technical.html" class="nav-link">Engineering Specs</a></li>
+        <li><a href="deployment.html" class="nav-link">Deployment</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <div class="system-status-indicator">
+          <span class="status-dot"></span>
+          <span>Simulation Active</span>
+        </div>
+        <a href="deployment.html" class="btn btn-primary btn-sm">Get Started</a>
+      </div>
+
+      <button class="mobile-toggle" aria-label="Toggle navigation">☰</button>
+    </div>
+  </header>
+
+  <!-- Hero Section (Executive Pamphlet Lead) -->
+  <section class="hero">
+    <div class="container hero-grid">
+      <div class="hero-content">
+        <div class="hero-tag-group">
+          <span class="badge badge-navy">USAF Auxiliary Training Technology</span>
+          <span class="badge badge-red">Mission Observer & Pilot Ready</span>
+          <span class="badge badge-gold">X-Plane 12 & Air Manager 4.2+</span>
+        </div>
+
+        <h1 class="hero-title">
+          Master Electronic Search & Rescue <span class="highlight-red">Before Wheels Leave the Ground</span>.
+        </h1>
+
+        <p class="hero-description">
+          The <b>CAP V-SAR Training Platform</b> bridges high-fidelity aerospace simulation with authentic tactical search avionics. Train Mission Observers, Pilots, and Radio Operators in multi-station synchronized sorties—with authentic direction finding, genuine radio horizon physics, and zero avgas burned.
+        </p>
+
+        <div class="hero-cta-group">
+          <a href="cockpit.html" class="btn btn-primary btn-lg">Explore Cockpit Systems →</a>
+          <a href="technical.html" class="btn btn-secondary btn-lg">Deep Engineering Specs</a>
+        </div>
+
+        <div class="hero-stats-row">
+          <div class="stat-item">
+            <span class="stat-value">85%</span>
+            <span class="stat-label">Cost Reduction per Qualified Crew</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">100%</span>
+            <span class="stat-label">Weather & Fleet Availability</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">406 / 121.5</span>
+            <span class="stat-label">Dual-Band Direction Finding</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-visual">
+        <div class="hero-card-frame" data-lightbox="images/fig_panel_becker517.png" data-caption="Dedicated Cessna 182T Mission Observer (MO) Station Panel featuring G1000 MFD, GMA 1347 Audio Panel, Becker SAR-DF 517, and TDFM-136B Radio">
+          <img src="images/fig_panel_becker517.png" alt="Cessna 182T Mission Observer Station Panel">
+          <div class="hero-card-caption">
+            <div>
+              <div class="hero-caption-title">Cessna 182T Mission Observer Station</div>
+              <div class="hero-caption-sub">Becker SAR-DF 517 • G1000 MFD • TDFM-136B FM Radio</div>
+            </div>
+            <span class="badge badge-outline" style="color: #ffffff; border-color: rgba(255,255,255,0.4);">Click to Zoom</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Executive Value Proposition Section -->
+  <section class="section">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-kicker">The Operational Imperative</span>
+        <h2 class="section-title">Bridging Classroom Theory & Tactical Search Competence</h2>
+        <p class="section-lead">
+          Electronic search using airborne direction finders (DF) is one of the most perishable skill sets in emergency services. CAP V-SAR eliminates the traditional bottlenecks of live flight training.
+        </p>
+      </div>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-icon-header">🎯</div>
+          <h3 class="card-title">Realistic 406 MHz Signal Physics</h3>
+          <p class="card-body">
+            Real emergency beacons cannot be legally activated for training without risking false alerts. CAP V-SAR replicates true COSPAS-SARSAT 50-second burst intervals, 520 ms pulses, hexadecimal identity decode, and antenna cone of confusion.
+          </p>
+          <div class="card-footer">
+            <span class="badge badge-navy">Physics-Accurate</span>
+            <a href="technical.html#rf-physics" style="font-weight: 700;">Learn More →</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-icon-header red">⚡</div>
+          <h3 class="card-title">Authentic Tactical Cockpit CRM</h3>
+          <p class="card-body">
+            Recreates the true division of cockpit duties: the Pilot flies airspeed, altitude, and headings while the Mission Observer operates the Becker 517 or RT-600 DF heads, adjusts squelch, manages audio panel relays, and keys the tactical FM radio.
+          </p>
+          <div class="card-footer">
+            <span class="badge badge-red">Crew Resource Mgmt</span>
+            <a href="cockpit.html" style="font-weight: 700;">Explore Cockpit →</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-icon-header gold">💰</div>
+          <h3 class="card-title">Unmatched Training ROI</h3>
+          <p class="card-body">
+            Live sorties burn expensive 100LL avgas, accumulate airframe maintenance hours, and are frequently scrubbed for weather. CAP V-SAR enables intensive, repeatable search homing practice 365 days a year for a fraction of the cost.
+          </p>
+          <div class="card-footer">
+            <span class="badge badge-gold">Zero-Fuel Training</span>
+            <a href="deployment.html" style="font-weight: 700;">Deployment Guide →</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Complete Ecosystem Feature Spotlight -->
+  <section class="section section-alt">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-kicker">End-to-End Simulation Architecture</span>
+        <h2 class="section-title">Six Integrated Stations, One Mission Net</h2>
+        <p class="section-lead">
+          From flight planning and dispatch to airborne homing and post-mission debrief, every team member trains on their real-world operational interface.
+        </p>
+      </div>
+
+      <!-- Spotlight 1: Dedicated Airframe -->
+      <div class="spotlight-row">
+        <div class="spotlight-img-frame" data-lightbox="images/fig_c182t_aircraft.png" data-caption="Dedicated Cessna 182T NAV III Skylane Package with authentic Lycoming IO-540 performance and Garmin G1000 Manifold Pressure EIS">
+          <img src="images/fig_c182t_aircraft.png" alt="Cessna 182T NAV III Aircraft Package">
+        </div>
+        <div class="spotlight-content">
+          <span class="badge badge-navy">Flight Dynamics</span>
+          <h3 class="spotlight-title">Cessna 182T NAV III (G1000 CAP) Airframe</h3>
+          <p class="spotlight-desc">
+            Engineered specifically for Civil Air Patrol operations in X-Plane 12. Replaces generic trainers with an authentic 230 HP Lycoming IO-540-AB1A5 powerplant, 3-blade constant-speed McCauley propeller, manual cowl flaps, and automatic G1000 Manifold Pressure (MAN IN HG) EIS instrumentation.
+          </p>
+          <ul class="feature-list">
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span>Authentic 3,100 lb MTOW, 87 gal fuel capacity, and C182T search loiter speeds</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span>Dedicated Civil Air Patrol N499CP livery and selection insignia</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span>Independent standalone package preserving default simulator aircraft untouched</span>
+            </li>
+          </ul>
+          <div style="margin-top: 8px;">
+            <a href="cockpit.html#airframe-specs" class="btn btn-primary btn-sm">View Airframe Specs →</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Spotlight 2: MO Station Panel -->
+      <div class="spotlight-row reverse">
+        <div class="spotlight-img-frame" data-lightbox="images/fig_panel_rt600.png" data-caption="RHOTHETA RT-600 Layout on the Cessna 182T Mission Observer Station Panel">
+          <img src="images/fig_panel_rt600.png" alt="RHOTHETA RT-600 MO Station Layout">
+        </div>
+        <div class="spotlight-content">
+          <span class="badge badge-red">Aircrew Avionics</span>
+          <h3 class="spotlight-title">Dual-Layout Mission Observer Panel</h3>
+          <p class="spotlight-desc">
+            A standalone 1920×1080 panel for Air Manager and Air Player. Designed for touch screens, secondary monitors, or networked observer laptops. Supports instantaneous layout switching between the fleet standard <b>Becker SAR-DF 517</b> and the modernization <b>RHOTHETA RT-600</b>.
+          </p>
+          <ul class="feature-list">
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span>Transparent cutout for G1000 MFD popout or Air Player LAN video streaming</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span>Garmin GMA 1347 Audio Panel with realistic COM3 audio/MIC selection switches</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span>Technisonic TDFM-136B VHF-FM tactical mission radio with live dot-matrix display</span>
+            </li>
+          </ul>
+          <div style="margin-top: 8px;">
+            <a href="cockpit.html#mo-station" class="btn btn-primary btn-sm">Inspect Avionics Stack →</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Spotlight 3: Ground Radio Console -->
+      <div class="spotlight-row">
+        <div class="spotlight-img-frame" data-lightbox="images/fig_radio_dual.png" data-caption="Dual Station Equipment Rack View running Motorola APX 6500 and Icom IC-A120 concurrently with live CAP Form 110 Communications Log">
+          <img src="images/fig_radio_dual.png" alt="MRO Base Radio Console">
+        </div>
+        <div class="spotlight-content">
+          <span class="badge badge-gold">Ground Operations</span>
+          <h3 class="spotlight-title">MRO Base Radio & Dispatch Console</h3>
+          <p class="spotlight-desc">
+            A responsive, browser-based radio console for Mission Radio Operators on tablets or laptops. Features authentic tactical faceplates for the <b>Motorola APX 6500</b> (VHF-FM) and <b>Icom IC-A120</b> (VHF-AM Aviation).
+          </p>
+          <ul class="feature-list">
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span>Acoustic simulation: Motorola 3-tone P25 chirps, AM sidetone hiss, squelch tails</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span>Automated CAP Form 110 radio log with UTC timestamps and plain-text export</span>
+            </li>
+            <li class="feature-list-item">
+              <span class="feature-check-icon">✓</span>
+              <span>Dual-watch rack view allowing concurrent tactical FM and aeronautical AM monitoring</span>
+            </li>
+          </ul>
+          <div style="margin-top: 8px;">
+            <a href="operations.html#base-radio" class="btn btn-primary btn-sm">View Dispatch Consoles →</a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Interactive System Showcase Gallery -->
+  <section class="section">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-kicker">Interactive System Tour</span>
+        <h2 class="section-title">Built for Every Role in the Search Operation</h2>
+        <p class="section-lead">Click any console screenshot below to inspect the high-resolution interface.</p>
+      </div>
+
+      <div class="grid-3">
+        <!-- Card 1: Flight Planner -->
+        <div class="showcase-card">
+          <div class="showcase-img-wrap" data-lightbox="images/fig_flightplanner_sar.png" data-caption="N499CP Flight Planner: Automated Geodetic Search Pattern Generator (Expanding Square, Creeping Line, Parallel Track) with FAA Sectional Underlays">
+            <img src="images/fig_flightplanner_sar.png" alt="Flight Planner SAR Patterns">
+            <div class="showcase-zoom-hint">🔍 View High-Res</div>
+          </div>
+          <div class="showcase-details">
+            <h4 class="showcase-title">N499CP Flight Planner</h4>
+            <p class="showcase-desc">
+              Computes geodetically accurate Expanding Square, Creeping Line, and Parallel Track search patterns. Exports directly into X-Plane FMS flight plans.
+            </p>
+            <div class="showcase-meta">
+              <span class="badge badge-navy">FAA Sectionals</span>
+              <span class="badge badge-outline">FMS Export</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 2: Instructor Console -->
+        <div class="showcase-card">
+          <div class="showcase-img-wrap" data-lightbox="images/fig_instructor_console.png" data-caption="Instructor Console: Real-time radar tracking, beacon coordinate placement, and scenario fault injection (drift, attenuation, receiver failure)">
+            <img src="images/fig_instructor_console.png" alt="Instructor Console">
+            <div class="showcase-zoom-hint">🔍 View High-Res</div>
+          </div>
+          <div class="showcase-details">
+            <h4 class="showcase-title">Instructor & Scenario Console</h4>
+            <p class="showcase-desc">
+              Drop emergency beacons anywhere on the map, inject atmospheric attenuation, induce receiver squelch faults, and monitor aircraft telemetry live.
+            </p>
+            <div class="showcase-meta">
+              <span class="badge badge-red">Scenario Control</span>
+              <span class="badge badge-outline">Fault Injection</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 3: Debrief Console -->
+        <div class="showcase-card">
+          <div class="showcase-img-wrap" data-lightbox="images/fig_debrief_console.png" data-caption="Debrief Console: Post-flight flight path replay against ground truth beacon location, closest point of approach (CPA), and bearing error scoring">
+            <img src="images/fig_debrief_console.png" alt="Debrief Console">
+            <div class="showcase-zoom-hint">🔍 View High-Res</div>
+          </div>
+          <div class="showcase-details">
+            <h4 class="showcase-title">Mission Debrief & Scoring</h4>
+            <p class="showcase-desc">
+              Objective post-sortie review. Replays recorded flight paths against truth beacon location, computes closest point of approach (CPA), and scores search track efficiency.
+            </p>
+            <div class="showcase-meta">
+              <span class="badge badge-gold">Track Scoring</span>
+              <span class="badge badge-outline">CPA Analysis</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Comparison Table: Live Training vs CAP V-SAR -->
+  <section class="section section-alt">
+    <div class="container-narrow">
+      <div class="section-header">
+        <span class="section-kicker">Mission Readiness Analysis</span>
+        <h2 class="section-title">Live Flight Training vs. CAP V-SAR Simulation</h2>
+        <p class="section-lead">How virtual search & rescue simulation multiplies squadron training volume while safeguarding budgets and airframes.</p>
+      </div>
+
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Evaluation Factor</th>
+              <th>Live Flight Training Sorties</th>
+              <th>CAP V-SAR Virtual Sorties</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>Operating Cost / Hour</b></td>
+              <td>$180 – $240+ (100LL avgas, oil, engine reserve)</td>
+              <td><b>$0.00</b> (Standard electricity only)</td>
+            </tr>
+            <tr>
+              <td><b>Weather Restrictions</b></td>
+              <td>Grounded by ceilings, visibility, wind, icing</td>
+              <td><b>100% Available 365 Days / Year</b></td>
+            </tr>
+            <tr>
+              <td><b>Emergency Beacon Homing</b></td>
+              <td>Restricted to low-power practice beacons or simulated bearings</td>
+              <td><b>Full 406 MHz COSPAS-SARSAT + 121.5 MHz VHF Homing</b></td>
+            </tr>
+            <tr>
+              <td><b>Terrain Horizon & Shadowing</b></td>
+              <td>Difficult to safely practice mountain canyon masking</td>
+              <td><b>Physics-accurate 3D ray-tracing terrain shielding</b></td>
+            </tr>
+            <tr>
+              <td><b>Observer Cockpit Avionics</b></td>
+              <td>Shared across few airframes; expensive to rewire</td>
+              <td><b>Becker 517 & RT-600 switchable on touch displays</b></td>
+            </tr>
+            <tr>
+              <td><b>Objective Post-Mission Scoring</b></td>
+              <td>Subjective observer log notes; hard to assess error</td>
+              <td><b>Recorded radar track replay, CPA distance & error curve</b></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Call to Action Banner -->
+  <section class="section">
+    <div class="container">
+      <div class="cta-banner">
+        <div class="cta-banner-content">
+          <h2 class="cta-banner-title">Equip Your Squadron with Mission-Ready Search Training</h2>
+          <p class="cta-banner-desc">
+            CAP V-SAR is open, modular, and ready for deployment on local stations or networked training exercises. Explore the complete engineering specifications and deployment topology today.
+          </p>
+          <div class="cta-actions">
+            <a href="cockpit.html" class="btn btn-primary btn-lg">Explore Cockpit Systems</a>
+            <a href="deployment.html" class="btn btn-gold btn-lg">View Deployment Guide</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Lightbox Modal -->
+  <div class="lightbox-modal" id="lightboxModal">
+    <div class="lightbox-container">
+      <button class="lightbox-close" aria-label="Close image preview">&times;</button>
+      <img src="" alt="" class="lightbox-image">
+      <div class="lightbox-caption"></div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="footer-brand-title">Civil Air Patrol V-SAR</div>
+          <p class="footer-brand-desc">
+            Virtual Search and Rescue Training Platform. Designed for high-fidelity electronic homing, tactical communication, and aircrew crew resource management.
+          </p>
+          <div style="margin-top: 8px;">
+            <span class="badge badge-outline" style="color:#94a3b8; border-color:#334155;">USAF Auxiliary Training Resource</span>
+          </div>
+        </div>
+
+        <div>
+          <h5 class="footer-col-title">Systems</h5>
+          <ul class="footer-links">
+            <li><a href="cockpit.html" class="footer-link">Cessna 182T NAV III</a></li>
+            <li><a href="cockpit.html#mo-station" class="footer-link">MO Station Panel</a></li>
+            <li><a href="cockpit.html#df-heads" class="footer-link">Becker SAR-DF 517</a></li>
+            <li><a href="cockpit.html#df-heads" class="footer-link">RHOTHETA RT-600</a></li>
+            <li><a href="cockpit.html#tdfm" class="footer-link">TDFM-136B Radio</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h5 class="footer-col-title">Operations</h5>
+          <ul class="footer-links">
+            <li><a href="operations.html#base-radio" class="footer-link">MRO Base Radio</a></li>
+            <li><a href="operations.html#flight-planner" class="footer-link">N499CP Flight Planner</a></li>
+            <li><a href="operations.html#mission-base" class="footer-link">Mission Base Map</a></li>
+            <li><a href="operations.html#debrief" class="footer-link">Debrief & Scoring</a></li>
+            <li><a href="operations.html#form-110" class="footer-link">CAP Form 110 Comms</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h5 class="footer-col-title">Engineering</h5>
+          <ul class="footer-links">
+            <li><a href="technical.html#rf-physics" class="footer-link">RF Propagation Physics</a></li>
+            <li><a href="technical.html#datarefs" class="footer-link">Dataref Contracts</a></li>
+            <li><a href="technical.html#cospas" class="footer-link">406 MHz Protocol Specs</a></li>
+            <li><a href="deployment.html" class="footer-link">Installation & Setup</a></li>
+            <li><a href="technical.html#testing" class="footer-link">Test Verification Suite</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <div>&copy; 2026 Civil Air Patrol V-SAR Project. Developed for Virtual Search and Rescue Training.</div>
+        <div>X-Plane 12 &bull; Air Manager 4.2+ &bull; Garmin G1000 SVT</div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
+

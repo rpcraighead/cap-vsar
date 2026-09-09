@@ -2,8 +2,7 @@
 // highest-value artefact the system produces, so it always shows the answer.
 const $ = id => document.getElementById(id);
 const map = L.map('map').setView([33.15, -117.18], 11);
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-  {maxZoom: 18, attribution: '&copy; OpenStreetMap'}).addTo(map);
+capvsarCharts(map, {view: 'debrief'});
 
 let data = null, t0 = 0, t1 = 0, playing = false, timer = null;
 const layers = L.layerGroup().addTo(map);

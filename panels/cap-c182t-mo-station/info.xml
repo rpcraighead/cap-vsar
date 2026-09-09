@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8"?>
+<panel>
+  <uuid>a4c8e710-5646-49e1-931f-4aeeb51e4490</uuid>
+  <name>Cessna 182T MO Station</name>
+  <author>CAP V-SAR</author>
+  <position>RIGHT</position>
+  <aircraftType>PROP</aircraftType>
+  <cockpitType>GLASS</cockpitType>
+  <engineCount>1</engineCount>
+  <description>Civil Air Patrol Mission Observer (MO) dedicated station panel for the Cessna 182T NAV III. Features the Garmin G1000 MFD, MO Audio Panel (GMA 1347), Becker SAR-DF 517 / RHOTHETA RT-600 direction finder, and Technisonic TDFM-136B VHF-FM mission radio. Ideal for multi-monitor setups or Air Player streaming to a second computer/touch display.</description>
+  <version>1</version>
+  <source>PERSONAL</source>
+  <tiers>
+    <tier>HOME_USE_STANDARD</tier>
+  </tiers>
+  <aircraftModels>
+    <aircraftModel isGeneric="true">
+      <make>Cessna</make>
+      <model>182T</model>
+      <flightSimulators>
+        <flightSimulator>FSX</flightSimulator>
+        <flightSimulator>XPLANE</flightSimulator>
+        <flightSimulator>PREPAR3D</flightSimulator>
+        <flightSimulator>FS2020</flightSimulator>
+      </flightSimulators>
+      <layouts>
+        <layout>
+          <uuid>e1c8e710-5646-49e1-931f-4aeeb51e4491</uuid>
+          <name>MO Station (Becker 517)</name>
+          <position>RIGHT</position>
+          <description>Mission Observer Station with Garmin G1000 MFD, GMA 1347 Audio Panel, Becker SAR-DF 517 Direction Finder, and TDFM-136B VHF-FM Mission Radio.</description>
+          <backgroundMode>LAYOUT_BACKGROUND</backgroundMode>
+          <backgroundColor>#00000000</backgroundColor>
+          <width>1920</width>
+          <height>1080</height>
+          <clickThru>false</clickThru>
+          <editable>true</editable>
+          <platforms>
+            <platform>WINDOWS</platform>
+            <platform>MAC</platform>
+            <platform>LINUX</platform>
+            <platform>RASPBERRY_PI</platform>
+            <platform>ANDROID</platform>
+            <platform>IPAD</platform>
+            <platform>ESP32</platform>
+          </platforms>
+          <properties />
+          <instruments>
+            <instrument>
+              <uuid>0b852ee1-6006-4e2b-9cdf-e397b3f16ab1</uuid>
+              <x>40</x>
+              <y>100</y>
+              <width>1100</width>
+              <height>715</height>
+              <properties>
+                <property>
+                  <name>Display unit function</name>
+                  <value>MFD</value>
+                </property>
+              </properties>
+            </instrument>
+            <instrument>
+              <uuid>1337420b-7420-4843-80eb-9d10c57a97d1</uuid>
+              <x>1155</x>
+              <y>100</y>
+              <width>121</width>
+              <height>715</height>
+              <properties />
+            </instrument>
+            <instrument>
+              <uuid>faefb90d-5704-48c7-8deb-c683d94b4eb3</uuid>
+              <x>1360</x>
+              <y>100</y>
+              <width>460</width>
+              <height>460</height>
+              <properties />
+            </instrument>
+            <instrument>
+              <uuid>26df5da8-8ce7-4255-bb0e-520453134609</uuid>
+              <x>1310</x>
+              <y>580</y>
+              <width>560</width>
+              <height>294</height>
+              <properties />
+            </instrument>
+          </instruments>
+        </layout>
+        <layout>
+          <uuid>e2c8e710-5646-49e1-931f-4aeeb51e4492</uuid>
+          <name>MO Station (RT-600)</name>
+          <position>RIGHT</position>
+          <description>Mission Observer Station with Garmin G1000 MFD, GMA 1347 Audio Panel, RHOTHETA RT-600 Direction Finder, and TDFM-136B VHF-FM Mission Radio.</description>
+          <backgroundMode>LAYOUT_BACKGROUND</backgroundMode>
+          <backgroundColor>#00000000</backgroundColor>
+          <width>1920</width>
+          <height>1080</height>
+          <clickThru>false</clickThru>
+          <editable>true</editable>
+          <platforms>
+            <platform>WINDOWS</platform>
+            <platform>MAC</platform>
+            <platform>LINUX</platform>
+            <platform>RASPBERRY_PI</platform>
+            <platform>ANDROID</platform>
+            <platform>IPAD</platform>
+            <platform>ESP32</platform>
+          </platforms>
+          <properties />
+          <instruments>
+            <instrument>
+              <uuid>0b852ee1-6006-4e2b-9cdf-e397b3f16ab1</uuid>
+              <x>40</x>
+              <y>100</y>
+              <width>1100</width>
+              <height>715</height>
+              <properties>
+                <property>
+                  <name>Display unit function</name>
+                  <value>MFD</value>
+                </property>
+              </properties>
+            </instrument>
+            <instrument>
+              <uuid>1337420b-7420-4843-80eb-9d10c57a97d1</uuid>
+              <x>1155</x>
+              <y>100</y>
+              <width>121</width>
+              <height>715</height>
+              <properties />
+            </instrument>
+            <instrument>
+              <uuid>d783d409-9bfa-49f2-ad5d-883af29848d6</uuid>
+              <x>1360</x>
+              <y>100</y>
+              <width>460</width>
+              <height>460</height>
+              <properties />
+            </instrument>
+            <instrument>
+              <uuid>26df5da8-8ce7-4255-bb0e-520453134609</uuid>
+              <x>1310</x>
+              <y>580</y>
+              <width>560</width>
+              <height>294</height>
+              <properties />
+            </instrument>
+          </instruments>
+        </layout>
+      </layouts>
+    </aircraftModel>
+  </aircraftModels>
+</panel>
+
