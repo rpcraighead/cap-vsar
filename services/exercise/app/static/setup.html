@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CAP V-SAR - Exercise & Fleet Setup</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/vendor/qrcode.min.js"></script>
+</head>
+<body class="setup-body">
+
+<header>
+  <div class="brand"><b>CAP V-SAR</b> <span>Exercise & Fleet Setup</span></div>
+  <div id="status" class="status online">Setup Mode</div>
+  <div class="spacer"></div>
+  <a class="navlink" href="/">Exercise Console</a>
+  <a class="navlink" href="/base">Mission Base</a>
+  <a class="navlink" href="/radio">Base Radio</a>
+  <a class="navlink" href="/debrief">Debrief</a>
+  <div id="userBadge" class="user-badge mono">👤 Instructor</div>
+  <button id="logoutBtn" class="ghost btn-sm">Log out</button>
+</header>
+
+<main class="setup-main">
+  <div class="setup-container">
+    <div class="setup-header-block">
+      <h1>Exercise Director Setup</h1>
+      <p class="subtitle">Configure participating aircraft, aircrew members, and ground communications staff. Generate secure login codes and scannable QR codes for immediate mobile or desktop onboarding.</p>
+    </div>
+
+    <!-- Step 1: Exercise Parameters -->
+    <div class="setup-card">
+      <div class="card-title">1. Exercise Parameters</div>
+      <div class="form-grid">
+        <div>
+          <label for="exName">Exercise Name</label>
+          <input id="exName" value="Civil Air Patrol SAREX Exercise" placeholder="e.g. CAWG Pauma Valley SAREX">
+        </div>
+        <div>
+          <label for="exScenario">Target Exercise Scenario</label>
+          <select id="exScenario"></select>
+        </div>
+      </div>
+      <div id="scenarioDesc" class="notes" style="margin-top:8px"></div>
+    </div>
+
+    <!-- Step 2: Fleet & Airplanes -->
+    <div class="setup-card">
+      <div class="card-title-row">
+        <div class="card-title">2. Aircraft Fleet Configuration</div>
+        <div class="stepper-group">
+          <span class="stepper-label">Number of Airplanes:</span>
+          <button type="button" class="btn-stepper" data-count="1">1</button>
+          <button type="button" class="btn-stepper" data-count="2">2</button>
+          <button type="button" class="btn-stepper" data-count="3">3</button>
+          <button type="button" class="btn-stepper" data-count="4">4</button>
+        </div>
+      </div>
+      <p class="hint">Configure tail numbers, callsigns, direction finder heads, and crew positions for each participating search aircraft.</p>
+      
+      <div id="aircraftGrid" class="aircraft-grid"></div>
+    </div>
+
+    <!-- Step 3: Ground Base & Communications Staff -->
+    <div class="setup-card">
+      <div class="card-title">3. Ground Operations & Mission Radio Staff</div>
+      <p class="hint">Assign ground roles for Mission Base, communications watches, and mobile Urban Direction Finding (UDF) teams.</p>
+      
+      <div class="staff-grid">
+        <div class="staff-option-box">
+          <label class="checkbox-label">
+            <input type="checkbox" id="staffMro1" checked disabled>
+            <b>Mission Radio Operator 1 (MRO 1)</b>
+          </label>
+          <span class="notes">Primary VHF-FM tactical net controller & CAP Form 110 logging watch.</span>
+        </div>
+
+        <div class="staff-option-box">
+          <label class="checkbox-label">
+            <input type="checkbox" id="staffMro2" checked>
+            <b>Mission Radio Operator 2 (MRO 2)</b>
+          </label>
+          <span class="notes">Aeronautical VHF-AM airband watch (123.100 MHz SAR & flight line).</span>
+        </div>
+
+        <div class="staff-option-box">
+          <label class="checkbox-label">
+            <input type="checkbox" id="staffUdf1" checked>
+            <b>Ground Search Team 1 (UDF 1)</b>
+          </label>
+          <span class="notes">Mobile vehicle or foot team utilizing smartphone PTT walkie-talkie & bearing reports.</span>
+        </div>
+
+        <div class="staff-option-box">
+          <label class="checkbox-label">
+            <input type="checkbox" id="staffUdf2">
+            <b>Ground Search Team 2 (UDF 2)</b>
+          </label>
+          <span class="notes">Secondary mobile team for cross-bearing triangulation.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Bar -->
+    <div class="setup-actions">
+      <button id="saveSetupBtn" class="primary btn-lg">Generate Roster & Invite Codes</button>
+      <button id="resetSetupBtn" class="ghost">Reset Defaults</button>
+      <button id="printBadgesBtn" class="ghost">🖨️ Print Access Badges</button>
+    </div>
+
+    <!-- Step 4: Participant Roster & QR Badges -->
+    <div id="rosterSection" class="setup-card" style="margin-top:24px">
+      <div class="card-title-row">
+        <div class="card-title">4. Participant Access Cards & Scannable QR Badges</div>
+        <div class="roster-meta mono" id="rosterCount">0 Participants</div>
+      </div>
+      <p class="hint">Participants can scan their assigned QR badge with their smartphone camera or enter the 6-character code at <code>/login</code> to instantly access their role console.</p>
+
+      <div id="rosterGrid" class="roster-grid"></div>
+    </div>
+  </div>
+</main>
+
+<script src="/static/setup.js"></script>
+</body>
+</html>

@@ -89,11 +89,40 @@ def digital_406_burst() -> bytes:
     return pcm_wav(samples)
 
 
+def receiver_noise() -> bytes:
+    """Two seamless seconds of VHF/UHF receiver background noise / discriminator hiss."""
+    duration = 2.0
+    num_samples = round(RATE * duration)
+    rng = random.Random(121500)
+    white = [rng.uniform(-1.0, 1.0) for _ in range(num_samples)]
+    samples: list[float] = [0.0] * num_samples
+    lp = 0.0
+    hp = 0.0
+    alpha_lp = 2.0 * math.pi * 3200.0 / RATE
+    alpha_hp = 2.0 * math.pi * 300.0 / RATE
+    for _ in range(2):
+        for val in white:
+            lp += alpha_lp * (val - lp)
+            hp += alpha_hp * (lp - hp)
+    for i, val in enumerate(white):
+        lp += alpha_lp * (val - lp)
+        hp += alpha_hp * (lp - hp)
+        samples[i] = (lp - hp) * 0.55
+
+    fade_len = 256
+    for i in range(fade_len):
+        w = i / fade_len
+        samples[i] = w * samples[i] + (1.0 - w) * samples[num_samples - fade_len + i]
+
+    return pcm_wav(samples)
+
+
 def assets() -> dict[str, bytes]:
     return {
         "elt_analog_df.wav": analog_elt(True),
         "elt_analog_clean.wav": analog_elt(False),
         "elt_406_burst.wav": digital_406_burst(),
+        "elt_noise.wav": receiver_noise(),
     }
 
 

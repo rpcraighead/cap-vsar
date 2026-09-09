@@ -73,18 +73,61 @@ component rather than the two the plan sketched.
     cap/scenario/beacon_elev  float    feet MSL
 """
 import collections
+import configparser
 import hashlib
 import json
 import math
+import os
 import random
 import threading
 import time
+import urllib.error
 import urllib.request
 
 import xp
 
-CONSOLE = "http://192.0.2.151:8700"
-CALLSIGN = "CAP-1"
+# O-2: three aircraft used to mean three hand-edited copies of this file,
+# because CONSOLE/CALLSIGN/PLUGIN_KEY were literals. They now come from
+# capvsar_station.ini next to wherever this plugin is actually deployed
+# (built by scripts/build_station_kit.py), so the tracked source in
+# xplane/ stays identical for every station and deploy_xplane_plugin.py's
+# hash check keeps meaning something. A station with no ini - or a
+# pre-O-2 install that only ever had this file - gets exactly the old
+# hardcoded single-station defaults, so this is not a breaking change.
+_DEFAULT_CONSOLE = "http://192.0.2.151:8700"
+_DEFAULT_CALLSIGN = "CAP-1"
+STATION_INI = os.path.join(os.path.dirname(os.path.abspath(__file__)), "capvsar_station.ini")
+
+
+def _load_station_config(path=STATION_INI):
+    """Read [station] console/callsign/plugin_key from an ini beside the
+    plugin. Missing file, missing section, or a missing individual key all
+    fall back independently - a station can override just the callsign.
+
+    CAPVSAR_TOKEN_PLUGIN, if set, always wins over the ini's plugin_key: the
+    env var is the documented mechanism used by the exercise console's own
+    tokened routes (docs/DATAREF_CONTRACT.md) and by ms01 deploys, and a
+    station.ini checked out alongside a plugin should not silently defeat it.
+    """
+    console, callsign = _DEFAULT_CONSOLE, _DEFAULT_CALLSIGN
+    plugin_key = os.environ.get("CAPVSAR_TOKEN_PLUGIN", "")
+    if os.path.exists(path):
+        cfg = configparser.ConfigParser()
+        cfg.read(path)
+        if cfg.has_section("station"):
+            console = cfg.get("station", "console", fallback=console)
+            callsign = cfg.get("station", "callsign", fallback=callsign)
+            if not plugin_key:
+                plugin_key = cfg.get("station", "plugin_key", fallback="")
+    return console, callsign, plugin_key
+
+
+# Shared secret for the console's plugin routes. The console withholds the
+# beacon position from every browser until the instructor reveals, so this key
+# is how the engine that actually needs it - this one - gets it. Without a key
+# the console answers 503 and the DF stays silent rather than searching for a
+# beacon at 0,0.
+CONSOLE, CALLSIGN, PLUGIN_KEY = _load_station_config()
 POLL_S = 3.0            # scenario refresh
 REPORT_S = 2.0          # position report
 LOOP_S = 0.25           # DF recompute
@@ -550,6 +593,11 @@ class PythonInterface:
         return "CAP V-SAR DF", "org.cap.vsar.df", "Direction finder propagation engine"
 
     def XPluginEnable(self):
+        # A fresh event: XPluginDisable sets the old one and X-Plane reuses the
+        # instance, so re-enabling with the set event started a thread that
+        # exited on its first check. The datarefs kept publishing stale state
+        # with no console link and nothing said so.
+        self.stop = threading.Event()
         self.loop = xp.createFlightLoop(self.flight_loop, xp.FlightLoop_Phase_AfterFlightModel)
         xp.scheduleFlightLoop(self.loop, LOOP_S)
         self.net = threading.Thread(target=self.net_worker, daemon=True)
@@ -558,6 +606,12 @@ class PythonInterface:
 
     def XPluginDisable(self):
         self.stop.set()
+        # Give the worker a moment to notice, but never block X-Plane on it: it
+        # may be inside a 4 s urlopen. It is a daemon and the event is set, so
+        # it will exit on its own either way.
+        if self.net and self.net.is_alive():
+            self.net.join(timeout=1.0)
+        self.net = None
         if self.loop:
             xp.destroyFlightLoop(self.loop)
             self.loop = None
@@ -596,7 +650,7 @@ class PythonInterface:
             ground = self.terrain_ft(lat, lon)
             if ground is None:
                 continue                      # unloaded scenery: assume clear
-            ray = b_ft + (ac_ft - b_ft) * fr  # linear, adequate at these ranges
+            ray = ac_ft + (b_ft - ac_ft) * fr  # linear, adequate at these ranges
             if ground > ray + 50.0:           # 50 ft margin for probe noise
                 return True
         return False
@@ -619,6 +673,12 @@ class PythonInterface:
         """True during the ~440 ms a 406 beacon is actually radiating."""
         return (time.time() - self.started) % BURST_PERIOD_S < BURST_LEN_S
 
+    def tuned_hz(self):
+        """The channel the crew has selected, ignoring any scan stepping."""
+        if not self.panel_seen:
+            return self.beacon_hz()
+        return float(self.active_freq_hz) if self.active_freq_hz else self.beacon_hz()
+
     def effective_freq_hz(self):
         """
         What the receiver is listening to this instant.
@@ -630,7 +690,7 @@ class PythonInterface:
         """
         if not self.panel_seen:
             return self.beacon_hz()
-        tuned = float(self.active_freq_hz) if self.active_freq_hz else self.beacon_hz()
+        tuned = self.tuned_hz()
         if not self.scan_enable:
             return tuned
         # 517 3.3.3: surveil the COSPAS/SARSAT burst, and in the 5-45 s gap
@@ -682,15 +742,21 @@ class PythonInterface:
             xp.log("CAP V-SAR: compute failed: %s" % e)
         return LOOP_S
 
-    def silent(self, keep_distance=False):
-        """Noise floor. Nothing is being received; nothing is held."""
+    def silent(self, keep_distance=False, keep_hold=False):
+        """Noise floor. Nothing is being received.
+
+        keep_hold leaves the TIMEHOLD bearing standing for a caller that is
+        about to run hold_or_drop: the receiver is quiet for a reason the crew
+        expects, not because the signal was lost.
+        """
         self.valid, self.signal, self.blocked, self.in_cone = 0, 0.0, 0, 0
         self.airframe_shadowed = 0
         self.airframe_attenuation_db = 0.0
         self.rx_open = 0
-        self.spread = 0.0
-        self.samples.clear()
-        self.held = None
+        if not keep_hold:
+            self.spread = 0.0
+            self.samples.clear()
+            self.held = None
         if not keep_distance:
             self.distance = 0.0
 
@@ -733,9 +799,14 @@ class PythonInterface:
         self.distance = d
         brg = bearing_true(lat, lon, b_lat, b_lon)
 
-        # radio horizon: 1.23 * sqrt(height above the beacon)
+        # Radio horizon. Both ends contribute: 1.23*(sqrt(h_ac) + sqrt(h_bcn)),
+        # heights in feet MSL. The old form used the aircraft's height *above
+        # the beacon*, which collapsed to zero the moment the beacon sat higher
+        # than the aircraft - so an aircraft in a valley below a ridge-top
+        # beacon a mile away heard nothing at all. Terrain between the two is a
+        # separate question, answered by the line-of-sight probe below.
         if eff.get("radio_horizon", True):
-            horizon = 1.23 * math.sqrt(max(alt_ft - b_ft, 0.0))
+            horizon = 1.23 * (math.sqrt(max(alt_ft, 0.0)) + math.sqrt(max(b_ft, 0.0)))
             if d > horizon:
                 self.silent(keep_distance=True)
                 self.decode_tick(False)
@@ -753,7 +824,18 @@ class PythonInterface:
                 self.decode_tick(False)
                 return
             if not tuned_to(listening_hz, self.beacon_hz(), self.rx_span_hz):
-                self.silent(keep_distance=True)
+                if self.scan_enable and listening_hz != self.tuned_hz():
+                    # Scan has stepped off the tuned channel between bursts
+                    # (517 3.3.3). That is the receiver doing its job, not the
+                    # signal going away, and TIMEHOLD is precisely what carries
+                    # the bearing across the gap. Clearing it here made the
+                    # bearing vanish the instant each 440 ms burst ended - in
+                    # the 517's normal 406 posture, scan on.
+                    self.silent(keep_distance=True, keep_hold=True)
+                    self.hold_or_drop(now)
+                else:
+                    # Genuinely parked on the wrong channel: nothing to hold.
+                    self.silent(keep_distance=True)
                 self.decode_tick(False)
                 self.scan_hold_hz = None
                 return
@@ -940,31 +1022,82 @@ class PythonInterface:
             self.cs_lat = self.cs_lon = 0.0
 
     # ------------------------------------------------------- network thread
+    def truth_note(self, state, message):
+        """Log a change in whether the console will give us the beacon.
+
+        Once per transition, not once per poll: a silent DF is the symptom the
+        crew reports, and this is where the reason gets recorded.
+        """
+        if getattr(self, "_truth_state", None) != state:
+            self._truth_state = state
+            xp.log("CAP V-SAR: " + message)
+
+    def fetch_scenario(self):
+        """The running sortie, with beacon truth, from the console.
+
+        Returns the decoded body, or None when the console is reachable but
+        will not serve truth - the caller then goes silent rather than
+        pointing the DF at a stale or null position.
+        """
+        req = urllib.request.Request(CONSOLE + "/api/plugin/scenario",
+                                     headers={"X-CAPVSAR-Token": PLUGIN_KEY}
+                                     if PLUGIN_KEY else {})
+        try:
+            with urllib.request.urlopen(req, timeout=4) as r:
+                st = json.load(r)
+            self.truth_note("ok", "beacon truth channel open")
+            return st
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                # Console predates the plugin truth channel. Fall back to the
+                # public state so the sortie flag still tracks, but that feed
+                # withholds the beacon, so the DF stays silent.
+                self.truth_note("legacy", "console has no /api/plugin/scenario "
+                                          "- update it; DF has no beacon truth")
+            elif e.code == 503:
+                self.truth_note("unconfigured", "console has no CAPVSAR_TOKEN_PLUGIN "
+                                                "set - DF has no beacon truth")
+            elif e.code == 403:
+                self.truth_note("rejected", "console rejected this station's plugin "
+                                            "key - DF has no beacon truth")
+            else:
+                self.truth_note("http%d" % e.code,
+                                "console returned HTTP %d for beacon truth" % e.code)
+            return None
+
     def net_worker(self):
         last_report = 0.0
         while not self.stop.is_set():
             try:
-                with urllib.request.urlopen(CONSOLE + "/api/state", timeout=4) as r:
-                    st = json.load(r)
-                sc = st.get("scenario") or {}
-                so = st.get("sortie") or {}
-                running = bool(so and not so.get("stopped"))
-                # beacon truth is withheld until reveal, so fall back to whatever
-                # was written into the writable datarefs
-                if running and sc.get("beacon_lat") is not None:
-                    self.scn.update({"active": 1, "lat": sc["beacon_lat"],
-                                     "lon": sc["beacon_lon"],
-                                     "elev_ft": sc.get("beacon_elev_ft", 0.0),
-                                     "band": float(sc.get("band", 121.5)),
-                                     "beacon_freq_hz": sc.get("beacon_freq_hz"),
-                                     "power": sc.get("power", 1.0),
-                                     "cs": sc.get("cs", {}),
-                                     "effects": sc.get("effects", {})})
-                elif running:
-                    self.scn["active"] = 1
-                    self.scn["effects"] = sc.get("effects", self.scn["effects"])
-                else:
+                st = self.fetch_scenario()
+                if st is None:
+                    # Console is up but will not give us the beacon. Silence is
+                    # the honest state: a DF homing on a stale or null position
+                    # teaches the crew something false.
                     self.scn["active"] = 0
+                else:
+                    sc = st.get("scenario") or {}
+                    so = st.get("sortie") or {}
+                    running = bool(so and not so.get("stopped"))
+                    if running and sc.get("beacon_lat") is not None:
+                        self.scn.update({"active": 1, "lat": sc["beacon_lat"],
+                                         "lon": sc["beacon_lon"],
+                                         "elev_ft": sc.get("beacon_elev_ft", 0.0),
+                                         "band": float(sc.get("band", 121.5)),
+                                         "beacon_freq_hz": sc.get("beacon_freq_hz"),
+                                         "power": sc.get("power", 1.0),
+                                         "cs": sc.get("cs", {}),
+                                         "effects": sc.get("effects", {})})
+                    elif running:
+                        # Sortie running but no beacon in the payload: the
+                        # scenario is incomplete. Effects still apply, but
+                        # there is nothing to home on.
+                        self.truth_note("no-beacon",
+                                        "sortie running with no beacon position")
+                        self.scn["active"] = 0
+                        self.scn["effects"] = sc.get("effects", self.scn["effects"])
+                    else:
+                        self.scn["active"] = 0
             except Exception:
                 pass                          # console offline is not an error
 
@@ -1009,9 +1142,13 @@ class PythonInterface:
                                      else ""),
                         }
                     body = json.dumps(report).encode()
+                    headers = {"Content-Type": "application/json"}
+                    if PLUGIN_KEY:
+                        # Position ingest carries the same key: the console
+                        # gates it on the plugin role once tokens are set.
+                        headers["X-CAPVSAR-Token"] = PLUGIN_KEY
                     req = urllib.request.Request(
-                        CONSOLE + "/api/positions", data=body,
-                        headers={"Content-Type": "application/json"})
+                        CONSOLE + "/api/positions", data=body, headers=headers)
                     urllib.request.urlopen(req, timeout=4).read()
                 except Exception:
                     pass

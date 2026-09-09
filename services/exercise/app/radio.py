@@ -33,6 +33,7 @@ CHANNELS = [
     {"id": "briefing", "label": "BRIEFING", "name": "Briefing Room"},
 ]
 SESSIONS: set = set()
+CHANNEL_ACTIVITY: dict[str, float] = {}
 
 
 @router.get('/api/radio/config')
@@ -42,6 +43,43 @@ def config():
             "accessCodeRequired": bool(os.getenv('CAPVSAR_RADIO_ACCESS_CODE')),
             "configured": bool(os.getenv('CAPVSAR_MUMBLE_HOST')),
             "securePort": int(os.getenv('CAPVSAR_RADIO_HTTPS_PORT', '8743'))}
+
+
+@router.get('/api/radio/rx')
+def rx_status():
+    now = time.monotonic()
+    return {
+        "main_rx": (now - CHANNEL_ACTIVITY.get('primary', 0) < 0.4),
+        "guard_rx": (now - CHANNEL_ACTIVITY.get('alternate', 0) < 0.4),
+        "channels": {k: (now - v < 0.4) for k, v in CHANNEL_ACTIVITY.items()}
+    }
+
+
+ICS_STATE: dict = {
+    "mode": "ALL",
+    "split_com": False,
+    "pilot_isolated": False,
+    "copilot_isolated": False,
+    "crew_isolated": False,
+}
+
+
+@router.get('/api/radio/ics')
+def ics_status():
+    return dict(ICS_STATE)
+
+
+@router.post('/api/radio/ics')
+def update_ics(payload: dict):
+    mode = str(payload.get('mode', ICS_STATE['mode'])).upper()
+    if mode in ('ALL', 'PILOT', 'COPILOT', 'CREW'):
+        ICS_STATE['mode'] = mode
+        ICS_STATE['pilot_isolated'] = (mode == 'PILOT')
+        ICS_STATE['copilot_isolated'] = (mode in ('PILOT', 'COPILOT'))
+        ICS_STATE['crew_isolated'] = (mode == 'CREW')
+    if 'split_com' in payload:
+        ICS_STATE['split_com'] = bool(payload['split_com'])
+    return dict(ICS_STATE)
 
 
 class TransmitGate:
@@ -122,7 +160,27 @@ class MumbleRadio:
             return
         if not pcm or len(pcm) % 2 or len(pcm) > RATE * 2:
             return
+
+        # Check ICS isolation: PILOT mode isolates pilot from copilot/crew path
+        if ICS_STATE.get('pilot_isolated'):
+            spk_u = name.upper()
+            self_u = self.callsign.upper()
+            is_spk_pilot = ('PILOT' in spk_u and 'COPILOT' not in spk_u)
+            is_self_pilot = ('PILOT' in self_u and 'COPILOT' not in self_u)
+            is_spk_crew = ('OBSERVER' in spk_u or 'COPILOT' in spk_u or 'CREW' in spk_u or 'MO' in spk_u)
+            is_self_crew = ('OBSERVER' in self_u or 'COPILOT' in self_u or 'CREW' in self_u or 'MO' in self_u)
+            if (is_spk_pilot and is_self_crew) or (is_spk_crew and is_self_pilot):
+                return
+
+        # Split COM drops MO from FM mission net
+        if ICS_STATE.get('split_com'):
+            self_u = self.callsign.upper()
+            if ('MO' in self_u or 'OBSERVER' in self_u) and self.channel_key in ('primary', 'alternate'):
+                return
+
         now = time.monotonic()
+        if self.channel_key:
+            CHANNEL_ACTIVITY[self.channel_key] = now
         if now-self.rx_announced.get(session, 0) > .3:
             self.enqueue({"type": "rx", "speaker": name, "session": session})
             self.rx_announced[session] = now
@@ -217,6 +275,16 @@ class MumbleRadio:
                 self.gate.renewed = time.monotonic()
         elif action == 'ping':
             self.enqueue({"type": "pong"})
+        elif action == 'ics':
+            mode = str(data.get('mode', ICS_STATE['mode'])).upper()
+            if mode in ('ALL', 'PILOT', 'COPILOT', 'CREW'):
+                ICS_STATE['mode'] = mode
+                ICS_STATE['pilot_isolated'] = (mode == 'PILOT')
+                ICS_STATE['copilot_isolated'] = (mode in ('PILOT', 'COPILOT'))
+                ICS_STATE['crew_isolated'] = (mode == 'CREW')
+            if 'split_com' in data:
+                ICS_STATE['split_com'] = bool(data['split_com'])
+            self.enqueue({"type": "ics", **ICS_STATE})
         else:
             raise ValueError('Unknown radio command.')
 

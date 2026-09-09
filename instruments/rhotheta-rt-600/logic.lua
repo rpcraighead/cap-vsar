@@ -139,14 +139,15 @@ local function current_freq() return FREQS[st.freq_index] end
 -- engine's own repaint. See the Becker's logic.lua for the log evidence and
 -- the caveat that this is a best-effort fix, not verified live.
 local function redraw()
-    if canvas_id then pcall(canvas_draw, canvas_id, draw_lcd) end
+    if canvas_id then canvas_draw(canvas_id, draw_lcd) end
 end
 
 -- Audio follows instantaneous squelch state, never a bearing retained by
 -- TIMEHOLD. The receiver stays muted during its five-second power-up screen.
 local function sync_audio()
     df_audio.update(st.power and not st.booting, df.state.rx_open,
-                    df.state.band_mhz, st.volume / 99, false)
+                    df.state.band_mhz, st.volume / 99, false,
+                    (df.state.signal or 0) / 100)
 end
 
 --- §2.3.3(1): on a COSPAS-SARSAT channel, a squelch of 0 or 60 means the unit
@@ -573,7 +574,6 @@ end)
 -- Keep the Last Signal and burst timers ticking between engine updates.
 timer_start(0, 250, function()
     df.tick(0.25)
-    if st.power and not st.booting then redraw() end
 end)
 
 df.set_power(false)

@@ -68,3 +68,92 @@ font:inherit;resize:vertical}
 button.active{background:var(--blue);color:#fff;border-color:var(--blue)}
 #map.picking,#map.picking .leaflet-grab,#map.picking .leaflet-interactive{cursor:crosshair}
 .nsMsg-err{color:var(--red)}
+
+/* Setup Page Layout */
+.setup-body{background:var(--bg);min-height:100vh}
+.setup-main{display:block;padding:24px 16px;height:auto;overflow-y:auto}
+.setup-container{max-width:1080px;margin:0 auto}
+.setup-header-block{margin-bottom:24px}
+.setup-header-block h1{margin:0 0 6px;color:var(--navy);font-size:24px;font-weight:700}
+.setup-header-block .subtitle{margin:0;color:var(--grey);font-size:14px;line-height:1.4}
+.setup-card{background:#fff;border:1px solid var(--line);border-radius:6px;padding:20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.card-title{font-size:15px;font-weight:700;color:var(--navy);margin-bottom:12px;text-transform:uppercase;letter-spacing:.04em}
+.card-title-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:12px}
+.card-title-row .card-title{margin-bottom:0}
+
+/* Form Grids & Steppers */
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.stepper-group{display:flex;align-items:center;gap:6px}
+.stepper-label{font-size:13px;font-weight:600;color:var(--navy);margin-right:6px}
+.btn-stepper{width:36px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;border:1px solid var(--blue);border-radius:4px;font-size:13px;font-weight:700}
+.btn-stepper.active{background:var(--blue);color:#fff}
+.aircraft-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:14px}
+.ac-config-card{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:14px}
+.ac-card-header{display:flex;align-items:center;justify-content:space-between}
+.ac-card-header b{color:var(--navy);font-size:14px}
+.crew-options{display:flex;gap:12px;margin-top:6px}
+.checkbox-inline{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--ink);cursor:pointer;margin:0}
+.staff-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:10px}
+.staff-option-box{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:12px}
+.checkbox-label{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--navy);cursor:pointer;margin:0 0 4px}
+.setup-actions{display:flex;align-items:center;gap:10px;margin-top:20px}
+.btn-lg{padding:10px 20px;font-size:14px}
+.btn-sm{padding:3px 8px;font-size:11px}
+
+/* Roster Cards & QR Badges */
+.roster-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-top:14px}
+.roster-badge-card{background:#fff;border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;box-shadow:0 1px 4px rgba(0,0,0,.06);border-top:4px solid var(--blue)}
+.roster-badge-card.role-instructor{border-top-color:#C59B27}
+.roster-badge-card.role-base{border-top-color:#1e7a3c}
+.roster-badge-card.role-aircrew{border-top-color:var(--blue)}
+.roster-badge-card.role-ground_team{border-top-color:#64748B}
+.badge-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.role-badge{font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:.05em}
+.badge-instructor{background:#FFF3CD;color:#856404}
+.badge-base{background:#D4EDDA;color:#155724}
+.badge-aircrew{background:var(--pale);color:var(--navy)}
+.badge-ground{background:#E2E8F0;color:#334155}
+.badge-code{font-size:15px;font-weight:800;color:var(--navy);background:var(--bg);padding:2px 8px;border-radius:4px;border:1px solid var(--line)}
+.badge-title{font-size:13px;font-weight:600;color:var(--ink);margin-bottom:4px}
+.badge-meta{font-size:11.5px;color:var(--grey);margin-bottom:12px}
+.badge-qr-container{background:#fff;padding:10px;border:1px solid var(--line);border-radius:4px;display:flex;flex-direction:column;align-items:center;margin-bottom:10px}
+.qr-canvas{width:130px;height:130px;display:flex;align-items:center;justify-content:center}
+.qr-canvas svg{width:100%;height:100%;display:block}
+.qr-label{font-size:10px;color:var(--grey);margin-top:6px}
+.badge-dest-info{font-size:11px;color:var(--grey);margin-bottom:10px}
+.dest-tag{background:var(--bg);padding:2px 6px;border-radius:3px;border:1px solid var(--line)}
+.badge-actions{display:flex;gap:6px;margin-top:auto}
+.btn-copy{flex:1;text-align:center}
+.btn-copied{background:#1e7a3c!important;color:#fff!important;border-color:#1e7a3c!important}
+.user-badge{font-size:11.5px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);padding:3px 9px;border-radius:12px}
+
+/* Login Screen Layout */
+.login-body{background:#0B2545;min-height:100vh;display:flex;align-items:center;justify-content:center;margin:0;padding:20px}
+.login-wrapper{width:100%;max-width:440px}
+.login-card{background:#fff;border-radius:8px;padding:32px 28px;box-shadow:0 8px 30px rgba(0,0,0,.3)}
+.login-brand{text-align:center;margin-bottom:20px;border-bottom:2px solid var(--line);padding-bottom:16px}
+.login-logo-text{font-size:18px;font-weight:800;letter-spacing:.1em;color:var(--navy)}
+.login-sub-text{font-size:10px;font-weight:700;color:var(--grey);letter-spacing:.08em;margin-top:2px}
+.login-title-block{text-align:center;margin-bottom:20px}
+.login-title-block h2{font-size:20px;color:var(--navy);margin:0 0 6px;border:0;padding:0;text-transform:none}
+.login-error-box{background:#F8D7DA;border:1px solid #F5C6CB;color:#721C24;padding:8px 12px;border-radius:4px;font-size:12px;margin-bottom:16px;text-align:center}
+.code-input{font-size:22px;font-weight:800;letter-spacing:.15em;text-align:center;text-transform:uppercase;padding:10px;border:2px solid var(--blue);border-radius:6px}
+.btn-block{width:100%;text-align:center;padding:12px;font-size:15px}
+.login-shortcuts-section{margin-top:24px;border-top:1px solid var(--line);padding-top:16px}
+.shortcuts-title{font-size:11px;font-weight:700;color:var(--grey);text-transform:uppercase;margin-bottom:10px;text-align:center}
+.shortcuts-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn-code-shortcut{padding:8px;background:var(--bg);border:1px solid var(--line);border-radius:4px;display:flex;flex-direction:column;align-items:center;cursor:pointer}
+.btn-code-shortcut:hover{background:var(--pale);border-color:var(--blue)}
+.btn-code-shortcut b{color:var(--navy);font-size:13px;font-family:Consolas,monospace}
+.btn-code-shortcut span{color:var(--grey);font-size:10.5px;margin-top:2px}
+.login-footer-notice{margin-top:24px;text-align:center;font-size:9.5px;color:var(--grey);letter-spacing:.06em}
+
+/* Print Stylesheet for Badges */
+@media print {
+  header, .setup-header-block, .setup-card:not(#rosterSection), .setup-actions, .no-print { display:none!important }
+  body, .setup-body, .setup-main, .setup-container { background:#fff!important; padding:0!important; margin:0!important; max-width:100%!important }
+  .setup-card#rosterSection { border:0!important; box-shadow:none!important; padding:0!important }
+  .roster-grid { grid-template-columns:repeat(2,1fr)!important; gap:12px!important }
+  .roster-badge-card { break-inside:avoid; border:1px solid #000!important; box-shadow:none!important }
+}
+

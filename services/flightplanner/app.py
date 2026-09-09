@@ -1,5 +1,9 @@
 from flask import Flask, render_template, request, jsonify, send_from_directory, abort
+from collections import deque
 from datetime import datetime, timedelta, timezone
+import fcntl
+import hmac
+import json
 import math
 import os
 import csv
@@ -8,6 +12,7 @@ import requests
 from io import StringIO
 import threading
 import time
+from urllib.parse import urlsplit
 
 try:
     from pygeomag import GeoMag
@@ -19,6 +24,8 @@ app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATABASE_PATH = os.path.join(BASE_DIR, 'aviation_data.db')
+DATABASE_UPDATE_LOCK_PATH = '/tmp/capvsar-flightplanner-aviation.update.lock'
+DATABASE_UPDATE_STATUS_PATH = '/tmp/capvsar-flightplanner-aviation.update.json'
 DOCS_DIR = os.path.join(BASE_DIR, 'docs')
 
 # Documentation available from the UI: url slug -> (filename, title)
@@ -40,6 +47,13 @@ OPEN_METEO_URL = 'https://api.open-meteo.com/v1/forecast'
 WINDS_LEVELS_HPA = [925, 900, 850, 800, 700, 600]
 WINDS_TARGET_ALT = [3000, 6000, 9000, 12000]
 _winds_cache = {}  # (round(lat,1), round(lon,1), 'YYYYMMDDHH') -> winds dict
+
+MAX_PARALLEL_DIMENSION_NM = 50.0
+MAX_PARALLEL_LEGS = 200
+VSAR_EXPORT_RATE_LIMIT = 5
+VSAR_EXPORT_RATE_WINDOW_S = 60.0
+_vsar_export_attempts = {}
+_vsar_export_rate_lock = threading.Lock()
 
 # FAA official tile sources via ArcGIS
 TILE_SOURCES = {
@@ -135,6 +149,28 @@ startup_status = {
 
 # Database update status
 update_status = {'in_progress': False, 'message': '', 'progress': 0}
+
+
+def _publish_update_status(**changes):
+    update_status.update(changes)
+    temporary = f'{DATABASE_UPDATE_STATUS_PATH}.{os.getpid()}.tmp'
+    try:
+        with open(temporary, 'w', encoding='utf-8') as status_file:
+            json.dump(update_status, status_file)
+        os.replace(temporary, DATABASE_UPDATE_STATUS_PATH)
+    except OSError as e:
+        log_msg(f'Could not publish aviation database status: {e}')
+
+
+def _read_update_status():
+    try:
+        with open(DATABASE_UPDATE_STATUS_PATH, encoding='utf-8') as status_file:
+            shared = json.load(status_file)
+        if not isinstance(shared, dict):
+            raise ValueError('status is not an object')
+        return shared
+    except (OSError, ValueError, TypeError):
+        return dict(update_status)
 
 def lat_lon_to_tile(lat, lon, zoom):
     lat_rad = math.radians(lat)
@@ -273,9 +309,44 @@ def startup_chart_download():
     finally:
         startup_status['in_progress'] = False
 
-def download_database():
-    global update_status
-    update_status = {'in_progress': True, 'progress': 5, 'message': 'Downloading airports...'}
+def _acquire_database_update_lock():
+    try:
+        lock_file = open(DATABASE_UPDATE_LOCK_PATH, 'a+')
+    except OSError as e:
+        log_msg(f'Could not open aviation database update lock: {e}')
+        return None
+    try:
+        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        lock_file.close()
+        return None
+    return lock_file
+
+
+def _release_database_update_lock(lock_file):
+    fcntl.flock(lock_file, fcntl.LOCK_UN)
+    lock_file.close()
+
+
+def database_update_running():
+    """Return whether another thread or worker holds the population lock."""
+    lock_file = _acquire_database_update_lock()
+    if lock_file is None:
+        return True
+    _release_database_update_lock(lock_file)
+    return False
+
+
+def download_database(lock_file=None):
+    if lock_file is None:
+        lock_file = _acquire_database_update_lock()
+        if lock_file is None:
+            log_msg('Aviation database update already running in another worker')
+            return False
+    _publish_update_status(in_progress=True, progress=5,
+                           message='Downloading airports...')
+    conn = None
+    succeeded = False
     try:
         r = requests.get(OURAIRPORTS_URLS['airports'], timeout=300)
         conn = sqlite3.connect(DATABASE_PATH)
@@ -284,7 +355,7 @@ def download_database():
         c.execute('DELETE FROM runways')
         c.execute('DELETE FROM navaids')
         
-        update_status['progress'] = 20
+        _publish_update_status(progress=20)
         cnt = 0
         for row in csv.DictReader(StringIO(r.content.decode('utf-8'))):
             icao = row.get('ident', '').upper()
@@ -297,11 +368,11 @@ def download_database():
                          float(row.get('longitude_deg',0) or 0),
                          int(float(row.get('elevation_ft',0) or 0))))
                     cnt += 1
-                except: pass
+                except Exception as e:
+                    log_msg(f"Skipping airport row {icao or '<unknown>'}: {e}")
         conn.commit()
         
-        update_status['message'] = 'Downloading runways...'
-        update_status['progress'] = 40
+        _publish_update_status(message='Downloading runways...', progress=40)
         r = requests.get(OURAIRPORTS_URLS['runways'], timeout=300)
         
         c.execute('SELECT icao FROM airports')
@@ -314,11 +385,11 @@ def download_database():
                     c.execute('INSERT INTO runways (airport_icao, runway_id, length, surface) VALUES (?,?,?,?)',
                         (apt, row.get('le_ident',''), int(float(row.get('length_ft',0) or 0)), row.get('surface','')))
                     rcnt += 1
-                except: pass
+                except Exception as e:
+                    log_msg(f"Skipping runway row for {apt or '<unknown>'}: {e}")
         conn.commit()
         
-        update_status['message'] = 'Downloading navaids...'
-        update_status['progress'] = 70
+        _publish_update_status(message='Downloading navaids...', progress=70)
         r = requests.get(OURAIRPORTS_URLS['navaids'], timeout=300)
         
         ncnt = 0
@@ -331,16 +402,36 @@ def download_database():
                          float(row.get('latitude_deg',0) or 0),
                          float(row.get('longitude_deg',0) or 0)))
                     ncnt += 1
-                except: pass
+                except Exception as e:
+                    log_msg(f"Skipping navaid row {nid or '<unknown>'}: {e}")
         conn.commit()
-        conn.close()
         
-        update_status['message'] = f'Done! {cnt} airports, {rcnt} runways, {ncnt} navaids'
-        update_status['progress'] = 100
+        _publish_update_status(
+            message=f'Done! {cnt} airports, {rcnt} runways, {ncnt} navaids',
+            progress=100)
+        succeeded = True
     except Exception as e:
-        update_status['message'] = f'Error: {e}'
+        _publish_update_status(message=f'Error: {e}')
+        log_msg(f'Aviation database update failed: {e}')
     finally:
-        update_status['in_progress'] = False
+        if conn is not None:
+            conn.close()
+        _publish_update_status(in_progress=False)
+        _release_database_update_lock(lock_file)
+    return succeeded
+
+
+def start_database_update():
+    """Start one population thread across all gunicorn workers."""
+    lock_file = _acquire_database_update_lock()
+    if lock_file is None:
+        return False
+    try:
+        threading.Thread(target=download_database, args=(lock_file,), daemon=True).start()
+    except Exception:
+        _release_database_update_lock(lock_file)
+        raise
+    return True
 
 def auto_update_if_empty():
     conn = sqlite3.connect(DATABASE_PATH)
@@ -349,8 +440,10 @@ def auto_update_if_empty():
     count = c.fetchone()[0]
     conn.close()
     if count == 0:
-        log_msg("Database empty — auto-starting aviation data download...")
-        threading.Thread(target=download_database, daemon=True).start()
+        if start_database_update():
+            log_msg("Database empty — auto-starting aviation data download...")
+        else:
+            log_msg("Database empty — another worker is populating it")
     else:
         log_msg(f"Database ready: {count} airports")
 
@@ -617,7 +710,7 @@ def generate_xplane_fms_content(departure, destination, waypoints, cruise_alt=65
     lines = [
         "I",
         "1100 Version",
-        "CYCLE 2401",
+        f"CYCLE {get_utc_now().strftime('%y%m')}",
         f"ADEP {departure.upper()}",
         f"ADES {destination.upper()}",
         f"NUMENR {len(waypoints) + 2}"
@@ -630,10 +723,10 @@ def generate_xplane_fms_content(departure, destination, waypoints, cruise_alt=65
     lines.append(f"1 {departure.upper()} ADEP {float(dep_elev):.1f} {dep_lat:.6f} {dep_lon:.6f}")
     
     for wpt in waypoints:
-        ident = wpt.get('identifier', 'WPT')
         lat = wpt.get('lat', 0.0)
         lon = wpt.get('lon', 0.0)
-        lines.append(f"11 {ident} {float(cruise_alt):.1f} {lat:.6f} {lon:.6f}")
+        ident = f"{lat:+.3f}_{lon:+.3f}"
+        lines.append(f"28 {ident} DRCT {float(cruise_alt):.6f} {lat:.6f} {lon:.6f}")
         
     dest_apt = get_airport(destination.upper())
     dest_lat = dest_apt['latitude'] if dest_apt else (waypoints[-1]['lat'] if waypoints else 0.0)
@@ -751,6 +844,54 @@ def calc_landing(alt, temp, hw=0):
     wf = 1.0 - (hw/9*0.10) if hw > 0 else 1.0
     return {'ground_roll': int(gr*wf), 'total_over_50ft': int(tot*wf)}
 
+
+def _same_origin_or_instructor_token():
+    supplied = (request.headers.get('X-CAPVSAR-Token') or '').strip()
+    expected = os.environ.get('CAPVSAR_TOKEN_INSTRUCTOR', '').strip()
+    if expected and supplied and hmac.compare_digest(supplied, expected):
+        return True
+    origin = request.headers.get('Origin')
+    return bool(origin and urlsplit(origin).netloc == urlsplit(request.host_url).netloc)
+
+
+def _request_security_error(require_json=False):
+    if require_json and not request.is_json:
+        return jsonify({'success': False,
+                        'error': 'This endpoint requires a JSON request body'}), 415
+    if not _same_origin_or_instructor_token():
+        return jsonify({'success': False,
+                        'error': 'A same-origin request or valid instructor token is required'}), 403
+    return None
+
+
+def _limited_text(data, field, default, maximum):
+    value = data.get(field, default)
+    if not isinstance(value, str):
+        raise ValueError(f'{field} must be text')
+    value = value.strip()
+    if len(value) > maximum:
+        raise ValueError(f'{field} must be at most {maximum} characters')
+    return value
+
+
+def _allow_vsar_export(client):
+    now = time.monotonic()
+    with _vsar_export_rate_lock:
+        attempts = _vsar_export_attempts.setdefault(client, deque())
+        while attempts and now - attempts[0] >= VSAR_EXPORT_RATE_WINDOW_S:
+            attempts.popleft()
+        if len(attempts) >= VSAR_EXPORT_RATE_LIMIT:
+            return False
+        attempts.append(now)
+        return True
+
+
+def _console_headers(role):
+    token = os.environ.get(f'CAPVSAR_TOKEN_{role.upper()}', '').strip()
+    if role == 'base' and not token:
+        token = os.environ.get('CAPVSAR_TOKEN_INSTRUCTOR', '').strip()
+    return {'X-CAPVSAR-Token': token} if token else {}
+
 # Flask Routes
 @app.route('/')
 def index():
@@ -815,9 +956,11 @@ def serve_tile(chart_type, z, x, y):
 
 @app.route('/api/update-database', methods=['POST'])
 def trigger_update():
-    if update_status['in_progress']: return jsonify({'success': False})
-    threading.Thread(target=download_database, daemon=True).start()
-    return jsonify({'success': True})
+    security_error = _request_security_error(require_json=True)
+    if security_error:
+        return security_error
+    started = start_database_update()
+    return jsonify({'success': started})
 
 @app.route('/api/update-status')
 def get_status():
@@ -826,8 +969,16 @@ def get_status():
     c.execute('SELECT COUNT(*) FROM airports')
     cnt = c.fetchone()[0]
     conn.close()
-    return jsonify({'in_progress': update_status['in_progress'], 'message': update_status['message'],
-                   'progress': update_status['progress'], 'airports': cnt})
+    status = _read_update_status()
+    locked = database_update_running()
+    if locked and not status.get('in_progress'):
+        status.update(in_progress=True,
+                      message='Aviation database update starting')
+    elif not locked and status.get('in_progress'):
+        status.update(in_progress=False,
+                      message='Aviation database update was interrupted')
+    return jsonify({'in_progress': status['in_progress'], 'message': status['message'],
+                   'progress': status['progress'], 'airports': cnt})
 
 @app.route('/api/nearest-airport')
 def nearest_airport():
@@ -1358,7 +1509,19 @@ def sar_generate():
             wpts = generate_creeping_line(datum_coords[0], datum_coords[1], end_lat, end_lon, sweep_w, spacing, legs)
         elif ptype == 'parallel_track':
             box_len = max(0.1, float(data.get('length_nm', 5.0)))
+            if box_len > MAX_PARALLEL_DIMENSION_NM:
+                return jsonify({'success': False, 'error':
+                    f'length_nm must be at most {MAX_PARALLEL_DIMENSION_NM:g}'}), 400
             box_w = max(0.1, float(data.get('width_nm', 4.0)))
+            if box_w > MAX_PARALLEL_DIMENSION_NM:
+                return jsonify({'success': False, 'error':
+                    f'width_nm must be at most {MAX_PARALLEL_DIMENSION_NM:g}'}), 400
+            sweeps = max(2, int(box_w / spacing))
+            leg_count = 2 * sweeps - 1
+            if leg_count > MAX_PARALLEL_LEGS:
+                return jsonify({'success': False, 'error':
+                    f'width_nm with spacing_nm would generate {sweeps} sweeps '
+                    f'({leg_count} legs); maximum is {MAX_PARALLEL_LEGS} legs'}), 400
             axis_hdg = float(data.get('axis_heading', 0.0)) % 360.0
             wpts = generate_parallel_track(datum_coords[0], datum_coords[1], box_len, box_w, axis_hdg, spacing)
         else:
@@ -1412,16 +1575,29 @@ def sar_export_vsar():
     # could redirect the server-side POST at an arbitrary URL. VSAR_CONSOLE_URL
     # is fixed at process start from an environment variable an operator sets,
     # not from anything a request can influence.
+    security_error = _request_security_error(require_json=True)
+    if security_error:
+        return security_error
+    if not _allow_vsar_export(request.remote_addr or 'unknown'):
+        return jsonify({'success': False,
+                        'error': 'V-SAR export rate limit exceeded; try again shortly'}), 429
+
     vsar_url = VSAR_CONSOLE_URL
     data = request.json or {}
-    pattern_type = data.get('pattern_type', 'Search Pattern')
+    try:
+        pattern_type = _limited_text(data, 'pattern_type', 'Search Pattern', 40)
+        callsign = _limited_text(data, 'callsign', 'CAP499', 24)
+        dep = _limited_text(data, 'departure', 'KSEE', 8)
+        dest = _limited_text(data, 'destination', 'KSEE', 8)
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
     waypoints = data.get('waypoints', [])
-    callsign = data.get('callsign', 'CAP499')
-    dep = data.get('departure', 'KSEE')
-    dest = data.get('destination', 'KSEE')
 
-    if not waypoints:
+    if not isinstance(waypoints, list) or not waypoints:
         return jsonify({'success': False, 'error': 'No waypoints to export'}), 400
+    if len(waypoints) > 500:
+        return jsonify({'success': False,
+                        'error': 'waypoints must contain at most 500 points'}), 400
 
     try:
         datum = waypoints[0]
@@ -1452,9 +1628,26 @@ def sar_export_vsar():
     }
     
     try:
-        r_scen = requests.post(f"{vsar_url}/api/scenarios", json=scenario_payload, timeout=5)
+        r_scen = requests.post(f"{vsar_url}/api/scenarios", json=scenario_payload,
+                               timeout=5, headers=_console_headers('instructor'))
+        if r_scen.status_code == 403:
+            return jsonify({
+                'success': False,
+                'error': ('V-SAR console refused the instructor token. Set the same '
+                          'CAPVSAR_TOKEN_INSTRUCTOR value on the planner and console.')
+            }), 502
         scen_ok = r_scen.status_code in (200, 201)
-        r_msg = requests.post(f"{vsar_url}/api/messages", json=message_payload, timeout=5)
+        r_msg = requests.post(f"{vsar_url}/api/messages", json=message_payload,
+                              timeout=5, headers=_console_headers('base'))
+        if r_msg.status_code == 403:
+            return jsonify({
+                'success': scen_ok,
+                'scenario_created': scen_ok,
+                'message_sent': False,
+                'error': ('V-SAR console refused the base token. Set matching '
+                          'CAPVSAR_TOKEN_BASE values, or provide the instructor token '
+                          'to the planner as the base-role fallback.')
+            }), 502
         msg_ok = r_msg.status_code in (200, 201)
 
         if scen_ok and msg_ok:

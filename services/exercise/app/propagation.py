@@ -35,9 +35,16 @@ def distance_nm(lat1, lon1, lat2, lon2) -> float:
 
 
 def radio_horizon_nm(alt_ft_msl: float, beacon_elev_ft: float) -> float:
-    """1.23 * sqrt(height above the beacon), the standard VHF line-of-sight rule."""
-    h = max(alt_ft_msl - beacon_elev_ft, 0.0)
-    return 1.23 * math.sqrt(h)
+    """The standard VHF rule, 1.23*(sqrt(h_ac) + sqrt(h_bcn)), heights in feet.
+
+    Both ends raise the horizon. This previously used the aircraft's height
+    *above the beacon*, which went to zero as soon as the beacon sat higher
+    than the aircraft — an aircraft below a ridge-top beacon a mile away was
+    ruled out of range entirely. Kept identical to the plugin's form
+    (PI_capvsar_df.py); the plugin remains authoritative whenever it reports.
+    """
+    return 1.23 * (math.sqrt(max(alt_ft_msl, 0.0))
+                   + math.sqrt(max(beacon_elev_ft, 0.0)))
 
 
 @dataclass

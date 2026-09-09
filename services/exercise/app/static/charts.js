@@ -91,3 +91,40 @@ document.addEventListener("DOMContentLoaded", () => {
     a.href = "//" + (location.hostname || "localhost") + ":8090/";
   });
 });
+
+// ---------------------------------------------------------------- role token
+// Controlling a sortie, logging a bearing or sending a message needs the role
+// token for that seat (CAPVSAR_TOKEN_INSTRUCTOR / _BASE on the console). The
+// operator is asked once and it is kept for this browser only.
+//
+// While no tokens are configured on the server nothing here is exercised: the
+// server answers those calls as before, and the operator is never prompted.
+const VSAR_TOKEN_KEY = 'vsar-role-token';
+
+function vsarToken() {
+  try { return localStorage.getItem(VSAR_TOKEN_KEY) || ''; } catch (e) { return ''; }
+}
+
+function vsarSetToken(v) {
+  try { v ? localStorage.setItem(VSAR_TOKEN_KEY, v) : localStorage.removeItem(VSAR_TOKEN_KEY); }
+  catch (e) { /* private window: token lives for this page only */ }
+}
+
+// fetch() plus the token header, retried once if the server rejects it so a
+// wrong or stale token can be corrected without a reload.
+async function vsarFetch(url, opts = {}, retry = true) {
+  const token = vsarToken();
+  const headers = Object.assign({}, opts.headers || {});
+  if (token) headers['X-CAPVSAR-Token'] = token;
+  const r = await fetch(url, Object.assign({}, opts, {headers}));
+  if (r.status === 403 && retry) {
+    const entered = prompt(token
+      ? 'That exercise token was refused. Enter the token for this seat:'
+      : 'This action needs the exercise token for this seat:');
+    if (entered) {
+      vsarSetToken(entered.trim());
+      return vsarFetch(url, opts, false);
+    }
+  }
+  return r;
+}

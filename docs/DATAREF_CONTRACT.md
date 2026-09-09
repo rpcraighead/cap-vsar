@@ -263,3 +263,56 @@ python3 scripts/deploy_xplane_plugin.py
 The engine reports the crew's DF settings back to the console in its position
 report, under a `df` key, so the instructor can see what the panel is actually
 set to. "Why can't they hear it" is usually answered there.
+
+---
+
+## Part 5 — Sim Innovations (`si_variable_*`) VHF-FM and Audio Panel Contract
+
+The Technisonic TDFM-136B airborne FM transceiver (`instruments/cap-fm-tdfm-136b/`) and Garmin GMA 1347 audio panel (`instruments/mo-audio-panel-gma1347/`) communicate with each other, hardware controls, and the mission net voice agent via Sim Innovations inter-instrument variables (`si_variable_*`). Because X-Plane lacks native datarefs for a third COM radio, these variables form the published contract for the Mission Observer (MO) station.
+
+### TDFM-136B Transceiver State (Published)
+
+| Variable | Type | Default | Producer | Consumers | Description |
+|---|---|---|---|---|---|
+| `cap_fm_power_on` | BOOL | false | TDFM-136B | GMA 1347, Voice Agent | Radio master power status (toggled by Main encoder press/hold). |
+| `cap_fm_frequency_hz` | INT | 0 | TDFM-136B | Voice Agent, Console | Active transmit/receive RF frequency in Hz (Main or Guard depending on MN/GD switch). |
+| `cap_fm_channel` | INT | 0 | TDFM-136B | Voice Agent, Console | Active memory/channel index (1–200 for Main memories, 101/102 for GD1/GD2). |
+| `cap_fm_channel_name` | STRING | "" | TDFM-136B | Voice Agent, Logger | 8-character channel alphanumeric tag (e.g. `TAC 1`, `AIR 1`). |
+| `cap_fm_transmitting` | BOOL | false | TDFM-136B | Voice Agent, GMA 1347 | True when actively transmitting RF. Interlocked by power, COM3 MIC, PTT, and 60s TOT timer. |
+| `cap_fm_high_power` | BOOL | false | TDFM-136B | Voice Agent | HI/LO power switch position (true = 10 W, false = 1 W). |
+| `cap_fm_talk_around` | BOOL | false | TDFM-136B | Voice Agent | Repeater talk-around mode (L1-*): transmits on receive frequency when true. |
+| `cap_fm_ctcss_tone` | FLOAT | 0.0 | TDFM-136B | Voice Agent, Repeater Sim | Continuous Tone-Coded Squelch System (CTCSS) subaudible tone in Hz (e.g. 110.9, 156.7). 0.0 if CSQ. |
+| `cap_fm_p25_nac` | INT | 0 | TDFM-136B | Voice Agent, Repeater Sim | APCO Project 25 Network Access Code (NAC) in hex (e.g. 0x293 = 659). 0 if analog. |
+| `cap_fm_guard_frequency_hz` | INT | 0 | TDFM-136B | Voice Agent, Console | Dedicated Guard receiver RF frequency in Hz (independent secondary receiver path). |
+| `cap_fm_guard_channel` | INT | 0 | TDFM-136B | Voice Agent, Console | Guard receiver memory channel index (101 for GD1, 102 for GD2). |
+| `cap_fm_guard_channel_name` | STRING | "" | TDFM-136B | Voice Agent, Logger | 8-character Guard channel alphanumeric tag (e.g. `AIRGUARD`). |
+| `cap_fm_guard_ctcss_tone` | FLOAT | 0.0 | TDFM-136B | Voice Agent | Guard receiver CTCSS tone in Hz (0.0 if CSQ). |
+| `cap_fm_guard_p25_nac` | INT | 0 | TDFM-136B | Voice Agent | Guard receiver P25 NAC in hex (0 if analog). |
+| `cap_fm_main_volume` | FLOAT | 1.0 | TDFM-136B | Audio Mixer | Main receiver volume potentiometer position (0.0–1.0). |
+| `cap_fm_guard_volume` | FLOAT | 1.0 | TDFM-136B | Audio Mixer | Guard receiver volume potentiometer position (0.0–1.0). |
+
+### GMA 1347 Audio Panel State (Published)
+
+| Variable | Type | Default | Producer | Consumers | Description |
+|---|---|---|---|---|---|
+| `cap_ics_isolation` | STRING | "ALL" | GMA 1347 | Intercom Mixer, Radio Service | ICS intercom isolation mode (`"ALL"`, `"PILOT"`, `"COPILOT"`, `"CREW"`). |
+| `cap_ics_pilot_isolated` | BOOL | false | GMA 1347 | Radio Service | True when pilot is isolated from copilot/passengers. |
+| `cap_ics_copilot_isolated` | BOOL | false | GMA 1347 | Radio Service | True when copilot is isolated from pilot. |
+| `cap_ics_crew_isolated` | BOOL | false | GMA 1347 | Radio Service | True when passengers/cabin are isolated. |
+| `cap_split_com_active` | BOOL | false | GMA 1347 | Radio Service | True when Split COM is active (pilot COM1, copilot COM2, observer isolated). |
+| `cap_recorder_playing` | BOOL | false | GMA 1347 | Headset Audio, UI | True when digital clearance recorder is actively playing back a recorded block. |
+| `cap_recorder_block` | INT | 0 | GMA 1347 | UI, Logger | Currently selected clearance recorder playback block index (1–16). |
+| `cap_recorder_count` | INT | 0 | GMA 1347 | UI, Logger | Total number of recorded transmission blocks stored in clearance recorder buffer. |
+| `cap_recorder_text` | STRING | "" | GMA 1347 | UI, Logger | Alphanumeric metadata / callsign tag of the active clearance recorder block. |
+
+### Mission Net & Audio Control Handshake (Subscribed / Ingested)
+
+| Variable | Type | Default | Producer | Consumers | Description |
+|---|---|---|---|---|---|
+| `cap_fm_ptt` | BOOL | false | Air Manager Touch/Key, Copilot PTT, Voice Agent | TDFM-136B | Observer Push-To-Talk input. Also synchronised from X-Plane dataref `sim/cockpit2/radios/actuators/audio_panel_copilot_ptt`. |
+| `cap_fm_main_rx` | BOOL | false | Voice Agent / Mumble Bridge | TDFM-136B, GMA 1347 | Main receiver carrier/squelch open. Drives upper squelch LED and feeds GMA clearance recorder. |
+| `cap_fm_guard_rx` | BOOL | false | Voice Agent / Mumble Bridge | TDFM-136B | Guard receiver carrier/squelch open. Drives lower squelch LED. Gated by radio power. |
+| `cap_fm_audio_selected` | BOOL | false | GMA 1347 | TDFM-136B, Headset Audio | COM3 audio monitor enabled. When false, observer headset is muted for FM, but squelch LEDs still illuminate on receive. |
+| `cap_fm_mic_selected` | BOOL | false | GMA 1347 | TDFM-136B | COM3 MIC transmitter selected. Interlocks TDFM transmission (PTT will not key unless true). |
+
+

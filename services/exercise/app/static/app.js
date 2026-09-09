@@ -54,10 +54,10 @@ function render() {
       <select id="liveAntennaProfile"><option value="c182_belly">C182 belly</option><option value="c182_top">C182 top</option></select></label>`;
     $('liveAntennaProfile').value = sc.effects.df_antenna_profile || 'c182_belly';
     $('liveAntennaProfile').onchange = e =>
-      fetch('/api/sorties/effects', {method:'POST', headers:{'Content-Type':'application/json'},
+      vsarFetch('/api/sorties/effects', {method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({df_antenna_profile: e.target.value})});
     $('effects').querySelectorAll('input').forEach(i => i.onchange = () =>
-      fetch('/api/sorties/effects', {method:'POST', headers:{'Content-Type':'application/json'},
+      vsarFetch('/api/sorties/effects', {method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({[i.dataset.k]: i.checked})}));
   }
 
@@ -139,19 +139,19 @@ async function loadScenarios(selectId) {
 }
 
 $('startBtn').onclick = async () => {
-  await fetch('/api/sorties', {method:'POST', headers:{'Content-Type':'application/json'},
+  await vsarFetch('/api/sorties', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({scenario_id: $('scenarioSel').value})});
   bearingLayer.clearLayers(); bearingLog.length = 0;
   Object.values(trackLines).forEach(l => map.removeLayer(l)); trackLines = {};
   $('bearings').textContent = 'no bearings logged';
   $('effects').dataset.for = '';
 };
-$('stopBtn').onclick   = () => fetch('/api/sorties/stop',   {method:'POST'});
-$('revealBtn').onclick = () => fetch('/api/sorties/reveal', {method:'POST'});
+$('stopBtn').onclick   = () => vsarFetch('/api/sorties/stop',   {method:'POST'});
+$('revealBtn').onclick = () => vsarFetch('/api/sorties/reveal', {method:'POST'});
 $('brgAdd').onclick = async () => {
   const cs = $('brgCallsign').value.trim(), v = parseFloat($('brgValue').value);
   if (!cs || isNaN(v)) return;
-  const r = await fetch('/api/bearings', {method:'POST', headers:{'Content-Type':'application/json'},
+  const r = await vsarFetch('/api/bearings', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({callsign: cs, bearing_true: v})});
   if (r.ok) $('brgValue').value = '';
 };
@@ -248,7 +248,7 @@ $('nsCreate').onclick = async () => {
   $('nsEffects').querySelectorAll('input').forEach(i => effects[i.dataset.k] = i.checked);
 
   nsMsg('creating\u2026');
-  const r = await fetch('/api/scenarios', {
+  const r = await vsarFetch('/api/scenarios', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
       name, notes: $('nsNotes').value.trim(),
@@ -266,5 +266,28 @@ $('nsCreate').onclick = async () => {
   $('nsName').value = ''; $('nsNotes').value = '';
 };
 
+async function initAuthBadge() {
+  try {
+    const res = await fetch('/api/auth/me');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.authenticated && $('userBadge')) {
+        const title = data.title || (data.role ? data.role.toUpperCase() : 'Instructor');
+        const cs = data.callsign ? ` (${data.callsign})` : '';
+        $('userBadge').textContent = `\uD83D\uDC64 ${title}${cs}`;
+      }
+    }
+  } catch (e) {}
+
+  if ($('logoutBtn')) {
+    $('logoutBtn').onclick = async () => {
+      try {
+        await fetch('/api/auth/logout', {method: 'POST'});
+      } catch (e) {}
+      location.href = '/login';
+    };
+  }
+}
+
 setInterval(() => $('clock').textContent = new Date().toUTCString().slice(17, 25) + 'Z', 1000);
-nsRenderEffects(); loadScenarios(); connect();
+nsRenderEffects(); loadScenarios(); connect(); initAuthBadge();

@@ -4,9 +4,13 @@ const $ = id => document.getElementById(id);
 const map = L.map('map').setView([33.15, -117.18], 10);
 capvsarCharts(map, {view: 'base'});
 
-let state = {}, acLayers = {}, trackLines = {}, beaconMarker = null, alertCircle = null;
+let state = {}, acLayers = {}, trackLines = {}, beaconMarker = null,
+    alertCircle = null, alertMarker = null;
+let sortieId = null;
 const bearingLayer = L.layerGroup().addTo(map);
 const bearingLog = [], msgLog = [];
+const seenBearings = new Set(), seenMessages = new Set();
+let lastBearingT = 0, lastMessageT = 0;
 let centred = false;
 
 const planeIcon = c => L.divIcon({className:'', iconSize:[26,26], html:
@@ -18,7 +22,7 @@ const fmtDur = s => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(Math.f
 
 function connect() {
   const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
-  ws.onopen  = () => { $('status').textContent = 'live'; $('status').className = 'status online'; };
+  ws.onopen  = () => { $('status').textContent = 'live'; $('status').className = 'status online'; backfill(); };
   ws.onclose = () => { $('status').textContent = 'reconnecting'; $('status').className = 'status offline';
                        setTimeout(connect, 2000); };
   ws.onmessage = e => {
@@ -29,8 +33,31 @@ function connect() {
   };
 }
 
+function clearSortieLayers() {
+  // Everything drawn here belongs to one sortie. Base staff plotting bearings
+  // over the previous exercise's search area is worse than an empty map, and
+  // the alert circle used to be created once and kept forever.
+  for (const layer of [alertCircle, alertMarker, beaconMarker]) if (layer) map.removeLayer(layer);
+  alertCircle = alertMarker = beaconMarker = null;
+  Object.values(acLayers).forEach(l => map.removeLayer(l));
+  Object.values(trackLines).forEach(l => map.removeLayer(l));
+  acLayers = {}; trackLines = {};
+  bearingLayer.clearLayers();
+  bearingLog.length = 0;
+  msgLog.length = 0;
+  seenBearings.clear(); seenMessages.clear();
+  lastBearingT = lastMessageT = 0;
+  $('bearings').textContent = 'no bearings logged';
+  $('messages').textContent = 'no messages';
+  centred = false;
+}
+
 function render() {
   const s = state.sortie, sc = state.scenario;
+
+  // A different sortie means a different search. Reset before drawing anything.
+  const id = s ? s.id : null;
+  if (id !== sortieId) { clearSortieLayers(); sortieId = id; if (id) backfill(); }
 
   // ---- alert intake: how the search opens
   if (sc) {
@@ -44,7 +71,7 @@ function render() {
       alertCircle = L.circle([sc.alert_lat, sc.alert_lon],
         {radius: (sc.alert_radius_nm || 5) * 1852, color:'#ed7d31', weight:2,
          dashArray:'8,6', fillColor:'#ed7d31', fillOpacity:.06}).addTo(map);
-      L.marker([sc.alert_lat, sc.alert_lon], {icon: L.divIcon({className:'', iconSize:[14,14],
+      alertMarker = L.marker([sc.alert_lat, sc.alert_lon], {icon: L.divIcon({className:'', iconSize:[14,14],
         html:'<div style="width:12px;height:12px;border:2px solid #ed7d31;border-radius:50%"></div>'})})
         .addTo(map).bindTooltip('reported area', {direction:'right'});
       if (!centred) { map.fitBounds(alertCircle.getBounds().pad(0.2)); centred = true; }
@@ -73,7 +100,10 @@ function render() {
     if (!acLayers[a.callsign]) {
       acLayers[a.callsign] = L.marker(ll, {icon: planeIcon(a.hdg_true)}).addTo(map)
         .bindTooltip(a.callsign, {permanent:true, direction:'top', offset:[0,-8]});
-      trackLines[a.callsign] = L.polyline([ll], {color:'#2e5496', weight:2, opacity:.6}).addTo(map);
+      // An aircraft that went quiet for 30 s and came back keeps its existing
+      // track: replacing the polyline orphaned the old one on the map forever.
+      if (trackLines[a.callsign]) trackLines[a.callsign].addLatLng(ll);
+      else trackLines[a.callsign] = L.polyline([ll], {color:'#2e5496', weight:2, opacity:.6}).addTo(map);
     } else {
       acLayers[a.callsign].setLatLng(ll).setIcon(planeIcon(a.hdg_true));
       trackLines[a.callsign].addLatLng(ll);
@@ -81,6 +111,8 @@ function render() {
     if (!centred) { map.setView(ll, 11); centred = true; }
   });
   Object.keys(acLayers).forEach(k => {
+    // Marker goes when the aircraft stops reporting; the track it already flew
+    // stays on the map, because that is history base staff still need.
     if (!seen.has(k)) { map.removeLayer(acLayers[k]); delete acLayers[k]; }
   });
 
@@ -95,6 +127,10 @@ function render() {
 }
 
 function addBearing(m) {
+  const key = m.id != null ? `bearing:${m.id}` :
+    `bearing:${m.t}:${m.callsign}:${m.bearing_true}`;
+  if (seenBearings.has(key)) return;
+  seenBearings.add(key); lastBearingT = Math.max(lastBearingT, m.t || 0);
   bearingLog.unshift(m);
   const R = 40 / 60;
   const brg = m.bearing_true * Math.PI / 180;
@@ -108,6 +144,10 @@ function addBearing(m) {
 }
 
 function addMessage(m) {
+  const key = m.id != null ? `message:${m.id}` :
+    `message:${m.t}:${m.sender}:${m.recipient}:${m.body}`;
+  if (seenMessages.has(key)) return;
+  seenMessages.add(key); lastMessageT = Math.max(lastMessageT, m.t || 0);
   msgLog.unshift(m);
   $('messages').innerHTML = msgLog.map(x => {
     const t = new Date(x.t * 1000).toUTCString().slice(17, 22);
@@ -115,10 +155,22 @@ function addMessage(m) {
   }).join('');
 }
 
+async function backfill() {
+  try {
+    const messageSince = Math.max(0, lastMessageT - .001);
+    const bearingSince = Math.max(0, lastBearingT - .001);
+    const [messages, bearings] = await Promise.all([
+      fetch(`/api/messages?since=${messageSince}`).then(r => r.ok ? r.json() : []),
+      fetch(`/api/bearings?since=${bearingSince}`).then(r => r.ok ? r.json() : []),
+    ]);
+    messages.forEach(addMessage); bearings.forEach(addBearing);
+  } catch {}
+}
+
 $('brgAdd').onclick = async () => {
   const cs = $('brgCallsign').value.trim(), v = parseFloat($('brgValue').value);
   if (!cs || isNaN(v)) return;
-  const r = await fetch('/api/bearings', {method:'POST', headers:{'Content-Type':'application/json'},
+  const r = await vsarFetch('/api/bearings', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({callsign: cs, bearing_true: v, note: $('brgNote').value.trim()})});
   if (r.ok) { $('brgValue').value = ''; $('brgNote').value = ''; }
   else { alert('That callsign is not reporting a position yet.'); }
@@ -128,12 +180,34 @@ $('brgValue').addEventListener('keydown', e => { if (e.key === 'Enter') $('brgAd
 $('msgSend').onclick = async () => {
   const body = $('msgBody').value.trim();
   if (!body) return;
-  const r = await fetch('/api/messages', {method:'POST', headers:{'Content-Type':'application/json'},
+  const r = await vsarFetch('/api/messages', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({recipient: $('msgTo').value.trim() || 'ALL', body})});
   if (r.ok) $('msgBody').value = '';
 };
 $('msgBody').addEventListener('keydown', e => { if (e.key === 'Enter') $('msgSend').click(); });
 
+async function initAuthBadge() {
+  try {
+    const res = await fetch('/api/auth/me');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.authenticated && $('userBadge')) {
+        const title = data.title || (data.role ? data.role.toUpperCase() : 'Base Staff');
+        const cs = data.callsign ? ` (${data.callsign})` : '';
+        $('userBadge').textContent = `\uD83D\uDC64 ${title}${cs}`;
+      }
+    }
+  } catch (e) {}
+
+  if ($('logoutBtn')) {
+    $('logoutBtn').onclick = async () => {
+      try {
+        await fetch('/api/auth/logout', {method: 'POST'});
+      } catch (e) {}
+      location.href = '/login';
+    };
+  }
+}
+
 setInterval(() => $('clock').textContent = new Date().toUTCString().slice(17, 25) + 'Z', 1000);
-fetch('/api/messages').then(r => r.json()).then(ms => ms.forEach(addMessage));
-connect();
+connect(); initAuthBadge();

@@ -393,7 +393,9 @@ async function checkDbStatus() {
 }
 
 document.getElementById('btn-update-db').addEventListener('click', async () => {
-    await fetch('/api/update-database', { method: 'POST' });
+    await fetch('/api/update-database', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'
+    });
     openModal('modal-db');
     setTimeout(checkDbStatus, 500);
 });

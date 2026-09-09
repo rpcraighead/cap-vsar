@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CAP V-SAR - Participant Access</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="login-body">
+
+<div class="login-wrapper">
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="login-logo-text">CIVIL AIR PATROL</div>
+      <div class="login-sub-text">VIRTUAL SEARCH & RESCUE (V-SAR)</div>
+    </div>
+
+    <div class="login-title-block">
+      <h2>Participant Login</h2>
+      <p class="hint">Enter the access code from your briefing card or scan your participant QR badge.</p>
+    </div>
+
+    <div id="loginError" class="login-error-box" style="display:none"></div>
+
+    <form id="loginForm" class="login-form">
+      <label for="accessCode">Participant Access Code</label>
+      <input type="text" id="accessCode" class="code-input mono" placeholder="e.g. OBS-423" autocomplete="off" autofocus required maxlength="12">
+
+      <button type="submit" id="loginSubmitBtn" class="primary btn-block btn-lg" style="margin-top:16px">Connect to Exercise Net</button>
+    </form>
+
+    <div class="login-shortcuts-section">
+      <div class="shortcuts-title">Quick Exercise Codes (Briefing Reference):</div>
+      <div class="shortcuts-grid">
+        <button type="button" class="btn-code-shortcut" data-code="INSTR-1">
+          <b>INSTR-1</b>
+          <span>Exercise Director</span>
+        </button>
+        <button type="button" class="btn-code-shortcut" data-code="MRO-1">
+          <b>MRO-1</b>
+          <span>Base Radio / Log</span>
+        </button>
+        <button type="button" class="btn-code-shortcut" data-code="OBS-423">
+          <b>OBS-423</b>
+          <span>CAP 423 Observer</span>
+        </button>
+        <button type="button" class="btn-code-shortcut" data-code="UDF-1">
+          <b>UDF-1</b>
+          <span>Ground Team Phone</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="login-footer-notice">
+      <span>EXERCISE TRAFFIC ONLY • SECURE PARTICIPANT GATEWAY</span>
+    </div>
+  </div>
+</div>
+
+<script src="/static/login.js"></script>
+</body>
+</html>

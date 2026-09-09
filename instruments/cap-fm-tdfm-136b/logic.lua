@@ -35,18 +35,47 @@ local panel = tdfm_panel
 -- which is access-restricted through eServices and deliberately not reproduced
 -- here — these are placeholders inside the 136-174 MHz band the radio covers.
 -- The instructor loads the exercise's channel card by editing this table.
+-- Authentic CAP fleet plan (CAPR 100-1 / CAP V-SAR).
+-- Channels 1-20 represent standard tactical, command, and interop assignments;
+-- channels 21-200 provide standard user-programmable memory positions.
 local memories = {
-    { memory = 1,  name = "CMD 1",   freq_hz = 148150000, mode = "n", squelch_mode = "t" },
-    { memory = 2,  name = "CMD 2",   freq_hz = 148225000, mode = "n", squelch_mode = "t" },
-    { memory = 3,  name = "AIR-GND", freq_hz = 149175000, mode = "n", squelch_mode = "t" },
-    { memory = 4,  name = "REPTR 1", freq_hz = 150300000, mode = "n", squelch_mode = "t" },
-    { memory = 5,  name = "SIMPLEX", freq_hz = 150775000, mode = "n", squelch_mode = "x" },
-    { memory = 6,  name = "TAC 1",   freq_hz = 151400000, mode = "D", squelch_mode = "g" },
+    { memory = 1,  name = "TAC 1",    freq_hz = 148150000, mode = "n", squelch_mode = "t", tone = 110.9, nac = 0 },
+    { memory = 2,  name = "TAC 2",    freq_hz = 148125000, mode = "n", squelch_mode = "t", tone = 110.9, nac = 0 },
+    { memory = 3,  name = "CC 1",     freq_hz = 150225000, mode = "D", squelch_mode = "g", tone = 0.0,   nac = 0x293 },
+    { memory = 4,  name = "CC 2",     freq_hz = 149275000, mode = "D", squelch_mode = "g", tone = 0.0,   nac = 0x293 },
+    { memory = 5,  name = "AIR 1",    freq_hz = 150537500, mode = "n", squelch_mode = "t", tone = 110.9, nac = 0 },
+    { memory = 6,  name = "AIR 2",    freq_hz = 149537500, mode = "n", squelch_mode = "t", tone = 110.9, nac = 0 },
+    { memory = 7,  name = "SAR 1",    freq_hz = 149925000, mode = "n", squelch_mode = "t", tone = 110.9, nac = 0 },
+    { memory = 8,  name = "GUARD",    freq_hz = 148150000, mode = "n", squelch_mode = "t", tone = 110.9, nac = 0 },
+    { memory = 9,  name = "GROUND 1", freq_hz = 148150000, mode = "n", squelch_mode = "x", tone = 0.0,   nac = 0 },
+    { memory = 10, name = "GROUND 2", freq_hz = 148125000, mode = "n", squelch_mode = "x", tone = 0.0,   nac = 0 },
+    { memory = 11, name = "BASE DIS", freq_hz = 150225000, mode = "D", squelch_mode = "g", tone = 0.0,   nac = 0x293 },
+    { memory = 12, name = "LOGISTCS", freq_hz = 149275000, mode = "n", squelch_mode = "t", tone = 110.9, nac = 0 },
+    { memory = 13, name = "AIR EVAC", freq_hz = 150537500, mode = "n", squelch_mode = "t", tone = 110.9, nac = 0 },
+    { memory = 14, name = "SAR 2",    freq_hz = 149900000, mode = "n", squelch_mode = "t", tone = 110.9, nac = 0 },
+    { memory = 15, name = "VFIRE 21", freq_hz = 154280000, mode = "n", squelch_mode = "t", tone = 156.7, nac = 0 },
+    { memory = 16, name = "VTAC 11",  freq_hz = 151137500, mode = "n", squelch_mode = "t", tone = 156.7, nac = 0 },
+    { memory = 17, name = "CALCORD",  freq_hz = 156075000, mode = "n", squelch_mode = "t", tone = 156.7, nac = 0 },
+    { memory = 18, name = "NATL GRD", freq_hz = 149250000, mode = "D", squelch_mode = "g", tone = 0.0,   nac = 0x293 },
+    { memory = 19, name = "CMD 1",    freq_hz = 148150000, mode = "n", squelch_mode = "t", tone = 110.9, nac = 0 },
+    { memory = 20, name = "CMD 2",    freq_hz = 148225000, mode = "n", squelch_mode = "t", tone = 110.9, nac = 0 },
 }
 
+for i = 21, 200 do
+    table.insert(memories, {
+        memory = i,
+        name = string.format("CHAN %03d", i),
+        freq_hz = 148150000,
+        mode = "n",
+        squelch_mode = "x",
+        tone = 0.0,
+        nac = 0,
+    })
+end
+
 local guards = {
-    { guard = 1, name = "GUARD 1", freq_hz = 148000000, mode = "n", squelch_mode = "t" },
-    { guard = 2, name = "GUARD 2", freq_hz = 149500000, mode = "n", squelch_mode = "t" },
+    { guard = 1, name = "GUARD 1", freq_hz = 148150000, mode = "n", squelch_mode = "t", tone = 110.9, nac = 0 },
+    { guard = 2, name = "GUARD 2", freq_hz = 148125000, mode = "n", squelch_mode = "t", tone = 110.9, nac = 0 },
 }
 
 local st = {
@@ -69,6 +98,8 @@ local st = {
 
     keypad_locked = false,
     scanning      = false,
+    scan_timer    = nil,
+    scan_hold_timer = nil,
     talk_around   = false,  -- L1 '*'
     home_memory   = 1,      -- L1 '#' toggles between home and current
     transmitting  = false,
@@ -83,9 +114,11 @@ local st = {
     audio_selected = false,
     mic_selected   = false,
     ptt_pressed    = false,
+    tot_timer      = nil,
+    tot_expired    = false,
 }
 
-local canvas_id, draw_display, led_main, led_guard
+local canvas_id, draw_display, led_main, led_guard, update_rx_lamps, stop_scan, handle_main_rx_change, start_scan_timer
 
 local function active_main()  return memories[st.main_index] end
 local function active_guard() return guards[st.guard_index] end
@@ -99,13 +132,25 @@ end
 -- Plan §6.3.2: "Air Manager radio panel writes the selected frequency to a
 -- shared variable; a small local agent moves the Mumble client accordingly."
 -- These are the variables that agent subscribes to.
-local var_freq    = si_variable_create("cap_fm_frequency_hz", "INT", 0)
-local var_channel = si_variable_create("cap_fm_channel", "INT", 0)
-local var_name    = si_variable_create("cap_fm_channel_name", "STRING", "")
-local var_ptt     = si_variable_create("cap_fm_transmitting", "BOOL", false)
-local var_power   = si_variable_create("cap_fm_power_on", "BOOL", false)
-local var_hi      = si_variable_create("cap_fm_high_power", "BOOL", false)
-local var_talk_ar = si_variable_create("cap_fm_talk_around", "BOOL", false)
+local var_freq          = si_variable_create("cap_fm_frequency_hz", "INT", 0)
+local var_channel       = si_variable_create("cap_fm_channel", "INT", 0)
+local var_name          = si_variable_create("cap_fm_channel_name", "STRING", "")
+local var_ptt           = si_variable_create("cap_fm_transmitting", "BOOL", false)
+local var_power         = si_variable_create("cap_fm_power_on", "BOOL", false)
+local var_hi            = si_variable_create("cap_fm_high_power", "BOOL", false)
+local var_talk_ar       = si_variable_create("cap_fm_talk_around", "BOOL", false)
+local var_in_ptt        = si_variable_create("cap_fm_ptt", "BOOL", false)
+local var_main_rx       = si_variable_create("cap_fm_main_rx", "BOOL", false)
+local var_guard_rx      = si_variable_create("cap_fm_guard_rx", "BOOL", false)
+local var_tone          = si_variable_create("cap_fm_ctcss_tone", "FLOAT", 0.0)
+local var_nac           = si_variable_create("cap_fm_p25_nac", "INT", 0)
+local var_guard_freq    = si_variable_create("cap_fm_guard_frequency_hz", "INT", 0)
+local var_guard_channel = si_variable_create("cap_fm_guard_channel", "INT", 0)
+local var_guard_name    = si_variable_create("cap_fm_guard_channel_name", "STRING", "")
+local var_guard_tone    = si_variable_create("cap_fm_guard_ctcss_tone", "FLOAT", 0.0)
+local var_guard_nac     = si_variable_create("cap_fm_guard_p25_nac", "INT", 0)
+local var_guard_vol     = si_variable_create("cap_fm_guard_volume", "FLOAT", 0.4)
+local var_main_vol      = si_variable_create("cap_fm_main_volume", "FLOAT", 0.6)
 
 --- Publish the current selection to the Mumble agent.
 local function publish()
@@ -120,7 +165,19 @@ local function publish()
     si_variable_write(var_name, ch.name)
     si_variable_write(var_hi, st.power_hi)
     si_variable_write(var_talk_ar, st.talk_around)
+    si_variable_write(var_tone, ch.tone or 0.0)
+    si_variable_write(var_nac, ch.nac or 0)
     si_variable_write(var_ptt, st.transmitting)
+
+    -- Guard receiver is independent and operates simultaneously
+    local g = active_guard()
+    si_variable_write(var_guard_freq, g.freq_hz)
+    si_variable_write(var_guard_channel, 100 + g.guard)
+    si_variable_write(var_guard_name, g.name)
+    si_variable_write(var_guard_tone, g.tone or 0.0)
+    si_variable_write(var_guard_nac, g.nac or 0)
+    si_variable_write(var_guard_vol, st.guard_volume / 100)
+    si_variable_write(var_main_vol, st.main_volume / 100)
 end
 
 -- ------------------------------------------------------------ command levels --
@@ -176,11 +233,71 @@ local function scroll_memory(delta)
     redraw()
 end
 
+stop_scan = function()
+    st.scanning = false
+    if st.scan_timer then
+        timer_stop(st.scan_timer)
+        st.scan_timer = nil
+    end
+    if st.scan_hold_timer then
+        timer_stop(st.scan_hold_timer)
+        st.scan_hold_timer = nil
+    end
+    redraw()
+end
+
+local function scan_step()
+    if not st.scanning or not st.power or st.main_rx or st.transmitting then
+        return
+    end
+    local next_idx = (st.main_index % 20) + 1
+    st.main_index = next_idx
+    publish()
+    redraw()
+end
+
+start_scan_timer = function()
+    if st.scan_timer then timer_stop(st.scan_timer) end
+    st.scan_timer = timer_start(250, 250, scan_step)
+end
+
+handle_main_rx_change = function(active)
+    if not st.scanning then return end
+    if active then
+        if st.scan_timer then
+            timer_stop(st.scan_timer)
+            st.scan_timer = nil
+        end
+        if st.scan_hold_timer then
+            timer_stop(st.scan_hold_timer)
+            st.scan_hold_timer = nil
+        end
+    else
+        if not st.scan_hold_timer and not st.scan_timer then
+            st.scan_hold_timer = timer_start(2000, 0, function()
+                st.scan_hold_timer = nil
+                if st.scanning and not st.main_rx and not st.transmitting then
+                    scan_step()
+                    start_scan_timer()
+                end
+            end)
+        end
+    end
+end
+
 --- L1-5 SCAN: start or stop scanning (§3.1.5). The guide tells the observer to
 --- use it only if the briefing calls for it, and it locks out most of the keypad.
 local function toggle_scan()
-    st.scanning = not st.scanning
-    redraw()
+    if not st.power or st.mn_gd ~= "MN" then return end
+    if st.scanning then
+        stop_scan()
+    else
+        st.scanning = true
+        if not st.main_rx and not st.transmitting then
+            start_scan_timer()
+        end
+        redraw()
+    end
 end
 
 --- L1-# : toggle between the home memory and the current one (§3.1).
@@ -245,7 +362,11 @@ local function press_key(key)
             redraw()
         elseif key:match("%d") then
             st.entry.digits = (st.entry.digits .. key):sub(-3)
-            redraw()
+            if #st.entry.digits == 3 then
+                commit_channel_entry()
+            else
+                redraw()
+            end
         end
         return
     end
@@ -307,6 +428,14 @@ draw_display = function()
         main_line = shown .. main_line:sub(4)
     end
 
+    if st.tot_expired then
+        if st.mn_gd == "MN" then
+            main_line = string.format("%03d %-20s", main.memory or 0, "*** TIME OUT ***"):sub(1, 24)
+        else
+            guard_line = string.format("GD%d %-20s", guard.guard or 1, "*** TIME OUT ***"):sub(1, 24)
+        end
+    end
+
     disp.draw(ctx, { main_line, guard_line }, st.power)
 end
 
@@ -348,11 +477,13 @@ dial_add("knob.png", panel.MAIN_ENC.x, panel.MAIN_ENC.y,
     function(direction)
         if not st.power then return end
         st.main_volume = math.max(0, math.min(100, st.main_volume + direction * 2))
+        si_variable_write(var_main_vol, st.main_volume / 100)
         redraw()
     end,
     function()  -- pressed
         if not st.power then
             st.power = true
+            update_rx_lamps()
             publish()
             redraw()
         else
@@ -361,7 +492,13 @@ dial_add("knob.png", panel.MAIN_ENC.x, panel.MAIN_ENC.y,
                 st.power = false
                 st.level = 1
                 st.entry = nil
-                st.scanning = false
+                stop_scan()
+                st.tot_expired = false
+                if st.tot_timer then
+                    timer_stop(st.tot_timer)
+                    st.tot_timer = nil
+                end
+                update_rx_lamps()
                 publish()
                 redraw()
             end)
@@ -377,6 +514,7 @@ dial_add("knob.png", panel.GUARD_ENC.x, panel.GUARD_ENC.y,
     function(direction)
         if not st.power then return end
         st.guard_volume = math.max(0, math.min(100, st.guard_volume + direction * 2))
+        si_variable_write(var_guard_vol, st.guard_volume / 100)
         redraw()
     end,
     function()
@@ -402,6 +540,9 @@ mn_gd_switch = switch_add("toggle_up.png", "toggle_down.png",
         local new_position = requested_switch_position(position, direction)
         switch_set_position(mn_gd_switch, new_position)
         st.mn_gd = (new_position == 0) and "MN" or "GD"
+        if st.mn_gd == "GD" and st.scanning then
+            stop_scan()
+        end
         publish()
         redraw()
     end)
@@ -472,14 +613,19 @@ end
 --- report in flight is an audio panel selection". Blanking the LEDs when COM3
 --- audio is deselected, as an earlier build did, hides exactly the evidence the
 --- trainee is supposed to find.
-local function update_rx_lamps()
-    visible(led_main,  st.power and st.main_rx)
-    visible(led_guard, st.power and st.guard_rx)
+update_rx_lamps = function()
+    if led_main and led_guard then
+        visible(led_main,  st.power and st.main_rx)
+        visible(led_guard, st.power and st.guard_rx)
+    end
 end
 
 si_variable_subscribe("cap_fm_main_rx", "BOOL", function(v)
     st.main_rx = v and true or false
     update_rx_lamps()
+    if handle_main_rx_change then
+        handle_main_rx_change(st.main_rx)
+    end
 end)
 
 si_variable_subscribe("cap_fm_guard_rx", "BOOL", function(v)
@@ -497,17 +643,66 @@ end)
 -- classic "they can hear me but I can't reach them" trap, so the interlock is
 -- modelled rather than assumed.
 local function update_transmit()
-    local tx = st.power and st.mic_selected and st.ptt_pressed
+    local tx = st.power and st.mic_selected and st.ptt_pressed and not st.tot_expired
     if tx ~= st.transmitting then
         st.transmitting = tx
+        if tx then
+            if st.scanning and st.scan_timer then
+                timer_stop(st.scan_timer)
+                st.scan_timer = nil
+            end
+            if st.tot_timer then timer_stop(st.tot_timer) end
+            st.tot_timer = timer_start(60000, 0, function()
+                st.tot_timer = nil
+                st.tot_expired = true
+                st.transmitting = false
+                publish()
+                redraw()
+            end)
+        else
+            if st.tot_timer then
+                timer_stop(st.tot_timer)
+                st.tot_timer = nil
+            end
+            if st.scanning and not st.main_rx and not st.scan_timer and not st.scan_hold_timer then
+                if start_scan_timer then start_scan_timer() end
+            end
+        end
         publish()
         redraw()
     end
 end
 
+local manual_ptt = false
+local copilot_ptt = false
+
+local function sync_ptt_state()
+    local pressed = manual_ptt or copilot_ptt
+    if pressed ~= st.ptt_pressed then
+        st.ptt_pressed = pressed
+        if not pressed then
+            local was_expired = st.tot_expired
+            st.tot_expired = false
+            if st.tot_timer then
+                timer_stop(st.tot_timer)
+                st.tot_timer = nil
+            end
+            if was_expired then
+                redraw()
+            end
+        end
+        update_transmit()
+    end
+end
+
 si_variable_subscribe("cap_fm_ptt", "BOOL", function(v)
-    st.ptt_pressed = v and true or false
-    update_transmit()
+    manual_ptt = v and true or false
+    sync_ptt_state()
+end)
+
+xpl_dataref_subscribe("sim/cockpit2/radios/actuators/audio_panel_copilot_ptt", "INT", function(v)
+    copilot_ptt = (v == 1)
+    sync_ptt_state()
 end)
 
 -- COM3 audio / COM3 MIC selection from the GMA 1347 audio panel.

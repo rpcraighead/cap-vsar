@@ -11,6 +11,9 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'services/exercise'))
 from app import radio
 
+RADIO_JS = (Path(__file__).resolve().parents[1] /
+            'services/exercise/app/static/mission-radio.js')
+
 
 class Output:
     def __init__(self): self.frames = []; self.pending = 0
@@ -174,3 +177,14 @@ def test_server_move_or_mute_during_transmission_unkeys(sockets, change):
         sock.send_bytes(bytes(1920))
         assert not sock.receive_json()['active']
         assert clients[0].sound_output.frames == []
+
+
+def test_browser_radio_rejoins_with_backoff_and_an_audible_alarm():
+    source = RADIO_JS.read_text()
+    assert 'scheduleReconnect' in source
+    assert 'soundDisconnectAlarm' in source
+    assert 'Math.min(30000' in source
+    assert "addEventListener('close',()=>{if(state.ws===socket)connectionLost" in source
+    assert "connectionLost('Mission voice stopped responding." in source
+    assert "state.context.addEventListener('statechange'" in source
+    assert "context.state==='suspended' && state.wantOnline" in source

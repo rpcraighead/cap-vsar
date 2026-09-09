@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CAP V-SAR Exercise Console</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="/static/style.css">
 </head><body>
 
@@ -10,11 +10,14 @@
   <div class="brand"><b>CAP V-SAR</b> <span>Exercise Console</span></div>
   <div id="status" class="status offline">connecting</div>
   <div class="spacer"></div>
+  <a class="navlink" href="/setup">⚙️ Setup</a>
   <a class="navlink" href="/base">Mission Base</a>
   <a class="navlink" href="/radio">Base Radio</a>
   <a class="navlink" href="/debrief">Debrief</a>
   <a class="navlink nav-planner" href=":8090" target="_blank" title="N499CP Flight Planner">Flight Planner</a>
   <div id="clock" class="mono"></div>
+  <div id="userBadge" class="user-badge mono">👤 Instructor</div>
+  <button id="logoutBtn" class="ghost btn-sm" style="color:#fff;border-color:rgba(255,255,255,.4)">Log out</button>
 </header>
 
 <main>
@@ -106,7 +109,7 @@
   <div id="map"></div>
 </main>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/vendor/leaflet/leaflet.js"></script>
 <script src="/static/charts.js"></script>
 <script src="/static/app.js"></script>
 </body></html>

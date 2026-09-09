@@ -10,6 +10,7 @@ REFS = {}          # name -> dict of callbacks
 SIM = {"lat": 0.0, "lon": 0.0, "elev_m": 0.0, "psi": 0.0,
        "phi": 0.0, "theta": 0.0}
 TERRAIN_FT = 0.0   # flat ground unless a test raises it
+TERRAIN_FN = None  # optional callable (lat, lon) -> elevation in feet
 LOG = []
 
 
@@ -59,17 +60,26 @@ class _Info:
     result = ProbeHitTerrain
     locationX = locationY = locationZ = 0.0
 
+    def __init__(self, x=0.0, y=0.0, z=0.0):
+        self.locationX = x
+        self.locationY = y
+        self.locationZ = z
+
 
 def worldToLocal(lat, lon, alt):
-    return 0.0, 0.0, 0.0
+    return float(lat), float(lon), float(alt)
 
 
 def localToWorld(x, y, z):
-    return 0.0, 0.0, TERRAIN_FT / 3.28084
+    if TERRAIN_FN is not None:
+        elev_ft = float(TERRAIN_FN(x, y))
+    else:
+        elev_ft = TERRAIN_FT
+    return x, y, elev_ft / 3.28084
 
 
 def probeTerrainXYZ(probe, x, y, z):
-    return _Info()
+    return _Info(x, y, z)
 
 
 def createFlightLoop(cb, phase):
