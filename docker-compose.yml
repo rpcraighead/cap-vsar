@@ -130,7 +130,7 @@ services:
       retries: 3
       start_period: 15s
 
-  # ---- N499CP Flight Planner: pre-flight planning + CAP search patterns ----
+  # ---- Flight planner: pre-flight planning + CAP search patterns ----
   # Composited here (rather than its standalone Cloud Run deployment) so it
   # reaches the exercise console over the compose network as "exercise:8700"
   # instead of a LAN IP or a public URL a caller could redirect - see the
@@ -145,11 +145,18 @@ services:
     ports:
       - "8090:8080"
     volumes:
-      - ./services/flightplanner/data/aviation_data.db:/app/aviation_data.db
+      # L-12: mount the DIRECTORY, not the database file. SQLite writes its
+      # journal and WAL next to the database; with a file mount those siblings
+      # were written into the container's own layer, so a crash mid-write left
+      # the journal on a discarded layer. The host file does not move -
+      # ./services/flightplanner/data/aviation_data.db is the same path it
+      # always was, now reached as /app/data/aviation_data.db.
+      - ./services/flightplanner/data:/app/data
       - ./services/flightplanner/data/charts:/app/charts
     environment:
       TZ: ${TZ}
       PORT: "8080"
+      DATABASE_PATH: /app/data/aviation_data.db
       VSAR_CONSOLE_URL: http://exercise:8700
       CAPVSAR_TOKEN_INSTRUCTOR: ${CAPVSAR_TOKEN_INSTRUCTOR:-}
       CAPVSAR_TOKEN_BASE: ${CAPVSAR_TOKEN_BASE:-}
