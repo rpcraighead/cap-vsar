@@ -1,10 +1,12 @@
-from flask import Flask, render_template, request, jsonify, send_from_directory, abort
+from flask import Flask, render_template, request, jsonify, send_from_directory, abort, Response
 from collections import deque
 from datetime import datetime, timedelta, timezone
 import fcntl
 import hmac
 import json
+import hashlib
 import math
+import re
 import os
 import csv
 import sqlite3
@@ -23,7 +25,31 @@ except Exception:
 app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATABASE_PATH = os.path.join(BASE_DIR, 'aviation_data.db')
+
+# L-12: the database lives in a DIRECTORY, not as a bind-mounted file.
+#
+# Compose used to mount ./services/flightplanner/data/aviation_data.db onto
+# /app/aviation_data.db - a single file. SQLite writes its rollback journal and
+# WAL beside the database, and those siblings are NOT part of the mount, so
+# they landed in the container's own writable layer. A crash mid-write then
+# left the journal on a layer that is discarded when the container is replaced,
+# and the database with no way to roll back. O-3 papered over the symptom by
+# pre-creating the file.
+#
+# DATA_DIR is overridable so a test or a local run can point somewhere else;
+# the default keeps a plain `python app.py` checkout working exactly as before.
+DATA_DIR = os.environ.get('CAPVSAR_PLANNER_DATA', os.path.join(BASE_DIR, 'data'))
+_legacy_db = os.path.join(BASE_DIR, 'aviation_data.db')
+DATABASE_PATH = os.environ.get('DATABASE_PATH') or os.path.join(
+    DATA_DIR, 'aviation_data.db')
+if not os.path.exists(DATABASE_PATH) and os.path.exists(_legacy_db):
+    # A checkout that still has the old file in place keeps using it rather
+    # than silently starting with an empty database.
+    DATABASE_PATH = _legacy_db
+try:
+    os.makedirs(os.path.dirname(DATABASE_PATH) or '.', exist_ok=True)
+except OSError:
+    pass
 DATABASE_UPDATE_LOCK_PATH = '/tmp/capvsar-flightplanner-aviation.update.lock'
 DATABASE_UPDATE_STATUS_PATH = '/tmp/capvsar-flightplanner-aviation.update.json'
 DOCS_DIR = os.path.join(BASE_DIR, 'docs')
@@ -75,48 +101,205 @@ OURAIRPORTS_URLS = {
     'navaids': 'https://davidmegginson.github.io/ourairports-data/navaids.csv'
 }
 
+# Cessna 182T NAV III GFC 700, 182TIMBUS-01, revision 1 (20 Dec 2007).
+# https://www.aeroelectric.com/Reference_Docs/Cessna/cessna-poh/C182T_2007_NavIII-G1000%2BGFC700_POH-PIM_fromCessna.pdf
+# The user selected the POH SAMPLE aircraft as the simulation planning baseline.
+# Its empty weight/moment are not a measurement of CAP 487. The builder still
+# uses 1970 lb; use 1924 lb in the sim to match this sample loading calculation.
 AIRCRAFT_DATABASE = {
-    'N499CP': {
-        'name': 'N499CP - Cessna 172S NAV III',
-        'empty_weight': 1642, 'empty_weight_moment': 62.6,
-        'max_takeoff_weight': 2550, 'usable_fuel': 53,
-        'fuel_weight_per_gallon': 6.0,
-        # POH Section 6: forward CG limit slopes aft with weight; aft limit constant
-        'cg_fwd_points': ((1950, 35.0), (2550, 41.0)),
-        'cg_aft_limit': 47.3,
-        'arms': {'front_seats': 37.0, 'rear_seats': 73.0, 'baggage1': 95.0},
-        'baggage1_max': 120,
-        'fuel_arm': 48.0, 'taxi_fuel': 1.4,
-        
-        'cruise_performance': {
-            4000: {2500: {0: (69, 115, 9.5)}, 2400: {0: (61, 109, 8.5)}},
-            6000: {2600: {0: (73, 119, 9.9)}, 2500: {0: (65, 114, 9.0)}, 2400: {0: (57, 108, 8.2)}},
-            8000: {2600: {0: (68, 119, 9.4)}, 2500: {0: (61, 112, 8.6)}, 2400: {0: (54, 106, 7.8)}},
-            10000: {2600: {0: (64, 117, 9.0)}, 2500: {0: (57, 111, 8.2)}},
-        },
-        
+    'CAP 487': {
+        'name': 'CAP 487 - Cessna 182T NAV III (POH sample baseline)',
+        # Figure 6-3, sample aircraft: pounds and thousand lb-in.
+        'empty_weight': 1924, 'empty_weight_moment': 70.9,
+        # Section 2-8 weight/CG limits; Section 1-5 engine specification.
+        'max_takeoff_weight': 3100, 'max_landing_weight': 2950,
+        'max_ramp_weight': 3110, 'engine_hp': 230,
+        'cg_fwd_points': ((2250, 33.0), (2700, 35.5), (3100, 40.9)),
+        'cg_aft_limit': 46.0,
+        # Figures 6-3 and 6-5: average occupant and baggage A positions.
+        # This form supports baggage A only (120 lb), not the B/C compartments.
+        'arms': {'front_seats': 37.0, 'rear_seats': 74.0, 'baggage1': 97.0},
+        'baggage1_max': 120, 'fuel_arm': 46.5,
+        # Section 1-6 and Fig 6-3: 87 usable of 92 total US gal, 6 lb/gal.
+        'usable_fuel': 87, 'total_fuel': 92, 'fuel_weight_per_gallon': 6.0,
+        # Fig 5-8 sheet 1: engine start, taxi AND takeoff allowance, US gal.
+        'taxi_fuel': 1.7,
+        # Fig 5-9 sheets 1..9: standard-temperature column, 3100 lb,
+        # recommended lean mixture, cowl flaps closed. Altitude -> RPM ->
+        # manifold pressure in inHg -> (% MCP, KTAS, US gal/hour).
+        # Above-80% rows exist only to interpolate; get_cruise rejects >80%.
+        'cruise_performance': {0: {2000: {20: (49.0, 108.0, 9.2),
+            21: (53.0, 112.0, 9.7),
+            22: (56.0, 117.0, 10.2),
+            23: (60.0, 120.0, 10.7),
+            24: (64.0, 124.0, 11.3),
+            25: (67.0, 127.0, 11.8),
+            26: (71.0, 130.0, 12.4),
+            27: (75.0, 133.0, 13.0)},
+     2100: {20: (51.0, 111.0, 9.6),
+            21: (55.0, 116.0, 10.1),
+            22: (59.0, 120.0, 10.6),
+            23: (63.0, 123.0, 11.2),
+            24: (67.0, 127.0, 11.8),
+            25: (71.0, 130.0, 12.4),
+            26: (75.0, 133.0, 13.0),
+            27: (79.0, 135.0, 13.7)},
+     2200: {20: (54.0, 114.0, 9.9),
+            21: (58.0, 119.0, 10.5),
+            22: (62.0, 122.0, 11.1),
+            23: (66.0, 126.0, 11.7),
+            24: (71.0, 130.0, 12.3),
+            25: (75.0, 133.0, 12.9),
+            26: (79.0, 135.0, 13.6),
+            27: (83.0, 137.0, 14.4)},
+     2300: {20: (56.0, 116.0, 10.2),
+            21: (60.0, 120.0, 10.8),
+            22: (65.0, 124.0, 11.4),
+            23: (69.0, 128.0, 12.0),
+            24: (73.0, 132.0, 12.7),
+            25: (78.0, 135.0, 13.4),
+            26: (82.0, 137.0, 14.2)},
+     2400: {20: (58.0, 118.0, 10.4),
+            21: (62.0, 122.0, 11.1),
+            22: (67.0, 127.0, 11.7),
+            23: (71.0, 130.0, 12.4),
+            24: (76.0, 133.0, 13.2),
+            25: (81.0, 136.0, 14.0)}},
+ 2000: {2000: {20: (51.0, 112.0, 9.4),
+               21: (54.0, 116.0, 10.0),
+               22: (58.0, 120.0, 10.5),
+               23: (62.0, 124.0, 11.0),
+               24: (66.0, 127.0, 11.5),
+               25: (69.0, 131.0, 12.1),
+               26: (73.0, 134.0, 12.7)},
+        2100: {20: (53.0, 115.0, 9.8),
+               21: (57.0, 119.0, 10.4),
+               22: (61.0, 123.0, 10.9),
+               23: (65.0, 127.0, 11.5),
+               24: (69.0, 131.0, 12.1),
+               25: (73.0, 134.0, 12.7),
+               26: (77.0, 137.0, 13.4)},
+        2200: {20: (56.0, 118.0, 10.2),
+               21: (60.0, 122.0, 10.8),
+               22: (64.0, 126.0, 11.4),
+               23: (69.0, 130.0, 12.0),
+               24: (73.0, 134.0, 12.6),
+               25: (77.0, 137.0, 13.3),
+               26: (81.0, 139.0, 14.1)},
+        2300: {20: (58.0, 120.0, 10.5),
+               21: (62.0, 124.0, 11.1),
+               22: (67.0, 128.0, 11.7),
+               23: (71.0, 133.0, 12.4),
+               24: (76.0, 136.0, 13.1),
+               25: (80.0, 139.0, 13.9)},
+        2400: {20: (60.0, 122.0, 10.7),
+               21: (65.0, 126.0, 11.4),
+               22: (69.0, 131.0, 12.1),
+               23: (74.0, 134.0, 12.8),
+               24: (79.0, 138.0, 13.6),
+               25: (83.0, 140.0, 14.4)}},
+ 4000: {2000: {20: (52.0, 115.0, 9.7),
+               21: (56.0, 120.0, 10.2),
+               22: (60.0, 124.0, 10.7),
+               23: (64.0, 128.0, 11.3),
+               24: (68.0, 131.0, 11.8),
+               25: (71.0, 135.0, 12.4)},
+        2100: {20: (55.0, 119.0, 10.1),
+               21: (59.0, 123.0, 10.6),
+               22: (63.0, 127.0, 11.2),
+               23: (67.0, 131.0, 11.8),
+               24: (71.0, 135.0, 12.4),
+               25: (75.0, 138.0, 13.0)},
+        2200: {20: (58.0, 122.0, 10.4),
+               21: (62.0, 126.0, 11.0),
+               22: (66.0, 130.0, 11.7),
+               23: (71.0, 134.0, 12.3),
+               24: (75.0, 138.0, 13.0),
+               25: (79.0, 141.0, 13.7)},
+        2300: {20: (60.0, 124.0, 10.7),
+               21: (65.0, 128.0, 11.4),
+               22: (69.0, 133.0, 12.1),
+               23: (74.0, 137.0, 12.8),
+               24: (78.0, 140.0, 13.5),
+               25: (83.0, 143.0, 14.3)},
+        2400: {20: (62.0, 126.0, 11.1),
+               21: (67.0, 131.0, 11.7),
+               22: (72.0, 135.0, 12.5),
+               23: (76.0, 139.0, 13.2),
+               24: (81.0, 142.0, 14.0)}},
+ 6000: {2000: {19: (50.0, 114.0, 9.4),
+               20: (54.0, 119.0, 9.9),
+               21: (58.0, 123.0, 10.4),
+               22: (62.0, 128.0, 11.0),
+               23: (66.0, 132.0, 11.5)},
+        2100: {19: (53.0, 118.0, 9.8),
+               20: (57.0, 122.0, 10.3),
+               21: (61.0, 127.0, 10.9),
+               22: (65.0, 131.0, 11.5),
+               23: (69.0, 135.0, 12.1)},
+        2200: {19: (56.0, 121.0, 10.1),
+               20: (60.0, 126.0, 10.7),
+               21: (64.0, 130.0, 11.3),
+               22: (69.0, 134.0, 12.0),
+               23: (73.0, 138.0, 12.6)},
+        2300: {19: (58.0, 123.0, 10.4),
+               20: (62.0, 128.0, 11.0),
+               21: (67.0, 133.0, 11.7),
+               22: (71.0, 137.0, 12.4),
+               23: (76.0, 141.0, 13.1)},
+        2400: {19: (60.0, 126.0, 10.7),
+               20: (65.0, 130.0, 11.4),
+               21: (69.0, 135.0, 12.1),
+               22: (74.0, 139.0, 12.8),
+               23: (79.0, 143.0, 13.6)}},
+ 8000: {2000: {19: (52.0, 118.0, 9.6), 20: (56.0, 123.0, 10.1), 21: (60.0, 127.0, 10.7)},
+        2100: {18: (50.0, 116.0, 9.4),
+               19: (55.0, 121.0, 10.0),
+               20: (59.0, 126.0, 10.6),
+               21: (63.0, 131.0, 11.2)},
+        2200: {18: (53.0, 119.0, 9.8),
+               19: (57.0, 125.0, 10.4),
+               20: (62.0, 130.0, 11.0),
+               21: (66.0, 134.0, 11.6)},
+        2300: {18: (55.0, 122.0, 10.1),
+               19: (60.0, 127.0, 10.7),
+               20: (64.0, 132.0, 11.3),
+               21: (69.0, 137.0, 12.0)},
+        2400: {18: (57.0, 124.0, 10.3),
+               19: (62.0, 130.0, 11.0),
+               20: (67.0, 135.0, 11.7),
+               21: (72.0, 139.0, 12.5)}},
+ 10000: {2000: {18: (50.0, 116.0, 9.3), 19: (54.0, 122.0, 9.8), 20: (58.0, 127.0, 10.4)},
+         2100: {18: (52.0, 120.0, 9.7), 19: (56.0, 125.0, 10.2), 20: (61.0, 130.0, 10.8)},
+         2200: {18: (55.0, 123.0, 10.0), 19: (59.0, 129.0, 10.6), 20: (64.0, 134.0, 11.3)},
+         2300: {18: (57.0, 126.0, 10.3),
+                19: (62.0, 132.0, 11.0),
+                20: (66.0, 137.0, 11.7),
+                21: (71.0, 141.0, 12.4)},
+         2400: {18: (59.0, 129.0, 10.6), 19: (64.0, 134.0, 11.3), 20: (69.0, 139.0, 12.1)}}},
+        # Fig 5-8 sheet 1: maximum-rate climb, standard temperature, zero wind;
+        # altitude -> (minutes from sea level, US gal, NM).
         'climb_performance': {
-            0: (0, 0.0, 0), 2000: (3, 0.8, 4), 4000: (6, 1.5, 8),
-            6000: (10, 2.2, 13), 8000: (14, 3.0, 19), 10000: (20, 3.9, 27),
+            0: (0, 0.0, 0), 2000: (2, 0.8, 3), 4000: (5, 1.5, 7),
+            6000: (8, 2.3, 11), 8000: (11, 3.2, 16), 10000: (15, 4.2, 21),
+            12000: (20, 5.2, 29), 14000: (26, 6.5, 38),
         },
-        
-        'takeoff_distance_2550': {
-            0: {15: (940, 1630), 30: (1070, 1810)},
-            2000: {15: (1150, 1960), 30: (1285, 2190)},
-            4000: {15: (1390, 2390), 30: (1550, 2685)},
-            6000: {15: (1680, 2950), 30: (1875, 3320)},
-        },
-        
-        'landing_distance': {
-            0: {15: (575, 1335), 30: (605, 1380)},
-            2000: {15: (620, 1405), 30: (650, 1455)},
-            4000: {15: (665, 1480), 30: (700, 1535)},
-            6000: {15: (720, 1560), 30: (755, 1620)},
-        },
+        # Fig 5-6 sheet 1: 3100 lb, flaps 20, paved/level/dry runway;
+        # altitude -> Celsius -> (ground roll ft, distance over 50 ft).
+        'takeoff_distance': {0: {0: (715, 1365), 10: (765, 1460), 20: (825, 1570), 30: (885, 1680), 40: (945, 1800)},
+ 2000: {0: (850, 1635), 10: (915, 1760), 20: (980, 1890), 30: (1055, 2035), 40: (1130, 2190)},
+ 4000: {0: (1015, 1990), 10: (1090, 2150), 20: (1175, 2325), 30: (1260, 2515), 40: (1355, 2720)},
+ 6000: {0: (1220, 2470), 10: (1315, 2690), 20: (1415, 2930), 30: (1520, 3200), 40: (1635, 3510)}},
+        # Fig 5-12: 2950 lb, flaps full, idle, max braking, paved/level/dry.
+        # Same column units as takeoff; subset at 2000 ft altitude increments.
+        'landing_distance': {0: {0: (560, 1300), 10: (580, 1335), 20: (600, 1365), 30: (620, 1400), 40: (640, 1435)},
+ 2000: {0: (600, 1370), 10: (625, 1405), 20: (645, 1440), 30: (670, 1480), 40: (690, 1515)},
+ 4000: {0: (650, 1450), 10: (670, 1485), 20: (695, 1525), 30: (720, 1565), 40: (740, 1600)},
+ 6000: {0: (700, 1530), 10: (725, 1575), 20: (750, 1615), 30: (775, 1660), 40: (800, 1700)}},
     }
 }
 
-DEFAULT_AIRCRAFT = 'N499CP'
+DEFAULT_AIRCRAFT = 'CAP 487'
 
 os.makedirs(CHARTS_DIR, exist_ok=True)
 
@@ -220,7 +403,7 @@ def download_tiles(chart_type, tile_url_template, regions, zoom_levels, phase_na
             try:
                 url = tile_url_template.format(z=z, x=x, y=y)
                 response = requests.get(url, timeout=15, headers={
-                    'User-Agent': 'Mozilla/5.0 N499CP-FlightPlanner/1.0',
+                    'User-Agent': 'Mozilla/5.0 CAP 487-FlightPlanner/1.0',
                     'Referer': 'https://www.faa.gov/'
                 })
                 if response.status_code == 200 and len(response.content) > 100:
@@ -516,7 +699,7 @@ def fetch_winds_aloft(lat, lon):
         r = requests.get(OPEN_METEO_URL, params={
             'latitude': lat, 'longitude': lon, 'hourly': ','.join(fields),
             'wind_speed_unit': 'kn', 'forecast_days': 1, 'timezone': 'UTC',
-        }, timeout=6, headers={'User-Agent': 'N499CP-Planner/1.0'})
+        }, timeout=6, headers={'User-Agent': 'CAP 487-Planner/1.0'})
         h = r.json()['hourly']
         times = h['time']
         target = now.strftime('%Y-%m-%dT%H:00')
@@ -555,7 +738,7 @@ def fetch_winds_aloft(lat, lon):
 def fetch_metar(station):
     try:
         r = requests.get(f"{AVIATION_WEATHER_BASE}/metar?ids={station}&format=json", timeout=8,
-                        headers={'User-Agent': 'N499CP-Planner/1.0'})
+                        headers={'User-Agent': 'CAP 487-Planner/1.0'})
         if r.status_code == 200 and r.text.strip().startswith('['):
             data = r.json()
             if data: 
@@ -567,7 +750,7 @@ def fetch_metar(station):
 def fetch_taf(station):
     try:
         r = requests.get(f"{AVIATION_WEATHER_BASE}/taf?ids={station}&format=json", timeout=8,
-                        headers={'User-Agent': 'N499CP-Planner/1.0'})
+                        headers={'User-Agent': 'CAP 487-Planner/1.0'})
         if r.status_code == 200 and r.text.strip().startswith('['):
             data = r.json()
             if data:
@@ -605,6 +788,15 @@ def destination_point(lat, lon, dist_nm, brg_deg):
                                      math.cos(d_div_r) - math.sin(lat1_rad) * math.sin(lat2_rad))
     return round(math.degrees(lat2_rad), 6), round((math.degrees(lon2_rad) + 540) % 360 - 180, 6)
 
+def _magnetic_headings(points):
+    for index, point in enumerate(points):
+        previous = points[max(0, index - 1)]
+        variation = mag_var((previous['lat'] + point['lat']) / 2,
+                            (previous['lon'] + point['lon']) / 2)
+        point['heading_mag'] = round((point['heading_true'] - variation) % 360, 1)
+    return points
+
+
 def generate_expanding_square(datum_lat, datum_lon, spacing_nm=1.0, num_legs=8, initial_heading=0.0, turn_dir='right'):
     """Generate Civil Air Patrol Expanding Square (SS) search pattern waypoints."""
     points = [{'identifier': 'DATUM', 'lat': round(datum_lat, 6), 'lon': round(datum_lon, 6), 'leg_dist_nm': 0.0, 'heading_true': initial_heading}]
@@ -627,20 +819,20 @@ def generate_expanding_square(datum_lat, datum_lon, spacing_nm=1.0, num_legs=8, 
         cur_lat, cur_lon = next_lat, next_lon
         cur_hdg = (cur_hdg + turn_angle) % 360
         
-    return points
+    return _magnetic_headings(points)
 
 def generate_creeping_line(start_lat, start_lon, end_lat, end_lon, sweep_width_nm=3.0, spacing_nm=1.0, max_legs=12):
     """Generate Civil Air Patrol Creeping Line (CS) search pattern waypoints."""
     adv_brg = bearing(start_lat, start_lon, end_lat, end_lon)
     tot_dist = gc_dist(start_lat, start_lon, end_lat, end_lon)
-    num_sweeps = min(max_legs, max(2, int(tot_dist / spacing_nm)))
+    num_sweeps = min(max_legs, max(1, math.ceil(tot_dist / spacing_nm)))
     
     left_brg = (adv_brg - 90) % 360
     right_brg = (adv_brg + 90) % 360
     half_w = sweep_width_nm / 2.0
     
     points = []
-    cur_axis_lat, cur_axis_lon = start_lat, start_lon
+    cur_axis_lat, cur_axis_lon = destination_point(start_lat, start_lon, min(spacing_nm, tot_dist) / 2, adv_brg)
     
     # Leg 1: Offset left
     p1_lat, p1_lon = destination_point(cur_axis_lat, cur_axis_lon, half_w, left_brg)
@@ -675,16 +867,16 @@ def generate_creeping_line(start_lat, start_lon, end_lat, end_lon, sweep_width_n
             wpt_idx += 1
             current_side = 'right'
             
-    return points
+    return _magnetic_headings(points)
 
 def generate_parallel_track(corner_lat, corner_lon, length_nm=5.0, width_nm=4.0, axis_heading=0.0, spacing_nm=1.0):
     """Generate Civil Air Patrol Parallel Track (PS) search pattern waypoints."""
     cross_heading = (axis_heading + 90) % 360
     opp_heading = (axis_heading + 180) % 360
-    num_sweeps = max(2, int(width_nm / spacing_nm))
+    num_sweeps = max(1, math.ceil(width_nm / spacing_nm))
     
     points = []
-    cur_lat, cur_lon = corner_lat, corner_lon
+    cur_lat, cur_lon = destination_point(corner_lat, corner_lon, min(spacing_nm, width_nm) / 2, cross_heading)
     points.append({'identifier': 'PS01', 'lat': cur_lat, 'lon': cur_lon, 'leg_dist_nm': 0.0, 'heading_true': axis_heading})
     
     wpt_idx = 2
@@ -703,10 +895,17 @@ def generate_parallel_track(corner_lat, corner_lon, length_nm=5.0, width_nm=4.0,
             wpt_idx += 1
             cur_lat, cur_lon = next_lat, next_lon
             
-    return points
+    return _magnetic_headings(points)
 
 def generate_xplane_fms_content(departure, destination, waypoints, cruise_alt=6500):
     """Generate X-Plane 11/12 standard .fms text file."""
+    departure, destination = departure.strip().upper(), destination.strip().upper()
+    airports = []
+    for role, ident in (('ADEP', departure), ('ADES', destination)):
+        airport = get_airport(ident)
+        if not airport:
+            raise ValueError(f'Cannot resolve {role} airport: {ident or "(empty)"}; update the aviation database or correct the identifier')
+        airports.append(airport)
     lines = [
         "I",
         "1100 Version",
@@ -716,22 +915,25 @@ def generate_xplane_fms_content(departure, destination, waypoints, cruise_alt=65
         f"NUMENR {len(waypoints) + 2}"
     ]
     
-    dep_apt = get_airport(departure.upper())
-    dep_lat = dep_apt['latitude'] if dep_apt else (waypoints[0]['lat'] if waypoints else 0.0)
-    dep_lon = dep_apt['longitude'] if dep_apt else (waypoints[0]['lon'] if waypoints else 0.0)
-    dep_elev = dep_apt.get('elevation', 0) if dep_apt else 0
+    dep_apt, dest_apt = airports
+    dep_lat, dep_lon = dep_apt['latitude'], dep_apt['longitude']
+    dep_elev = dep_apt.get('elevation', 0)
     lines.append(f"1 {departure.upper()} ADEP {float(dep_elev):.1f} {dep_lat:.6f} {dep_lon:.6f}")
     
     for wpt in waypoints:
         lat = wpt.get('lat', 0.0)
         lon = wpt.get('lon', 0.0)
-        ident = f"{lat:+.3f}_{lon:+.3f}"
+        # Laminar's v11 FMS specification (also used by X-Plane 12):
+        # https://developer.x-plane.com/article/flightplan-files-v11-fms-file-format/
+        # Type 28 uses lat/lon in columns 5/6; column 2 is the identifier.
+        # Use a conservative ASCII token subset; never change the coordinates
+        # to obtain a name. Preserve coordinate names for unlabelled points.
+        ident = re.sub(r'[^A-Z0-9_]', '_', str(wpt.get('identifier') or '').upper()).strip('_')
+        ident = ident or f"{lat:+.3f}_{lon:+.3f}"
         lines.append(f"28 {ident} DRCT {float(cruise_alt):.6f} {lat:.6f} {lon:.6f}")
         
-    dest_apt = get_airport(destination.upper())
-    dest_lat = dest_apt['latitude'] if dest_apt else (waypoints[-1]['lat'] if waypoints else 0.0)
-    dest_lon = dest_apt['longitude'] if dest_apt else (waypoints[-1]['lon'] if waypoints else 0.0)
-    dest_elev = dest_apt.get('elevation', 0) if dest_apt else 0
+    dest_lat, dest_lon = dest_apt['latitude'], dest_apt['longitude']
+    dest_elev = dest_apt.get('elevation', 0)
     lines.append(f"1 {destination.upper()} ADES {float(dest_elev):.1f} {dest_lat:.6f} {dest_lon:.6f}")
     
     return "\n".join(lines) + "\n"
@@ -749,13 +951,18 @@ def mag_var(lat, lon):
         return 0.0
 
 def wind_corr(tc, tas, wd, ws):
+    if tas <= 0:
+        raise ValueError('True airspeed must be positive')
     if ws == 0: return 0, tas
     swc = (ws/tas)*math.sin(math.radians(wd-tc))
-    swc = max(-1, min(1, swc))
+    if abs(swc) >= 1:
+        raise ValueError('Crosswind is at or above true airspeed; course cannot be maintained')
     wca = math.degrees(math.asin(swc))
     # Winds-aloft direction is FROM: a headwind (wd == tc) must reduce GS
     gs = tas*math.cos(math.asin(swc)) - ws*math.cos(math.radians(wd-tc))
-    return round(wca,1), max(round(gs,1), 0)
+    if gs <= 0:
+        raise ValueError('Headwind produces non-positive ground speed; leg cannot be flown')
+    return round(wca,1), gs
 
 def get_airport(icao):
     conn = sqlite3.connect(DATABASE_PATH)
@@ -801,17 +1008,40 @@ def get_coords(ident):
     if n: return (n['latitude'], n['longitude'], 'navaid', n)
     return None
 
-def get_cruise(alt, rpm):
-    ac = AIRCRAFT_DATABASE[DEFAULT_AIRCRAFT]
-    cd = ac['cruise_performance']
-    alts = sorted(cd.keys())
-    a = min(alts, key=lambda x: abs(x-alt))
-    if a not in cd: return {'true_airspeed': 110, 'fuel_flow_gph': 8.5}
-    rpms = sorted(cd[a].keys())
-    r = min(rpms, key=lambda x: abs(x-rpm))
-    if r not in cd[a]: return {'true_airspeed': 110, 'fuel_flow_gph': 8.5}
-    pwr, tas, gph = cd[a][r][0]
-    return {'power_percent': pwr, 'true_airspeed': tas, 'fuel_flow_gph': gph}
+def _bracket(values, requested):
+    values = sorted(values)
+    if not values[0] <= requested <= values[-1]:
+        raise ValueError(f'Input {requested:g} outside performance table {values[0]:g}..{values[-1]:g}')
+    return (max(value for value in values if value <= requested),
+            min(value for value in values if value >= requested))
+
+
+def _lerp_tuple(low, high, fraction):
+    return tuple(a + (b - a) * fraction for a, b in zip(low, high))
+
+
+def get_cruise(alt, rpm, manifold_pressure=20.0):
+    """Interpolate the POH standard-temperature altitude/RPM/MP grid."""
+    cd = AIRCRAFT_DATABASE[DEFAULT_AIRCRAFT]['cruise_performance']
+    low, high = _bracket(cd, alt)
+    rows = []
+    for altitude in (low, high):
+        rlow, rhigh = _bracket(cd[altitude], rpm)
+        rpm_rows = []
+        for setting in (rlow, rhigh):
+            table = cd[altitude][setting]
+            mlow, mhigh = _bracket(table, manifold_pressure)
+            fraction = (manifold_pressure - mlow) / (mhigh - mlow) if mhigh != mlow else 0
+            rpm_rows.append(_lerp_tuple(table[mlow], table[mhigh], fraction))
+        fraction = (rpm - rlow) / (rhigh - rlow) if rhigh != rlow else 0
+        rows.append(_lerp_tuple(*rpm_rows, fraction))
+    fraction = (alt - low) / (high - low) if high != low else 0
+    pwr, tas, gph = _lerp_tuple(*rows, fraction)
+    if pwr > 80:
+        raise ValueError('Cruise setting exceeds the POH maximum of 80% power')
+    return {'power_percent': pwr, 'true_airspeed': tas, 'fuel_flow_gph': gph,
+            'manifold_pressure_inhg': manifold_pressure,
+            'conditions': 'POH standard temperature, recommended lean mixture, 3100 lb'}
 
 def get_climb(fr, to):
     ac = AIRCRAFT_DATABASE[DEFAULT_AIRCRAFT]
@@ -824,24 +1054,44 @@ def get_climb(fr, to):
 
 def calc_takeoff(wt, alt, temp, hw=0):
     ac = AIRCRAFT_DATABASE[DEFAULT_AIRCRAFT]
-    tbl = ac['takeoff_distance_2550']
+    tbl = ac['takeoff_distance']
+    if not 0 < wt <= ac['max_takeoff_weight']:
+        raise ValueError('Takeoff weight must be positive and no more than 3100 lb')
+    _bracket(tbl, alt)
+    for row in tbl.values():
+        _bracket(row, temp)
     alts = sorted(tbl.keys())
     a = min([x for x in alts if x >= alt], default=alts[-1])
     temps = sorted(tbl[a].keys())
     t = min([x for x in temps if x >= temp], default=temps[-1])
     gr, tot = tbl[a][t]
-    wf = 1.0 - (hw/9*0.10) if hw > 0 else 1.0
+    # C182T POH, Figs 5-6 / 5-12 wind-correction notes (source above).
+    # Up to 10 kt tailwind: increase distance 10% per 2 kt.
+    if hw < -10:
+        raise ValueError('Tailwind exceeds the 10 kt performance-table limit')
+    wf = 1.0 - hw / 2 * 0.10 if hw < 0 else 1.0 - hw / 9 * 0.10
+    if wf <= 0:
+        raise ValueError('Headwind exceeds the supported runway correction')
     return {'ground_roll': int(gr*wf), 'total_over_50ft': int(tot*wf)}
 
 def calc_landing(alt, temp, hw=0):
     ac = AIRCRAFT_DATABASE[DEFAULT_AIRCRAFT]
     tbl = ac['landing_distance']
+    _bracket(tbl, alt)
+    for row in tbl.values():
+        _bracket(row, temp)
     alts = sorted(tbl.keys())
     a = min([x for x in alts if x >= alt], default=alts[-1])
     temps = sorted(tbl[a].keys())
     t = min([x for x in temps if x >= temp], default=temps[-1])
     gr, tot = tbl[a][t]
-    wf = 1.0 - (hw/9*0.10) if hw > 0 else 1.0
+    # C182T POH, Figs 5-6 / 5-12 wind-correction notes (source above).
+    # Up to 10 kt tailwind: increase distance 10% per 2 kt.
+    if hw < -10:
+        raise ValueError('Tailwind exceeds the 10 kt performance-table limit')
+    wf = 1.0 - hw / 2 * 0.10 if hw < 0 else 1.0 - hw / 9 * 0.10
+    if wf <= 0:
+        raise ValueError('Headwind exceeds the supported runway correction')
     return {'ground_roll': int(gr*wf), 'total_over_50ft': int(tot*wf)}
 
 
@@ -938,21 +1188,110 @@ def get_startup_status():
 
 @app.route('/api/tile-sources')
 def get_tile_sources():
+    """Local tile URLs, always.
+
+    These used to be the ArcGIS templates, so the browser went straight out to
+    the internet and the whole server-side cache was bypassed (L-8). Serving
+    /tiles/ means the map works at a base with no route out, for any area that
+    has been cached.
+    """
     return jsonify({
-        'vfr': TILE_SOURCES['vfr'],
-        'ifr_low': TILE_SOURCES['ifr_low'],
-        'ifr_high': TILE_SOURCES['ifr_high'],
+        'vfr': '/tiles/vfr/{z}/{x}/{y}.png',
+        'ifr_low': '/tiles/ifr_low/{z}/{x}/{y}.png',
+        'ifr_high': '/tiles/ifr_high/{z}/{x}/{y}.png',
+        'offline': tiles_offline(),
     })
 
-# Serve cached tiles
+# ---------------------------------------------------------------- tiles (L-8)
+#
+# The mission base has no internet. Tiles used to be requested straight from
+# ArcGIS by the browser, so the map was blank there - and the server-side cache
+# that existed to prevent exactly that only ran under __main__, never under
+# gunicorn, so the charts volume stayed empty and /tiles/ answered 204 forever.
+# Nothing asked it for a tile anyway: /api/tile-sources handed the frontend the
+# ArcGIS URLs directly.
+#
+# Now every tile goes through here. Cache first; on a miss, fetch upstream once
+# and keep it, so an online planning session populates the cache for the
+# offline exercise without anyone running a separate step.
+#
+# The cache directory names are not the same as the layer keys - 'ifr_low' is
+# stored under 'ifr' because that is what download_tiles() was called with -
+# so this map is the single place that knows both, and it is also the
+# whitelist. chart_type arrives from the URL, and it is about to be used to
+# build a path that gets WRITTEN to, so it never reaches the filesystem
+# unvalidated.
+TILE_CACHE = {
+    'vfr':      {'dir': 'vfr',      'upstream': TILE_SOURCES['vfr']},
+    'ifr_low':  {'dir': 'ifr',      'upstream': TILE_SOURCES['ifr_low']},
+    'ifr_high': {'dir': 'ifr_high', 'upstream': TILE_SOURCES['ifr_high']},
+}
+
+# A base with no route out must not pay a network timeout per tile: Leaflet asks
+# for dozens at once and every one of them would hold a worker. After a failure
+# we stop trying for a while and serve straight from the cache.
+TILE_FETCH_TIMEOUT_S = 4
+TILE_UPSTREAM_COOLDOWN_S = 60
+_tile_upstream = {'blocked_until': 0.0}
+_tile_fetch_lock = threading.Lock()
+
+
+def tiles_offline():
+    """True when this station must never reach for the network."""
+    return os.environ.get('CAPVSAR_TILES_OFFLINE', '').strip().lower() in (
+        '1', 'true', 'yes', 'on')
+
+
+def _fetch_tile_upstream(spec, z, x, y, dest_path):
+    """Fetch one tile and cache it. Returns the bytes, or None."""
+    if tiles_offline():
+        return None
+    now = time.time()
+    if now < _tile_upstream['blocked_until']:
+        return None
+    try:
+        url = spec['upstream'].format(z=z, x=x, y=y)
+        r = requests.get(url, timeout=TILE_FETCH_TIMEOUT_S, headers={
+            'User-Agent': 'Mozilla/5.0 CAP-VSAR-FlightPlanner/1.0',
+            'Referer': 'https://www.faa.gov/',
+        })
+    except Exception:
+        with _tile_fetch_lock:
+            _tile_upstream['blocked_until'] = time.time() + TILE_UPSTREAM_COOLDOWN_S
+        return None
+    if r.status_code != 200 or len(r.content) <= 100:
+        return None
+    try:
+        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+        # Write beside the target and rename, so a killed worker cannot leave a
+        # half-written PNG in the cache to be served forever after.
+        tmp = dest_path + '.part'
+        with open(tmp, 'wb') as f:
+            f.write(r.content)
+        os.replace(tmp, dest_path)
+    except OSError:
+        pass                      # a read-only volume is not a reason to fail
+    return r.content
+
+
 @app.route('/tiles/<chart_type>/<int:z>/<int:x>/<int:y>.png')
 def serve_tile(chart_type, z, x, y):
-    tile_dir = os.path.join(CHARTS_DIR, chart_type, str(z), str(x))
+    spec = TILE_CACHE.get(chart_type)
+    if spec is None:
+        return '', 404
+    tile_dir = os.path.join(CHARTS_DIR, spec['dir'], str(z), str(x))
     tile_file = f'{y}.png'
     full_path = os.path.join(tile_dir, tile_file)
-    if os.path.exists(full_path):
+    if os.path.exists(full_path) and os.path.getsize(full_path) > 100:
         return send_from_directory(tile_dir, tile_file, mimetype='image/png')
-    return '', 204
+
+    body = _fetch_tile_upstream(spec, z, x, y, full_path)
+    if body is None:
+        # No tile and no way to get one. 204 leaves Leaflet's blank tile in
+        # place, which is what an uncached corner of the map looked like
+        # before; it is not an error.
+        return '', 204
+    return Response(body, mimetype='image/png')
 
 @app.route('/api/update-database', methods=['POST'])
 def trigger_update():
@@ -1063,7 +1402,10 @@ def calc_route():
             label = p
         coords.append({'identifier': label, 'lat': c[0], 'lon': c[1], 'type': c[2], 'data': c[3]})
     
-    cruise = get_cruise(alt, rpm)
+    try:
+        cruise = get_cruise(alt, rpm, float(d.get('manifold_pressure', 20)))
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
     mid = coords[len(coords)//2]
     winds = fetch_winds_aloft(mid['lat'], mid['lon'])
     
@@ -1081,7 +1423,10 @@ def calc_route():
         fr, to = coords[i], coords[i+1]
         dist = gc_dist(fr['lat'], fr['lon'], to['lat'], to['lon'])
         tc = bearing(fr['lat'], fr['lon'], to['lat'], to['lon'])
-        wca, gs = wind_corr(tc, cruise['true_airspeed'], wdir, wspd)
+        try:
+            wca, gs = wind_corr(tc, cruise['true_airspeed'], wdir, wspd)
+        except ValueError as exc:
+            return jsonify({'success': False, 'error': f"{fr['identifier']} to {to['identifier']}: {exc}"}), 400
         # MH = TH - variation (east positive: "east is least")
         var = mag_var((fr['lat'] + to['lat']) / 2, (fr['lon'] + to['lon']) / 2)
         mh = (tc + wca - var) % 360
@@ -1105,7 +1450,9 @@ def calc_route():
         'winds_aloft': {'altitude': alt, 'direction': wdir, 'speed': wspd,
                         'source': winds.get('station', 'estimated'),
                         'simulated': winds.get('simulated', True)},
-        'cruise': {'altitude': alt, 'rpm': rpm, 'true_airspeed': cruise['true_airspeed'], 'fuel_flow_gph': cruise['fuel_flow_gph']},
+        'aircraft': ac['name'],
+        'cruise': dict(cruise, altitude=alt, rpm=rpm),
+        'full_fuel_endurance_hours': round(max(0, (ac['usable_fuel'] - taxi - climb['fuel_gallons'] - reserve) / cruise['fuel_flow_gph']) + climb['time_minutes'] / 60, 2),
         'climb': climb,
         'totals': {
             'distance_nm': round(tot_dist,1),
@@ -1149,14 +1496,20 @@ def weather_briefing():
 
 @app.route('/api/performance/takeoff', methods=['POST'])
 def perf_to():
-    d = request.json
-    return jsonify(calc_takeoff(int(d.get('weight',2550)), int(d.get('pressure_altitude',0)),
-                                int(d.get('temperature',15)), int(d.get('headwind',0))))
+    try:
+        d = request.json
+        return jsonify(calc_takeoff(int(d.get('weight',3100)), int(d.get('pressure_altitude',0)),
+                                    int(d.get('temperature',15)), int(d.get('headwind',0))))
+    except (ValueError, TypeError) as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
 
 @app.route('/api/performance/landing', methods=['POST'])
 def perf_land():
-    d = request.json
-    return jsonify(calc_landing(int(d.get('pressure_altitude',0)), int(d.get('temperature',15)), int(d.get('headwind',0))))
+    try:
+        d = request.json
+        return jsonify(calc_landing(int(d.get('pressure_altitude',0)), int(d.get('temperature',15)), int(d.get('headwind',0))))
+    except (ValueError, TypeError) as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
 
 @app.route('/api/weight-balance', methods=['POST'])
 def wb():
@@ -1180,15 +1533,20 @@ def wb():
     cg = tm/tw if tw > 0 else 0
 
     # Forward CG limit varies with weight (linear between POH envelope points)
-    (w1, f1), (w2, f2) = ac['cg_fwd_points']
-    if tw <= w1:   fwd_limit = f1
-    elif tw >= w2: fwd_limit = f2
-    else:          fwd_limit = f1 + (tw - w1) / (w2 - w1) * (f2 - f1)
+    envelope = ac['cg_fwd_points']
+    fwd_limit = envelope[0][1] if tw <= envelope[0][0] else envelope[-1][1]
+    for (w1, f1), (w2, f2) in zip(envelope, envelope[1:]):
+        if w1 <= tw <= w2:
+            fwd_limit = f1 + (tw - w1) / (w2 - w1) * (f2 - f1)
+            break
 
     within_weight = tw <= ac['max_takeoff_weight']
     within_cg = fwd_limit <= cg <= ac['cg_aft_limit']
 
     return jsonify({
+        'aircraft': ac['name'], 'baseline': 'POH sample: 1924 lb, moment/1000 70.9',
+        'max_landing_weight': ac['max_landing_weight'],
+        'fuel_burn_before_landing_gallons': math.ceil(max(0, tw - ac['max_landing_weight']) / ac['fuel_weight_per_gallon'] * 10) / 10,
         'total_weight': round(tw,1), 'max_weight': ac['max_takeoff_weight'],
         'weight_margin': round(ac['max_takeoff_weight']-tw,1),
         'cg': round(cg,2), 'cg_forward_limit': round(fwd_limit,2), 'cg_aft_limit': ac['cg_aft_limit'],
@@ -1223,7 +1581,7 @@ def load_dtpp_diagrams():
 
     try:
         url = f'https://aeronav.faa.gov/d-tpp/{cycle}/xml_data/d-tpp_Metafile.xml'
-        r = requests.get(url, timeout=60, headers={'User-Agent': 'N499CP-Planner/1.0'})
+        r = requests.get(url, timeout=60, headers={'User-Agent': 'CAP 487-Planner/1.0'})
         if r.status_code != 200:
             log_msg(f"d-TPP metafile not found for cycle {cycle}")
             dtpp_cache['loading'] = False
@@ -1382,7 +1740,10 @@ def terrain_profile():
     dep_elev = samples[0]['elevation_ft']
     dest_elev = samples[-1]['elevation_ft']
     rpm = int(d.get('rpm', 2400))
-    cruise = get_cruise(cruise_altitude, rpm)
+    try:
+        cruise = get_cruise(cruise_altitude, rpm, float(d.get('manifold_pressure', 20)))
+    except (TypeError, ValueError) as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
     gs = cruise['true_airspeed']  # approximate GS (no wind for profile)
 
     # Climb: interpolate distance to reach cruise altitude from departure elevation
@@ -1497,6 +1858,7 @@ def sar_generate():
         init_hdg = float(data.get('initial_heading', 0.0)) % 360.0
     except (TypeError, ValueError):
         return jsonify({'success': False, 'error': 'spacing_nm, num_legs and initial_heading must be numbers'}), 400
+    coverage_truncated = False
     turn_dir = data.get('turn_direction', 'right')
 
     try:
@@ -1506,6 +1868,7 @@ def sar_generate():
             end_lat = float(data.get('end_lat', datum_coords[0] + 0.15))
             end_lon = float(data.get('end_lon', datum_coords[1] + 0.15))
             sweep_w = max(0.1, min(50.0, float(data.get('sweep_width_nm', 3.0))))
+            coverage_truncated = math.ceil(gc_dist(*datum_coords, end_lat, end_lon) / spacing) > legs
             wpts = generate_creeping_line(datum_coords[0], datum_coords[1], end_lat, end_lon, sweep_w, spacing, legs)
         elif ptype == 'parallel_track':
             box_len = max(0.1, float(data.get('length_nm', 5.0)))
@@ -1516,7 +1879,7 @@ def sar_generate():
             if box_w > MAX_PARALLEL_DIMENSION_NM:
                 return jsonify({'success': False, 'error':
                     f'width_nm must be at most {MAX_PARALLEL_DIMENSION_NM:g}'}), 400
-            sweeps = max(2, int(box_w / spacing))
+            sweeps = max(1, math.ceil(box_w / spacing))
             leg_count = 2 * sweeps - 1
             if leg_count > MAX_PARALLEL_LEGS:
                 return jsonify({'success': False, 'error':
@@ -1543,6 +1906,7 @@ def sar_generate():
     return jsonify({
         'success': True,
         'pattern_type': ptype,
+        'coverage_truncated': coverage_truncated,
         'datum': {'lat': datum_coords[0], 'lon': datum_coords[1]},
         'waypoints': wpts,
         'total_distance_nm': round(tot_dist, 1),
@@ -1558,13 +1922,64 @@ def sar_export_fms():
     dest = data.get('destination', 'KSEE')
     wpts = data.get('waypoints', [])
     alt = int(data.get('altitude', 6500))
-    fms_text = generate_xplane_fms_content(dep, dest, wpts, alt)
+    try:
+        fms_text = generate_xplane_fms_content(dep, dest, wpts, alt)
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
     
     return jsonify({
         'success': True,
         'filename': f"{dep}_{dest}_SAR.fms",
         'content': fms_text
     })
+
+def point_elevation_ft(lat, lon, timeout=6):
+    """Ground elevation at one point, or None (L-9).
+
+    The V-SAR push sent beacon_elev_ft: 0.0 - sea level. The DF propagation
+    model uses that elevation for BOTH ends of the radio horizon and as one end
+    of the terrain line-of-sight ray, so a beacon planted at sea level in
+    mountainous country modelled nothing real: the horizon was computed from a
+    height the beacon does not have, and the ray ran to the wrong place.
+    """
+    try:
+        r = requests.get('https://epqs.nationalmap.gov/v1/json', params={
+            'x': lon, 'y': lat, 'units': 'Feet', 'wkid': 4326,
+            'includeDate': False}, timeout=timeout)
+        if r.status_code != 200:
+            return None
+        value = float(r.json().get('value'))
+    except (requests.RequestException, TypeError, ValueError, KeyError):
+        return None
+    # The service answers -1000000 for "no data", and a negative elevation is
+    # not something a CAP search area has.
+    return max(0.0, value) if value > -1000 else None
+
+
+# How far to move the beacon off the planned search datum, and the environment
+# variable that changes it. The datum is where the planner *thinks* the beacon
+# is; putting the real one exactly there means the crew flies to the middle of
+# their own search area and finds it immediately, which trains nothing. A real
+# distress beacon is wherever it is.
+BEACON_OFFSET_NM = float(os.environ.get('CAPVSAR_BEACON_OFFSET_NM', '2.5'))
+
+
+def offset_beacon(lat, lon, seed_text):
+    """Move the beacon off the datum by BEACON_OFFSET_NM on a stable bearing.
+
+    Deterministic per plan, so re-pushing the same sortie does not teleport the
+    beacon, and so an instructor can reproduce a scenario. Zero disables it.
+    """
+    if BEACON_OFFSET_NM <= 0:
+        return lat, lon
+    bearing = (int(hashlib.sha256(seed_text.encode()).hexdigest()[:8], 16) % 360)
+    d = BEACON_OFFSET_NM / 60.0                       # NM -> degrees of latitude
+    rad = math.radians(bearing)
+    new_lat = lat + d * math.cos(rad)
+    cos_lat = math.cos(math.radians(lat)) or 1e-6
+    new_lon = lon + (d * math.sin(rad)) / cos_lat
+    return round(new_lat, 6), round(new_lon, 6)
+
 
 @app.route('/api/sar/export-vsar', methods=['POST'])
 def sar_export_vsar():
@@ -1586,7 +2001,7 @@ def sar_export_vsar():
     data = request.json or {}
     try:
         pattern_type = _limited_text(data, 'pattern_type', 'Search Pattern', 40)
-        callsign = _limited_text(data, 'callsign', 'CAP499', 24)
+        callsign = _limited_text(data, 'callsign', 'CAP 487', 24)
         dep = _limited_text(data, 'departure', 'KSEE', 8)
         dest = _limited_text(data, 'destination', 'KSEE', 8)
     except ValueError as e:
@@ -1606,15 +2021,27 @@ def sar_export_vsar():
     except (KeyError, TypeError, ValueError, IndexError):
         return jsonify({'success': False, 'error': 'waypoints[0] must have numeric lat/lon'}), 400
 
+    # L-9: the beacon does not sit on the planned datum, and it is not at sea
+    # level. Both of those handed the exercise away - the first tells the crew
+    # where to look, the second makes the propagation model meaningless.
+    beacon_lat, beacon_lon = offset_beacon(
+        datum_lat, datum_lon, f"{callsign}|{pattern_type}|{datum_lat}|{datum_lon}")
+    beacon_elev = point_elevation_ft(beacon_lat, beacon_lon)
+    elevation_known = beacon_elev is not None
+
     scenario_payload = {
         'name': f"CAP Sortie - {pattern_type.replace('_', ' ').title()} ({dep}->{dest})",
-        'notes': f"Generated by N499CP Flight Planner for {callsign}. Total waypoints: {len(waypoints)}. Planned at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%MZ')}.",
-        'beacon_lat': datum_lat,
-        'beacon_lon': datum_lon,
-        'beacon_elev_ft': 0.0,
+        'notes': f"Generated by CAP 487 Flight Planner for {callsign}. Total waypoints: {len(waypoints)}. Planned at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%MZ')}."
+                 + ("" if elevation_known else
+                    " Beacon elevation could not be resolved (USGS unreachable); the instructor should set it before flying."),
+        'beacon_lat': beacon_lat,
+        'beacon_lon': beacon_lon,
+        'beacon_elev_ft': beacon_elev if elevation_known else 0.0,
         'band': '121.5',
         'power': 1.0,
         'alert_kind': 'Planned CAP Search Sortie',
+        # The ALERT is the planned datum - that is what the crew is briefed on
+        # and what the search area is drawn around. Only the beacon moves.
         'alert_text': f"{callsign} search corridor: {len(waypoints)} waypoints. Initial point: {datum_lat}, {datum_lon}.",
         'alert_lat': datum_lat,
         'alert_lon': datum_lon,
@@ -1650,21 +2077,52 @@ def sar_export_vsar():
             }), 502
         msg_ok = r_msg.status_code in (200, 201)
 
-        if scen_ok and msg_ok:
-            status_desc = f"Pushed to V-SAR Console (scenario created & broadcast to active sortie)"
-        elif scen_ok:
-            if r_msg.status_code == 400 and 'no sortie running' in r_msg.text:
-                status_desc = f"Pushed to V-SAR Console (scenario created; ready in console)"
-            else:
-                status_desc = f"Pushed to V-SAR Console (scenario created; message status {r_msg.status_code})"
-        else:
+        # L-9: the console accepts /api/messages whether or not a sortie is
+        # running - with one it persists the message into the record, without
+        # one it only broadcasts to whoever is watching. The old code inferred
+        # "ready in console" from a 400 the console stopped returning long ago,
+        # so that branch was dead and every push claimed it had been
+        # "broadcast to active sortie". Ask the console what is actually
+        # running rather than guessing from a status code.
+        sortie_running = None
+        try:
+            r_state = requests.get(f"{vsar_url}/api/state", timeout=4,
+                                   headers=_console_headers('base'))
+            if r_state.status_code == 200:
+                sortie = (r_state.json() or {}).get('sortie') or {}
+                sortie_running = bool(sortie) and not sortie.get('stopped')
+        except (requests.RequestException, ValueError):
+            sortie_running = None       # unknown, and reported as unknown
+
+        persisted = bool(msg_ok and sortie_running)
+        if not scen_ok:
             status_desc = f"Failed to create scenario in V-SAR Console (HTTP {r_scen.status_code})"
+        elif not msg_ok:
+            status_desc = (f"Scenario created; the console rejected the broadcast "
+                           f"(HTTP {r_msg.status_code})")
+        elif sortie_running is True:
+            status_desc = ("Scenario created and broadcast; a sortie is running, "
+                           "so the message is in its record")
+        elif sortie_running is False:
+            status_desc = ("Scenario created and broadcast. No sortie is running, "
+                           "so the message is NOT part of any exercise record - "
+                           "start the sortie in the console")
+        else:
+            status_desc = ("Scenario created and broadcast; could not confirm "
+                           "whether a sortie is running")
 
         return jsonify({
             'success': scen_ok,
             'vsar_url': vsar_url,
             'scenario_created': scen_ok,
+            # Kept for older callers, but it only ever meant "the console
+            # accepted it". broadcast/persisted are the honest pair.
             'message_sent': msg_ok,
+            'message_broadcast': msg_ok,
+            'message_persisted': persisted,
+            'sortie_running': sortie_running,
+            'beacon_offset_nm': BEACON_OFFSET_NM,
+            'beacon_elevation_resolved': elevation_known,
             'message': status_desc
         })
     except Exception as e:
@@ -1673,14 +2131,66 @@ def sar_export_vsar():
             'error': f"Failed to connect to V-SAR console at {vsar_url}: {str(e)}"
         }), 502
 
+def start_chart_precache():
+    """Kick off the chart pre-cache, once per container (L-8).
+
+    This only ever ran under `__main__`, so in Docker - the only way it
+    actually runs - it never ran at all. The charts volume stayed empty, every
+    /tiles/ request answered 204, and USER_GUIDE.md's promise that cached tiles
+    are used first was simply untrue.
+
+    gunicorn forks several workers and each imports this module, so the work is
+    claimed with an exclusive lock file: whoever creates it downloads, the rest
+    carry on serving. The lock lives in the charts volume and is removed when
+    the download finishes.
+    """
+    if os.environ.get('CAPVSAR_PRECACHE_CHARTS', '1').strip().lower() in (
+            '0', 'false', 'no', 'off'):
+        log_msg('Chart pre-cache disabled by CAPVSAR_PRECACHE_CHARTS')
+        return False
+    if tiles_offline():
+        log_msg('CAPVSAR_TILES_OFFLINE set - serving only what is already cached')
+        return False
+    try:
+        os.makedirs(CHARTS_DIR, exist_ok=True)
+        lock_path = os.path.join(CHARTS_DIR, '.precache.pid')
+        fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        return False              # another worker already claimed it
+    except OSError as e:
+        log_msg(f'Chart pre-cache could not claim the lock: {e}')
+        return False
+    os.write(fd, str(os.getpid()).encode())
+    os.close(fd)
+
+    def run():
+        try:
+            startup_chart_download()
+        finally:
+            try:
+                os.unlink(lock_path)
+            except OSError:
+                pass
+
+    threading.Thread(target=run, daemon=True).start()
+    return True
+
+
+# Under gunicorn there is no __main__, so this is where it has to happen.
+# Importing this module must not start a download during tests, which import it
+# directly - CAPVSAR_PRECACHE_CHARTS=0 is how the suites opt out.
+start_chart_precache()
+
+
 if __name__ == '__main__':
     print("=" * 60)
-    print("N499CP Flight Planner - CAP San Diego Sr. Sq. 57")
+    print("CAP 487 Flight Planner - CAP San Diego Sr. Sq. 57")
     print("=" * 60)
     print(f"Charts directory: {os.path.abspath(CHARTS_DIR)}")
     
-    # Start chart download in background
-    threading.Thread(target=startup_chart_download, daemon=True).start()
+    # Already started at import time by start_chart_precache(); the lock file
+    # makes this second call a no-op.
+    start_chart_precache()
     
     print("Starting server at http://localhost:5000")
     print("Charts will download automatically on first run...")

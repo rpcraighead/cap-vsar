@@ -1,4 +1,4 @@
-# Quick Start — N499CP Flight Planner
+# Quick Start — CAP 487 Flight Planner
 
 Plan your first route in about a minute. We'll fly
 **KSEE → JLI → TRM → KPSP** (Gillespie Field, over the Julian and Thermal VORs,

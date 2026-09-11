@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Unit tests for Civil Air Patrol Search & Rescue (SAR) pattern algorithms
-and X-Plane 12 .FMS export in N499CP Flight Planner.
+and X-Plane 12 .FMS export in CAP 487 Flight Planner.
 """
 import unittest
 import fcntl
@@ -108,7 +108,8 @@ class TestSARPatterns(unittest.TestCase):
         self.assertGreaterEqual(len(wpts), 5)
         self.assertEqual(wpts[0]['identifier'], 'PS01')
 
-    def test_xplane_fms_export(self):
+    @patch('app.get_airport', return_value={'latitude': 32.8262, 'longitude': -116.9724, 'elevation': 388})
+    def test_xplane_fms_export(self, airport):
         wpts = [
             {'identifier': 'SS01', 'lat': 33.1866, 'lon': -117.0792},
             {'identifier': 'SS02', 'lat': 33.1866, 'lon': -117.0593}
@@ -120,12 +121,13 @@ class TestSARPatterns(unittest.TestCase):
         self.assertIn("CYCLE 2609", fms)
         self.assertIn("ADEP KSEE", fms)
         self.assertIn("ADES KCRQ", fms)
-        self.assertIn("28 +33.187_-117.079 DRCT 5500.000000 33.186600 -117.079200", fms)
-        self.assertIn("28 +33.187_-117.059 DRCT 5500.000000 33.186600 -117.059300", fms)
+        self.assertIn("28 SS01 DRCT 5500.000000 33.186600 -117.079200", fms)
+        self.assertIn("28 SS02 DRCT 5500.000000 33.186600 -117.059300", fms)
         self.assertNotIn('\r', fms)
         self.assertTrue(fms.endswith('\n'))
 
-    def test_xplane_fms_waypoint_record_structure(self):
+    @patch('app.get_airport', return_value={'latitude': 32.8262, 'longitude': -116.9724, 'elevation': 388})
+    def test_xplane_fms_waypoint_record_structure(self, airport):
         wpts = [
             {'identifier': 'DATUM', 'lat': 33.1700, 'lon': -117.0792},
             {'identifier': 'SS01', 'lat': 33.1866, 'lon': -117.0792}
@@ -145,8 +147,153 @@ class TestSARPatterns(unittest.TestCase):
             self.assertEqual(fields[2], 'DRCT')
             self.assertEqual(fields[3], '5500.000000')
 
+    def test_fms_unknown_airports_return_json_400(self):
+        for role, departure, destination, results in (
+            ('ADEP', 'UNKNOWN', 'KSEE', [None]),
+            ('ADES', 'KSEE', 'UNKNOWN', [{'latitude': 32.8, 'longitude': -117, 'elevation': 388}, None]),
+        ):
+            with self.subTest(role=role), patch('app.get_airport', side_effect=results):
+                response = flight_app.app.test_client().post('/api/sar/export-fms', json={
+                    'departure': departure, 'destination': destination,
+                    'waypoints': [{'identifier': 'DATUM', 'lat': 33.17, 'lon': -117.079}],
+                })
+                self.assertEqual(response.status_code, 400)
+                self.assertIn(role, response.json['error'])
+                self.assertIn('UNKNOWN', response.json['error'])
+                self.assertNotIn('content', response.json)
+
+    @patch('app.get_airport', return_value={'latitude': 32.8262, 'longitude': -116.9724, 'elevation': 388})
+    def test_fms_sanitizes_labels_without_changing_coordinates(self, airport):
+        text = generate_xplane_fms_content('KSEE', 'KSEE', [
+            {'identifier': 'ss04\n1 FAKE', 'lat': 33.123456, 'lon': -117.654321},
+            {'identifier': '', 'lat': 33.123456, 'lon': -117.654321},
+        ])
+        records = [line.split() for line in text.splitlines() if line.startswith('28 ')]
+        self.assertEqual(len(records), 2)
+        self.assertEqual(records[0][1], 'SS04_1_FAKE')
+        for record in records:
+            self.assertEqual(len(record), 6)
+            self.assertEqual(record[4:], ['33.123456', '-117.654321'])
+        self.assertIn('1 KSEE ADEP 388.0 32.826200 -116.972400', text)
+
+    def test_parallel_four_nm_box_has_four_centered_tracks(self):
+        points = generate_parallel_track(0, 0, 4, 4, 0, 1)
+        self.assertEqual(len(points), 8)
+        offsets = [gc_dist(0, 0, 0, point['lon']) for point in points[::2]]
+        for actual, expected in zip(offsets, (0.5, 1.5, 2.5, 3.5)):
+            self.assertAlmostEqual(actual, expected, delta=0.01)
+        self.assertAlmostEqual(offsets[-1] + 0.5, 4, delta=0.01)
+        self.assertTrue(all('heading_mag' in point for point in points))
+
+    def test_parallel_fractional_width_rounds_up(self):
+        self.assertEqual(len(generate_parallel_track(0, 0, 4, 4.1, 0, 1)), 10)
+        self.assertEqual(len(generate_parallel_track(0, 0, 4, 0.4, 0, 1)), 2)
+
+    def test_creeping_coverage_flag_and_headings(self):
+        response = flight_app.app.test_client().post('/api/sar/generate-pattern', json={
+            'pattern_type': 'creeping_line', 'datum_lat': 0, 'datum_lon': 0,
+            'end_lat': 0.2, 'end_lon': 0, 'spacing_nm': 1, 'num_legs': 2,
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json['coverage_truncated'])
+        self.assertTrue(all('heading_mag' in point for point in response.json['waypoints']))
+
+    def test_cruise_interpolates_altitude_and_rpm(self):
+        result = flight_app.get_cruise(5000, 2350, 20.5)
+        self.assertAlmostEqual(result['true_airspeed'], (124 + 128 + 126 + 131 + 128 + 133 + 130 + 135) / 8)
+        self.assertAlmostEqual(result['fuel_flow_gph'], (10.7 + 11.4 + 11.1 + 11.7 + 11.0 + 11.7 + 11.4 + 12.1) / 8)
+
+    def test_impossible_headwind_and_tailwind(self):
+        with self.assertRaisesRegex(ValueError, 'ground speed'):
+            flight_app.wind_corr(0, 90, 0, 100)
+        self.assertEqual(flight_app.wind_corr(0, 90, 180, 20)[1], 110)
+        with self.assertRaisesRegex(ValueError, 'Crosswind'):
+            flight_app.wind_corr(0, 90, 90, 100)
+
+    def test_impossible_route_returns_error_not_zero_fuel(self):
+        airport = lambda ident: (0 if ident == 'START' else 1, 0, 'airport', {'elevation': 0})
+        with patch('app.get_coords', side_effect=airport), patch('app.get_cruise', return_value={
+            'true_airspeed': 90, 'fuel_flow_gph': 9,
+        }), patch('app.fetch_winds_aloft', return_value={'levels': {6500: {'direction': 0, 'speed': 100}}}):
+            response = flight_app.app.test_client().post('/api/calculate-route', json={
+                'departure': 'START', 'destination': 'END',
+            })
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('ground speed', response.json['error'])
+        self.assertNotIn('totals', response.json)
+
+    def test_runway_tailwind_increases_distance(self):
+        self.assertEqual(flight_app.calc_takeoff(3100, 0, 20, -4)['ground_roll'], int(825 * 1.2))
+        self.assertEqual(flight_app.calc_landing(0, 20, -4)['ground_roll'], int(600 * 1.2))
+
+    def test_cap487_poh_sample_and_cg_envelope(self):
+        self.assertEqual(flight_app.DEFAULT_AIRCRAFT, 'CAP 487')
+        aircraft = flight_app.AIRCRAFT_DATABASE['CAP 487']
+        self.assertEqual((aircraft['usable_fuel'], aircraft['max_takeoff_weight']), (87, 3100))
+        client = flight_app.app.test_client()
+        empty = client.post('/api/weight-balance', json={}).json
+        self.assertEqual((empty['total_weight'], empty['moment_1000']), (1924, 70.9))
+        for weight, forward in ((2250, 33), (2475, 34.25), (2700, 35.5), (2900, 38.2), (3100, 40.9)):
+            result = client.post('/api/weight-balance', json={'empty_weight': weight, 'empty_moment': weight * 42 / 1000}).json
+            self.assertAlmostEqual(result['cg_forward_limit'], forward)
+        loaded = client.post('/api/weight-balance', json={'pilot_weight': 180, 'fuel_gallons': 87}).json
+        self.assertEqual(loaded['total_weight'], 2626)
+        self.assertAlmostEqual(loaded['moment_1000'], 101.8)
+
+    def test_cap487_cruise_and_endurance_from_poh(self):
+        cruise = flight_app.get_cruise(6000, 2400, 20)
+        self.assertEqual((cruise['power_percent'], cruise['true_airspeed'], cruise['fuel_flow_gph']), (65, 130, 11.4))
+        with self.assertRaises(ValueError):
+            flight_app.get_cruise(6000, 2500, 20)
+        with self.assertRaisesRegex(ValueError, '80%'):
+            flight_app.get_cruise(4000, 2400, 24)
+        airport = (33, -117, 'airport', {'elevation': 0})
+        with patch('app.get_coords', return_value=airport), patch('app.fetch_winds_aloft', return_value={'levels': {6000: {'direction': 0, 'speed': 0}}}):
+            response = flight_app.app.test_client().post('/api/calculate-route', json={
+                'departure': 'KSEE', 'destination': 'KSEE', 'cruise_altitude': 6000,
+                'rpm': 2400, 'manifold_pressure': 20,
+            })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json['full_fuel_endurance_hours'], 6.66)
+        self.assertGreaterEqual(response.json['full_fuel_endurance_hours'], 5.5)
+        self.assertEqual(response.json['totals']['taxi_fuel'], 1.7)
+
+    def test_exercise_page_uses_182t_defaults(self):
+        html = flight_app.app.test_client().get('/').get_data(as_text=True)
+        self.assertNotIn('N499CP', html)
+        self.assertIn('id="wb-empty-weight" value="1924"', html)
+        self.assertIn('id="wb-fuel" value="87" max="87"', html)
+        self.assertIn('id="mp-select"', html)
+
+    def test_doc_pages_do_not_carry_the_real_172s_registration(self):
+        """The planner computes CAP 487 182T figures only; N499CP is a real 172S.
+
+        The index page is covered above. The rendered doc pages share
+        templates/guide.html, which was missed by the L-7 rename.
+        """
+        client = flight_app.app.test_client()
+        for slug in flight_app.DOCS:
+            with self.subTest(slug=slug):
+                html = client.get(f'/guide/{slug}').get_data(as_text=True)
+                self.assertNotIn('N499CP', html)
+                self.assertIn('CAP 487 Flight Planner', html)
+
+    def test_runway_outside_table_is_json_error(self):
+        client = flight_app.app.test_client()
+        for endpoint in ('takeoff', 'landing'):
+            for data in ({'pressure_altitude': 7000}, {'temperature': 45}, {'headwind': -11}):
+                with self.subTest(endpoint=endpoint, data=data):
+                    response = client.post('/api/performance/' + endpoint, json=data)
+                    self.assertEqual(response.status_code, 400)
+                    self.assertIn('error', response.json)
+
 
 class TestSARRequestBounds(unittest.TestCase):
+    def setUp(self):
+        # These tests call handlers directly with a request double. Keep the
+        # JSON boundary a double too, whether or not Flask is installed.
+        self.enterContext(patch.object(flight_app, 'jsonify', side_effect=lambda value: value))
+
     @staticmethod
     def request(payload):
         return types.SimpleNamespace(
@@ -223,6 +370,7 @@ class TestAviationDatabaseUpdateLock(unittest.TestCase):
 
 class TestPlannerSecurity(unittest.TestCase):
     def setUp(self):
+        self.enterContext(patch.object(flight_app, 'jsonify', side_effect=lambda value: value))
         if hasattr(flight_app, '_vsar_export_attempts'):
             flight_app._vsar_export_attempts.clear()
 

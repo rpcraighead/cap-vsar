@@ -1,7 +1,7 @@
-# N499CP Flight Planner — User Guide
+# CAP 487 Flight Planner — User Guide
 
 A route planner, nav-log generator, and performance/W&B calculator built around
-**N499CP** (2020 Cessna 172S NAV III), CAP San Diego Sr. Sq. 57.
+**CAP 487** (Cessna 182T NAV III, POH sample planning baseline), CAP San Diego Sr. Sq. 57.
 
 > ⚠️ **SIM USE ONLY.** This tool is for training and planning practice. Weather is
 > partly simulated, terrain sampling is approximate, and airport/navaid data comes
@@ -67,15 +67,20 @@ Press **Enter** in the box or click **Fly** to calculate.
 
 ### 3.2 Cruise settings
 
-Three dropdowns to the right of the route box drive the performance math:
+The route controls drive the 182T standard-temperature performance tables:
 
-- **Altitude** — grouped by VFR/IFR and cruise direction (hemispheric rule
-  labels are a planning aid, not enforced). Pick a preset or **Custom…** to type
-  any value (500–17,500 ft).
-- **RPM** — engine RPM, tied to the C172S cruise-performance table (2400 RPM ≈
-  55% power is the default). **Custom…** allows 1500–2700 in 50-RPM steps.
-- **Reserve** — fuel reserve in minutes (30 / 45 / 60 or Custom). This is added to
-  the total fuel requirement.
+- **Altitude** — supported table range 0–10,000 ft. Intermediate values are
+  interpolated. Unavailable combinations return an error.
+- **RPM** — 2,000–2,400 RPM; default 2,400.
+- **Manifold pressure** — inHg; default 20. Power depends on RPM, manifold
+  pressure and altitude. Settings above the POH's 80% cruise limit are rejected.
+- **Reserve** — minutes of cruise fuel, added to the route requirement and
+  subtracted from full-fuel endurance. Default 45 minutes.
+
+Cruise assumes 3,100 lb, standard temperature, recommended lean mixture and
+closed cowl flaps. Climb uses the POH maximum-rate, standard-temperature,
+zero-wind table. The log shows power setting and full-87-gallon endurance
+including climb, with the selected reserve withheld.
 
 ### 3.3 Fly
 
@@ -99,8 +104,28 @@ The top-left switcher chooses the base layer:
 - **Satellite** — Esri World Imagery
 - **Street** — OpenStreetMap
 
-FAA chart tiles are served from the FAA ArcGIS service (with any locally cached
-tiles used first).
+**Offline.** The three FAA layers are served by this application from its own
+tile cache, so they work at a mission base with no internet for any area that
+has been cached. On a cache miss the server fetches that tile once and keeps
+it, which means an online planning session quietly populates the cache for the
+exercise. An area that was never cached shows blank tiles rather than an error.
+
+This used to read "served from the FAA ArcGIS service (with any locally cached
+tiles used first)", which was not true in either half: the browser went
+straight to ArcGIS and never asked for a cached tile, and the cache itself only
+filled when the app was started with `python app.py` — never in Docker, which
+is how it actually runs. Both are fixed (L-8).
+
+Two controls, if you need them:
+
+| Environment variable | Effect |
+|---|---|
+| `CAPVSAR_TILES_OFFLINE=1` | Never reach for the network. Serve only what is cached. Set this at a base you know is isolated, so the server does not spend a timeout on each missing tile. |
+| `CAPVSAR_PRECACHE_CHARTS=0` | Do not pre-download charts at startup. |
+
+**Satellite** and **Street** are not cached and come straight from Esri and
+OpenStreetMap, so they need internet and will be blank without it. The FAA
+layers are the ones to brief from.
 
 ### 4.2 Plan mode (click-to-add)
 
@@ -201,19 +226,23 @@ An elevation profile sampled along the route (USGS elevation data):
 
 ### 6.1 Perf
 
-Takeoff and landing distances for N499CP from the POH tables. Enter weight
+Takeoff and landing distances for CAP 487 from the POH tables. Enter weight
 (takeoff), pressure altitude, temperature, and headwind; get **ground roll** and
-**distance over a 50 ft obstacle**. The tables use conservative (round-up)
-interpolation and a simple headwind credit.
+**distance over a 50 ft obstacle**. The imported runway subset covers 0–6,000 ft and 0–40 °C; values between
+rows use the next higher row. Takeoff uses the 3,100 lb short-field table
+(flaps 20°); landing uses the 2,950 lb table (full flaps). Both assume paved,
+level, dry surface. Wind corrections follow the POH chart notes: 10% decrease
+per 9 kt headwind, or 10% increase per 2 kt tailwind through 10 kt. Outside-table
+inputs return an error.
 
 ### 6.2 W&B (Weight & Balance)
 
 Enter empty weight/moment and the loading (pilot, front pax, rear pax, baggage,
 fuel). The calculator returns total weight, CG, and moment, and checks limits:
 
-- **Forward CG limit varies with weight** — 35.0" at 1950 lb sloping to 41.0" at
-  2550 lb (per the POH envelope). Aft limit is 47.3".
-- Warns if **fuel > 53 gal usable** or **baggage > 120 lb**.
+- **Forward CG limit varies with weight** — 33.0" at/below 2,250 lb, 35.5" at
+  2,700 lb and 40.9" at 3,100 lb, linearly between points. Aft limit is 46.0".
+- Warns if **fuel > 87 gal usable** or **baggage A > 120 lb** (the form does not model baggage B/C).
 - The status line spells out exactly what's out of limits (overweight amount, or
   CG forward/aft of the weight-specific limit).
 
@@ -255,23 +284,12 @@ Valley, and into **Palm Springs (KPSP)** — a nice mountains-to-desert VFR hop.
 4. Press **Fly**.
 5. The route draws KSEE → JLI → TRM → KPSP and the **Log** drawer opens.
 
-### What you should see (illustrative)
+### What you should see
 
-Distances and courses are stable; times/fuel/headings depend on the current
-winds aloft (live GFS forecast), so your exact numbers will vary with the weather.
+Times, fuel and headings depend on the selected RPM/manifold pressure and
+winds. The former 172S numerical example no longer applies. Read the calculated
+log and fuel summary for CAP 487's 87-gallon profile.
 
-| Leg | Dist (NM) | TC | MH | GS (kt) | Time (min) |
-|-----|-----------|----|----|---------|------------|
-| KSEE → JLI | ~27 | 046° | ~022° | ~98 | ~17 |
-| JLI → TRM | ~36 | 036° | ~014° | ~95 | ~23 |
-| TRM → KPSP | ~21 | 305° | ~301° | ~88 | ~14 |
-| **Total** | **~85** | — | — | — | **~74** |
-
-Total fuel required ≈ **19 gal** (taxi + climb + cruise + 45-min reserve) — well
-within the 53-gal usable, but always confirm with a real W&B and reserve plan.
-
-Note the **magnetic headings run about 11° less than the true courses** — that's
-the ~11° E magnetic variation for Southern California being applied correctly.
 
 ### Explore the rest
 
@@ -332,3 +350,50 @@ Clicking **Apply to Route** integrates the generated search waypoints (`SS01`, `
 *Questions or fixes: this app lives at
 [github.com/rpcraighead/flight-planner-n499cp-v2](https://github.com/rpcraighead/flight-planner-n499cp-v2)
 (and Gitea internally). Fly safe, brief for real.*
+
+
+## SAR flight-plan export to X-Plane 12
+
+The FMS export requires both airport identifiers to resolve in the local
+aviation database. An unresolved departure or destination returns an error
+naming the identifier. Correct it or update the database before exporting;
+search waypoints are never substituted for airport positions.
+
+SAR waypoints retain DATUM, SS01, CS01 and PS01-style identifiers. Export
+normalizes labels to uppercase ASCII letters, digits and underscores, while
+latitude and longitude remain in their own columns. Unlabelled points retain
+coordinate-derived identifiers. This follows Laminar's
+[v11 FMS format used by X-Plane 12](https://developer.x-plane.com/article/flightplan-files-v11-fms-file-format/).
+
+Validation covers file structure, identifiers and coordinates against that
+specification. The G1000 display has not yet been checked in a running
+X-Plane 12 session. Before the exercise, load the file and compare the flight
+plan's names and coordinates with the brief; brief both until that check passes.
+
+
+## CAP 487 POH baseline and sources
+
+The profile uses Cessna 182T NAV III GFC 700 information manual
+[182TIMBUS-01, revision 1, 20 December 2007](https://www.aeroelectric.com/Reference_Docs/Cessna/cessna-poh/C182T_2007_NavIII-G1000%2BGFC700_POH-PIM_fromCessna.pdf):
+Section 2-8 for limits, Figure 5-6 for takeoff, 5-8 for climb/start allowance,
+5-9 for cruise, 5-12 for landing, and Figures 6-3/6-5 for sample loading/arms.
+
+As selected for this simulation, empty weight is **1,924 lb** and empty
+moment/1000 is **70.9**, the POH sample pair. These are not measurements of
+CAP 487. The aircraft builder currently uses **1,970 lb**, so its empty-weight
+setting must be changed to 1,924 lb to match this planning baseline. The
+planner does not modify the installed simulator aircraft. CG arms are measured
+from the POH firewall datum; the simulator's datum mapping is not verified.
+
+The POH maximum takeoff weight is 3,100 lb, maximum landing weight 2,950 lb,
+and usable fuel 87 US gal. The W&B result shows required fuel burn before
+landing when the calculated weight exceeds 2,950 lb. Passenger arms assume
+average seat positions; this form supports only baggage area A.
+
+At 6,000 ft, 2,400 RPM and 20 inHg, Figure 5-9 gives **65% power, 130 KTAS
+and 11.4 gal/h**. With 87 gal, the Figure 5-8 maximum-rate climb from sea level,
+1.7 gal start/taxi/takeoff allowance and 45 minutes reserve, the planner gives
+approximately **6.66 hours** including climb. This supports the project
+handbook's **5.5+ hours** at 65% power; endurance is not a fixed 5.5-hour value.
+The POH endurance chart uses a different (normal-climb) assumption, so this
+calculation is explicitly based on the imported maximum-rate climb table.

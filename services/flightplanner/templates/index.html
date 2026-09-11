@@ -3,9 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>N499CP Flight Planner</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <title>CAP 487 Flight Planner</title>
+  <!-- L-8: everything below is served from this host. The mission base runs
+       with no internet, and Leaflet from unpkg meant the map did not render at
+       all there - a planner that cannot draw a map is not a planner. The fonts
+       came from fonts.googleapis.com and simply hung. Vendored copies:
+       Leaflet 1.9.4, byte-identical to the exercise console's (F-1), and the
+       Latin subsets of the three families, refreshable from
+       https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fonts/fonts.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
@@ -14,7 +21,7 @@
   <header id="toolbar">
     <div id="logo-area">
       <img src="{{ url_for('static', filename='logo.jpg') }}" alt="CAP" id="logo-img">
-      <span id="logo-title">N499CP</span>
+      <span id="logo-title">CAP 487</span>
     </div>
 
     <div id="route-bar">
@@ -26,20 +33,17 @@
           <option value="5500">5,500 ft</option>
           <option value="7500">7,500 ft</option>
           <option value="9500">9,500 ft</option>
-          <option value="11500">11,500 ft</option>
         </optgroup>
         <optgroup label="VFR Westbound (180°–359°)">
           <option value="4500">4,500 ft</option>
           <option value="6500" selected>6,500 ft</option>
           <option value="8500">8,500 ft</option>
-          <option value="10500">10,500 ft</option>
         </optgroup>
         <optgroup label="IFR Eastbound">
           <option value="3000">3,000 ft</option>
           <option value="5000">5,000 ft</option>
           <option value="7000">7,000 ft</option>
           <option value="9000">9,000 ft</option>
-          <option value="11000">11,000 ft</option>
         </optgroup>
         <optgroup label="IFR Westbound">
           <option value="4000">4,000 ft</option>
@@ -50,17 +54,23 @@
         <option value="custom">Custom...</option>
       </select>
 
-      <select id="rpm-select" title="Engine RPM">
-        <option value="2700">2700 RPM</option>
-        <option value="2650">2650 RPM</option>
-        <option value="2600">2600 RPM (75%)</option>
-        <option value="2550">2550 RPM</option>
-        <option value="2500">2500 RPM (65%)</option>
-        <option value="2450">2450 RPM</option>
-        <option value="2400" selected>2400 RPM (55%)</option>
-        <option value="2350">2350 RPM</option>
+      <select id="rpm-select" title="Engine RPM (POH standard temperature)">
+        <option value="2400" selected>2400 RPM</option>
         <option value="2300">2300 RPM</option>
+        <option value="2200">2200 RPM</option>
+        <option value="2100">2100 RPM</option>
+        <option value="2000">2000 RPM</option>
         <option value="custom">Custom...</option>
+      </select>
+      <select id="mp-select" title="Manifold pressure, inHg; unavailable POH settings return an error">
+        <option value="18">18 inHg MP</option>
+        <option value="19">19 inHg MP</option>
+        <option value="20" selected>20 inHg MP</option>
+        <option value="21">21 inHg MP</option>
+        <option value="22">22 inHg MP</option>
+        <option value="23">23 inHg MP</option>
+        <option value="24">24 inHg MP</option>
+        <option value="25">25 inHg MP</option>
       </select>
 
       <select id="reserve-select" title="Fuel reserve">
@@ -147,6 +157,7 @@
               <tr><td>45-min Reserve</td><td id="ft-reserve">--</td></tr>
               <tr class="fuel-total"><td>Total Required</td><td id="ft-total">--</td></tr>
             </table>
+          <p id="cruise-conditions"></p>
           </div>
         </div>
       </div>
@@ -217,13 +228,13 @@
   <div class="modal-overlay" id="modal-perf" style="display:none">
     <div class="modal-box">
       <div class="modal-header">
-        <span>Performance — N499CP</span>
+        <span>Performance — CAP 487</span>
         <button class="modal-close" data-modal="modal-perf">×</button>
       </div>
       <div class="modal-body modal-flex">
         <div class="perf-half">
           <h4>Takeoff</h4>
-          <div class="form-row"><label>Weight (lbs)</label><input type="number" id="to-weight" value="2550" max="2550"></div>
+          <div class="form-row"><label>Weight (lbs)</label><input type="number" id="to-weight" value="3100" max="3100"></div>
           <div class="form-row"><label>Press Alt (ft)</label><input type="number" id="to-altitude" value="0" step="500"></div>
           <div class="form-row"><label>Temp (°C)</label><input type="number" id="to-temp" value="15"></div>
           <div class="form-row"><label>Headwind (kts)</label><input type="number" id="to-wind" value="0"></div>
@@ -252,24 +263,25 @@
   <div class="modal-overlay" id="modal-wb" style="display:none">
     <div class="modal-box">
       <div class="modal-header">
-        <span>Weight &amp; Balance — N499CP</span>
+        <span>Weight &amp; Balance — CAP 487</span>
         <button class="modal-close" data-modal="modal-wb">×</button>
       </div>
       <div class="modal-body">
+        <p>POH sample baseline: 1,924 lb empty, moment/1000 70.9. The simulator builder uses 1,970 lb; its empty weight must be adjusted to match this baseline.</p>
         <div class="wb-form-grid">
-          <div class="form-row"><label>Empty Weight (lbs)</label><input type="number" id="wb-empty-weight" value="1642"></div>
-          <div class="form-row"><label>Empty Moment (/1000)</label><input type="number" id="wb-empty-moment" value="62.6" step="0.1"></div>
+          <div class="form-row"><label>Empty Weight (lbs)</label><input type="number" id="wb-empty-weight" value="1924"></div>
+          <div class="form-row"><label>Empty Moment (/1000)</label><input type="number" id="wb-empty-moment" value="70.9" step="0.1"></div>
           <div class="form-row"><label>Pilot (lbs)</label><input type="number" id="wb-pilot" value="180"></div>
           <div class="form-row"><label>Front Pax (lbs)</label><input type="number" id="wb-front-pax" value="0"></div>
           <div class="form-row"><label>Rear Pax (lbs)</label><input type="number" id="wb-rear-pax" value="0"></div>
-          <div class="form-row"><label>Baggage (lbs)</label><input type="number" id="wb-baggage" value="0" max="120"></div>
-          <div class="form-row"><label>Fuel (gal)</label><input type="number" id="wb-fuel" value="53" max="53" step="0.1"></div>
+          <div class="form-row"><label>Baggage A (lbs)</label><input type="number" id="wb-baggage" value="0" max="120"></div>
+          <div class="form-row"><label>Fuel (gal)</label><input type="number" id="wb-fuel" value="87" max="87" step="0.1"></div>
         </div>
         <button class="btn-calc" id="calc-wb" style="margin-top:0.75rem">Calculate W&amp;B</button>
         <div id="wb-results" style="display:none;margin-top:0.75rem">
           <div id="wb-summary-grid">
-            <div class="wb-card"><div class="wb-val" id="wb-total-weight">--</div><div class="wb-lbl">Total Weight</div><div class="wb-limit">Max: 2550 lbs</div></div>
-            <div class="wb-card"><div class="wb-val" id="wb-cg">--</div><div class="wb-lbl">CG (in)</div><div class="wb-limit" id="wb-cg-limits">35.0 – 47.3</div></div>
+            <div class="wb-card"><div class="wb-val" id="wb-total-weight">--</div><div class="wb-lbl">Total Weight</div><div class="wb-limit">Max: 3100 lbs</div></div>
+            <div class="wb-card"><div class="wb-val" id="wb-cg">--</div><div class="wb-lbl">CG (in)</div><div class="wb-limit" id="wb-cg-limits">33.0 – 46.0</div></div>
             <div class="wb-card"><div class="wb-val" id="wb-moment">--</div><div class="wb-lbl">Moment/1000</div></div>
           </div>
           <div id="wb-status-msg"></div>
@@ -282,27 +294,29 @@
   <div class="modal-overlay" id="modal-ref" style="display:none">
     <div class="modal-box wide">
       <div class="modal-header">
-        <span>N499CP Quick Reference</span>
+        <span>CAP 487 Quick Reference</span>
         <button class="modal-close" data-modal="modal-ref">×</button>
       </div>
       <div class="modal-body ref-body">
         <div class="ref-card">
-          <h4>V-Speeds (KIAS)</h4>
-          <table><tr><td>Vx</td><td>62</td></tr><tr><td>Vy</td><td>74</td></tr><tr><td>Va (2550)</td><td>99</td></tr><tr><td>Vfe 10°</td><td>110</td></tr><tr><td>Vfe Full</td><td>85</td></tr><tr><td>Vno</td><td>129</td></tr><tr><td>Vne</td><td>163</td></tr><tr><td>Vso</td><td>40</td></tr><tr><td>Vs1</td><td>48</td></tr><tr><td>Best Glide</td><td>68</td></tr></table>
+          <h4>182T Planning Conditions</h4>
+          <p>230 HP IO-540; maximum 2400 RPM. Cruise uses standard-temperature POH tables, recommended lean mixture and cowl flaps closed.</p>
+          <p>Runway distances use short-field technique, paved, level, dry surface. Takeoff: 3100 lb, flaps 20°. Landing: 2950 lb, full flaps.</p>
+          <p>Use the <a href="https://www.aeroelectric.com/Reference_Docs/Cessna/cessna-poh/C182T_2007_NavIII-G1000%2BGFC700_POH-PIM_fromCessna.pdf" target="_blank" rel="noopener">182T POH</a> for speeds and procedures.</p>
         </div>
         <div class="ref-card">
           <h4>Weights</h4>
-          <table><tr><td>Max Ramp</td><td>2558 lbs</td></tr><tr><td>Max T/O</td><td>2550 lbs</td></tr><tr><td>Max Landing</td><td>2550 lbs</td></tr><tr><td>Baggage A</td><td>120 lbs</td></tr><tr><td>Baggage B</td><td>50 lbs</td></tr></table>
+          <table><tr><td>Max Ramp</td><td>3110 lbs</td></tr><tr><td>Max T/O</td><td>3100 lbs</td></tr><tr><td>Max Landing</td><td>2950 lbs</td></tr><tr><td>Baggage A</td><td>120 lbs</td></tr><tr><td>Baggage B+C</td><td>80 lbs (not in form)</td></tr></table>
         </div>
         <div class="ref-card">
           <h4>Fuel</h4>
-          <table><tr><td>Total</td><td>56 gal</td></tr><tr><td>Usable</td><td>53 gal</td></tr><tr><td>Weight</td><td>6.0 lbs/gal</td></tr><tr><td>Arm</td><td>FS 48.0</td></tr></table>
+          <table><tr><td>Total</td><td>92 gal</td></tr><tr><td>Usable</td><td>87 gal</td></tr><tr><td>Weight</td><td>6.0 lbs/gal</td></tr><tr><td>Arm</td><td>FS 46.5</td></tr></table>
         </div>
         <div class="ref-card">
           <h4>CG Limits</h4>
-          <table><tr><td>Fwd @ 1950 lb</td><td>35.0 in</td></tr><tr><td>Fwd @ 2550 lb</td><td>41.0 in</td></tr><tr><td>Aft (all)</td><td>47.3 in</td></tr></table>
+          <table><tr><td>Fwd @ 2250 lb</td><td>33.0 in</td></tr><tr><td>Fwd @ 2700 lb</td><td>35.5 in</td></tr><tr><td>Fwd @ 3100 lb</td><td>40.9 in</td></tr><tr><td>Aft (all)</td><td>46.0 in</td></tr></table>
           <h4 style="margin-top:0.75rem">Stations (in)</h4>
-          <table><tr><td>Front seats</td><td>FS 37.0</td></tr><tr><td>Rear seats</td><td>FS 73.0</td></tr><tr><td>Baggage</td><td>FS 95.0</td></tr><tr><td>Fuel</td><td>FS 48.0</td></tr></table>
+          <table><tr><td>Front seats</td><td>FS 37.0</td></tr><tr><td>Rear seats</td><td>FS 74.0</td></tr><tr><td>Baggage</td><td>FS 97.0</td></tr><tr><td>Fuel</td><td>FS 46.5</td></tr></table>
         </div>
       </div>
     </div>
@@ -444,7 +458,7 @@
     </div>
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

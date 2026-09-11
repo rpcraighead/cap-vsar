@@ -3,8 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ title }} — N499CP Flight Planner</title>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <title>{{ title }} — CAP 487 Flight Planner</title>
+  <!-- L-8: vendored, same as index.html. This page was left on the CDN by the
+       original fix and would have been the one broken page at a base with no
+       internet - which is exactly where someone reads the user guide. -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fonts/fonts.css') }}">
   <style>
     :root{
       --bg:#0e1116; --panel:#161b22; --border:#2a2f3a; --text:#d7dce3;
@@ -64,7 +67,7 @@
 </head>
 <body>
   <header>
-    <div class="brand">N499CP <span>Flight Planner</span></div>
+    <div class="brand">CAP 487 <span>Flight Planner</span></div>
     <nav>
       <a href="/guide">User Guide</a>
       <a href="/guide/quickstart">Quick Start</a>
@@ -76,7 +79,7 @@
     {{ body|safe }}
   </main>
   <footer>
-    N499CP Flight Planner · SIM USE ONLY · brief with official sources before any real flight.
+    CAP 487 Flight Planner · SIM USE ONLY · brief with official sources before any real flight.
   </footer>
 </body>
 </html>

@@ -291,7 +291,7 @@ function setCustomOption(selectId, displayText, numericValue) {
             label:      'Cruise altitude',
             unit:       'ft MSL',
             hint:       'VFR hemispheric rule: odd thousands +500 ft eastbound (0°–179°), even thousands +500 ft westbound (180°–359°). Class A starts at FL180.',
-            min: 500, max: 17500, step: 100,
+            min: 500, max: 10000, step: 100,
             defaultVal: customAlt,
             onConfirm: val => {
                 customAlt = Math.round(val);
@@ -321,8 +321,8 @@ function setCustomOption(selectId, displayText, numericValue) {
             title:      'Custom RPM',
             label:      'Engine RPM',
             unit:       'RPM',
-            hint:       'C172S normal cruise range: 2200–2700 RPM. Do not exceed 2700 RPM (redline).',
-            min: 1500, max: 2700, step: 50,
+            hint:       'CAP 487 POH cruise tables: 2000–2400 RPM. Maximum engine speed: 2400 RPM.',
+            min: 2000, max: 2400, step: 50,
             defaultVal: customRpm,
             onConfirm: val => {
                 customRpm = Math.round(val / 50) * 50;
@@ -498,7 +498,7 @@ async function calculateRoute(alertOnError = true) {
         const res  = await fetch('/api/calculate-route', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ departure, destination, waypoints, cruise_altitude: cruiseAlt, rpm, reserve_minutes: reserveMinutes })
+            body: JSON.stringify({ departure, destination, waypoints, cruise_altitude: cruiseAlt, rpm, manifold_pressure: Number(document.getElementById('mp-select').value), reserve_minutes: reserveMinutes })
         });
         const data = await res.json();
         if (!data.success) {
@@ -523,6 +523,8 @@ async function calculateRoute(alertOnError = true) {
               <td>${s.magnetic_heading}°</td><td>${s.ground_speed}</td>
               <td>${s.time_minutes}</td><td>${s.fuel_gallons}</td>
             </tr>`).join('');
+
+        document.getElementById('cruise-conditions').textContent = `CAP 487 · ${data.cruise.rpm} RPM / ${data.cruise.manifold_pressure_inhg} inHg · ${data.cruise.power_percent.toFixed(1)}% power · POH standard temperature. Full 87 gal endurance with selected reserve: ${data.full_fuel_endurance_hours} h.`;
 
         // Fuel summary
         document.getElementById('ft-taxi').textContent    = data.totals.taxi_fuel    + ' gal';
@@ -757,7 +759,9 @@ async function fetchTerrainProfile() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             route_points:    currentRoute.route_points.map(p => ({ lat: p.latitude || p.lat, lon: p.longitude || p.lon, identifier: p.identifier })),
-            cruise_altitude: currentRoute.cruise?.altitude || 6000
+            cruise_altitude: currentRoute.cruise?.altitude || 6000,
+            rpm: currentRoute.cruise?.rpm || 2400,
+            manifold_pressure: currentRoute.cruise?.manifold_pressure_inhg || 20
         })
     });
     const data = await res.json();
@@ -952,12 +956,13 @@ document.getElementById('calc-wb').addEventListener('click', async () => {
         const msg = document.getElementById('wb-status-msg');
         if (r.within_all_limits) {
             msg.className = 'ok';
-            msg.textContent = '✓ Within all limits';
+            msg.textContent = '✓ Within takeoff weight and CG limits';
         } else {
             msg.className = 'danger';
             msg.textContent = (!r.within_weight_limits ? `OVERWEIGHT by ${Math.abs(r.weight_margin)} lbs ` : '') +
                               (!r.within_cg_limits     ? 'CG OUT OF LIMITS' : '');
         }
+        if (r.fuel_burn_before_landing_gallons > 0) msg.textContent += ` Burn at least ${r.fuel_burn_before_landing_gallons} gal before landing to meet the 2,950 lb landing limit.`;
         document.getElementById('wb-results').style.display = 'block';
     } catch (e) { alert(e.message); }
 });
@@ -1208,7 +1213,7 @@ document.getElementById('sar-btn-vsar').addEventListener('click', async () => {
                 // no longer accepted from the client - see sar_export_vsar().
                 pattern_type: pattern.pattern_type,
                 waypoints: pattern.waypoints,
-                callsign: 'CAP499',
+                callsign: 'CAP 487',
                 departure: dep,
                 destination: dest
             })
