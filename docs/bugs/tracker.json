@@ -11,18 +11,18 @@
       "P3": "Cleanup, tooling, docs. No exercise impact."
     },
     "waves": {
-      "0": "Now — make the work safe to do at all.",
+      "0": "Now \u2014 make the work safe to do at all.",
       "1": "Before session 1 (base stand-up). Nothing flies; base, planner and comms must work.",
       "2": "Before session 2 (full mission, three aircraft, injected effects).",
       "3": "Before session 3 (dress rehearsal) and the live SAREX.",
-      "4": "After the SAREX — architecture, tooling, CalTopo phase 2."
+      "4": "After the SAREX \u2014 architecture, tooling, CalTopo phase 2."
     },
     "wave_dates_note": "Wave dates track the illustrative calendar in docs/USE_CASE_SAREX_REHEARSAL.md (T-14/T-7/T-2 before a 17 Oct 2026 SAREX). Re-anchor to the real exercise date."
   },
   "clusters": {
     "C1": {
       "name": "Repo & release hygiene",
-      "owner_hint": "maintainer — git remote and release"
+      "owner_hint": "maintainer \u2014 git remote and release"
     },
     "C2": {
       "name": "Truth integrity & roles",
@@ -30,15 +30,15 @@
     },
     "C3": {
       "name": "Propagation engine correctness",
-      "owner_hint": "Claude — xplane/PI_capvsar_df.py, sole editor"
+      "owner_hint": "DONE (all ten items fixed) - Claude, xplane/PI_capvsar_df.py"
     },
     "C4": {
       "name": "Station identity & onboarding kit",
-      "owner_hint": "Claude — O-2 station config and kit (plugin + scripts/)"
+      "owner_hint": "Claude \u2014 O-2 station config and kit (plugin + scripts/)"
     },
     "C5": {
       "name": "Deployment bootstrap & voice provisioning",
-      "owner_hint": "Claude — deploy.sh, compose, ms01 (has ssh access)"
+      "owner_hint": "Claude \u2014 deploy.sh, compose, ms01 (has ssh access)"
     },
     "C6": {
       "name": "Offline mission base",
@@ -54,23 +54,23 @@
     },
     "C9": {
       "name": "Radio console hardening",
-      "owner_hint": "Codex — mission-radio.js/html and radio.py; F-9..F-13 queue behind F-4"
+      "owner_hint": "Codex \u2014 mission-radio.js/html and radio.py; F-9..F-13 queue behind F-4"
     },
     "C10": {
       "name": "Flight planner correctness",
-      "owner_hint": "Codex — services/flightplanner/app.py"
+      "owner_hint": "Codex \u2014 services/flightplanner/app.py"
     },
     "C11": {
       "name": "Flight planner security & dependencies",
-      "owner_hint": "Codex — same file as C10, sequenced after it"
+      "owner_hint": "Codex \u2014 same file as C10, sequenced after it"
     },
     "C12": {
       "name": "Instrument runtime",
-      "owner_hint": "Gemini — instruments/** outright, including the DF heads"
+      "owner_hint": "Gemini \u2014 instruments/** outright, including the DF heads"
     },
     "C13": {
       "name": "Instrument tooling & shared libs",
-      "owner_hint": "Gemini — instrument tooling; I-9a Lua harness is its first task"
+      "owner_hint": "Gemini \u2014 instrument tooling; I-9a Lua harness is its first task"
     },
     "C14": {
       "name": "Contract & documentation truth",
@@ -78,7 +78,11 @@
     },
     "C15": {
       "name": "Service boundaries (architecture)",
-      "owner_hint": "unassigned — after C2 and C7 settle"
+      "owner_hint": "unassigned \u2014 after C2 and C7 settle"
+    },
+    "C16": {
+      "name": "Aircraft package fidelity",
+      "owner_hint": "Claude \u2014 actively correcting the CAP 487 C182 model; visual and flight-model acceptance remain open"
     }
   },
   "issues": [
@@ -96,7 +100,7 @@
       "files": [
         "repo root"
       ],
-      "problem": "Codex published a v0.1 baseline to Gitea and GitHub on 2026-09-08 with ignore rules covering credentials, runtime state and build output. But this working tree still has no `.git/` and `git` is not installed on this machine, so agents editing here still cannot diff, revert or see what another tool changed — which is the actual failure mode the finding was about.",
+      "problem": "Codex published a v0.1 baseline to Gitea and GitHub on 2026-09-08 with ignore rules covering credentials, runtime state and build output. But this working tree still has no `.git/` and `git` is not installed on this machine, so agents editing here still cannot diff, revert or see what another tool changed \u2014 which is the actual failure mode the finding was about.",
       "fix": "This directory is now a real checkout: git init in place, origin set to ssh://git@192.0.2.121:2222/ron/capvsar.git (git.rpc-cyberflight.com does not resolve from this host - use the IP), local main tracking origin/main. Everything that had accumulated in the working tree since v0.1 (RBAC/setup wizard, O-2, radio/DF work, docs, tests) was captured as one commit on top of v0.1 without checking out or discarding anything already on disk, then pushed. .env.example, missing on disk with no explanation, was reconstructed from the env vars the code actually reads and committed separately. Pushed to Gitea only - not mirrored to GitHub here, since this repo's IP-redaction convention (if any, cf. flight-planner-n499cp-v2 scripts/redact_ips.py) was not established before pushing somewhere public.",
       "verify": "git log and git status work in /home/ron/Projects/cap-vsar (this directory), confirmed. origin/main on Gitea matches local main (pushed c517617). GitHub mirroring is a separate, deliberately deferred decision.",
       "depends_on": []
@@ -180,7 +184,7 @@
       "files": [
         "xplane/PI_capvsar_df.py:595-599"
       ],
-      "problem": "interp() walks aircraft to beacon with `fr`, but `ray = b_ft + (ac_ft - b_ft) * fr` puts the beacon's altitude at the aircraft end. Ridges near the beacon never block; high ground near the aircraft falsely blocks. Terrain masking — a headline training effect — is inverted.",
+      "problem": "interp() walks aircraft to beacon with `fr`, but `ray = b_ft + (ac_ft - b_ft) * fr` puts the beacon's altitude at the aircraft end. Ridges near the beacon never block; high ground near the aircraft falsely blocks. Terrain masking \u2014 a headline training effect \u2014 is inverted.",
       "fix": "ray = ac_ft + (b_ft - ac_ft) * fr.",
       "verify": "New test with a non-flat terrain stub (ridge at 30/60/90 % of path) asserting blocked vs clear in both directions.",
       "depends_on": []
@@ -201,7 +205,7 @@
         "docker-compose.yml:73"
       ],
       "problem": "Any LAN/WireGuard participant can stop a sortie, reveal the beacon, delete scenarios or rewrite injected effects. Only the radio stream has an access code and it defaults to empty. /ws has no origin check although the radio socket does.",
-      "fix": "Superseded 2026-09-08 by the full Exercise Setup / RBAC system (services/exercise/app/access.py): session-cookie and QR/short-code participant login (/join/<code>, /login) with a roster generated per exercise by the Setup wizard, role tokens (instructor/base/aircrew/ground_team/plugin) enforced on every mutating route and view, instructor satisfies base, /ws origin-checked. The old CAPVSAR_TOKEN_* shared-secret env vars are preserved only for backward compatibility with the plugin/scripts, not required for participant roles — the earlier REMAINING item (setting those on ms01) no longer gates this fix. Covered by tests/test_setup_auth.py (23 tests) and tests/test_console.py::RoleGates.",
+      "fix": "Superseded 2026-09-08 by the full Exercise Setup / RBAC system (services/exercise/app/access.py): session-cookie and QR/short-code participant login (/join/<code>, /login) with a roster generated per exercise by the Setup wizard, role tokens (instructor/base/aircrew/ground_team/plugin) enforced on every mutating route and view, instructor satisfies base, /ws origin-checked. The old CAPVSAR_TOKEN_* shared-secret env vars are preserved only for backward compatibility with the plugin/scripts, not required for participant roles \u2014 the earlier REMAINING item (setting those on ms01) no longer gates this fix. Covered by tests/test_setup_auth.py (23 tests) and tests/test_console.py::RoleGates.",
       "verify": "A non-instructor session (base/aircrew/ground_team) gets 403 on reveal/stop/scenario mutation; /setup and / redirect unauthenticated or non-instructor sessions; /join/<code> and /login establish a working session cookie. Covered by tests/test_setup_auth.py and tests/test_console.py::RoleGates.",
       "depends_on": []
     },
@@ -221,7 +225,7 @@
         "services/exercise/app/static/index.html:5,109",
         "services/exercise/app/static/debrief.html:5,54"
       ],
-      "problem": "Leaflet 1.9.4 loads from unpkg.com with no local copy. On a base LAN with no internet base.js:4 throws on `L` being undefined, so the WebSocket never connects and the status board and bearing log are gone — the whole view, not just the map.",
+      "problem": "Leaflet 1.9.4 loads from unpkg.com with no local copy. On a base LAN with no internet base.js:4 throws on `L` being undefined, so the WebSocket never connects and the status board and bearing log are gone \u2014 the whole view, not just the map.",
       "fix": "Fixed 2026-09-08: Leaflet 1.9.4 vendored to services/exercise/app/static/vendor/leaflet/ (js, css and the five dist images leaflet.css references, 192 KB) and the three views point at it. tests/test_console.py::OfflineAssets asserts no view pulls a remote script or stylesheet, that the vendored files are served at the paths the pages request, and that the CSS's images/ resolve. The planner's own CDN and tile dependency is separate and still open (L-8).",
       "verify": "Load /base with outbound internet blocked: map tiles may be blank but aircraft, status board and bearing log work.",
       "depends_on": []
@@ -248,7 +252,7 @@
     },
     {
       "id": "O-2",
-      "title": "Plugin hardcodes console address and callsign — multi-aircraft not deployable",
+      "title": "Plugin hardcodes console address and callsign \u2014 multi-aircraft not deployable",
       "type": "bug",
       "severity": "critical",
       "priority": "P0",
@@ -265,7 +269,7 @@
       ],
       "problem": "Corrected 2026-09-08: participant onboarding is NOT absent. The canonical repo has docs/CONNECT.md (join guide), scripts/wg-peer.sh (prints a WireGuard peer config and QR for a named participant), scripts/deploy.sh (idempotent stack deploy) and infra/ROUTER.md. What remains real and unchanged: the plugin hardcodes CONSOLE and CALLSIGN with no per-station override, so three aircraft still means three hand-edited copies; the deploy scripts are Linux-only; build_c182t_package.py hardcodes /home/ron; and there is no single station kit bundling plugin + instruments + panel + aircraft + CA cert for a member to install.",
       "fix": "xplane/PI_capvsar_df.py now loads CONSOLE/CALLSIGN/PLUGIN_KEY from capvsar_station.ini beside wherever the plugin is deployed (_load_station_config()), falling back independently per-key to the historical single-station defaults so an install with no ini is unchanged. CAPVSAR_TOKEN_PLUGIN still overrides the ini plugin_key. scripts/build_station_kit.py generates a per-station kit (plugin + generated ini + the four Air Manager instruments + a README), optionally zipped. The tracked plugin source is now byte-identical across every station, so deploy_xplane_plugin.py hash checks mean something again. NOT bundled, deliberately: the C182T aircraft package (build_c182t_package.py derives it from the recipient's own local Laminar install, not redistributable) and a CA certificate (issued per ms01 deployment, not present in this repo).",
-      "verify": "tests/test_engine.py: _load_station_config() falls back to defaults with no ini, applies per-key overrides from an ini, and confirms CAPVSAR_TOKEN_PLUGIN beats the ini. End-to-end: scripts/build_station_kit.py --callsign CAP-2 built a kit, and importing that kit's PI_capvsar_df.py directly (own directory, own ini) yielded CALLSIGN=CAP-2 and the kit's plugin_key — the same tracked source picking up a different station identity from its own directory. Deployed via scripts/deploy_xplane_plugin.py to this machine's X-Plane install (no station.ini present there, so behavior is unchanged from before this fix).",
+      "verify": "tests/test_engine.py: _load_station_config() falls back to defaults with no ini, applies per-key overrides from an ini, and confirms CAPVSAR_TOKEN_PLUGIN beats the ini. End-to-end: scripts/build_station_kit.py --callsign CAP-2 built a kit, and importing that kit's PI_capvsar_df.py directly (own directory, own ini) yielded CALLSIGN=CAP-2 and the kit's plugin_key \u2014 the same tracked source picking up a different station identity from its own directory. Deployed via scripts/deploy_xplane_plugin.py to this machine's X-Plane install (no station.ini present there, so behavior is unchanged from before this fix).",
       "depends_on": [
         "P-2"
       ]
@@ -308,7 +312,7 @@
         "docs/ (missing CONNECT.md)",
         "vault: Projects/as-built/AsBuilt_CAPVSAR.md"
       ],
-      "problem": "The as-built tells participants their instructions are at docs/CONNECT.md in the repository. That file does not exist, so the one pointer a new member is given leads nowhere — the same onboarding gap as O-2, but already promised in writing.",
+      "problem": "The as-built tells participants their instructions are at docs/CONNECT.md in the repository. That file does not exist, so the one pointer a new member is given leads nowhere \u2014 the same onboarding gap as O-2, but already promised in writing.",
       "fix": "WRONG FINDING, corrected 2026-09-08. docs/CONNECT.md exists in the canonical repo on ms01 and is a complete participant guide (Mumble client per platform, server details, nets, PTT). It was absent only from the local working tree this review was written against. Now pulled down. No work needed.",
       "verify": "A member who has never seen the project can get onto the voice net and the base console from that page alone.",
       "depends_on": [
@@ -372,7 +376,7 @@
       "files": [
         "xplane/PI_capvsar_df.py:645-652,755-759,693"
       ],
-      "problem": "Scan steps the receiver to alt1/alt2 between bursts; the next tick finds it untuned and calls silent(), clearing `held`. With scan_enable=1 — the 517's normal 406 posture — the bearing vanishes the instant each 440 ms burst ends instead of holding, which is exactly the behaviour the training relies on.",
+      "problem": "Scan steps the receiver to alt1/alt2 between bursts; the next tick finds it untuned and calls silent(), clearing `held`. With scan_enable=1 \u2014 the 517's normal 406 posture \u2014 the bearing vanishes the instant each 440 ms burst ends instead of holding, which is exactly the behaviour the training relies on.",
       "fix": "Fixed 2026-09-08. The untuned path now distinguishes scan stepping from being parked on the wrong channel. When scan has stepped off the crew's channel between bursts it calls silent(keep_hold=True) then hold_or_drop(), the same treatment the between-bursts gap already got, so TIMEHOLD carries the bearing across the step. Tuning away by hand still drops it. Added tuned_hz() so 'what the crew selected' and 'what the receiver is on this instant' are separate questions rather than duplicated logic.",
       "verify": "New test: 406 beacon with scan enabled holds a bearing between bursts.",
       "depends_on": []
@@ -509,7 +513,7 @@
         "services/exercise/app/static/debrief.js:45,68-72,90-98",
         "services/exercise/app/main.py:301"
       ],
-      "problem": "/track returns callsign per position but the debrief treats them as one track: with three aircraft the polyline zigzags between them, 'track flown' sums inter-aircraft jumps and closest approach is meaningless — the scoring the SET relies on. Heading is also derived via atan2(dlon, dlat) with no cos(lat), ~10 deg bias at 33 N, although hdg_true is stored and simply not returned.",
+      "problem": "/track returns callsign per position but the debrief treats them as one track: with three aircraft the polyline zigzags between them, 'track flown' sums inter-aircraft jumps and closest approach is meaningless \u2014 the scoring the SET relies on. Heading is also derived via atan2(dlon, dlat) with no cos(lat), ~10 deg bias at 33 N, although hdg_true is stored and simply not returned.",
       "fix": "Fixed 2026-09-08, both halves. Server: /api/sorties/{id}/track now returns hdg_true, which was stored on every position and discarded by the query. Client: debrief.js groups positions by callsign - one faint full track, one playback polyline and one labelled marker per aircraft, each in its own colour - and scores each aircraft separately for closest approach, track flown, direct line and efficiency. Heading uses the recorded hdg_true when present, and the fallback now scales longitude by cos(latitude), which the old inline calculation omitted (~10 deg of error at 33N).",
       "verify": "Verified in a headless browser against a seeded three-aircraft sortie (180 positions): three separate scored rows - CAP-1 0.00 nm 'overhead the beacon', CAP-2 3.34 nm 'did not close', CAP-3 1.96 nm 'localised' - three labelled markers, no JS errors. tests/test_console.py covers the hdg_true half.",
       "depends_on": []
@@ -610,7 +614,7 @@
         "instruments/rhotheta-rt-600/logic.lua:574-577",
         "instruments/*/lib/cap_df.lua:95"
       ],
-      "problem": "The 250 ms tick repaints unconditionally and df.on_change fires redraw() from all three subscription groups every engine tick — roughly 8 Hz of ~100 _txt calls each rebuilding a style string, whether anything changed or not. This is CPU the MO station spends for nothing and it widens the canvas_draw reentrancy window.",
+      "problem": "The 250 ms tick repaints unconditionally and df.on_change fires redraw() from all three subscription groups every engine tick \u2014 roughly 8 Hz of ~100 _txt calls each rebuilding a style string, whether anything changed or not. This is CPU the MO station spends for nothing and it widens the canvas_draw reentrancy window.",
       "fix": "Fixed 2026-09-08. In cap_df.lua and DF heads' logic.lua, added snapshot-based change detection so redraw only occurs on whole-second timer boundaries or true bearing/signal/flag state changes, eliminating ~8 Hz idle repaint load.",
       "verify": "Air Manager CPU drops measurably with a static signal; display still updates within 250 ms of a real change.",
       "depends_on": []
@@ -630,7 +634,7 @@
         "instruments/becker-sar-df-517/logic.lua:163",
         "instruments/rhotheta-rt-600/logic.lua:141"
       ],
-      "problem": "The pcall was added for a reentrancy error the Air Manager log shows only twice, each immediately followed by the missing-callback signature that was separately fixed — and zero occurrences since. It now silently swallows every synchronous canvas_draw failure.",
+      "problem": "The pcall was added for a reentrancy error the Air Manager log shows only twice, each immediately followed by the missing-callback signature that was separately fixed \u2014 and zero occurrences since. It now silently swallows every synchronous canvas_draw failure.",
       "fix": "Fixed 2026-09-08. Dropped the swallowing pcall around canvas_draw in both becker-sar-df-517/logic.lua and rhotheta-rt-600/logic.lua.",
       "verify": "Exercise pages 1-3 and scan mode; Air Manager log stays clean.",
       "depends_on": []
@@ -696,7 +700,7 @@
         "~/Air Manager/log.txt"
       ],
       "problem": "SimVideoStreamClient loses the connection every few minutes; the stock instrument calls video_stream_add() once at load, so after a reconnect the MFD tile is frozen on its last frame. Every MO station hits this.",
-      "fix": "Wrapper instrument that re-arms the stream on reconnect, or a watchdog timer that re-calls video_stream_add when frames stop arriving.",
+      "fix": "Created instruments/g1000-mfd-watchdog wrapper instrument monitoring frame arrival, displaying stale overlay on freeze, and auto re-arming video_stream_add() upon timeout/reconnect. Verified offline in tests/test_am.py; left open pending live flight station verification.",
       "verify": "A one-hour session with no frozen MFD; log shows reconnects with recovered video.",
       "depends_on": []
     },
@@ -712,9 +716,9 @@
       "cluster": "C5",
       "status": "resolved",
       "files": [
-        "Plan v0.8 §9.4"
+        "Plan v0.8 \u00a79.4"
       ],
-      "problem": "The containerization entry says to confirm spare AM4 licences against AM4_COMPAT.md, which does not exist. Three MO seats are assumed, not verified — a blocker discovered on exercise day would be expensive.",
+      "problem": "The containerization entry says to confirm spare AM4 licences against AM4_COMPAT.md, which does not exist. Three MO seats are assumed, not verified \u2014 a blocker discovered on exercise day would be expensive.",
       "fix": "WRONG FINDING, corrected 2026-09-08. docs/AM4_COMPAT.md exists in the canonical repo and records the licence position: spare AM4 licences cover the DF heads and MO COM panel, and it explicitly distinguishes Air Manager from Air Player seats (sold separately) for crew stations that only display. The CHANGELOG citation resolved all along.",
       "verify": "Three MO stations activate simultaneously in a rehearsal.",
       "depends_on": []
@@ -748,11 +752,11 @@
       "effort": "S",
       "component": "plugin",
       "cluster": "C3",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "xplane/PI_capvsar_df.py:824"
       ],
-      "problem": "decode_tick is called without the on_406 gate used elsewhere, so an analog beacon shows SYNC OK and a hex ident — teaching a student that a 121.5 signal carries beacon identity.",
+      "problem": "decode_tick is called without the on_406 gate used elsewhere, so an analog beacon shows SYNC OK and a hex ident \u2014 teaching a student that a 121.5 signal carries beacon identity.",
       "fix": "Gate decode_tick on the 406 band.",
       "verify": "121.5 scenario shows no decoded ident.",
       "depends_on": []
@@ -767,7 +771,7 @@
       "effort": "S",
       "component": "plugin",
       "cluster": "C3",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "xplane/PI_capvsar_df.py:783,805"
       ],
@@ -786,7 +790,7 @@
       "effort": "S",
       "component": "plugin",
       "cluster": "C3",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "xplane/PI_capvsar_df.py:772"
       ],
@@ -807,7 +811,7 @@
       "effort": "M",
       "component": "plugin",
       "cluster": "C3",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "xplane/PI_capvsar_df.py:94,593"
       ],
@@ -828,7 +832,7 @@
       "effort": "M",
       "component": "docs",
       "cluster": "C14",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "docs/DATAREF_CONTRACT.md:43,59,67-74,107"
       ],
@@ -847,7 +851,7 @@
       "effort": "M",
       "component": "console-api",
       "cluster": "C15",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "services/exercise/app/propagation.py:37-71"
       ],
@@ -866,7 +870,7 @@
       "effort": "S",
       "component": "plugin",
       "cluster": "C3",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "xplane/PI_capvsar_df.py:432,962,972,1018"
       ],
@@ -885,7 +889,7 @@
       "effort": "L",
       "component": "plugin",
       "cluster": "C3",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "xplane/PI_capvsar_df.py:770,828-830"
       ],
@@ -906,7 +910,7 @@
       "effort": "M",
       "component": "console-api",
       "cluster": "C7",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "services/exercise/app/main.py:235,277-283,143,219"
       ],
@@ -925,7 +929,7 @@
       "effort": "M",
       "component": "console-api",
       "cluster": "C7",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "services/exercise/app/main.py:300-302,442-444,149",
         "services/exercise/Dockerfile"
@@ -945,7 +949,7 @@
       "effort": "M",
       "component": "console-api",
       "cluster": "C9",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "services/exercise/app/radio.py:141"
       ],
@@ -964,16 +968,18 @@
       "effort": "S",
       "component": "console-ui",
       "cluster": "C8",
-      "status": "open",
+      "status": "fixed",
       "files": [
-        "services/exercise/app/static/base.js:114",
-        "services/exercise/app/static/debrief.js:105",
-        "services/exercise/app/static/app.js:80",
-        "services/exercise/app/static/radio.js:453"
+        "services/exercise/app/static/base.js",
+        "services/exercise/app/static/debrief.js",
+        "services/exercise/app/static/app.js",
+        "services/exercise/app/static/radio.js",
+        "services/exercise/app/static/setup.js",
+        "tests/test_console.py"
       ],
       "problem": "Message bodies, senders and channel names are interpolated into innerHTML unescaped, and any LAN client can POST /api/messages with markup.",
-      "fix": "Escape on render, as legacy radio.js:467 already does.",
-      "verify": "A message containing a script tag renders as text.",
+      "fix": "2026-09-11: added a shared esc() helper to base.js, app.js and debrief.js and escaped every server string reaching innerHTML, including Leaflet bindTooltip, which also renders HTML. radio.js already escaped sender/recipient/body but not the channel name named in this item; escaped it with the existing escapeHtml. Found and fixed the same class in setup.js, which was not in the original list: its cards render /api/setup values and two of them land inside attribute values, so the helper escapes the quote too. Numbers reaching HTML through toFixed() or Math.round() are left alone because they cannot carry markup.",
+      "verify": "tests/test_console.py::ServerStringsAreEscaped parses each view, walks every innerHTML and bindTooltip statement and fails on any tainted field not wrapped in an escaper; a self-check reverts three known fixes and asserts the detector notices. Console and radio: 90 passed, 17 subtests. Not verified in a browser against a live posted payload.",
       "depends_on": []
     },
     {
@@ -986,7 +992,7 @@
       "effort": "S",
       "component": "console-ui",
       "cluster": "C9",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "services/exercise/app/static/radio.js:530,535-559"
       ],
@@ -1025,7 +1031,7 @@
       "effort": "M",
       "component": "console-ui",
       "cluster": "C9",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "services/exercise/app/static/mission-radio.html",
         "services/exercise/app/static/radio.js:471-495"
@@ -1045,12 +1051,12 @@
       "effort": "M",
       "component": "planner",
       "cluster": "C10",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "services/flightplanner/app.py:591-595,543,532,554"
       ],
       "problem": "Parallel track places int(width/spacing) tracks starting on the box edge, so a 4 NM box at 1 NM spacing leaves the last mile unsearched and wastes half the first track; CAP practice is tracks at S/2, 3S/2. Creeping line silently truncates at max_legs with no warning that coverage is incomplete. heading_mag is emitted for expanding square but not the other two.",
-      "fix": "Half-spacing offset and ceil; return a coverage-truncated flag; emit heading_mag consistently.",
+      "fix": "Implemented: parallel tracks start half-spacing inside the box and use ceil counts; creeping sweeps use ceil and half-spacing start. API returns coverage_truncated when max_legs limits coverage. All points include heading_mag. Tests cover full 4 NM / 1 NM coverage, fractional/narrow boxes and truncation.",
       "verify": "Generated coverage matches the requested box within one track spacing.",
       "depends_on": []
     },
@@ -1064,18 +1070,18 @@
       "effort": "M",
       "component": "planner",
       "cluster": "C10",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "services/flightplanner/app.py:711,736-740,665,937"
       ],
       "problem": "get_cruise is nearest-neighbour rather than interpolating; takeoff/landing clamp to the last table row, understating distance above 6000 ft or 30 C; negative headwind (tailwind) is ignored; and when wind >= TAS ground speed clamps to zero and the leg then reports zero time and fuel, so an impossible leg looks cheap.",
-      "fix": "Interpolate; refuse or flag beyond-table inputs; handle tailwind; error on GS <= 0.",
+      "fix": "Implemented: interpolate cruise altitude/RPM between supported rows; reject beyond-table cruise and runway altitude/temperature. Apply C172S POH tailwind correction (+10% per 2 kt through 10 kt); refuse stronger tailwind. Non-positive GS and unmaintainable crosswind raise errors; route HTTP 400 names the leg. Tests cover 100 kt headwind at 90 KTAS, tailwind, interpolation and out-of-table inputs.",
       "verify": "A leg with a 100 kt headwind reports an error, not zero fuel.",
       "depends_on": []
     },
     {
       "id": "L-7",
-      "title": "Flight planner ships 172S performance data under a 182T label",
+      "title": "Flight planner plans a different aircraft than the exercise flies",
       "type": "bug",
       "severity": "medium",
       "priority": "P2",
@@ -1083,15 +1089,37 @@
       "effort": "M",
       "component": "planner",
       "cluster": "C10",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "services/flightplanner/app.py:64-102",
         "services/flightplanner/README.md"
       ],
-      "problem": "AIRCRAFT_DATABASE holds 2550 lb / 53 gal 172S figures while the aircraft, the handbook and the simulator package are all a 3100 lb / 87 gal 182T. Fuel and endurance planning for every sortie is computed from the wrong airframe.",
-      "fix": "Replace with 182T POH data (matching the .acf the build script produces), or relabel the profile honestly.",
-      "verify": "Planned endurance matches the handbook's 5.5 h figure.",
+      "problem": "Re-scoped 2026-09-10 after Codex correctly stopped on the original wording. The old description said the planner holds 172S figures 'under a 182T label'. It does not - app.py:80 says 'N499CP - Cessna 172S NAV III' and the planner README and USER_GUIDE agree, so the profile is labelled honestly. The real defect is an identity collision: N499CP is a REAL Cessna 172S on the squadron line, and the simulated aircraft was wearing that same registration while being a 182T. Fixed on the simulator side 2026-09-10 - the simulated aircraft is now CAP 487 (3100 lb, 87 gal, IO-540) everywhere except this planner. What is left is the planning gap the original item was really about: the exercise flies CAP 487 and the planner computes fuel, endurance and W&B for a 172S, so every sortie is planned on the wrong airframe. The crew no longer even matches on a shared registration. Source check 2026-09-10: Cessna 182TIMBUS-01 (20 Dec 2007), section 6-8 and figure 6-3, requires aircraft-specific empty weight and moment; its sample is 1924 lb and 70.9 thousand lb-in. The builder sets CAP 487 to 1970 lb but supplies no corresponding POH-datum empty moment or documented conversion from the inherited X-Plane CG. The planner requires empty_weight_moment. Implementation stopped under the prompt's no-guessing rule; obtain or explicitly define the simulated aircraft's datum-referenced W&B record before adding the complete profile. Source: https://www.aeroelectric.com/Reference_Docs/Cessna/cessna-poh/C182T_2007_NavIII-G1000%2BGFC700_POH-PIM_fromCessna.pdf .",
+      "fix": "Implemented 2026-09-10 after the user explicitly selected POH numbers. CAP 487 is the default with the C182T POH SAMPLE empty weight/moment (1924 lb / 70.9 thousand lb-in), 3100 lb takeoff, 2950 lb landing and 87 gal usable. Imported cited standard-temperature altitude/RPM/manifold-pressure cruise tables, climb, runway and CG/arm data. UI includes manifold pressure, correct weights/fuel/reference and a visible sample-baseline note. Old N499CP profile removed. Builder still uses 1970 lb and its CG datum is unverified: tracked separately in L-7a, with no claim that a planner update modified the simulator.",
+      "verify": "32 planner tests and 49 console/radio tests pass. At 6000 ft / 2400 RPM / 20 inHg, reproduces POH 65%, 130 KTAS and 11.4 GPH; full 87 gal with start/climb and 45-minute reserve gives 6.66 h, consistent with handbook 5.5+ h. UI defaults and CG envelope breakpoints tested. No X-Plane flight verification.",
       "depends_on": []
+    },
+    {
+      "id": "L-14",
+      "title": "Planner suite fails: cruise and runway tests assume the retired 172S table",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "S",
+      "component": "planner",
+      "cluster": "C10",
+      "status": "fixed",
+      "files": [
+        "services/flightplanner/app.py",
+        "services/flightplanner/tests/test_sar.py"
+      ],
+      "problem": "Found 2026-09-10 running the planner suite after L-8. L-7's partial fix REPLACED the N499CP 172S profile with a single 'CAP 487' 182T profile rather than adding one alongside, and the 182T table has a different shape: RPM 2000-2400 plus a manifold-pressure axis, where the 172S had 2400/2500 at a single power setting. Three tests written against the 172S numbers now fail against the only profile that exists: test_cruise_interpolates_altitude_and_rpm asks for get_cruise(5000, 2450) and gets 'Input 2450 outside performance table 2000..2400'; test_runway_tailwind_increases_distance and both subtests of test_runway_outside_table_is_json_error fail the same way. 40 pass, 4 fail. The suite was green when those tests were written, so this is a regression introduced between the two, not a pre-existing gap. [RESOLVED 2026-09-10: Codex's completed L-7 landed the full 182T table and re-pointed the cruise and runway tests at it. pytest services/flightplanner/tests/ is 58 passed, 0 failed.]",
+      "fix": "Land L-7 properly - decide whether the real N499CP 172S profile returns alongside CAP 487 - then re-point these tests at whichever profile they are meant to exercise, using figures from that aircraft's table. Do not edit the tests to chase the new numbers without deciding the L-7 question first, or the suite will just encode whatever the table happens to say.",
+      "verify": "pytest services/flightplanner/tests/ is green.",
+      "depends_on": [
+        "L-7"
+      ]
     },
     {
       "id": "L-8",
@@ -1103,7 +1131,7 @@
       "effort": "M",
       "component": "planner",
       "cluster": "C6",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "services/flightplanner/templates/index.html:8,447",
         "services/flightplanner/static/js/app.js:83-97",
@@ -1126,7 +1154,7 @@
       "effort": "M",
       "component": "planner",
       "cluster": "C10",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "services/flightplanner/app.py:894-897,1001-1008,1397,1438,1463"
       ],
@@ -1185,12 +1213,12 @@
       "effort": "S",
       "component": "instruments",
       "cluster": "C12",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "instruments/becker-sar-df-517/logic.lua:378,392,402"
       ],
-      "problem": "`msg and msg.has_pos or s.cs_has_pos` means a STORED frame without a position displays the live frame's position — the student reads a stored beacon as having a position it never carried.",
-      "fix": "Explicit if/else on the stored message.",
+      "problem": "`msg and msg.has_pos or s.cs_has_pos` means a STORED frame without a position displays the live frame's position \u2014 the student reads a stored beacon as having a position it never carried.",
+      "fix": "Replaced fallthrough ternary with explicit if/else block on msg in page 4 stored message render, ensuring stored messages without positions never inherit live frame coordinates.",
       "verify": "Store a positionless frame; page 4 shows no position.",
       "depends_on": []
     },
@@ -1204,12 +1232,12 @@
       "effort": "S",
       "component": "instruments",
       "cluster": "C12",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "instruments/rhotheta-rt-600/logic.lua:479-481,386"
       ],
       "problem": "Release returns early when the unit is unpowered, leaving press_at armed, and power_off does not stop the timers, so f1_long fires clear_average() after shutdown.",
-      "fix": "Stop timers in power_off and on the early-return path.",
+      "fix": "Cancelled softkey press timers in power_off() and in early-return paths when unpowered, preventing clear_average() timer leak after shutdown.",
       "verify": "Hold F1, power off, release: no averaging reset.",
       "depends_on": []
     },
@@ -1223,14 +1251,14 @@
       "effort": "M",
       "component": "instruments",
       "cluster": "C12",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "instruments/becker-sar-df-517/logic.lua:588",
         "instruments/cap-fm-tdfm-136b/logic.lua:353-358",
-        "instruments/mo-audio-panel-gma1347/logic.lua:389"
+        "instruments/mo-audio-panel-gma1347/logic.lua:486"
       ],
       "problem": "Both DF heads and the TDFM power up with the battery and avionics master off; only the GMA follows avionics_power_on, and even it ignores bus_volts. For a trainer whose value is procedural traps, the most basic one is missing.",
-      "fix": "Gate all four instruments on the avionics bus and bus voltage.",
+      "fix": "Gated Becker 517, RT-600, TDFM-136B, and GMA 1347 on avionics power switch and bus voltage (MIN_BUS_VOLTS = 10.0V). Added tests verifying cold dark startup, auto-boot on bus power, and immediate shutdown on voltage drop.",
       "verify": "Cold aircraft: no instrument lights until the master is on.",
       "depends_on": []
     },
@@ -1244,15 +1272,15 @@
       "effort": "M",
       "component": "instruments",
       "cluster": "C13",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "instruments/*/lib/cap_df.lua",
         "instruments/*/lib/lcd.lua",
         "instruments/*/lib/dcu.lua",
         "tests/test_faceplate.py:126-129"
       ],
-      "problem": "cap_df.lua, cap_df_audio.lua, dcu.lua, lcd.lua and three WAVs are byte-identical across the Becker and RT-600 (lcd.lua also in the TDFM). A test enforces the DF pair but not the TDFM copy, so that one can drift silently.",
-      "fix": "instruments/_shared/ copied in by the deploy scripts, with a test asserting installed copies match the shared source.",
+      "problem": "cap_df.lua, cap_df_audio.lua, dcu.lua, lcd.lua and four WAVs (elt_analog_clean, elt_analog_df, elt_noise, elt_406_burst) are byte-identical across the Becker and RT-600 (lcd.lua also in the TDFM). A test enforces the DF pair but not the TDFM copy, so that one can drift silently.",
+      "fix": "Extracted lcd.lua, cap_df.lua, cap_df_audio.lua, dcu.lua and four ELT WAVs into instruments/_shared/. Synchronized at deploy time via deploy_df_instruments.py. Replaced pairwise test with test_faceplate.py check enforcing all copies match _shared/.",
       "verify": "Editing _shared updates all instruments on deploy; drift fails the test.",
       "depends_on": []
     },
@@ -1266,12 +1294,12 @@
       "effort": "M",
       "component": "instruments",
       "cluster": "C13",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "scripts/register_mo_panel.py:25,50,97-100,107-168,171-172,182"
       ],
-      "problem": "It hardcodes 26 panel columns and magic values, syncs sqlite_sequence for two of four tables, pkills Air Manager without confirmation, relaunches from a /home/ron path, and never updates an existing layout so position edits never propagate. Panel geometry is triplicated across info.xml, this script and generate_assets.py with no cross-check. Streaming=true is set only through the SQLite path, so the --zip route ships a dead MFD.",
-      "fix": "Confirm before killing; parameterise the DB path; update existing layouts; single source for geometry; put Streaming in info.xml.",
+      "problem": "It hardcodes 26 panel columns and magic values, syncs sqlite_sequence for two of four tables, pkills Air Manager without confirmation, relaunches from a /home/ron path, and never updates an existing layout so position edits never propagate. Panel geometry is triplicated across info.xml, this script and panels/cap-c182t-mo-station/generate_assets.py with no cross-check. Streaming=true is set only through the SQLite path, so the --zip route ships a dead MFD.",
+      "fix": "Established panel_geometry.py (parsing info.xml) as single source of truth for panel geometry. Modernized register_mo_panel.py with capvsar_station.ini path parameterization, user confirmation before killing Air Manager, in-place updates for existing layouts, and sqlite_sequence synchronization across all four modified tables.",
       "verify": "The zip route produces a working MFD on a second machine.",
       "depends_on": [
         "O-2"
@@ -1328,13 +1356,13 @@
       "effort": "S",
       "component": "instruments",
       "cluster": "C13",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "scripts/deploy_df_instruments.py:14-17,47",
         "instruments/*/info.xml:20-25"
       ],
       "problem": "The deploy script handles two of four instruments although the website claims it deploys all four; TDFM and GMA have no deploy script; stale target files are never removed; and every info.xml claims FSX/P3D/FS2020 support although all four are X-Plane only. [Re-verified 2026-09-08: deploy_df_instruments.py still lists 2 of 4 instruments; TDFM and GMA have no deploy script. Stands.]",
-      "fix": "Deploy all four, prune stale files, correct the manifests.",
+      "fix": "Expanded deploy_df_instruments.py to deploy all four instruments and synchronize _shared/ assets; pruned stale target files and empty directories; updated panel info.xml to remove legacy FSX/P3D/FS2020 simulator claims and include Streaming=true for G1000 MFD.",
       "verify": "One command deploys four instruments to a clean Air Manager.",
       "depends_on": []
     },
@@ -1348,7 +1376,7 @@
       "effort": "S",
       "component": "docs",
       "cluster": "C14",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "CHANGELOG.md"
       ],
@@ -1367,7 +1395,7 @@
       "effort": "M",
       "component": "docs",
       "cluster": "C14",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "README.md:25",
         "website/technical.html:441,453",
@@ -1396,7 +1424,7 @@
         "CHANGELOG.md (7 citations)",
         "docker-compose.yml:4,131"
       ],
-      "problem": "Corrected 2026-09-08: CONOPS-cap-vsar.md is not missing, it lives in the vault at Projects/architecture/CONOPS-cap-vsar.md — but outside the repo, so the agents that the CHANGELOG points at it cannot read it, and it has already drifted from the code it describes. AM4_COMPAT.md and infra/ROUTER.md are still cited as authoritative and still resolve nowhere.",
+      "problem": "Corrected 2026-09-08: CONOPS-cap-vsar.md is not missing, it lives in the vault at Projects/architecture/CONOPS-cap-vsar.md \u2014 but outside the repo, so the agents that the CHANGELOG points at it cannot read it, and it has already drifted from the code it describes. AM4_COMPAT.md and infra/ROUTER.md are still cited as authoritative and still resolve nowhere.",
       "fix": "WRONG FINDING, corrected 2026-09-08. Every cited document exists in the canonical repo: docs/ragd/vaultnotes/CONOPS-cap-vsar.md, docs/AM4_COMPAT.md and infra/ROUTER.md. All three were missing only from the local working tree. The vault notes are published into the repo by docs/ragd/ragd_ingest.py, so the agents CAN read them. Now pulled down locally.",
       "verify": "Every document the repo cites resolves from inside the repo.",
       "depends_on": []
@@ -1411,7 +1439,7 @@
       "effort": "S",
       "component": "docs",
       "cluster": "C14",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "repo root",
         "scripts/build_c182t_package.py"
@@ -1424,6 +1452,35 @@
       ]
     },
     {
+      "id": "D-5",
+      "title": "Manufacturer artwork is still redistributed, as figure extracts and in git history",
+      "type": "legal",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "M",
+      "component": "docs",
+      "cluster": "C14",
+      "status": "open",
+      "files": [
+        "docs/figures/rt600_p08_front_panel-08.png",
+        "docs/figures/tdfm_p11_front_panel-11.png",
+        "docs/figures/gma1347_panel-04.png",
+        "docs/figures/gma1347_panel-05.png",
+        "docs/figures/b517_p29_bearing_controls-29.png",
+        "docs/figures/capdeck_p8-08.png",
+        "scripts/build_radio_reference_doc.py:326,383,478",
+        "panels/cap-c182t-mo-station/preview.png",
+        "cap-c182t-mo-station.zip"
+      ],
+      "problem": "Found while doing D-4. Untracking the manuals closed only half the question. Eight PNGs in docs/figures/ are page extracts from the same Becker/RHOTHETA/Technisonic/Garmin manuals (the -pNN- in each name is the source page), they are still tracked, and build_radio_reference_doc.py embeds three of them into a generated document. panels/cap-c182t-mo-station/preview.png and the root zip additionally embed the stock Air Manager G1000 instrument preview, a Sim Innovations asset. And git rm --cached does not rewrite history: the nine manuals D-4 untracked are still in every existing commit, so a push to a public remote publishes them anyway.",
+      "fix": "Decide each case: the figure extracts are drawing references and could be replaced by our own redrawn artwork (make_panel_artwork.py already redraws these panels) or kept locally like the manuals, but build_radio_reference_doc.py must stop embedding them either way. Regenerate the panel preview without the stock MFD tile. Before any public push, scrub history with git-filter-repo - untracking alone is not enough.",
+      "verify": "A fresh clone of the public repo contains no manufacturer page image, and git log --all -- docs/*.pdf returns nothing.",
+      "depends_on": [
+        "D-4"
+      ]
+    },
+    {
       "id": "C15-1",
       "title": "Split the console into store + routers with role middleware",
       "type": "task",
@@ -1433,13 +1490,13 @@
       "effort": "L",
       "component": "console-api",
       "cluster": "C15",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "services/exercise/app/main.py",
         "services/missionbase/",
         "services/tracking/"
       ],
-      "problem": "main.py holds scenario truth, telemetry ingest, the WebSocket hub, SQLite and (via radio.py) the real-time voice bridge on one event loop. X-3 is the symptom, and the CalTopo relay and IC/AOBD views both land here next. The empty services/missionbase/ and services/tracking/ directories are the right instinct.",
+      "problem": "main.py holds scenario truth, telemetry ingest, the WebSocket hub, SQLite and (via radio.py) the real-time voice bridge on one event loop. X-3 is the symptom, and the CalTopo relay and IC/AOBD views both land here next. The empty services/missionbase/ and services/tracking/ directories are the right instinct. [2026-09-10: split within the service rather than into separate containers - settings/store/roles/hub/models and routers/{scenarios,sorties,telemetry,comms,system,auth,pages}. main.py is 169 lines of assembly. services/missionbase/ and services/tracking/ are still empty: extracting them is a deployment change, and nothing needed it yet - the CalTopo relay and the IC/AOBD views now have an obvious router to land in.]",
       "fix": "store.py (SQLite, WAL, rehydration, truth serializer) plus exercise / tracking / missionbase / radio routers behind one app; move the Mumble bridge off the main loop.",
       "verify": "Same behaviour, with the truth serializer provably applied in one place.",
       "depends_on": [
@@ -1458,7 +1515,7 @@
       "effort": "M",
       "component": "console-api",
       "cluster": "C15",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "services/flightplanner/app.py",
         "services/exercise/app/propagation.py",
@@ -1466,7 +1523,7 @@
         "services/exercise/app/static/debrief.js",
         "xplane/PI_capvsar_df.py"
       ],
-      "problem": "Bearing/distance is implemented five times with the same R_NM constant; debrief.js has already drifted (missing cos(lat) in heading). [Re-verified 2026-09-08 against the complete tree: exactly five files carry their own geodesy. Stands.]",
+      "problem": "Bearing/distance is implemented five times with the same R_NM constant; debrief.js has already drifted (missing cos(lat) in heading). [Re-verified 2026-09-08 against the complete tree: exactly five files carry their own geodesy. Stands.] [2026-09-10: the debrief.js drift cited here was already fixed under F-3 - re-verified. Consolidated as far as the deployment boundaries allow: app/geo.py is the one implementation inside the exercise console (propagation.py and mock_bridge.py import it). The plugin runs in X-Plane's interpreter, the planner is a separate container and two copies are browser JS, so those cannot import it; tests/test_geodesy.py pins all five to the same answers instead, and was checked against a deliberately rounded radius and a reintroduced F-3 bug.]",
       "fix": "One shared Python geodesy module for the two services; the plugin keeps its standalone copy tested against it; the JS uses one helper.",
       "verify": "A cross-implementation test agrees within 1 m over 100 NM.",
       "depends_on": []
@@ -1481,13 +1538,13 @@
       "effort": "S",
       "component": "planner",
       "cluster": "C10",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "services/flightplanner/app.py:635",
         "services/flightplanner/app.py:517-554"
       ],
       "problem": "Found reviewing the L-1 fix. The pattern generators label points DATUM, SS01..SSnn, CS01, PS01, and the AOBD briefs the crew on those names - but the FMS writer now derives the identifier purely from coordinates, so the G1000 shows '+33.187_-117.079' for every leg. The brief says 'turn at SS04' and nothing in the cockpit says SS04. The plan still flies the correct positions; only the label is lost.",
-      "fix": "Determine whether X-Plane 12 accepts an arbitrary identifier on a type 28 record and treats the lat/lon columns as authoritative. If it does, emit the generator's label (sanitised to the character set the FMS allows) and keep the coordinates in the columns. If it does not, say so in the user guide so the AOBD briefs coordinates instead.",
+      "fix": "Implemented: type 28 records preserve generator labels as uppercase ASCII letters/digits/underscores and keep separate coordinate columns, per https://developer.x-plane.com/article/flightplan-files-v11-fms-file-format/ (applies to X-Plane 12). File structure, labels and sanitization tested. Running X-Plane/G1000 display check remains unperformed and is documented in USER_GUIDE.md.",
       "verify": "Load an exported pattern in X-Plane 12 and read the leg names on the G1000 flight plan page.",
       "depends_on": [
         "L-1"
@@ -1503,13 +1560,13 @@
       "effort": "S",
       "component": "planner",
       "cluster": "C10",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "services/flightplanner/app.py:626-628",
         "services/flightplanner/app.py:639-641"
       ],
       "problem": "Pre-existing, surfaced while generating a sample for the L-1 review. When get_airport() misses - an unknown identifier, or the aviation database still downloading - the export falls back to the first/last waypoint's coordinates and elevation 0.0, and emits them under the requested airport code. The observed sample put KSEE at 33.170,-117.079 (a search waypoint) instead of Gillespie Field, with no warning anywhere. A crew loading that plan departs from the wrong place.",
-      "fix": "Return a 400 naming the identifier that could not be resolved, or emit the record only when the lookup succeeds. Never substitute an unrelated position under an airport code.",
+      "fix": "Implemented: resolve both airports before writing FMS content; unresolved ADEP/ADES returns JSON 400 naming the identifier. Tests cover both ends and no file content on failure.",
       "verify": "Exporting with an unknown ADEP returns an error rather than a plausible-looking file.",
       "depends_on": []
     },
@@ -1663,7 +1720,7 @@
       "files": [
         "services/exercise/app/static/mission-radio.js:251"
       ],
-      "problem": "Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. The only oscillator is the 660 Hz headset-test beep. There is no talk-permit chirp on channel grant and no squelch tail, so an operator gets no acoustic confirmation that the radio actually keyed. NOTE: the audit proposed porting playP25Chirp/playP25Tail/playAmSquelchBurst from radio.js - those functions do not exist anywhere in the tree. This is new work, not a port.",
+      "problem": "Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. The only oscillator is the 660 Hz headset-test beep. There is no talk-permit chirp on channel grant and no squelch tail, so an operator gets no acoustic confirmation that the radio actually keyed. NOTE (corrected 2026-09-10): they DO exist, as methods of the audio class in radio.js (playP25Chirp ~:29, playP25Tail ~:60, playAmSquelchBurst ~:102). An earlier note here said they were absent; that was a grep for standalone functions. This is a port, and the legacy implementations are the reference.",
       "fix": "Synthesise a talk-permit chirp on grant and a squelch tail on release.",
       "verify": "Keying produces an audible grant tone before speech is passed.",
       "depends_on": []
@@ -1735,7 +1792,7 @@
       "effort": "S",
       "component": "planner",
       "cluster": "C10",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "docker-compose.yml:121",
         "services/flightplanner/app.py:25"
@@ -1744,6 +1801,46 @@
       "fix": "Mount the DIRECTORY - ./services/flightplanner/data:/app/data - and point DATABASE_PATH at /app/data/aviation_data.db so the journal stays with the database. The host file does not move, so no migration. Left for Codex because app.py is its lane and it had uncommitted work there.",
       "verify": "A write leaves its journal on the host volume, not inside the container.",
       "depends_on": []
+    },
+    {
+      "id": "L-13",
+      "title": "Planner direct-handler tests fail with real Flask installed",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 4,
+      "effort": "S",
+      "component": "planner",
+      "cluster": "C10",
+      "status": "fixed",
+      "files": [
+        "services/flightplanner/tests/test_sar.py"
+      ],
+      "problem": "Found 2026-09-10: direct-handler request-bound and security tests expect the optional Flask stub dictionary response. Real jsonify fails outside application context.",
+      "fix": "Explicitly mock jsonify in direct-handler unit tests. New HTTP regressions use Flask test_client to check actual JSON and status.",
+      "verify": "29 planner tests pass with Flask installed.",
+      "depends_on": []
+    },
+    {
+      "id": "L-7a",
+      "title": "Align simulator loading baseline with selected 182T POH sample",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "M",
+      "component": "infra",
+      "cluster": "C10",
+      "status": "open",
+      "files": [
+        "scripts/build_c182t_package.py"
+      ],
+      "problem": "The user selected Cessna 182T POH sample values for the planner (1924 lb empty, moment/1000 70.9). The builder still specifies 1970 lb and inherits an X-Plane CG without a verified mapping to the POH firewall datum. Planner and installed simulator loading results therefore cannot yet be assumed to match.",
+      "fix": "Reconcile the builder and simulator loading/CG datum with the selected POH sample baseline, then rebuild/reload and verify in X-Plane. Keep simulation assumptions explicit.",
+      "verify": "At identical fuel/payload, the simulator and planner agree on baseline mass and datum-referenced CG.",
+      "depends_on": [
+        "L-7"
+      ]
     },
     {
       "id": "AI-1",
@@ -1785,11 +1882,117 @@
         "docs/bugs/CODEX_RESUME_AI_PILOT.md"
       ],
       "problem": "The supervised airborne maneuver gate and X-Plane adapter are covered by packet-level tests, but live CAP 487 handling, G1000/GFC 700 annunciations, capture, pilot takeover, pause, and disconnect behavior remain unverified. The 2026-09-11 acceptance attempt could not start X-Plane because NVIDIA userspace 595.91.07 did not match the loaded 595.84 kernel module.",
-      "fix": "Use scripts/launch_xplane12.sh to reject mismatched NVIDIA driver state and strip the inherited Snap environment. Reboot the simulator host to load the matching NVIDIA kernel module, then run the supervised Gate A acceptance profile with CAP 487 positioned airborne.",
+      "fix": "2026-09-11: live heading capture (12.742 s), FLC altitude capture (50.555 s), out-of-block command refusal, pilot takeover, old-lease refusal and shutdown pause verified. User confirmed FLC-to-ALT, AP disconnect and shutdown pause. Corrected telemetry-loss trial dropped 48 packets for 5.007 s: stale telemetry revoked lease in 1.900 s after drop began, pause_on passed through, direct pause readback=1. Telemetry recovered without reacquisition and old lease returned HTTP 400. Controller/relay stopped and subscriptions cancelled. Initial loss trial was invalid due to old direct subscriptions and remains documented. AI-2 stays open for installed CAP 487 package verification (AI-4); manual recovery verified by user report and four seconds of live pause=0, altitude 4199.636 ft, 122.422 KIAS, bank 0.576 degrees and VVI -0.224 ft/min. Explicit visual confirmation of the latest automatic fault pause has not been supplied; direct telemetry proved pause=1. AI-4 package has now been corrected and installed with static validation; fresh X-Plane load and visual cockpit verification remain pending.",
       "verify": "Observe and record representative heading and altitude capture, command rejection outside the envelope, pilot takeover, pause, and disconnect behavior in X-Plane 12; confirm the cockpit annunciations agree with controller state and that only one process owns the controls.",
       "depends_on": [
         "AI-1"
       ]
+    },
+    {
+      "id": "AI-3",
+      "title": "Live RREF comma header discarded by AI pilot receiver",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 3,
+      "effort": "S",
+      "component": "infra",
+      "cluster": "C15",
+      "status": "fixed",
+      "files": [
+        "services/ai_pilot/xplane_udp.py",
+        "services/ai_pilot/tests/test_udp_protocol.py"
+      ],
+      "problem": "Live X-Plane 12.4.3 replies begin RREF comma, while the receiver accepted only RREF NUL, leaving all maneuver observations missing.",
+      "fix": "Accept observed comma and existing NUL headers; test receive dispatch, callbacks, cached values and rejection of unrelated headers.",
+      "verify": "64 AI-pilot tests and 23 subtests pass; live status reports finite telemetry aged 0.028 seconds. Console/radio: 86 passed.",
+      "depends_on": []
+    },
+    {
+      "id": "AI-4",
+      "title": "Installed exercise aircraft predates CAP 487 identity and has prop lever load error",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "M",
+      "component": "infra",
+      "cluster": "C15",
+      "status": "open",
+      "files": [
+        "scripts/build_c182t_package.py"
+      ],
+      "problem": "Installed Cessna_182T_G1000.acf declares N499CP. X-Plane Log.txt reports prop_lever.obj line 187 IDX10 index out of range and a non-power-of-two prop_lever.png. Repository rename alone did not update this installed package.",
+      "fix": "Fixed builder IDX10 remainder encoding (four trailing indices now use IDX) and resampled generated prop texture from 194x87 to 256x128. Built staging package and installed only tailnum, selection icons, prop object/texture, and CAP livery rename with backups; file hashes verify all other installed content preserved. Backup: /home/ron/X-Plane 12/Output/capvsar-backups/AI4-20260911-083735",
+      "verify": "Installed static checks pass: all 30 ACF patches match, tailnum CAP 487, 125 vertices, 534 in-range indices/178 triangles, 256x128 texture, unchanged vertex/UV/index sequence, single prop-lever attachment. Console/radio: 86 passed, 8891 warnings in 2.62s. Remains open pending fresh X-Plane load log and visual cockpit/prop-lever confirmation.",
+      "depends_on": []
+    },
+    {
+      "id": "AI-5",
+      "title": "Live altitude selection does not establish commanded climb",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 3,
+      "effort": "M",
+      "component": "infra",
+      "cluster": "C15",
+      "status": "fixed",
+      "files": [
+        "services/ai_pilot/maneuvers.py"
+      ],
+      "problem": "Live target 4200 ft from 3999 ft remained near 3997 ft after roughly 40 seconds. Selected altitude read 4200 but VVI selector read 0 and autopilot state 18; controller remained executing. Cause not yet established.",
+      "fix": "Implemented G1000 FLC command for altitude changes with explicit 110-KIAS exercise target and pilot-managed power; existing FLC is not toggled off. Automated tests pass; supervised live FLC and cockpit capture verification pending.",
+      "verify": "Live FLC target 4200 ft at 110 KIAS captured in 50.555 s from 3984.975 ft. AP readback 106 during FLC with altitude arm and 16386 after capture; measured capture 4191.494 ft, 112.099 KIAS, 91.618 ft/min. Cockpit visual confirmation remains part of open AI-2. User confirmed FLC-to-ALT cockpit transition near 4200 ft.",
+      "depends_on": []
+    },
+    {
+      "id": "AI-6",
+      "title": "Controller shutdown pause request does not pause live X-Plane",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 3,
+      "effort": "M",
+      "component": "infra",
+      "cluster": "C15",
+      "status": "fixed",
+      "files": [
+        "services/ai_pilot/xplane_udp.py",
+        "services/ai_pilot/maneuver_server.py"
+      ],
+      "problem": "Clean SIGINT shutdown while owning control called set_paused(True), but subsequent live sim/time/paused readback was 0. Current implementation writes sim/time/paused; pause delivery/effect is unverified and failed this trial. User was instructed to pause locally.",
+      "fix": "Installed DataRefs.txt confirms sim/time/paused is read-only. Replaced writes with Commands.txt pause_on/pause_off explicit commands and added regression coverage. Live pause readback verification pending.",
+      "verify": "Live shutdown pause verified with sim/time/paused=1 and user visual confirmation. Live telemetry-loss fault also sent pause_on at 1.900 s after relay drop began, revoked lease and produced pause=1. Autopilot modes were preserved during the fault. After telemetry restoration, old lease returned HTTP 400.",
+      "depends_on": []
+    },
+    {
+      "id": "A-1",
+      "title": "CAP 487 retains the stock C172S airframe geometry and exterior",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P0",
+      "wave": 3,
+      "effort": "L",
+      "component": "infra",
+      "cluster": "C16",
+      "status": "open",
+      "files": [
+        "scripts/build_c182t_package.py",
+        "scripts/fetch_flightgear_c182.py",
+        "scripts/convert_flightgear_c182.py",
+        "tests/test_flightgear_c182.py",
+        "docs/FLIGHTGEAR_C182_GPL_PLAN.md",
+        "docs/SOURCES.md",
+        "README.md",
+        "NOTICE",
+        "docs/C182T_DIMENSION_MASTER.md",
+        "scripts/c182t_dimension_master.json"
+      ],
+      "problem": "The CAP 487 builder copies Laminar's Cessna 172 SP package and patches identity, engine, propeller, weights, fuel, cowl flaps and V-speeds, but it does not replace the Plane Maker body, wing, tail, gear or exterior meshes. A direct ACF comparison found no airframe-geometry changes, and the installed fuselage.obj, wings.obj, fuselage_gear.obj and fuselage_prop.obj are byte-for-byte identical to the stock 172 files. CAP 487 therefore presents and partly flies as a C172S under C182T identity and performance data. The real 182T is 29 ft long and 9 ft 4 in high; the 172S is 27 ft 2 in long and 8 ft 11 in high, with material differences in cowling, fuselage, landing gear, tail and three-blade propeller despite their similar span.",
+      "fix": "Local prototype implemented 2026-09-11. The builder now requires the pinned HHS81/c182s donor at commit 1359d63393c7fc9145953b081d151d93627e791a, converts its shared C182S/T exterior from AC3D to OBJ8 without Blender, and replaces the stock C172 fuselage, wing, gear, propeller, glass, light and broken-part attachment slots. It generates a CAP 487 texture, animates the primary control surfaces and three-blade propeller from X-Plane datarefs, and embeds the donor GPL text, provenance manifest and local-prototype notice in the generated aircraft. Donor and generated assets remain outside the Apache git tree. The installed package was rebuilt after preserving the prior aircraft beside it as Cessna 182T NAV III.pre-flightgear-20260911-20260911. The public-release alternatives and GPL source/notice gate are recorded in docs/FLIGHTGEAR_C182_GPL_PLAN.md. A-1 remains open because the Plane Maker aerodynamic geometry is still inherited from the C172 and the exterior has not yet passed an X-Plane visual and dimensional acceptance.",
+      "verify": "Completed: the pinned archive SHA-256 matched d81628fff8489af41d312c0e0bc14e1de2ac10a50d6c0c75f937441f81343fbe; a clean staging and installed build applied 40/40 ACF patches and generated 26,867 structurally valid OBJ8 triangles; all ten stock exterior/crash attachment slots point to the new C182 objects or an intentional blank; the installed main OBJ SHA-256 matches staging; converter and donor-integrity tests pass (5/5); console/radio regression suites pass (90 tests and 17 subtests). Orthographic projections confirm the axes and silhouette. The donor-native overall bounds are about 8.50 m long, 10.91 m span and 3.22 m high, so it is an approximate visual donor rather than the authoritative 8.84 m by 10.97 m by 2.84 m dimensional acceptance master. Outstanding: load it in X-Plane and inspect exterior/cockpit/night views, animation and alignment; resolve the donor dimension differences against a C182T three-view; calibrate Plane Maker body, wing, tail, gear, mass, CG and aerodynamics against the selected POH; and complete the production license route before any redistribution. Stage 1 of the dimensional correction (measurement master) completed 2026-09-11: targets sourced from the FAA-approved 182T NAV III GFC 700 POH (182TPHBUS-00/-01), TCDS 3A13 Rev 66 and Cessna's Dec 2015 Rev C Specification and Description, recorded with page and SHA-256 in docs/C182T_DIMENSION_MASTER.md and scripts/c182t_dimension_master.json. The POH fixes normal ground attitude (nose strut approximately 2 in, wings level), the datum (lower front face of firewall, so the cockpit anchor is FS 0), and the endpoints: length runs spinner apex to rudder trailing edge and the 36 ft 0 in span includes wingtip strobes. Nine items including wing root, hinge-line, tail and individual gear stations are unpublished and are recorded as unknown rather than invented. Preliminary donor deltas under these endpoint rules: span -0.37%, length -3.83%, wheel base -3.64%, track -4.64%, height +8.58%, propeller 79.17 in against a 77.5-79.0 in certificated band; no uniform or per-axis scale reconciles these. The donor's nose wheel contact sits 131 mm below its main-wheel plane, so its height and propeller ground clearance are provisional until the mesh is re-posed. Still outstanding: the stage-2 measurement harness, the regional geometry correction, X-Plane visual acceptance, Plane Maker calibration and the production license route. X-Plane 12 visual acceptance run 2026-09-11: the exterior FAILS. The sim was first found rendering a stale pre-rebuild load (X-Plane loaded the aircraft at 09:50:47, the rebuild wrote at 09:56:11), which mimics the stock 172SP exactly; acceptance runs must issue sim/operation/reload_aircraft first. After reload: cabin reads see-through to the Laminar interior, CAP 487 registration renders mirrored, and a magenta patch appears at the firewall. Ruled out with data: texture alpha (flightgear_c182t.png is 100% opaque), inverted winding (closed convex objects measure 100% outward; a flipped model would read 0%), and interior protrusion (skin half-width 0.635 m vs Laminar cockpit 0.560 m, floor clears seats by 65 mm). Defect found and guarded: bucket selection keys on texture name, so all 37 untextured donor objects of 88 were dropped silently - 28 correctly (ground-service clutter and duplicate LODs) but by accident, and 9 as real gaps (Strobe, NavLight.L/R, NavlightTransp, BeaconOff, and the four Windscreen interior/side parts). Strobe and BeaconOff matter dimensionally: published span is defined with strobes installed and published height is measured to the fin tip. convert_flightgear_c182.py now classifies every donor object via DELIBERATELY_EXCLUDED/KNOWN_UNCONVERTED and assert_all_objects_classified raises on anything uncovered; the guard is a pure function testable without the donor cache (suite now 9 donor-free tests). Behaviour-preserving: all five OBJs rebuild byte-identical. Also confirmed 0 of 40 ACF patches touch wing/body/gear/tail geometry. Still outstanding: the see-through cabin, mirrored registration and magenta firewall patch are unexplained; the 9 unconverted objects are not yet emitted; Plane Maker geometry, dimensional correction and the production license route are untouched.",
+      "depends_on": []
     }
   ]
 }

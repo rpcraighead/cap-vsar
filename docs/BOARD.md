@@ -7,8 +7,8 @@
 *Ron: Write or update tasks below. In your prompt to any agent, simply say:*
 > *"Check `docs/BOARD.md` and execute the task assigned to you."*
 
-- [ ] **@Claude**: Ingest C182 dimensions and verify Becker / RT-600 antenna shadowing and link budget calculations against `PI_capvsar_df.py`.
-- [ ] **@Codex**: Gate A live acceptance completion for CAP 487 package, prop lever visual confirmation, and maneuver server integration.
+- [ ] **@Claude**: Complete the CAP 487 C182 model, dimensional correction, visual acceptance, Plane Maker geometry, and prop-lever verification.
+- [ ] **@Codex**: Consolidate independent working-tree changes and complete the remaining AI-2 maneuver-server live acceptance without editing aircraft/model paths.
 - [x] **@Antigravity (Gemini)**: Build the Flight Data Recorder (FDR) tap and automated post-flight test engine for Becker 517 & RT-600 and CAP Radio diagnostics.
 
 ---
@@ -18,8 +18,8 @@
 
 | Agent | Current Work / Focus | Locked Paths (DO NOT TOUCH) | Status |
 |---|---|---|---|
-| **Claude** | C182 dimensions & DF propagation | `xplane/**`, `tests/test_engine.py` | IDLE / Ready |
-| **Codex** | AI-1..AI-6 Gate A acceptance & safety gates | `services/ai_pilot/maneuvers*`, `scripts/launch_xplane12.sh` | IDLE / Paused |
+| **Claude** | CAP 487 C182 model and aircraft acceptance | `xplane/**`, `scripts/*c182*`, `tests/test_engine.py`, `tests/test_flightgear_c182.py`, `docs/C182T_DIMENSION_MASTER.md`, `docs/FLIGHTGEAR_C182_GPL_PLAN.md` | ACTIVE / User confirmed |
+| **Codex** | Git consolidation and remaining AI-2 live acceptance | `docs/BOARD.md`, `docs/bugs/tracker.json`, `docs/BUG_TRACKER.md`, `services/ai_pilot/maneuvers*` | ACTIVE |
 | **Antigravity (Gemini)** | AI Pilot Web Deck, FDR tap & Diagnostic Engine | `services/ai_pilot/fdr*`, `services/ai_pilot/diag*`, `services/ai_pilot/web*` | IDLE / Ready |
 
 ---
@@ -39,6 +39,7 @@
 
 - **2026-09-11 [Antigravity]**: Completed Flight Data Recorder (FDR) tap, automated diagnostic test engine, and Web UI scorecard. 44 unit tests passing.
 - **2026-09-11 [Codex]**: Completed Gate A live FLC climb (110 KIAS to 4,200 ft in 50.5s) and telemetry-loss pause verification.
+- **2026-09-11 [Codex]**: Preserved AI Pilot, planner, console, deployment and SAR instrument work as five scoped commits; aircraft/model paths remain with Claude.
 - **2026-09-11 [Antigravity]**: Created C182T authentic POH checklists (all 9 normal procedures), UDP protocol client, and Glassmorphic web deck (`http://localhost:8088`). 35 tests passing.
 - **2026-09-10 [Claude]**: Closed prompts 3, 5, 6, 7 and X-9 (effects scoping, Form 110, radio session sharing).
 
@@ -49,4 +50,3 @@
 2. **Read Before Writing**: Check `docs/BOARD.md` and the head of `CHANGELOG.md` at session start.
 3. **Verify Claims**: Verify facts against the real tree rather than assuming prompt claims still hold.
 4. **Keep Board Trim**: When updating, keep completed items to the last 5 so this file stays under 80 lines.
-
