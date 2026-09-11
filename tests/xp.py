@@ -34,7 +34,11 @@ def getDatad(ref):
 
 
 def getDataf(ref):
+    # true_psi is true heading; psi is the local OpenGL-frame heading. A test
+    # that sets only "psi" gets the same value from both, so the distinction
+    # only shows up where a test deliberately sets them apart (P-12).
     return {"sim/flightmodel/position/psi": SIM["psi"],
+            "sim/flightmodel/position/true_psi": SIM.get("true_psi", SIM["psi"]),
             "sim/flightmodel/position/phi": SIM["phi"],
             "sim/flightmodel/position/theta": SIM["theta"]}[ref.name]
 

@@ -40,14 +40,14 @@ instantaneous-reception groups so each callback remains manageable.
 | `cap/df/bearing_rel` | FLOAT | deg | Relative to the nose. This is what drives the needle. Averaged — see below. |
 | `cap/df/bearing_true` | FLOAT | deg | True bearing |
 | `cap/df/signal` | FLOAT | **0..1** | Not a percentage. `cap_df.lua` rescales to 0–100 for display. |
-| `cap/df/distance_nm` | FLOAT | NM | Slant range. Instructor-facing; the 517 shows it on page 3. |
+| `cap/df/distance_nm` | FLOAT | NM | Slant range — ground great-circle and the height difference combined, so an aircraft directly over a beacon 3,000 ft below reads 0.49, not 0. Instructor-facing; the 517 shows it on page 3. |
 | `cap/df/in_cone` | INT | bool | Inside the cone of confusion — bearing deliberately invalid |
 | `cap/df/blocked` | INT | bool | Terrain masking the signal |
 | `cap/df/airframe_shadowed` | INT | bool | At least 1 dB of installation-specific wing/fuselage attenuation is active. Separate from terrain masking. |
 | `cap/df/airframe_attenuation_db` | FLOAT | dB | Current directional loss from the selected antenna profile. Instructor/debug truth. |
 | `cap/df/rx_open` | INT | bool | A transmission is receivable at this instant. Unlike `valid`, this is never held. Audio should follow this value. |
 | `cap/df/band` | FLOAT | MHz | What the head is **actually listening to**, which in scan mode is not what the crew tuned |
-| `cap/df/spread` | FLOAT | deg | Scatter of the un-averaged bearings. How the operator judges whether to trust the needle. |
+| `cap/df/spread` | FLOAT | deg | Scatter of the un-averaged bearings, **peak to peak** — the full width of the band, so the extremes are `bearing ± spread/2`. How the operator judges whether to trust the needle. |
 | `cap/df/error_code` | INT | — | **−1 = no error**; 0–12 are Becker E0–E12. Set from the console's `effects.error_code`. |
 
 ### COSPAS/SARSAT decode
@@ -56,7 +56,7 @@ instantaneous-reception groups so each callback remains manageable.
 |---|---|---|
 | `cap/df/cs_sync` | INT | 0 none, 1 SYNC OK, 2 SELFTEST |
 | `cap/df/cs_protocol` | INT | 1 USER, 2 STANDARD, 3 NATIONAL; +4 for the TEST variant |
-| `cap/df/cs_hex15` | BYTE[15] | 15-hex beacon ident, one ASCII character per byte |
+| `cap/df/cs_hex15` | BYTE[15] | 15-hex beacon ident, one ASCII character per byte. **Length 0 until a frame decodes** — X-Plane reports the array's real length, so read `cs_sync` first and do not assume 15 bytes are there. |
 | `cap/df/cs_country` | INT | Numeric country code |
 | `cap/df/cs_has_position` | INT | 1 when the message carries a position |
 | `cap/df/cs_lat` / `cs_lon` | FLOAT | Degrees, valid only when the above is 1 |
@@ -64,11 +64,14 @@ instantaneous-reception groups so each callback remains manageable.
 
 ### Scenario
 
-Writable for offline testing without the console:
+All four are writable, which is the whole offline test path: with no console
+reachable, set the position and then `active` to 1 and the DF behaves exactly
+as it would in a sortie. A live console still wins — its next poll overwrites
+whatever was written here.
 
 | Dataref | Type |
 |---|---|
-| `cap/scenario/active` | INT (read-only) |
+| `cap/scenario/active` | INT |
 | `cap/scenario/beacon_lat` | DOUBLE |
 | `cap/scenario/beacon_lon` | DOUBLE |
 | `cap/scenario/beacon_elev` | FLOAT (ft MSL) |
@@ -177,6 +180,17 @@ unchanged.
   group selection takes in its two or three channels at once. The beacon's own
   frequency comes from the console's `beacon_freq_hz`, or is derived from `band`
   if it sends none.
+- **Signal strength (P-13).** `cap/df/signal` is a link budget, not an inverse
+  square curve: beacon ERP (a 121.5/243 analog ELT radiates about 0.1 W, a 406
+  beacon 5 W), less 20 dB for a beacon lying in ground clutter with a damaged
+  antenna, less free-space path loss, less terrain and airframe losses — then
+  mapped onto 0..1 across the 45 dB above the heads' published ~1 µV/m
+  sensitivity. The bands therefore differ in *range*, not just in cadence and
+  decode: on a clear path a bearing holds to roughly 50 NM on 121.5 and 105 NM
+  on 406, with a decodable 406 frame to about 44 NM. Terrain and the radio
+  horizon cut all three well short of that in real country. On 406 the value is
+  gated to the burst, so the bar pulses on the 50 s beacon cadence rather than
+  sitting pegged between bursts (P-7).
 - **Squelch.** A percentage maps onto a threshold on the 0..1 signal, from the
   noise floor at 0 % (and Auto) to just above saturation at 100 %. Wound fully
   up the set really is deaf. The RT-600's scale stops at 60 %, so its squelch
@@ -186,7 +200,7 @@ unchanged.
   the aircraft-to-beacon ray into body coordinates, and tests its intersection
   with a softened wing/fuselage silhouette. A belly profile nulls when the
   lowered wing is toward the beacon; a top profile reverses that relationship.
-  Directional and terrain losses are applied to unsaturated field strength, so
+  Directional and terrain losses accumulate in dB before the 0..1 mapping, so
   a close strong beacon can remain receivable through shielding. `rx_open`
   closes immediately in the null while `valid` may retain the last bearing for
   TIMEHOLD. The supplied C182 profiles are training approximations and support
@@ -246,12 +260,20 @@ effect controls; the remaining optional fields enrich particular exercises.
 |---|---|
 | `beacon_freq_hz` | The exact channel the beacon transmits on. Without it a 406 beacon is assumed to be on 406.025, and the 517 always hears it — so **the coverage scenario needs this field set** to a channel the 517 lacks. |
 | `cs` block | `hex15`, `country`, `protocol`, `has_position`, `lat`, `lon`, `selftest`. Without it the ident is synthesised from the beacon position (stable per beacon, obviously not a real registration), country defaults to 366, and no position is claimed. |
+| `effects.radio_horizon` | **Default on.** Enforces the two-ended radio horizon, `1.23*(sqrt(h_ac) + sqrt(h_beacon))`. Turn it off to let a beacon be heard from anywhere. |
+| `effects.terrain_masking` | **Default on.** Runs the in-simulator terrain probe. This is the one effect no server-side model can reproduce, so turning it off gives up most of what the plugin is for — but it is the right switch for a first-session demo where the beacon must simply be findable. |
+| `effects.burst_cadence` | **Default on.** A 406 beacon radiates for 440 ms every 50 s; the signal bar and audio are gated to the burst and the bearing is carried between bursts by TIMEHOLD. Off makes 406 continuous, which is not realistic but is far easier for a first look at the head. |
+| `effects.cone_of_confusion` | **Default on.** Directly overhead the beacon, reception continues but no bearing can be resolved: `in_cone` goes to 1 and `valid` to 0. |
+| `effects.multipath` | **Default off.** Terrain reflections swing the bearing. Since P-13 this is driven by the terrain probe — strongest where the path is blocked or grazing a ridge, absent on a clear path, and wandering with the aircraft's position rather than stepping on a timer. |
+| `effects.multipath_offset_deg` | Peak bearing error the above can reach; defaults to 40. |
 | `effects.beacon_has_gps` | Whether a synthesised decode carries a position. A plain 406 ELT without GPS is both the commoner case and the more interesting search. |
 | `effects.error_code` | Injects a Becker E0–E12 fault. |
 | `effects.mounting`, `effects.antenna_offset_deg` | The installation truth the crew's settings have to match. |
 | `effects.airframe_shadowing` | Enables attitude-dependent wing/fuselage attenuation. Defaults off for existing scenarios. |
 | `effects.df_antenna_profile` | `c182_belly` or `c182_top`; defaults to the belly profile. This is physical installation truth, independent of the crew's TOP/BOTTOM control. |
-| `effects.wing_null_max_loss_db` | Optional peak loss override; nominal profile value is 24 dB. Geometry can also be overridden with the `wing_null_*_ft` fields implemented in the plugin. |
+| `effects.wing_null_max_loss_db` | Optional peak loss override; nominal profile value is 24 dB. |
+| `effects.df_antenna_location` | `belly` or `top`, overriding just the location half of the chosen profile. |
+| `effects.wing_null_antenna_plane_distance_ft`, `..._half_span_ft`, `..._half_chord_ft`, `..._fuselage_half_width_ft`, `..._fuselage_half_length_ft`, `..._edge_softness_ft` | Per-scenario geometry overrides on the selected profile (all prefixed `wing_null_`). Each falls back independently to the profile value, so a scenario can override one dimension alone. |
 
 Deploy the tracked engine after validation with:
 

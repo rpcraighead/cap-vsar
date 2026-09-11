@@ -13,6 +13,7 @@ faceplates - for those, scripts/luacheck.py checks syntax and the rest waits on
 first bring-up in Air Manager.
 """
 import importlib.util
+import math
 import sys
 import os
 
@@ -44,6 +45,11 @@ class Clock:
 
 clock = Clock()
 mod.time = clock
+
+# The engine adds Gaussian scatter to every un-averaged bearing, so an
+# unseeded run makes any tight bearing assertion a coin toss that usually
+# lands. Seed it: the noise is still exercised, the same way every run.
+mod.random.seed(20260910)
 
 FAILED = []
 
@@ -156,8 +162,8 @@ settle(e)
 rel = xp.read("cap/df/bearing_rel")
 check("beacon dead ahead -> ~0 deg relative", abs(mod.ang_diff(rel, 0.0)) < 8.0,
       "bearing_rel=%.1f" % rel)
-check("spread is published and small on a strong signal",
-      0.0 <= xp.read("cap/df/spread") < 10.0, "spread=%.1f" % xp.read("cap/df/spread"))
+mid_spread = xp.read("cap/df/spread")
+check("spread is published", 0.0 <= mid_spread < 30.0, "spread=%.1f" % mid_spread)
 
 # Drag error: swing the aircraft 90 deg and the averaged bearing should lag.
 # The beacon is due south, so nose on 270 puts it 270 relative.
@@ -174,6 +180,28 @@ cleared = xp.read("cap/df/bearing_rel")
 check("CLR -> averaging store gone, bearing snaps back",
       abs(mod.ang_diff(cleared, 270.0)) < 20.0, "shows %.1f" % cleared)
 check("clear_average self-resets", xp.read("cap/df/clear_average") == 0)
+
+# Genuinely strong signal: 1 NM out, outside the cone of confusion. 5 NM on a
+# 0.1 W ELT is mid-scale since P-13 recalibrated the bar, so it is no longer
+# the geometry to test "strong" against. spread is peak to peak (P-10), so it
+# is the full width of the hollow-marker band the faceplates draw at
+# bearing +/- spread/2, not a one-sided deviation. Deliberately last in this
+# section: new_engine() re-registers the datarefs, so anything reading through
+# xp.read() after this point sees this engine, not the one above.
+strong = new_engine(beacon_hz=121_500_000, band=121.5,
+                    effects={"terrain_masking": False})
+xp.SIM.update({"lat": 39.0 + 0.0167, "lon": -105.0,
+               "elev_m": 12000.0 / 3.28084, "psi": 180.0,
+               "phi": 0.0, "theta": 0.0})
+xp.write("cap/df/power", 1)
+xp.write("cap/df/head_type", mod.HEAD_RT600)
+xp.write("cap/df/active_freq_hz", 121_500_000)
+settle(strong)
+check("spread is tight on a strong signal", xp.read("cap/df/spread") < 3.0,
+      "spread=%.2f deg at signal %.2f"
+      % (xp.read("cap/df/spread"), xp.read("cap/df/signal")))
+check("...and wider at mid scale", mid_spread > xp.read("cap/df/spread"),
+      "%.1f deg vs %.2f deg" % (mid_spread, xp.read("cap/df/spread")))
 
 print("\n== mounting trap ==")
 e = new_engine(beacon_hz=121_500_000, band=121.5)
@@ -240,7 +268,10 @@ xp.SIM["phi"] = -35.0
 settle(e)
 check("opposite bank restores reception",
       xp.read("cap/df/airframe_shadowed") == 0 and
-      xp.read("cap/df/rx_open") == 1 and xp.read("cap/df/signal") > 0.9)
+      xp.read("cap/df/rx_open") == 1 and
+      abs(xp.read("cap/df/signal") - level_signal) < 0.01,
+      "signal %.2f back to the wings-level %.2f"
+      % (xp.read("cap/df/signal"), level_signal))
 
 # Mirror the setup: beacon abeam left and left wing down.
 xp.SIM["psi"] = 270.0
@@ -289,10 +320,15 @@ xp.write("cap/df/power", 1)
 xp.write("cap/df/head_type", mod.HEAD_RT600)
 xp.write("cap/df/active_freq_hz", 121_500_000)
 settle(e)
-check("disabled shadowing preserves legacy signal",
+# P-13 recalibrated the bar onto a link budget, so 5 NM on a 0.1 W 121.5 ELT
+# is about half scale rather than pegged. What this test is for is that the
+# effect switch costs nothing when it is off: no flag, no dB, and the same
+# signal the unshadowed link budget gives.
+check("disabled shadowing costs nothing",
       xp.read("cap/df/airframe_shadowed") == 0 and
       xp.read("cap/df/airframe_attenuation_db") == 0.0 and
-      xp.read("cap/df/signal") > 0.9)
+      abs(xp.read("cap/df/signal") - level_signal) < 0.01,
+      "signal %.2f" % xp.read("cap/df/signal"))
 
 print("\n== timehold across the 406 burst gap ==")
 e = new_engine(beacon_hz=406_025_000)
@@ -376,8 +412,8 @@ xp.write("cap/df/head_type", mod.HEAD_RT600)
 xp.write("cap/df/active_freq_hz", 121_500_000)
 settle(e)
 loose = xp.read("cap/df/spread")
-check("weak signal scatters more than a strong one", loose > tight,
-      "signal %.2f spread %.1f deg vs signal 1.00 spread %.1f deg"
+check("weak signal scatters more than a strong one", loose > tight + 1.0,
+      "signal %.2f spread %.1f deg vs the close-in %.1f deg"
       % (xp.read("cap/df/signal"), loose, tight))
 
 print("\n== scan mode (517 3.3.3) ==")
@@ -633,6 +669,313 @@ with tempfile.TemporaryDirectory() as d:
             del os.environ["CAPVSAR_TOKEN_PLUGIN"]
         else:
             os.environ["CAPVSAR_TOKEN_PLUGIN"] = old_env
+
+print("\n== a 121.5 beacon carries no COSPAS-SARSAT frame (P-6) ==")
+# An analog beacon has no identity in it at all. Decoding one showed SYNC OK
+# and a 15-hex ident on the page, which teaches the crew the exact opposite of
+# what the 406 half of the exercise exists to demonstrate.
+e = new_engine(beacon_hz=121_500_000, band=121.5,
+               effects={"terrain_masking": False, "cone_of_confusion": False})
+xp.write("cap/df/power", 1)
+xp.write("cap/df/head_type", mod.HEAD_RT600)
+xp.write("cap/df/active_freq_hz", 121_500_000)
+settle(e)
+check("121.5 with a good bearing still shows no decode",
+      bool(xp.read("cap/df/valid")) and xp.read("cap/df/cs_sync") == 0,
+      "valid=%d cs_sync=%d" % (xp.read("cap/df/valid"), xp.read("cap/df/cs_sync")))
+
+# ...including from inside the cone of confusion, which is the path that was
+# actually wrong: the cone branch called decode_tick without the 406 gate.
+e = new_engine(beacon_lat=39.0, beacon_lon=-105.0, beacon_ft=9000.0,
+               beacon_hz=121_500_000, band=121.5,
+               effects={"terrain_masking": False, "cone_of_confusion": True})
+xp.SIM.update({"lat": 39.0 + 0.0004, "lon": -105.0,       # directly overhead
+               "elev_m": 12000.0 / 3.28084, "psi": 0.0, "phi": 0.0, "theta": 0.0})
+xp.write("cap/df/power", 1)
+xp.write("cap/df/head_type", mod.HEAD_RT600)
+xp.write("cap/df/active_freq_hz", 121_500_000)
+settle(e)
+check("overhead a 121.5 beacon: in the cone, and still no decode",
+      xp.read("cap/df/in_cone") == 1 and xp.read("cap/df/cs_sync") == 0,
+      "in_cone=%d cs_sync=%d" % (xp.read("cap/df/in_cone"), xp.read("cap/df/cs_sync")))
+
+# The same geometry on 406 must still decode, or the gate is simply too tight.
+e = new_engine(beacon_lat=39.0, beacon_lon=-105.0, beacon_ft=9000.0,
+               beacon_hz=406_025_000, band=406.0,
+               effects={"terrain_masking": False, "cone_of_confusion": True})
+xp.SIM.update({"lat": 39.0 + 0.0004, "lon": -105.0,
+               "elev_m": 12000.0 / 3.28084, "psi": 0.0, "phi": 0.0, "theta": 0.0})
+xp.write("cap/df/power", 1)
+xp.write("cap/df/head_type", mod.HEAD_RT600)
+xp.write("cap/df/active_freq_hz", 406_025_000)
+force_burst(e, True)
+settle_burst(e, 8)
+check("406 in the cone of confusion still decodes its frame",
+      xp.read("cap/df/in_cone") == 1 and xp.read("cap/df/cs_sync") == 1,
+      "in_cone=%d cs_sync=%d" % (xp.read("cap/df/in_cone"), xp.read("cap/df/cs_sync")))
+
+print("\n== the signal bar follows the 406 burst (P-7) ==")
+# 406 radiates for 440 ms in every 50 s. The bar showed the continuous field
+# strength, so it sat pegged for the 49.5 s the beacon was silent - and the
+# squelch was deciding on a signal that was not being received.
+e = new_engine(beacon_hz=406_025_000, band=406.0,
+               effects={"burst_cadence": True, "terrain_masking": False})
+xp.write("cap/df/power", 1)
+xp.write("cap/df/head_type", mod.HEAD_RT600)
+xp.write("cap/df/active_freq_hz", 406_025_000)
+xp.write("cap/df/timehold_sec", 30.0)
+force_burst(e, True)
+settle_burst(e, 8)
+in_burst = xp.read("cap/df/signal")
+check("signal is up during the burst", in_burst > 0.5, "signal %.2f" % in_burst)
+
+force_burst(e, False)
+clock.advance(mod.LOOP_S)
+e.compute()
+between = xp.read("cap/df/signal")
+check("signal drops to the noise floor between bursts", between == 0.0,
+      "signal %.2f" % between)
+check("...while TIMEHOLD keeps the bearing on the display",
+      bool(xp.read("cap/df/valid")) and xp.read("cap/df/rx_open") == 0)
+
+# A 121.5 beacon is continuous, so its bar must not pulse.
+e = new_engine(beacon_hz=121_500_000, band=121.5,
+               effects={"burst_cadence": True, "terrain_masking": False})
+xp.write("cap/df/power", 1)
+xp.write("cap/df/head_type", mod.HEAD_RT600)
+xp.write("cap/df/active_freq_hz", 121_500_000)
+force_burst(e, False)
+settle(e)
+check("121.5 is continuous and its bar does not pulse",
+      xp.read("cap/df/signal") > 0.1, "signal %.2f" % xp.read("cap/df/signal"))
+
+print("\n== terrain masking is a real shadow (P-8) ==")
+# The old -12 dB left a fully masked beacon at 2 NM reading 0.375 with a
+# perfectly good bearing, so the masking the terrain probe exists to produce
+# taught nothing at all inside about 4 NM.
+def masked_engine(d_deg=0.0333, terrain_ft=20000.0, hz=121_500_000, band=121.5):
+    eng = new_engine(beacon_lat=39.0, beacon_lon=-105.0, beacon_ft=9000.0,
+                     beacon_hz=hz, band=band,
+                     effects={"terrain_masking": True, "radio_horizon": False,
+                              "cone_of_confusion": False, "burst_cadence": False})
+    xp.SIM.update({"lat": 39.0 + d_deg, "lon": -105.0,
+                   "elev_m": 12000.0 / 3.28084, "psi": 180.0,
+                   "phi": 0.0, "theta": 0.0})
+    xp.write("cap/df/power", 1)
+    xp.write("cap/df/head_type", mod.HEAD_RT600)
+    xp.write("cap/df/active_freq_hz", hz)
+    xp.TERRAIN_FT = terrain_ft
+    settle(eng, 60)
+    return eng
+
+e = masked_engine()                     # ~2 NM, ridge far above the ray
+check("a deeply masked beacon at 2 NM falls below squelch",
+      xp.read("cap/df/blocked") == 1 and not bool(xp.read("cap/df/valid")),
+      "blocked=%d signal %.3f" % (xp.read("cap/df/blocked"), xp.read("cap/df/signal")))
+xp.TERRAIN_FT = 0.0
+
+e = masked_engine(terrain_ft=0.0)       # same range, clear path
+check("...and the same beacon on a clear path is loud",
+      xp.read("cap/df/blocked") == 0 and xp.read("cap/df/signal") > 0.5,
+      "signal %.2f" % xp.read("cap/df/signal"))
+
+# Grazing the ridge is not the same as being behind it: the crew should hear a
+# degraded signal, not silence, and the two cases must sound different.
+graze = mod.terrain_loss_db(False, 400.0)
+deep = mod.terrain_loss_db(True, -3000.0)
+edge = mod.terrain_loss_db(True, -10.0)
+check("diffraction loss grades with obstruction depth",
+      0.0 < graze < mod.TERRAIN_MASK_LOSS_DB <= edge < deep <= mod.TERRAIN_MASK_LOSS_MAX_DB,
+      "graze %.1f dB, just-blocked %.1f dB, deep %.1f dB" % (graze, edge, deep))
+check("a wide-open path costs nothing", mod.terrain_loss_db(False, 5000.0) == 0.0)
+
+print("\n== probe density and earth curvature (P-9) ==")
+# 24 fixed probes is 1.25 NM apart at 30 NM, which steps straight over the kind
+# of narrow ridge that actually masks a beacon.
+check("short paths keep the historical 24 probes",
+      e.los_sample_count(2.0) == 24 and e.los_sample_count(6.0) == 24,
+      "2 NM -> %d, 6 NM -> %d" % (e.los_sample_count(2.0), e.los_sample_count(6.0)))
+check("a long path is sampled far more finely than 24",
+      e.los_sample_count(25.0) == mod.LOS_SAMPLES_MAX,
+      "25 NM -> %d probes" % e.los_sample_count(25.0))
+check("the probe count is bounded",
+      e.los_sample_count(300.0) == mod.LOS_SAMPLES_MAX)
+
+# A ridge 0.5 NM wide at 25 NM, sitting between two of the old fixed probes
+# (fr 6/24 = 0.2500 and 7/24 = 0.2917) and caught by the new spacing.
+ac_lat25, b_lat25 = 39.0 + 0.4167, 39.0
+
+
+def narrow_ridge(lat, lon):
+    fr = (ac_lat25 - lat) / (ac_lat25 - b_lat25)
+    return 14000.0 if 0.260 <= fr <= 0.280 else 1000.0
+
+
+e = new_engine(beacon_lat=b_lat25, beacon_lon=-105.0, beacon_ft=1000.0,
+               beacon_hz=121_500_000, band=121.5,
+               effects={"terrain_masking": True, "radio_horizon": False,
+                        "cone_of_confusion": False})
+xp.SIM.update({"lat": ac_lat25, "lon": -105.0, "elev_m": 12000.0 / 3.28084,
+               "psi": 180.0, "phi": 0.0, "theta": 0.0})
+xp.write("cap/df/power", 1)
+xp.write("cap/df/head_type", mod.HEAD_RT600)
+xp.write("cap/df/active_freq_hz", 121_500_000)
+xp.TERRAIN_FN = narrow_ridge
+e.compute()
+check("a narrow ridge at 25 NM blocks", xp.read("cap/df/blocked") == 1,
+      "blocked=%d at %.1f NM" % (xp.read("cap/df/blocked"), xp.read("cap/df/distance_nm")))
+# The same ridge is missed at the old fixed spacing, which is the whole point.
+missed = [k for k in range(1, 24) if 0.260 <= k / 24.0 <= 0.280]
+check("...and the old fixed 24 probes would have stepped over it", not missed,
+      "old probes inside the ridge: %r" % missed)
+xp.TERRAIN_FN = None
+
+# The straight ray sits above the curved earth, by about 150 ft at mid-path
+# over 30 NM. Ignoring it handed every long path a free ridge's worth of
+# clearance.
+mid = e.earth_bulge_ft(30.0, 0.5)
+check("mid-path earth bulge over 30 NM is about 150 ft", 130.0 < mid < 170.0,
+      "%.0f ft" % mid)
+check("the bulge vanishes at both ends",
+      e.earth_bulge_ft(30.0, 0.0) == 0.0 and e.earth_bulge_ft(30.0, 1.0) < 1e-9)
+check("a short path is barely affected", e.earth_bulge_ft(2.0, 0.5) < 1.0,
+      "%.2f ft at 2 NM" % e.earth_bulge_ft(2.0, 0.5))
+
+print("\n== reporting cadence, heading source and null handling (P-12) ==")
+check("the report loop ticks faster than either deadline it serves",
+      mod.NET_TICK_S < mod.REPORT_S and mod.NET_TICK_S < mod.POLL_S,
+      "tick %.2f s, report %.1f s, poll %.1f s"
+      % (mod.NET_TICK_S, mod.REPORT_S, mod.POLL_S))
+
+e = new_engine()
+check("no position is reported before the flight loop has run once",
+      e.pos_seen is False)
+e.compute()
+check("...and one is once it has", e.pos_seen is True)
+
+# psi is the local OpenGL-frame heading and diverges from true north away from
+# the scenery origin; true_psi is true heading. The bearing the needle shows is
+# computed against it, so the wrong one is a silent, position-dependent error.
+e = new_engine(beacon_hz=121_500_000, band=121.5,
+               effects={"terrain_masking": False, "cone_of_confusion": False})
+xp.SIM.update({"psi": 150.0, "true_psi": 180.0})
+xp.write("cap/df/power", 1)
+xp.write("cap/df/head_type", mod.HEAD_RT600)
+xp.write("cap/df/active_freq_hz", 121_500_000)
+settle(e)
+# psi and true_psi are set 30 deg apart, so the two possible answers are ~0
+# (true_psi, correct) and ~30 (psi, the bug). 10 deg separates them cleanly
+# without pretending the bearing is noise-free at this range.
+check("relative bearing is taken from true heading, not the OpenGL frame",
+      abs(mod.ang_diff(xp.read("cap/df/bearing_rel"), 0.0)) < 10.0,
+      "bearing_rel %.1f (about 30 would mean psi was used)"
+      % xp.read("cap/df/bearing_rel"))
+del xp.SIM["true_psi"]
+
+check("a null scenario value coerces instead of raising",
+      mod.as_float(None) == 0.0 and mod.as_float(None, 121.5) == 121.5
+      and mod.as_float("406.0") == 406.0 and mod.as_float("", 1.0) == 1.0)
+e = new_engine()
+e.scn["elev_ft"] = mod.as_float(None)
+check("...so the elevation dataref still reads rather than dying",
+      xp.read("cap/scenario/beacon_elev") == 0.0)
+
+print("\n== link budget: the bands differ in range (P-13) ==")
+# The old model saturated inside 5 NM on every band, so a 0.1 W 121.5 ELT and a
+# 5 W 406 beacon differed only in cadence and decode - never in how far away
+# the crew could hear them, which is the fact the fleet argument rests on.
+def detection_range_nm(hz, target):
+    lo, hi = 0.05, 600.0
+    for _ in range(60):
+        mid = (lo + hi) / 2.0
+        prx = (mod.beacon_erp_dbm(hz) - mod.BEACON_GROUND_LOSS_DB
+               - mod.free_space_loss_db(hz, mid))
+        level = max(0.0, min(1.0, (prx - mod.RX_FLOOR_DBM) / mod.RX_SPAN_DB))
+        if level > target:
+            lo = mid
+        else:
+            hi = mid
+    return lo
+
+
+r121 = detection_range_nm(121_500_000, mod.SQUELCH_FLOOR)
+r406 = detection_range_nm(406_025_000, mod.SQUELCH_FLOOR)
+d406 = detection_range_nm(406_025_000, mod.DECODE_MIN_SIGNAL)
+check("121.5 is heard to about 50 NM on a clear path", 40.0 < r121 < 60.0,
+      "%.0f NM" % r121)
+check("406 is heard roughly twice as far", 1.8 < r406 / r121 < 2.5,
+      "406 %.0f NM vs 121.5 %.0f NM" % (r406, r121))
+check("a 406 frame decodes well inside the range it is heard at",
+      d406 < r406 * 0.6, "decode %.0f NM, bearing %.0f NM" % (d406, r406))
+check("243.0 is the same power on a higher frequency, so it is heard less far",
+      detection_range_nm(243_000_000, mod.SQUELCH_FLOOR) < r121)
+check("the scenario power knob is dB, and 1.0 is the rated beacon",
+      mod.power_ratio_db(1.0) == 0.0 and abs(mod.power_ratio_db(0.5) + 3.01) < 0.02)
+check("a zero-power beacon is silent rather than a maths error",
+      mod.power_ratio_db(0.0) == -math.inf)
+
+# Multipath used to be a 40 deg step for 12 s in every 36, independent of
+# terrain and range: crews learned its rhythm rather than its cause.
+e = new_engine()
+check("no multipath on a wide-open path",
+      e.multipath_error_deg(5000.0, 39.0, -105.0, clock.now, 40.0) == 0.0)
+check("...and none at all where the probe saw nothing",
+      e.multipath_error_deg(None, 39.0, -105.0, clock.now, 40.0) == 0.0)
+grazing = abs(e.multipath_error_deg(200.0, 39.0, -105.0, clock.now, 40.0))
+blocked_mp = abs(e.multipath_error_deg(-100.0, 39.0, -105.0, clock.now, 40.0))
+check("a blocked path reflects harder than a grazing one",
+      blocked_mp > grazing > 0.0,
+      "grazing %.1f deg, blocked %.1f deg" % (grazing, blocked_mp))
+check("the error is bounded by the scenario's amplitude",
+      blocked_mp <= 40.0, "%.1f deg" % blocked_mp)
+moved = e.multipath_error_deg(-100.0, 39.05, -105.0, clock.now, 40.0)
+check("the reflection moves with the aircraft rather than on a timer",
+      abs(moved - e.multipath_error_deg(-100.0, 39.0, -105.0, clock.now, 40.0)) > 1.0,
+      "%.1f deg vs %.1f deg half a mile away"
+      % (moved, e.multipath_error_deg(-100.0, 39.0, -105.0, clock.now, 40.0)))
+
+print("\n== the dataref contract matches the engine (P-10) ==")
+# The contract is the interface every faceplate is written against, and it had
+# drifted in six places. A doc fix alone would drift again, so this is the
+# guard: everything the engine publishes, and every effect switch it reads,
+# has to appear in DATAREF_CONTRACT.md.
+import re
+
+CONTRACT = os.path.join(os.path.dirname(HERE), "docs", "DATAREF_CONTRACT.md")
+with open(CONTRACT, encoding="utf-8") as fh:
+    contract = fh.read()
+with open(PLUGIN, encoding="utf-8") as fh:
+    source = fh.read()
+
+published = set(re.findall(r'registerDataAccessor\(\s*"([^"]+)"', source))
+published |= set(re.findall(r'^\s+[ifb]\("([^"]+)"', source, re.M))
+# cs_lat and cs_lon share one row, written as `cap/df/cs_lat` / `cs_lon`, so
+# that one name is allowed to appear in its short form. Everything else must
+# appear in full - matching on the leaf name alone would let any dataref pass
+# on a chance mention in the prose.
+SHORT_FORM = {"cap/df/cs_lon": "`cs_lon`"}
+undocumented = sorted(
+    d for d in published
+    if d not in contract and SHORT_FORM.get(d, "\0") not in contract)
+check("every published dataref is in DATAREF_CONTRACT.md", not undocumented,
+      "%d published, missing: %s" % (len(published), undocumented or "none"))
+
+effects = set(re.findall(r'eff(?:ects)?\.get\("([a-z_0-9]+)"', source))
+effects |= set(re.findall(r'^\s+"(df_antenna_location|wing_null_[a-z_]+)":', source, re.M))
+effects |= {"beacon_has_gps", "error_code"}
+missing_fx = sorted(k for k in effects
+                    if ("effects." + k) not in contract
+                    and ("`%s`" % k) not in contract
+                    and not (k.startswith("wing_null_")
+                             and ("..._" + k[len("wing_null_"):]) in contract))
+check("every effect switch the engine reads is in the contract", not missing_fx,
+      "%d effects, missing: %s" % (len(effects), missing_fx or "none"))
+
+# The two claims the contract makes about values, not names.
+check("the contract no longer calls cap/scenario/active read-only",
+      "INT (read-only)" not in contract)
+check("the contract describes spread as peak to peak",
+      "peak to peak" in contract)
 
 print("\n" + ("ALL PASS" if not FAILED else "FAILURES: " + ", ".join(FAILED)))
 sys.exit(1 if FAILED else 0)

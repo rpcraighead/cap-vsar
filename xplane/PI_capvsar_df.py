@@ -130,11 +130,30 @@ def _load_station_config(path=STATION_INI):
 CONSOLE, CALLSIGN, PLUGIN_KEY = _load_station_config()
 POLL_S = 3.0            # scenario refresh
 REPORT_S = 2.0          # position report
+NET_TICK_S = 0.5        # network thread wake-up; both timers are checked on it
 LOOP_S = 0.25           # DF recompute
 R_NM = 3440.065
 M_PER_NM = 1852.0
 FT_PER_M = 3.28084
-LOS_SAMPLES = 24        # terrain probes along the path
+FT_PER_NM = M_PER_NM * FT_PER_M
+# Terrain probes along the path. A fixed 24 is a spacing that depends entirely
+# on range: 150 ft apart at 2 NM, and 1.25 NM apart at 30 NM - wide enough to
+# step straight over the kind of narrow ridge that actually masks a beacon.
+# Spacing is the thing that matters, so the count follows distance, with a floor
+# that keeps short paths sampled exactly as finely as they were and a ceiling
+# that bounds the cost: the flight loop runs at 4 Hz, so this is at most ~384
+# terrain probes a second.
+LOS_SAMPLES = 24            # floor, and the historical fixed count
+LOS_SAMPLES_MAX = 96
+LOS_SPACING_NM = 0.25
+
+# The straight ray between the two ends sits above the curved earth - about
+# 150 ft at mid-path over a 30 NM leg, which is a whole ridge line's worth of
+# clearance the old flat ray handed out for free. 4/3 is the standard radio
+# refraction figure, and the same assumption as the 1.23 constant in the radio
+# horizon term below, so the two halves of the propagation model agree.
+EARTH_R_M = 6_371_000.0
+EARTH_RADIUS_K = 4.0 / 3.0
 
 HEAD_517, HEAD_RT600 = 0, 1
 MODE_EMERGENCY, MODE_TRAINING = 0, 1
@@ -198,6 +217,61 @@ NOISE_DEG = 14.0        # scatter at zero signal; falls off as the signal rises
 # continuous emergency frequencies in turn, holding on one if it answers.
 SCAN_DWELL_S = 4.0
 
+# Terrain masking. A blocked path is not a clean cut-off: the signal arrives
+# diffracted over the ridge line, and single knife-edge diffraction loss runs
+# 20-40 dB across the obstruction geometries a search area produces. An earlier
+# build attenuated by *0.06 - only 12 dB - so a fully masked beacon at 2 NM
+# still read 0.375 and gave a perfectly good bearing, and the masking that the
+# whole in-simulator terrain probe exists to produce taught nothing inside
+# ~4 NM. The loss is graded by how far the ground actually stands above the
+# ray, because that is the difference between a beacon just behind a ridge line
+# and one down in the next canyon, and the crew's response to the two differs.
+TERRAIN_MASK_LOSS_DB = 20.0         # grazing: ground just on the ray
+TERRAIN_MASK_LOSS_MAX_DB = 40.0     # deep shadow
+TERRAIN_MASK_DEPTH_FT = 500.0       # obstruction depth that reaches the max
+
+# Partial obstruction. A ray that clears the ridge by less than the first
+# Fresnel zone is still degraded, and it is also where reflections arrive with
+# enough strength to swing a bearing - so this figure drives both the loss and
+# the multipath below.
+TERRAIN_GRAZE_FT = 1000.0
+TERRAIN_GRAZE_LOSS_DB = 6.0
+
+# ------------------------------------------------------------- link budget
+#
+# The old model was signal = power * 25 / d^2 on every band, which saturates
+# inside 5 NM regardless of frequency: a 0.1 W 121.5 ELT and a 5 W 406 beacon
+# differed only in cadence and in whether a frame decoded - never in range. So
+# "406 is heard from much further out", which is the single most useful
+# propagation fact the exercise has to teach, was not modelled at all.
+#
+# This is a free-space link budget instead: ERP, path loss, then the terrain
+# and airframe losses, all in dB, mapped onto the 0..1 bar at the end.
+#
+# ERP is the published beacon figure - an analog 121.5/243 ELT radiates about
+# 100 mW (243.0 is the same transmitter's harmonic channel), a 406 beacon 5 W.
+BEACON_ERP_DBM = ((400e6, 37.0),        # 406 MHz, 5 W
+                  (200e6, 20.0),        # 243 MHz, 0.1 W
+                  (0.0, 20.0))          # 121.5 MHz, 0.1 W
+
+# What a beacon on the ground actually delivers, as against its rated ERP: the
+# antenna is bent or broken, the airframe is on its side or inverted, and the
+# whole thing is in ground clutter. Survey work on real ELT activations puts
+# this well over 10 dB; 20 dB is the figure that makes the modelled detection
+# ranges land on the ones CAP aircrew are taught to expect.
+BEACON_GROUND_LOSS_DB = 20.0
+
+# Receiver. The floor is the published DF sensitivity - both heads specify
+# about 1 uV/m, which for a half-wave dipole at 121.5 MHz works out at roughly
+# -117 dBm - and the span is where the bar pegs, 45 dB above it.
+#
+# Together these give, on a clear path: a bearing on 121.5 to about 50 NM and
+# on 406 to about 105 NM, with a 406 frame decodable to about 43 NM. Terrain
+# and the radio horizon cut all three well short of that in real country, which
+# is the point - the crew climbs to hear it.
+RX_FLOOR_DBM = -117.0
+RX_SPAN_DB = 45.0
+
 # Decoding the BCH-protected COSPAS-SARSAT frame needs more signal than getting
 # a bearing does, and a good frame stays on screen between bursts.
 DECODE_MIN_SIGNAL = 0.25
@@ -234,6 +308,63 @@ AIRFRAME_PROFILES = {
         "max_loss_db": 24.0,
     },
 }
+
+
+def as_float(value, default=0.0):
+    """Coerce a JSON scenario value to a float.
+
+    The console's scenario rows are nullable and hand-edited, so beacon_elev_ft,
+    power or band can arrive as null or as a string. Any of those reached the
+    dataref accessors as-is, where float(None) raises inside X-Plane's read
+    callback - which surfaces as a dead dataref, not as a traceback anyone sees.
+    """
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def beacon_erp_dbm(hz):
+    """Radiated power for the band the beacon is transmitting on."""
+    for edge, dbm in BEACON_ERP_DBM:
+        if hz > edge:
+            return dbm
+    return BEACON_ERP_DBM[-1][1]
+
+
+def power_ratio_db(power):
+    """The scenario's relative power knob, as dB. 1.0 is the rated beacon."""
+    p = as_float(power, 1.0)
+    if p <= 0.0:
+        return -math.inf
+    return 10.0 * math.log10(p)
+
+
+def free_space_loss_db(hz, d_nm):
+    """Free-space path loss. 32.44 is the constant for MHz and km."""
+    d_km = max(d_nm, 0.01) * M_PER_NM / 1000.0
+    return 32.44 + 20.0 * math.log10(hz / 1e6) + 20.0 * math.log10(d_km)
+
+
+def terrain_loss_db(blocked, clearance_ft):
+    """Diffraction loss from the worst point on the path.
+
+    clearance_ft is how far the ray passes above the ground there; negative
+    means the ground is above the ray. A blocked path grades from grazing
+    knife-edge loss to a deep-shadow figure, and a path that clears by less
+    than roughly a Fresnel zone still pays something.
+    """
+    if clearance_ft is None:
+        return TERRAIN_MASK_LOSS_DB if blocked else 0.0
+    if clearance_ft < 0.0:
+        depth = min(1.0, -clearance_ft / TERRAIN_MASK_DEPTH_FT)
+        return (TERRAIN_MASK_LOSS_DB
+                + (TERRAIN_MASK_LOSS_MAX_DB - TERRAIN_MASK_LOSS_DB) * depth)
+    if clearance_ft < TERRAIN_GRAZE_FT:
+        return TERRAIN_GRAZE_LOSS_DB * (1.0 - clearance_ft / TERRAIN_GRAZE_FT)
+    return 0.0
 
 
 def bearing_true(lat1, lon1, lat2, lon2):
@@ -465,6 +596,11 @@ class PythonInterface:
                     "band": 121.5, "power": 1.0, "effects": {}}
         self.started = time.time()
         self.pos = (0.0, 0.0, 0.0, 0.0)   # lat, lon, alt_ft, hdg_true
+        # The flight loop fills self.pos; until it has run once, the placeholder
+        # above is not a position and must not be reported. Posting it put every
+        # track's first point at 0N 0E in the Gulf of Guinea, and the console
+        # drew the leg from there to the aircraft's real position.
+        self.pos_seen = False
         self.attitude = (0.0, 0.0)          # roll, pitch
 
     # ------------------------------------------------------------- lifecycle
@@ -472,7 +608,12 @@ class PythonInterface:
         self.dr_lat = xp.findDataRef("sim/flightmodel/position/latitude")
         self.dr_lon = xp.findDataRef("sim/flightmodel/position/longitude")
         self.dr_elev = xp.findDataRef("sim/flightmodel/position/elevation")
-        self.dr_psi = xp.findDataRef("sim/flightmodel/position/psi")
+        # psi is the heading in X-Plane's local OpenGL frame, which diverges
+        # from true north as you move away from the scenery origin - tens of
+        # degrees over a wide search area, straight into every relative bearing
+        # the needle shows. true_psi is true heading, always.
+        self.dr_psi = (xp.findDataRef("sim/flightmodel/position/true_psi")
+                       or xp.findDataRef("sim/flightmodel/position/psi"))
         self.dr_phi = xp.findDataRef("sim/flightmodel/position/phi")
         self.dr_theta = xp.findDataRef("sim/flightmodel/position/theta")
 
@@ -512,7 +653,15 @@ class PythonInterface:
         f("cap/df/band", lambda: self.published_band())
         f("cap/df/spread", lambda: self.spread)
         i("cap/df/error_code", lambda: int(self.scn.get("effects", {}).get("error_code", ERR_NONE)))
-        i("cap/scenario/active", lambda: int(self.scn.get("active", 0)))
+        # Writable like the other three scenario refs, which is what
+        # DATAREF_CONTRACT.md has always promised: with no console reachable,
+        # setting lat/lon/elev and then active=1 is the whole offline test
+        # path, and a read-only active made that impossible. A live console
+        # still wins - the next poll overwrites whatever was set here. (P-10)
+        self.accessors.append(xp.registerDataAccessor(
+            "cap/scenario/active", xp.Type_Int, 1,
+            readInt=lambda r: int(self.scn.get("active", 0)),
+            writeInt=lambda r, v: self.scn.__setitem__("active", 1 if int(v) else 0)))
 
         i("cap/df/cs_sync", lambda: self.cs_sync)
         i("cap/df/cs_protocol", lambda: self.cs_protocol)
@@ -637,23 +786,83 @@ class PythonInterface:
         _, _, alt_m = xp.localToWorld(info.locationX, info.locationY, info.locationZ)
         return alt_m * FT_PER_M
 
-    def line_of_sight_blocked(self, ac_lat, ac_lon, ac_ft, b_lat, b_lon, b_ft):
+    def los_sample_count(self, d_nm):
+        """How many probes this path needs, at LOS_SPACING_NM where it can."""
+        wanted = math.ceil(max(0.0, d_nm) / LOS_SPACING_NM)
+        return int(max(LOS_SAMPLES, min(LOS_SAMPLES_MAX, wanted)))
+
+    def earth_bulge_ft(self, d_nm, fr):
+        """Height of the curved surface above the straight chord, in feet.
+
+        d1*d2 / 2*R_effective, the standard obstruction-clearance form, with d1
+        and d2 the two path legs either side of the probe.
         """
-        Sample terrain along the path and compare it to the straight ray.
+        d_m = d_nm * M_PER_NM
+        return (fr * (1.0 - fr) * d_m * d_m
+                / (2.0 * EARTH_R_M * EARTH_RADIUS_K) * FT_PER_M)
+
+    def terrain_clearance(self, ac_lat, ac_lon, ac_ft, b_lat, b_lon, b_ft,
+                          d_nm=None):
+        """
+        Sample terrain along the path and compare it to the ray.
 
         This is the reason the engine lives in the simulator: no server-side
         model can see the ridge between the aircraft and the beacon.
+
+        Returns (blocked, clearance_ft) where clearance_ft is the worst
+        clearance found - positive above the ground, negative into it, and None
+        if no probe returned anything (unloaded scenery). How close the ray came
+        matters as much as whether it got through: it sets the diffraction loss
+        and it is where a reflection comes from.
         """
-        for k in range(1, LOS_SAMPLES):
-            fr = k / float(LOS_SAMPLES)
+        if d_nm is None:
+            d_nm = distance_nm(ac_lat, ac_lon, b_lat, b_lon)
+        samples = self.los_sample_count(d_nm)
+        worst = None
+        for k in range(1, samples):
+            fr = k / float(samples)
             lat, lon = interp(ac_lat, ac_lon, b_lat, b_lon, fr)
             ground = self.terrain_ft(lat, lon)
             if ground is None:
                 continue                      # unloaded scenery: assume clear
-            ray = ac_ft + (b_ft - ac_ft) * fr  # linear, adequate at these ranges
-            if ground > ray + 50.0:           # 50 ft margin for probe noise
-                return True
-        return False
+            # Linear interpolation between the two ends, less the amount the
+            # earth has risen under it by this point along the path.
+            ray = (ac_ft + (b_ft - ac_ft) * fr
+                   - self.earth_bulge_ft(d_nm, fr))
+            clearance = ray + 50.0 - ground   # 50 ft margin for probe noise
+            if worst is None or clearance < worst:
+                worst = clearance
+        if worst is None:
+            return False, None
+        return worst < 0.0, worst
+
+    def line_of_sight_blocked(self, ac_lat, ac_lon, ac_ft, b_lat, b_lon, b_ft,
+                              d_nm=None):
+        """Boolean form of terrain_clearance, kept for callers that only ask
+        whether the path is masked."""
+        return self.terrain_clearance(ac_lat, ac_lon, ac_ft,
+                                      b_lat, b_lon, b_ft, d_nm)[0]
+
+    def multipath_error_deg(self, clearance_ft, lat, lon, now, amplitude_deg):
+        """Bearing error from a terrain reflection.
+
+        Strongest where the path is obstructed or grazing, nothing at all where
+        it is wide open, and wandering with the aircraft's position rather than
+        stepping on a timer: a reflection moves as the geometry that produces it
+        moves, and holds still when the aircraft does.
+        """
+        if clearance_ft is None:
+            return 0.0
+        if clearance_ft <= 0.0:
+            strength = 1.0
+        elif clearance_ft < TERRAIN_GRAZE_FT:
+            strength = 1.0 - clearance_ft / TERRAIN_GRAZE_FT
+        else:
+            return 0.0
+        phase = lat * 137.0 + lon * 91.0
+        wander = (math.sin(phase) * 0.6
+                  + math.sin(phase * 2.7 + (now - self.started) / 30.0) * 0.4)
+        return amplitude_deg * strength * wander
 
     # ---------------------------------------------------------- receiver
     def beacon_hz(self):
@@ -769,6 +978,7 @@ class PythonInterface:
         roll = xp.getDataf(self.dr_phi)
         pitch = xp.getDataf(self.dr_theta)
         self.pos = (lat, lon, alt_ft, hdg)
+        self.pos_seen = True
         self.attitude = (roll, pitch)
 
         if self.clear_pending:
@@ -795,8 +1005,16 @@ class PythonInterface:
         b_lat, b_lon, b_ft = s["lat"], s["lon"], s["elev_ft"]
         eff = s.get("effects", {})
 
+        # Ground great-circle distance drives everything that is about
+        # position over the earth: the radio horizon, the cone of confusion and
+        # the terrain probe's interpolation along the path.
         d = distance_nm(lat, lon, b_lat, b_lon)
-        self.distance = d
+        # The published distance is slant range, which is what the contract has
+        # always claimed and what the instructor actually wants - an aircraft at
+        # 12,000 ft over a beacon at 9,000 ft is not 0.0 NM from it. The signal
+        # travels the slant path too, so the link budget uses it. (P-10)
+        slant_nm = math.hypot(d, (alt_ft - b_ft) / FT_PER_NM)
+        self.distance = slant_nm
         brg = bearing_true(lat, lon, b_lat, b_lon)
 
         # Radio horizon. Both ends contribute: 1.23*(sqrt(h_ac) + sqrt(h_bcn)),
@@ -840,31 +1058,65 @@ class PythonInterface:
                 self.scan_hold_hz = None
                 return
 
-        # terrain masking - the effect only the simulator can produce
-        blocked = False
+        # terrain masking - the effect only the simulator can produce. The
+        # probe returns how far the ground stands above or below the ray at its
+        # worst point, because a beacon just behind a ridge line and one down in
+        # the next canyon are different problems for the crew and should not
+        # sound identical.
+        blocked, clearance_ft = False, None
         if eff.get("terrain_masking", True) and d > 0.3:
-            blocked = self.line_of_sight_blocked(lat, lon, alt_ft, b_lat, b_lon, b_ft)
+            blocked, clearance_ft = self.terrain_clearance(
+                lat, lon, alt_ft, b_lat, b_lon, b_ft, d)
         self.blocked = 1 if blocked else 0
 
-        # Accumulate propagation losses before saturation. This lets a very
-        # strong nearby beacon remain audible through partial shielding while a
-        # weak distant beacon can disappear into the null.
-        raw_signal = float(s.get("power", 1.0)) * 25.0 / max(d * d, 0.25)
-        if blocked:
-            raw_signal *= 0.06                # heavy attenuation, not silence
+        # Link budget, in dB all the way down: what the beacon radiates, what
+        # the path costs, then each obstruction in turn. Accumulating the losses
+        # before the 0..1 mapping is what lets a strong nearby beacon stay
+        # audible through partial shielding while a weak distant one disappears
+        # into the same null.
+        beacon_hz = self.beacon_hz()
+        prx_dbm = (beacon_erp_dbm(beacon_hz)
+                   + power_ratio_db(s.get("power", 1.0))
+                   - BEACON_GROUND_LOSS_DB
+                   - free_space_loss_db(beacon_hz, slant_nm))
+
+        terrain_db = terrain_loss_db(blocked, clearance_ft)
+        prx_dbm -= terrain_db
 
         loss_db = 0.0
         if eff.get("airframe_shadowing", False):
             loss_db = airframe_shadow_loss_db(
                 brg, hdg, d * 6076.0, b_ft - alt_ft, roll, pitch, eff)
-            raw_signal *= 10.0 ** (-loss_db / 10.0)
+            prx_dbm -= loss_db
         self.airframe_attenuation_db = loss_db
         self.airframe_shadowed = 1 if loss_db >= 1.0 else 0
 
-        signal = min(1.0, raw_signal)
+        signal = max(0.0, min(1.0, (prx_dbm - RX_FLOOR_DBM) / RX_SPAN_DB))
+
+        # 406 transmits a burst about every 50 s, so for 49.5 s of every 50 the
+        # receiver has nothing arriving at all. The gate has to come before the
+        # signal is published, not after: publishing the continuous field
+        # strength left the bar pegged between bursts - the one cue that tells a
+        # crew they are listening to a 406 beacon rather than an analog one -
+        # and made the squelch decide on a signal that was not being received.
+        on_406 = listening_hz > 400e6
+        between_bursts = (on_406 and eff.get("burst_cadence", True)
+                          and not self.burst_open())
+        if between_bursts:
+            signal = 0.0
+
         self.signal = signal
         self.rx_open = 0
         self.in_cone = 0
+
+        if between_bursts:
+            # Nothing to take a bearing from, so the last one stands for as long
+            # as the crew's TIMEHOLD allows. Ahead of the squelch branch, which
+            # would also release a scan hold the receiver is legitimately still
+            # sitting on.
+            self.hold_or_drop(now)
+            self.decode_tick(False)
+            return
 
         if signal < self.squelch_threshold():
             # Squelched, either by the noise floor or because the crew wound it
@@ -880,15 +1132,6 @@ class PythonInterface:
         if self.panel_seen and self.scan_enable and not on_cs_grid(listening_hz):
             self.scan_hold_hz = listening_hz
 
-        # 406 transmits a burst about every 50 s. Outside the burst there is
-        # nothing to take a bearing from, so the last one is held for as long as
-        # the crew's TIMEHOLD setting allows and then dropped.
-        on_406 = listening_hz > 400e6
-        if on_406 and eff.get("burst_cadence", True) and not self.burst_open():
-            self.hold_or_drop(now)
-            self.decode_tick(False)
-            return
-
         # This is instantaneous reception, separate from a bearing which may be
         # held across a null or between 406 bursts. The audio path should follow
         # rx_open rather than cap/df/valid.
@@ -903,13 +1146,25 @@ class PythonInterface:
             self.samples.clear()
             self.held = None
             self.spread = 0.0
-            self.decode_tick(signal >= DECODE_MIN_SIGNAL)
+            # on_406 matters: an analog 121.5 beacon carries no frame at all,
+            # and decoding one here showed SYNC OK and a hex ident on a signal
+            # that has no identity in it - the exact thing the 406 half of the
+            # exercise is meant to teach.
+            self.decode_tick(signal >= DECODE_MIN_SIGNAL and on_406)
             return
         self.in_cone = 0
 
         if eff.get("multipath", False):
-            if int((now - self.started) / 12.0) % 3 == 0:
-                brg = (brg + float(eff.get("multipath_offset_deg", 40.0))) % 360.0
+            # Driven by the terrain probe that already ran, not by a clock. The
+            # old form swung the bearing 40 deg for 12 s out of every 36
+            # regardless of where the aircraft was or what was between it and
+            # the beacon, which reads as a scripted glitch - crews learned the
+            # rhythm rather than the cause. A reflection needs something to
+            # reflect off: it appears where the path grazes terrain, grows as
+            # the obstruction does, and wanders as the geometry changes.
+            brg = (brg + self.multipath_error_deg(
+                clearance_ft, lat, lon, now,
+                float(eff.get("multipath_offset_deg", 40.0)))) % 360.0
 
         rel = (brg - hdg) % 360.0
 
@@ -937,11 +1192,21 @@ class PythonInterface:
         mean_rel = circular_mean(rels)
         self.bearing_rel = mean_rel
         self.bearing_true = (mean_rel + hdg) % 360.0
-        self.spread = max((abs(ang_diff(r, mean_rel)) for r in rels), default=0.0)
+        # Peak to peak, not the one-sided maximum deviation. Both faceplates
+        # draw the hollow extreme markers at bearing +/- spread/2 (517 manual
+        # Fig 3-3, and DATAREF_CONTRACT.md says so), which with a one-sided
+        # value drew the scatter at half its real width - the trust cue the
+        # operator reads at a glance was systematically flattering. The 517's
+        # numeric SPRD on page 3 is the width of the same band. (P-10)
+        devs = [ang_diff(r, mean_rel) for r in rels]
+        self.spread = (max(devs) - min(devs)) if devs else 0.0
         self.valid = 1
         self.held = (now, self.bearing_rel, self.bearing_true)
 
-        self.decode_tick(signal >= DECODE_MIN_SIGNAL and on_406 and self.burst_open())
+        # Reaching here already means a burst is being heard (or that the
+        # scenario has switched the cadence off and the beacon is radiating
+        # continuously), so the burst state is not re-tested.
+        self.decode_tick(signal >= DECODE_MIN_SIGNAL and on_406)
 
     def hold_or_drop(self, now):
         """
@@ -1066,90 +1331,111 @@ class PythonInterface:
             return None
 
     def net_worker(self):
+        """Poll scenario truth and report position, each on its own cadence.
+
+        The two used to share one loop that slept POLL_S, so REPORT_S=2.0 was a
+        fiction: positions went out every 3 s, or every 7 if a poll timed out,
+        and the console's track and its dead-reckoning were paced off a figure
+        the plugin never actually kept. Both deadlines are absolute, so a slow
+        fetch is caught up rather than compounded.
+        """
+        last_poll = 0.0
         last_report = 0.0
         while not self.stop.is_set():
-            try:
-                st = self.fetch_scenario()
-                if st is None:
-                    # Console is up but will not give us the beacon. Silence is
-                    # the honest state: a DF homing on a stale or null position
-                    # teaches the crew something false.
-                    self.scn["active"] = 0
-                else:
-                    sc = st.get("scenario") or {}
-                    so = st.get("sortie") or {}
-                    running = bool(so and not so.get("stopped"))
-                    if running and sc.get("beacon_lat") is not None:
-                        self.scn.update({"active": 1, "lat": sc["beacon_lat"],
-                                         "lon": sc["beacon_lon"],
-                                         "elev_ft": sc.get("beacon_elev_ft", 0.0),
-                                         "band": float(sc.get("band", 121.5)),
-                                         "beacon_freq_hz": sc.get("beacon_freq_hz"),
-                                         "power": sc.get("power", 1.0),
-                                         "cs": sc.get("cs", {}),
-                                         "effects": sc.get("effects", {})})
-                    elif running:
-                        # Sortie running but no beacon in the payload: the
-                        # scenario is incomplete. Effects still apply, but
-                        # there is nothing to home on.
-                        self.truth_note("no-beacon",
-                                        "sortie running with no beacon position")
-                        self.scn["active"] = 0
-                        self.scn["effects"] = sc.get("effects", self.scn["effects"])
-                    else:
-                        self.scn["active"] = 0
-            except Exception:
-                pass                          # console offline is not an error
+            if time.time() - last_poll >= POLL_S:
+                last_poll = time.time()
+                self.poll_scenario_once()
 
-            now = time.time()
-            if now - last_report >= REPORT_S:
-                last_report = now
-                try:
-                    lat, lon, alt_ft, hdg = self.pos
-                    report = {"callsign": CALLSIGN, "lat": lat, "lon": lon,
-                              "alt_ft": alt_ft, "hdg_true": hdg}
-                    if self.panel_seen:
-                        # What the crew has the DF set to. The instructor cannot
-                        # see over their shoulder, and "why can't they hear it"
-                        # is usually answered here.
-                        report["df"] = {
-                            "valid": bool(self.valid),
-                            "bearing_rel": round(self.bearing_rel, 1),
-                            "bearing_true": round(self.bearing_true, 1),
-                            "signal": round(self.signal, 4),
-                            "distance_nm": round(self.distance, 2),
-                            "in_cone": bool(self.in_cone),
-                            "blocked": bool(self.blocked),
-                            "power": self.power,
-                            "head_type": self.head_type,
-                            "freq_hz": int(self.effective_freq_hz()),
-                            "rx_span_hz": int(self.rx_span_hz),
-                            "squelch": self.squelch,
-                            "mode": self.mode,
-                            "scan": self.scan_enable,
-                            "mounting": self.mounting,
-                            "offset_deg": self.offset_deg,
-                            "rx_open": self.rx_open,
-                            "airframe_shadowed": self.airframe_shadowed,
-                            "airframe_attenuation_db": round(self.airframe_attenuation_db, 1),
-                            "roll_deg": round(self.attitude[0], 1),
-                            "pitch_deg": round(self.attitude[1], 1),
-                            "note": ("wing null" if self.airframe_shadowed and not self.rx_open
-                                     else "airframe attenuation" if self.airframe_shadowed
-                                     else "terrain masked" if self.blocked
-                                     else "cone of confusion" if self.in_cone
-                                     else "holding" if self.valid and not self.rx_open
-                                     else ""),
-                        }
-                    body = json.dumps(report).encode()
-                    headers = {"Content-Type": "application/json"}
-                    if PLUGIN_KEY:
-                        # Position ingest carries the same key: the console
-                        # gates it on the plugin role once tokens are set.
-                        headers["X-CAPVSAR-Token"] = PLUGIN_KEY
-                    req = urllib.request.Request(
-                        CONSOLE + "/api/positions", data=body, headers=headers)
-                    urllib.request.urlopen(req, timeout=4).read()
-                except Exception:
-                    pass
-            self.stop.wait(POLL_S)
+            if self.pos_seen and time.time() - last_report >= REPORT_S:
+                last_report = time.time()
+                self.report_position_once()
+            self.stop.wait(NET_TICK_S)
+
+    def poll_scenario_once(self):
+        """One scenario fetch. A console that is down is not an error here."""
+        try:
+            st = self.fetch_scenario()
+            if st is None:
+                # Console is up but will not give us the beacon. Silence is
+                # the honest state: a DF homing on a stale or null position
+                # teaches the crew something false.
+                self.scn["active"] = 0
+            else:
+                sc = st.get("scenario") or {}
+                so = st.get("sortie") or {}
+                running = bool(so and not so.get("stopped"))
+                if (running and sc.get("beacon_lat") is not None
+                        and sc.get("beacon_lon") is not None):
+                    freq_hz = as_float(sc.get("beacon_freq_hz"), 0.0)
+                    self.scn.update({"active": 1,
+                                     "lat": as_float(sc["beacon_lat"]),
+                                     "lon": as_float(sc["beacon_lon"]),
+                                     "elev_ft": as_float(sc.get("beacon_elev_ft")),
+                                     "band": as_float(sc.get("band"), 121.5),
+                                     "beacon_freq_hz": freq_hz or None,
+                                     "power": as_float(sc.get("power"), 1.0),
+                                     "cs": sc.get("cs") or {},
+                                     "effects": sc.get("effects") or {}})
+                elif running:
+                    # Sortie running but no beacon in the payload: the
+                    # scenario is incomplete. Effects still apply, but
+                    # there is nothing to home on.
+                    self.truth_note("no-beacon",
+                                    "sortie running with no beacon position")
+                    self.scn["active"] = 0
+                    self.scn["effects"] = sc.get("effects") or self.scn["effects"]
+                else:
+                    self.scn["active"] = 0
+        except Exception:
+            pass                          # console offline is not an error
+
+    def report_position_once(self):
+        """One position report to the console."""
+        try:
+            lat, lon, alt_ft, hdg = self.pos
+            report = {"callsign": CALLSIGN, "lat": lat, "lon": lon,
+                      "alt_ft": alt_ft, "hdg_true": hdg}
+            if self.panel_seen:
+                # What the crew has the DF set to. The instructor cannot
+                # see over their shoulder, and "why can't they hear it"
+                # is usually answered here.
+                report["df"] = {
+                    "valid": bool(self.valid),
+                    "bearing_rel": round(self.bearing_rel, 1),
+                    "bearing_true": round(self.bearing_true, 1),
+                    "signal": round(self.signal, 4),
+                    "distance_nm": round(self.distance, 2),
+                    "in_cone": bool(self.in_cone),
+                    "blocked": bool(self.blocked),
+                    "power": self.power,
+                    "head_type": self.head_type,
+                    "freq_hz": int(self.effective_freq_hz()),
+                    "rx_span_hz": int(self.rx_span_hz),
+                    "squelch": self.squelch,
+                    "mode": self.mode,
+                    "scan": self.scan_enable,
+                    "mounting": self.mounting,
+                    "offset_deg": self.offset_deg,
+                    "rx_open": self.rx_open,
+                    "airframe_shadowed": self.airframe_shadowed,
+                    "airframe_attenuation_db": round(self.airframe_attenuation_db, 1),
+                    "roll_deg": round(self.attitude[0], 1),
+                    "pitch_deg": round(self.attitude[1], 1),
+                    "note": ("wing null" if self.airframe_shadowed and not self.rx_open
+                             else "airframe attenuation" if self.airframe_shadowed
+                             else "terrain masked" if self.blocked
+                             else "cone of confusion" if self.in_cone
+                             else "holding" if self.valid and not self.rx_open
+                             else ""),
+                }
+            body = json.dumps(report).encode()
+            headers = {"Content-Type": "application/json"}
+            if PLUGIN_KEY:
+                # Position ingest carries the same key: the console
+                # gates it on the plugin role once tokens are set.
+                headers["X-CAPVSAR-Token"] = PLUGIN_KEY
+            req = urllib.request.Request(
+                CONSOLE + "/api/positions", data=body, headers=headers)
+            urllib.request.urlopen(req, timeout=4).read()
+        except Exception:
+            pass
