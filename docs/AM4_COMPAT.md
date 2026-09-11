@@ -43,8 +43,9 @@ These arrived in Air Manager 5 and would silently break an AM4 station:
 | `scene_add` (3D objects) | V5.0 |
 | `_solid` / `_hole` shape functions, `viewport_shape` | V5.2 |
 
-`video_stream_add` arrived in V4.2, so it is fine on a current AM4 but not on
-early 4.x. We do not need it.
+`video_stream_add` arrived in V4.2, so it is supported on Air Manager 4.2+
+(used by the G1000 MFD video stream and watchdog recovery wrapper for X-Plane 12),
+but not on earlier 4.x releases.
 
 ## Licensing note
 

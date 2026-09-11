@@ -19,6 +19,7 @@ services/flightplanner/charts/
 services/exercise/radio-public/
 backups/
 *.log
+logs/fdr/
 
 # Rebuildable output and packages
 output/
@@ -30,3 +31,13 @@ docs/manual/*.docx
 # Editor and operating-system files
 .DS_Store
 *~
+
+# Manufacturer documentation (D-4). These are Becker / RHOTHETA / Technisonic
+# / Garmin copyrighted manuals, useful to keep on disk and cited throughout
+# the faceplate work, but not ours to redistribute. docs/SOURCES.md records
+# the public URL each one came from - fetch your own copy from there.
+docs/Becker_SARDF517_manual*.pdf
+docs/RT600_*.pdf
+docs/TDFM136*.pdf
+docs/GMA1347_*.pdf
+docs/gma.txt

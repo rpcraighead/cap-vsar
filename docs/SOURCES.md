@@ -3,6 +3,15 @@
 Gathered 2026-09-06. All of these are publicly posted; the CAP wing sites and
 Technisonic's dealer host them for their own members and customers.
 
+**These files are not in the repository (D-4).** They are the manufacturers'
+copyrighted manuals — publicly posted is not the same as ours to redistribute,
+and this repository is headed for a public host. They are in `.gitignore`, so
+they stay on the disk of anyone who already has them and nothing deletes them.
+If you are working from a fresh clone and need one, fetch it from the source
+URL in the table below; every faceplate citation in the code refers to these
+documents by section and figure number, so a clone without them is still
+readable, just not checkable against the originals.
+
 | File | Device | Source |
 |---|---|---|
 | `Becker_SARDF517_manual.pdf` | SAR-DF 517 | Washington County CAP — `washingtoncounty.cap.gov/media/cms/Becker_SARDF_517_Manual_E696A5229F5E0.pdf` |
@@ -312,3 +321,23 @@ One gap: there is **no** `audio_selection_mark` dataref on either side, only the
 `monitor_audio_mkr` commands and `sim/cockpit/switches/marker_panel_out`. The
 instrument therefore tracks MKR annunciator state locally and drives the
 commands, which is correct but cannot be read back if something else changes it.
+
+## FlightGear C182 exterior prototype
+
+The local CAP 487 exterior prototype uses the HHS81 FlightGear C182 project at
+commit `1359d63393c7fc9145953b081d151d93627e791a`. The reviewed commit archive
+has SHA-256
+`d81628fff8489af41d312c0e0bc14e1de2ac10a50d6c0c75f937441f81343fbe`.
+GitHub identifies the repository license as GPL-2.0 and the root contains the
+GPL version 2 text.
+
+The converter reads `Models/c182s.ac`, which is the shared exterior referenced
+by the donor's `Models/c182t.xml`, and uses `Models/Liveries/Default.png`,
+`Models/Lights.png` and `Models/PropBlur.png`. The donor also includes the
+editable `dev/C182T.blend`. None of these inputs or their generated OBJ8 output
+is stored in this repository. `scripts/fetch_flightgear_c182.py` fetches and
+checks the pinned source outside the tree, and the generated aircraft records
+the commit and file hashes in `flightgear-c182-prototype.json`.
+
+See [`FLIGHTGEAR_C182_GPL_PLAN.md`](FLIGHTGEAR_C182_GPL_PLAN.md) for the local
+prototype boundary, production options and release gate.
