@@ -172,6 +172,59 @@ class TestWebServerAPIs(unittest.TestCase):
             0.0,
         )
 
+    def test_board_api(self):
+        from services.ai_pilot.board_manager import get_board_path
+        board_file = get_board_path()
+        original_content = board_file.read_text(encoding="utf-8") if board_file.is_file() else None
+        try:
+            # 1. Test GET /api/board
+            status, content = self._get("/api/board")
+            self.assertEqual(status, 200)
+            data = json.loads(content.decode("utf-8"))
+            self.assertIn("tasks", data)
+            self.assertIn("locks", data)
+            self.assertIn("contracts", data)
+            self.assertIn("handoffs", data)
+
+            # 2. Test static /board and /board.html routing
+            status, html = self._get("/board")
+            self.assertEqual(status, 200)
+            self.assertIn(b"Agent Dispatch Board", html)
+
+            status, html2 = self._get("/board.html")
+            self.assertEqual(status, 200)
+            self.assertIn(b"Agent Dispatch Board", html2)
+
+            # 3. Test POST /api/board/task
+            status, post_res = self._post_json("/api/board/task", {
+                "agent": "Codex",
+                "task": "Test temporary task from unit test",
+            })
+            self.assertEqual(status, 200)
+            self.assertEqual(post_res["status"], "ok")
+
+            # 4. Verify task is present in board
+            status, content = self._get("/api/board")
+            data = json.loads(content.decode("utf-8"))
+            matching = [t for t in data["tasks"] if "Test temporary task from unit test" in t["task"]]
+            self.assertTrue(len(matching) > 0)
+            task_idx = matching[0]["id"]
+
+            # 5. Test POST /api/board/toggle
+            status, toggle_res = self._post_json("/api/board/toggle", {
+                "index": task_idx,
+                "completed": True,
+            })
+            self.assertEqual(status, 200)
+            self.assertEqual(toggle_res["status"], "ok")
+
+            status, content = self._get("/api/board")
+            data = json.loads(content.decode("utf-8"))
+            self.assertTrue(data["tasks"][task_idx]["completed"])
+        finally:
+            if original_content is not None:
+                board_file.write_text(original_content, encoding="utf-8")
+
 
 if __name__ == "__main__":
     unittest.main()

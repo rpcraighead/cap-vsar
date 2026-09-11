@@ -179,6 +179,29 @@ body {
   box-shadow: 0 0 16px rgba(0, 210, 255, 0.5);
 }
 
+.btn-nav {
+  background: rgba(14, 21, 33, 0.85);
+  border: 1px solid var(--accent-cyan);
+  color: var(--text-main);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 12px;
+  padding: 7px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.btn-nav:hover {
+  background: rgba(0, 119, 255, 0.3);
+  color: #fff;
+  box-shadow: 0 0 14px rgba(0, 210, 255, 0.4);
+}
+
 /* Main Flight Grid */
 .flight-grid {
   display: grid;

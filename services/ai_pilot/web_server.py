@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib.parse import parse_qs, urlparse
 
+from . import board_manager
 from .c182t_checklists import ALL_CHECKLISTS, ChecklistPhase
 from .flight_controller import FlightController, haversine_distance_nm
 from .lightweight_agent import LightweightAgent
@@ -104,11 +105,15 @@ class AIPilotRequestHandler(BaseHTTPRequestHandler):
             self._handle_get_status()
         elif path == "/api/chat":
             self._send_json({"messages": self.agent.get_chat_history()})
+        elif path == "/api/board":
+            self._send_json(board_manager.read_board())
         else:
             # Static file serving
             rel_path = path.lstrip("/")
             if not rel_path or rel_path == "index.html":
                 target_file = STATIC_DIR / "index.html"
+            elif rel_path in ("board", "board.html"):
+                target_file = STATIC_DIR / "board.html"
             else:
                 target_file = STATIC_DIR / rel_path
 
@@ -143,6 +148,29 @@ class AIPilotRequestHandler(BaseHTTPRequestHandler):
                 return
             reply = self.agent.handle_user_command(user_text)
             self._send_json({"reply": reply, "messages": self.agent.get_chat_history()})
+
+        elif path == "/api/board/task":
+            agent = body.get("agent", "")
+            task = body.get("task", "")
+            if not agent or not task:
+                self._send_json({"error": "Missing agent or task"}, status=400)
+                return
+            board_manager.add_task(agent, task)
+            self._send_json({"status": "ok", "board": board_manager.read_board()})
+
+        elif path == "/api/board/toggle":
+            idx = body.get("index")
+            completed = body.get("completed", False)
+            if idx is None:
+                self._send_json({"error": "Missing index"}, status=400)
+                return
+            ok = board_manager.toggle_task(int(idx), bool(completed))
+            self._send_json({"status": "ok" if ok else "not_found", "board": board_manager.read_board()})
+
+        elif path == "/api/board/raw":
+            md = body.get("markdown", "")
+            board_manager.save_raw_markdown(md)
+            self._send_json({"status": "ok", "board": board_manager.read_board()})
 
         elif path in {
             "/api/checklists/run",

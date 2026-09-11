@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Dispatch Board • CAP V-SAR</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    .board-nav-bar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 4px;
+    }
+    .nav-tab {
+      background: rgba(14, 21, 33, 0.75);
+      border: 1px solid var(--panel-border);
+      color: var(--text-muted);
+      font-family: var(--font-display);
+      font-weight: 700;
+      padding: 8px 18px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 13px;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .nav-tab:hover, .nav-tab.active {
+      background: rgba(0, 119, 255, 0.25);
+      border-color: var(--accent-cyan);
+      color: #fff;
+      box-shadow: 0 0 12px rgba(0, 210, 255, 0.3);
+    }
+    .board-grid {
+      display: grid;
+      grid-template-columns: 55% 45%;
+      gap: 16px;
+    }
+    @media (max-width: 1100px) {
+      .board-grid { grid-template-columns: 1fr; }
+    }
+    /* Agent Lane Cards */
+    .agent-lanes-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .agent-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .agent-card.claude { border-top: 4px solid #b87333; }
+    .agent-card.codex { border-top: 4px solid #00ff88; }
+    .agent-card.antigravity { border-top: 4px solid #00d2ff; }
+
+    .agent-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .agent-name {
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 0.5px;
+      color: #fff;
+    }
+    .agent-status-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+    }
+    .status-active { background: rgba(0, 255, 136, 0.2); color: var(--accent-green); border: 1px solid var(--accent-green); }
+    .status-idle { background: rgba(255, 170, 0, 0.2); color: var(--accent-amber); border: 1px solid var(--accent-amber); }
+
+    .lane-label { font-size: 10px; color: var(--text-muted); }
+    .lane-val { font-family: var(--font-mono); font-size: 11px; color: var(--text-main); }
+    .locked-files { font-family: var(--font-mono); font-size: 11px; color: #ff8899; background: rgba(255,51,68,0.1); padding: 4px; border-radius: 4px; }
+
+    /* Task Dispatch Section */
+    .dispatch-creator {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .agent-selector-row {
+      display: flex;
+      gap: 8px;
+    }
+    .agent-radio-btn {
+      flex: 1;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--card-border);
+      background: rgba(0, 0, 0, 0.3);
+      color: var(--text-muted);
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s ease;
+    }
+    .agent-radio-btn.selected {
+      background: rgba(0, 119, 255, 0.3);
+      border-color: var(--accent-cyan);
+      color: #fff;
+    }
+    .dispatch-input-row {
+      display: flex;
+      gap: 8px;
+    }
+    .dispatch-input-row input {
+      flex: 1;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--card-border);
+      color: #fff;
+      padding: 10px 14px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      border-radius: 6px;
+      outline: none;
+    }
+    .dispatch-input-row input:focus {
+      border-color: var(--accent-cyan);
+    }
+    .btn-dispatch {
+      background: linear-gradient(135deg, #0077ff, #0044bb);
+      border: 1px solid var(--accent-cyan);
+      color: #fff;
+      font-family: var(--font-display);
+      font-weight: 700;
+      padding: 0 18px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    /* Task Items List */
+    .task-queue-box {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .task-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      transition: all 0.2s ease;
+    }
+    .task-card.done {
+      opacity: 0.6;
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+    .task-checkbox {
+      margin-top: 3px;
+      cursor: pointer;
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent-green);
+    }
+    .task-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .task-agent-tag {
+      font-weight: 700;
+      font-size: 12px;
+      color: var(--accent-cyan);
+    }
+    .task-desc {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.4;
+      color: var(--text-main);
+    }
+    .task-card.done .task-desc {
+      text-decoration: line-through;
+    }
+    .btn-copy-prompt {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: var(--text-main);
+      font-family: var(--font-display);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn-copy-prompt:hover {
+      background: var(--accent-blue);
+      color: #fff;
+    }
+
+    /* Broadcasts and Handoffs */
+    .bullet-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+    .bullet-item {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 8px 10px;
+      border-radius: 4px;
+      border-left: 3px solid var(--accent-cyan);
+      line-height: 1.4;
+    }
+    .raw-markdown-editor {
+      width: 100%;
+      height: 180px;
+      background: #000;
+      border: 1px solid var(--card-border);
+      color: #9cdcfe;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 10px;
+      border-radius: 6px;
+      outline: none;
+      resize: vertical;
+    }
+  </style>
+</head>
+<body>
+  <div class="deck-container">
+    <!-- Navigation Tabs -->
+    <div class="board-nav-bar">
+      <a href="/" class="nav-tab">✈️ Flight Deck</a>
+      <a href="/board.html" class="nav-tab active">📋 Multi-Agent Dispatch Board</a>
+    </div>
+
+    <!-- Header -->
+    <header class="flight-header">
+      <div class="brand">
+        <div class="badge-cap">CAP V-SAR</div>
+        <div class="aircraft-title">
+          <span class="tailnum">AGENT COORDINATION BOARD</span>
+          <span class="type">docs/BOARD.md</span>
+          <span class="engine">Claude • Codex • Antigravity</span>
+        </div>
+      </div>
+
+      <div class="status-group">
+        <div class="indicator-badge" id="sync-badge">
+          <span class="dot"></span> <span id="sync-text">SYNCED WITH DISK</span>
+        </div>
+        <button class="btn-primary" id="btn-refresh">🔄 Refresh Board</button>
+      </div>
+    </header>
+
+    <!-- Main Board Grid -->
+    <main class="board-grid">
+      <!-- Left Column: Dispatcher & Task Queue -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>1. USER DISPATCH QUEUE</h2>
+          <span class="subtext">PROMPT ANY AGENT FROM HERE</span>
+        </div>
+
+        <!-- Task Creator Form -->
+        <div class="dispatch-creator">
+          <div class="lane-label">SELECT TARGET AGENT:</div>
+          <div class="agent-selector-row">
+            <div class="agent-radio-btn selected" data-agent="Claude">🟣 @Claude</div>
+            <div class="agent-radio-btn" data-agent="Codex">🟢 @Codex</div>
+            <div class="agent-radio-btn" data-agent="Antigravity (Gemini)">🔵 @Antigravity</div>
+          </div>
+
+          <div class="dispatch-input-row">
+            <input type="text" id="task-input" placeholder="Type task instruction for agent..." autocomplete="off">
+            <button class="btn-dispatch" id="btn-add-task">➕ Dispatch Task</button>
+          </div>
+        </div>
+
+        <!-- Live Tasks List -->
+        <div class="lane-label" style="margin-top: 6px;">ACTIVE PROMPTS & TASKS:</div>
+        <div class="task-queue-box" id="task-queue-box">
+          <div class="log-line text-dim">Loading tasks from docs/BOARD.md...</div>
+        </div>
+      </section>
+
+      <!-- Right Column: Agent Lanes, Locks & Contracts -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>2. ACTIVE LANES & FILE LOCKS</h2>
+          <span class="subtext">COLLISION PREVENTION</span>
+        </div>
+
+        <!-- Agent Status Cards -->
+        <div class="agent-lanes-grid" id="agent-lanes-grid">
+          <!-- Populated via JS -->
+        </div>
+
+        <!-- Contract Changes & Broadcasts -->
+        <div class="panel-header" style="margin-top: 10px;">
+          <h2>3. CONTRACT & SCHEMA BROADCASTS</h2>
+          <span class="subtext">INTERFACE ALIGNMENT</span>
+        </div>
+        <div class="bullet-list" id="contracts-list">
+          <!-- Populated via JS -->
+        </div>
+
+        <!-- Completed Handoffs -->
+        <div class="panel-header" style="margin-top: 10px;">
+          <h2>4. COMPLETED HANDOFFS</h2>
+          <span class="subtext">RECENT ACTIVITY LOG</span>
+        </div>
+        <div class="bullet-list" id="handoffs-list">
+          <!-- Populated via JS -->
+        </div>
+
+        <!-- Raw Markdown Accordion -->
+        <details style="margin-top: 12px; cursor: pointer;">
+          <summary class="lane-label" style="outline: none;">📝 Direct Markdown Editor (docs/BOARD.md)</summary>
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+            <textarea class="raw-markdown-editor" id="raw-editor"></textarea>
+            <button class="btn-primary" id="btn-save-raw" style="align-self: flex-end;">Save Markdown to Disk</button>
+          </div>
+        </details>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    let currentAgent = 'Claude';
+    let boardData = {};
+
+    // Agent radio selection
+    document.querySelectorAll('.agent-radio-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.agent-radio-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        currentAgent = btn.getAttribute('data-agent');
+      });
+    });
+
+    async function fetchBoard() {
+      try {
+        const resp = await fetch('/api/board');
+        if (!resp.ok) return;
+        boardData = await resp.json();
+        renderBoard(boardData);
+      } catch (err) {
+        console.error('Failed to fetch board:', err);
+      }
+    }
+
+    function renderBoard(data) {
+      // 1. Render Tasks
+      const elQueue = document.getElementById('task-queue-box');
+      if (!data.tasks || data.tasks.length === 0) {
+        elQueue.innerHTML = '<div class="log-line text-dim">No tasks currently queued.</div>';
+      } else {
+        elQueue.innerHTML = data.tasks.map((t, idx) => `
+          <div class="task-card ${t.completed ? 'done' : ''}">
+            <input type="checkbox" class="task-checkbox" ${t.completed ? 'checked' : ''} onchange="toggleTask(${idx}, this.checked)">
+            <div class="task-content">
+              <span class="task-agent-tag">@${t.agent}</span>
+              <div class="task-desc">${t.task}</div>
+            </div>
+            <button class="btn-copy-prompt" onclick="copyPrompt('${t.agent}', '${encodeURIComponent(t.task)}')">📋 Copy Prompt</button>
+          </div>
+        `).join('');
+      }
+
+      // 2. Render Agent Locks
+      const elLanes = document.getElementById('agent-lanes-grid');
+      elLanes.innerHTML = (data.locks || []).map(l => {
+        const lowerAgent = l.agent.toLowerCase();
+        const cls = lowerAgent.includes('claude') ? 'claude' : lowerAgent.includes('codex') ? 'codex' : 'antigravity';
+        const isActive = l.status.toLowerCase().includes('active');
+        return `
+          <div class="agent-card ${cls}">
+            <div class="agent-head">
+              <span class="agent-name">${l.agent}</span>
+              <span class="agent-status-badge ${isActive ? 'status-active' : 'status-idle'}">${l.status}</span>
+            </div>
+            <div class="lane-label">FOCUS:</div>
+            <div class="lane-val">${l.focus}</div>
+            <div class="lane-label">LOCKED PATHS:</div>
+            <div class="locked-files">${l.paths}</div>
+          </div>
+        `;
+      }).join('');
+
+      // 3. Render Contracts
+      const elContracts = document.getElementById('contracts-list');
+      elContracts.innerHTML = (data.contracts || []).map(c => `
+        <div class="bullet-item">${c}</div>
+      `).join('');
+
+      // 4. Render Handoffs
+      const elHandoffs = document.getElementById('handoffs-list');
+      elHandoffs.innerHTML = (data.handoffs || []).map(h => `
+        <div class="bullet-item" style="border-left-color: var(--accent-green)">${h}</div>
+      `).join('');
+
+      // 5. Raw Editor
+      document.getElementById('raw-editor').value = data.raw || '';
+    }
+
+    async function toggleTask(taskIndex, completed) {
+      await fetch('/api/board/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ index: taskIndex, completed }),
+      });
+      fetchBoard();
+    }
+
+    async function addTask() {
+      const input = document.getElementById('task-input');
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+
+      await fetch('/api/board/task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent: currentAgent, task: text }),
+      });
+      fetchBoard();
+    }
+
+    function copyPrompt(agent, encodedTask) {
+      const task = decodeURIComponent(encodedTask);
+      const promptText = `Check docs/BOARD.md and execute the active task assigned to you: ${task}`;
+      navigator.clipboard.writeText(promptText).then(() => {
+        alert(`Copied prompt for ${agent} to clipboard!\n\n"${promptText}"\n\nPaste this into your chat with ${agent}.`);
+      });
+    }
+
+    document.getElementById('btn-add-task').addEventListener('click', addTask);
+    document.getElementById('task-input').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') addTask();
+    });
+
+    document.getElementById('btn-refresh').addEventListener('click', fetchBoard);
+
+    document.getElementById('btn-save-raw').addEventListener('click', async () => {
+      const rawText = document.getElementById('raw-editor').value;
+      await fetch('/api/board/raw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markdown: rawText }),
+      });
+      alert('docs/BOARD.md updated successfully on disk!');
+      fetchBoard();
+    });
+
+    // Initial load and polling every 3 seconds
+    fetchBoard();
+    setInterval(fetchBoard, 3000);
+  </script>
+</body>
+</html>
+
