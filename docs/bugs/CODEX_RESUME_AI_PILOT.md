@@ -68,7 +68,7 @@ Proceed autonomously:
 4. Ensure no legacy AI pilot or duplicate maneuver-server process is writing
    controls. Start exactly one live controller with:
 
-   `PYTHONPATH=. /tmp/capvsar-planner-venv/bin/python -m services.ai_pilot.maneuver_server --live --min-altitude 3000 --max-altitude 6000`
+   `PYTHONPATH=. ~/.cache/capvsar/capvsar-planner-venv/bin/python -m services.ai_pilot.maneuver_server --live --min-altitude 3000 --max-altitude 6000`
 
 5. Before acquiring control, query `/api/status` and prove all required RREF
    telemetry is finite and fresh. The backend now renews missing/stale RREF
@@ -92,9 +92,9 @@ Proceed autonomously:
    UDP write.
 8. Stop the maneuver server cleanly. Run:
 
-   `PYTHONPATH=. /tmp/capvsar-planner-venv/bin/pytest services/ai_pilot/tests -q`
+   `PYTHONPATH=. ~/.cache/capvsar/capvsar-planner-venv/bin/pytest services/ai_pilot/tests -q`
 
-   `PYTHONPATH=. /tmp/capvsar-planner-venv/bin/pytest tests/test_console.py tests/test_radio.py -q`
+   `PYTHONPATH=. ~/.cache/capvsar/capvsar-planner-venv/bin/pytest tests/test_console.py tests/test_radio.py -q`
 
 9. If every AI-2 verification passes, re-read `docs/bugs/tracker.json`
    immediately before setting AI-2 to `fixed`, regenerate the board with

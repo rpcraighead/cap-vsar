@@ -22,7 +22,7 @@ documentation they were built from.
 
 | Aircraft Package | Location | What it is |
 |---|---|---|
-| **Cessna 182T NAV III (G1000 CAP)** | `X-Plane 12/Aircraft/CAP/Cessna 182T NAV III/` | Dedicated Civil Air Patrol C182T NAV III (`N499CP`) adapted from Laminar C172SP G1000 with 230 HP Lycoming IO-540-AB1A5, 3-blade constant-speed McCauley prop, G1000 Manifold Pressure EIS, 87 gal fuel capacity, manual cowl flaps, and authentic flight envelope V-speeds. Generated via `scripts/build_c182t_package.py`. |
+| **Cessna 182T NAV III (G1000 CAP)** | `X-Plane 12/Aircraft/CAP/Cessna 182T NAV III/` | Local CAP 487 prototype using the installed Laminar G1000 cockpit and a pinned GPL FlightGear C182 exterior. The builder supplies 230 HP IO-540 data, a 3-blade constant-speed prop, 87 gal usable fuel and C182T limits. Generated via `scripts/build_c182t_package.py`; see the [GPL production plan](docs/FLIGHTGEAR_C182_GPL_PLAN.md) before distributing anything. |
 
 | Web Application / Service | URL / Port | What it is |
 |---|---|---|
@@ -31,7 +31,7 @@ documentation they were built from.
 | Instructor Console | `ms01:8700/` | Exercise scenario management, map-pin beacon placement, propagation fault injection |
 | Mission Base Console | `ms01:8700/base` | Situational awareness map (hidden beacon truth), bearing logging & intersection cuts |
 | Debrief Console | `ms01:8700/debrief` | Recorded flight replay against truth, CPA, track efficiency, bearing error scoring |
-| N499CP Flight Planner | `ms01:8090/` | Pre-flight navigation log, geodetic CAP search patterns (SS, CS, PS), FMS export |
+| Flight Planner | `ms01:8090/` | Pre-flight navigation log, geodetic CAP search patterns (SS, CS, PS), FMS export |
 
 
 ## Architecture
@@ -101,7 +101,7 @@ python3 tests/test_engine.py        # propagation engine
 python3 tests/test_faceplate.py     # artwork, resources, geometry and AM loading contract
 python3 scripts/luacheck.py instruments/*/logic.lua instruments/*/lib/*.lua
 python3 scripts/deploy_xplane_plugin.py       # install the tested engine into X-Plane
-python3 scripts/deploy_df_instruments.py      # install both DF heads into Air Manager
+python3 scripts/deploy_df_instruments.py      # install all four instruments into Air Manager
 ```
 
 `tests/test_faceplate.py` is the half of the instrument layer that can be
@@ -248,10 +248,12 @@ from a second copy of the geometry — a copy that drifted, and that would have
 quietly replaced a regenerated faceplate with the superseded flat design.
 ## Cessna 182T NAV III (G1000 CAP) Aircraft Package
 
-To support high-fidelity Virtual Search and Rescue (V-SAR) training in X-Plane 12, a dedicated **Cessna 182T Skylane NAV III (`N499CP`)** aircraft package has been engineered.
+To support high-fidelity Virtual Search and Rescue (V-SAR) training in X-Plane 12, a dedicated **Cessna 182T Skylane NAV III (`CAP 487`)** aircraft package has been engineered.
 
 - **Standalone Package Path:** `/home/ron/X-Plane 12/Aircraft/CAP/Cessna 182T NAV III/`
 - **Builder Script:** `python3 scripts/build_c182t_package.py`
+- **Exterior Prototype:** pinned HHS81 FlightGear C182 source, converted locally
+  to OBJ8; see [`docs/FLIGHTGEAR_C182_GPL_PLAN.md`](docs/FLIGHTGEAR_C182_GPL_PLAN.md)
 
 ### Aircraft Specifications
 - **Powerplant:** 230 HP Lycoming IO-540-AB1A5 direct-drive fuel-injected engine (2,400 RPM redline).
@@ -260,9 +262,12 @@ To support high-fidelity Virtual Search and Rescue (V-SAR) training in X-Plane 1
 - **Weights:** 1,970 lbs empty weight; 3,100 lbs max takeoff weight (1,130 lbs useful load).
 - **Cowl Flaps:** Equipped with manual cowl flaps for engine cooling management.
 - **Flight Envelope:** $V_S=51$, $V_{S0}=41$, $V_X=65$, $V_Y=80$, $V_{BG}=76$, $V_{FE1}=140$, $V_{FEM}=100$, $V_{NO}=140$, $V_{NE}=175$ KIAS.
-- **Livery & Registration:** N499CP, ICAO code `C182`, Civil Air Patrol livery and custom menu selection icons with USAF Auxiliary branding.
+- **Livery & Registration:** CAP 487, ICAO code `C182`, Civil Air Patrol livery and custom menu selection icons with USAF Auxiliary branding.
 
-The package leaves the base Laminar Research C172SP completely untouched and can be rebuilt or refreshed at any time by executing `build_c182t_package.py`.
+The package leaves the base Laminar Research C172SP completely untouched and
+can be rebuilt or refreshed at any time. The generated aircraft combines GPL
+donor-derived exterior files with files copied from the operator's X-Plane
+installation, so it is a local prototype and must not be redistributed.
 
 ## What is deliberately not here
 
@@ -278,10 +283,33 @@ The package leaves the base Laminar Research C172SP completely untouched and can
 
 ## Documentation collected
 
-See [`docs/`](docs/) — Becker 517 and RT-600 manuals, the Technisonic operating
-instructions, the CAP RT-600 training deck, and the CAP FM radio observer guide.
-[`docs/SOURCES.md`](docs/SOURCES.md) records where each came from.
+[`docs/SOURCES.md`](docs/SOURCES.md) lists the equipment documentation this
+work is built from — the Becker 517 and RT-600 manuals, the Technisonic
+operating instructions, the CAP RT-600 training deck and the CAP FM radio
+observer guide — with the public URL each one came from.
+
+The manuals themselves are **not in this repository**: they are the
+manufacturers' copyright, not ours to redistribute. Fetch your own from the
+URLs in `SOURCES.md` if you want to check the faceplates against them. Every
+citation in the code gives a section or figure number, so the code is readable
+without them.
 
 Gathering the RT-600 documentation closes the dependency flagged in plan §6.2.2
 ("RT-600 operating documentation has not yet been gathered; the control mapping
 cannot be written until it is"). It is gathered, and the mapping is written.
+
+## Licence
+
+The project's own code, artwork and documentation are licensed under the
+Apache License 2.0 — see [`LICENSE`](LICENSE).
+
+[`NOTICE`](NOTICE) is the part that matters before you copy anything out of
+here: what this repository deliberately does *not* redistribute. In short, the
+Cessna 182T package is **built** from Laminar Research's stock 172SP in your
+own X-Plane installation and no Laminar asset is stored here; the instruments
+run inside Air Manager, which each station licenses itself; and the equipment
+manuals stay with their manufacturers.
+
+This is a member-built training project. It is not an official Civil Air Patrol
+product, it carries no CAP endorsement, and nothing in it may be used for real
+flight planning or a real search.

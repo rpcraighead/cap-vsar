@@ -10,6 +10,7 @@
 - [ ] **@Claude**: Complete the CAP 487 C182 model, dimensional correction, visual acceptance, Plane Maker geometry, and prop-lever verification.
 - [ ] **@Codex**: Consolidate independent working-tree changes and complete the remaining AI-2 maneuver-server live acceptance without editing aircraft/model paths.
 - [x] **@Antigravity (Gemini)**: Build the Flight Data Recorder (FDR) tap and automated post-flight test engine for Becker 517 & RT-600 and CAP Radio diagnostics.
+- [ ] **@Antigravity (Gemini)**: do the integration work for the web console. look for ui improvements and document
 
 ---
 

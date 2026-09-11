@@ -3,6 +3,987 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-11 — recurring project mirror to fastnfs
+
+Installed and enabled the workstation user service `project-fastnfs.service` and
+`project-fastnfs.timer`: rsync runs two minutes after each completed run, with
+user lingering enabled for operation after logout and at boot. The workstation
+must remain powered on. Source and operating instructions live in the sibling
+`../project-sync/` directory; installed units are in `~/.config/systemd/user/`.
+
+Destination: `ron@192.0.2.151:/srv/fastnfs/ron-projects/workstation/` on ms01.
+All non-hidden project directories under `/home/ron/Projects/` are mirrored,
+including repository Git history, uncommitted and ignored files. Portable
+`~/.cache/capvsar/` contents are included separately. Python/test caches, Git lock
+files, external symlink targets and the machine-specific pytest venv are omitted.
+The destination parent is private (0700); SSH uses existing keys and strict host
+verification. No simulator or flight-control files were changed for this setup.
+
+The mirror is one-way from the workstation. Laptop users should VPN in and copy
+it into a separate local working directory before editing; the next workstation
+sync would overwrite edits made directly in the mirror. Replaced/deleted files
+are retained under `history/<UTC run>/`, without automatic pruning. A success
+marker records completed runs. Transfers are locked against overlap and use
+bounded network timeouts. Live working-tree copies are not atomic Git snapshots.
+
+Verified initial transfer, matching Git heads for cap-vsar and g1000-sar,
+replacement/deletion retention with a temporary probe, successful service exit,
+next scheduled run, and `Linger=yes`. Laptop copy and pause/resume commands are
+in `../project-sync/README.md`. This entry records the previously completed setup.
+
+## 2026-09-11 — card H0: five runs, five control-law defects, none of them the input ramp
+
+Card H0 (control and trim confidence, 100 KIAS clean) was flown five times and has
+**still not produced a valid data point.** Every run failed for a different reason,
+and each reason was a real defect in `XPlaneDirectBackend` that the card found and
+offline testing had not. Recording them because the sequence is the useful part:
+the card is doing exactly what a card is for.
+
+**Simulator engineering validation only. Not approved instruction for a real
+aircraft.** The authorized `ManeuverGate` path and its envelope were used
+throughout; no second controller and no bypass. `services/ai_pilot/maneuvers.py`
+remains unmodified.
+
+### Run 1 — step inputs, uncoordinated
+
+Invalidated on the pilot's call: *"the control inputs were unrealistically
+instantaneous, and we need to include rudder input to keep the airplane
+coordinated for good numbers."* Added `TestInput.shaped()`, a trapezoidal ramp,
+and closed the rudder loop on sideslip (`BETA_TO_RUDDER`, `BETA_TO_RUDDER_I`)
+on top of the existing adverse-yaw feedforward.
+
+### Run 2 — throttle bang-bang, then the climb sideslip
+
+Throttle swung 0.150 to 1.000 and speed 94.7-108.8 about a 100 target. The cause
+was a PURE INTEGRATOR at 0.010 per tick at 10 Hz: 0.1 of throttle per second per
+knot of error, with no way to stop. By the time speed reached target the throttle
+was already against a limit and the error had to reverse to unwind it. Replaced
+with PI.
+
+Then, from the pilot: *"more right rudder is needed in the climb."* The steady
++1.6 degrees of right bank held all the way up was not trim - it was a standing
+sideslip that the heading loop was masking by holding a wing down. Proportional
+feedback always lags a left-turning tendency that grows with power and with angle
+of attack. Added `RIGHT_RUDDER_FF`, scaling with throttle and inversely with
+dynamic pressure.
+
+### Run 3 — "bank is abrupt like pitch inputs were"
+
+The ramp was verified working, on the trace, on the command path: `shaped` climbs
+0.0077 to 0.1000 over exactly 1.0 s and the aileron command tracks it to four
+decimals. **The step was at the other end of the input.** The instant it expired,
+the heading loop saw a 20.7 degree bank and commanded the aileron limit in a
+single 100 ms tick, held it saturated for 1.2 s, reached 14.3 deg/s of roll rate
+and overshot through wings-level to +9.2 degrees. No amount of ramping the input
+can fix a step that is not in the input.
+
+Two fixes. **Rate damping** on both inner loops (`ROLL_RATE_TO_AILERON`,
+`PITCH_RATE_TO_ELEVATOR`): proportional-on-angle has no way to know the aircraft
+is already moving, so it commands correction all the way to the target and
+overshoots through it. And a **slew-rate limiter** on all three surfaces, applied
+last before the wire, so nothing upstream - loop, clamp or test input - can
+produce a step at the controls. A ramped test input passes through untouched
+(0.10 of travel per second against a 0.40 limit); what gets limited is the
+transition at each end of it.
+
+Run 3 was also **not a valid test point at all**, which the abruptness had
+obscured. It entered 22 knots fast; the throttle went to the idle stop and the
+integral wound to its -0.35 limit and sat there for ten seconds, where
+integrating could not change the output. When speed finally reached 100 the trim
+term still had to unwind off the stop, so speed sailed through to 94.1 KIAS in a
+274 fpm descent - the condition the first input was flown from. Clamping the
+integral TERM is not anti-windup; replaced with conditional integration.
+
+### Run 4 — the gate worked, and found a loop satisfied with the aircraft in the wrong place
+
+Added a **criteria-based stabilization gate** to `scripts/fly_card_h0.py`: the
+card now refuses to take data until the reference condition is met and HELD
+(kias +/-2, alt +/-60 ft, vs +/-120 fpm, bank +/-2 deg, for 4 continuous
+seconds), records each point's entry condition, and marks any point entered
+off-condition as not attributable. A test point is only a test point if it starts
+from a known condition.
+
+It immediately earned its place. Speed was nailed at 100.0 KIAS from the 22-knot
+entry offset - the anti-windup fix confirmed in flight - with vs -3 and bank
+-0.2. And the aircraft sat **107 ft low for two full minutes, correcting none of
+it.** Nothing saturated, nothing oscillating: the cascade is proportional
+throughout, and it reaches equilibrium the moment pitch equals its command, which
+it can do at a standing altitude error because the pitch the VS loop asks for at
+that error is also the attitude that flies level. Every loop was satisfied and
+the aircraft was in the wrong place. Added `ALT_TO_PITCH_I` - the term a pilot
+supplies with the trim wheel. Without it the card's reference condition is not
+reachable and the card cannot be flown at all.
+
+### Run 5 — out-trimmed, saturated, climbing away from its own commands
+
+Engaged on an aircraft the autopilot had left trimmed to **+0.432 nose-up**. The
+backend held full nose-DOWN elevator, saturated at -0.400 for seven seconds,
+while the aircraft pitched UP to 11.5 degrees and climbed at 1,533 fpm. Nothing
+in the control law was wrong. It had no trim authority, inherited someone else's
+trim, and had no way to know it was being out-trimmed - because a saturated
+surface and a slow one look identical from the response alone.
+
+`docs/C182T_HANDLING_TEST_MATRIX.md` had listed "no trim" as a BLOCKED reason for
+H0 before any of this was flown. Run 5 is what that assessment looks like in the
+air.
+
+Added an **autotrim loop** driven off the elevator the loop is actually holding.
+It adopts the aircraft's real trim by readback before moving it, and **will not
+write trim it has not first measured** - flying out of trim is recoverable,
+writing a guessed trim position to an aircraft somebody else has been flying is
+not. Frozen during a pitch test input, because trimming out a deliberate input
+trims out the measurement. Trim position and trim RATE are now recorded, which is
+the card's trim-confidence observable supplied directly.
+
+Trim is deliberately kept OUT of `CONTROL_DREFS`, the set `_neutralize` zeroes:
+handing an aircraft back with the trim slammed to neutral is an upset, not a
+release.
+
+### Recovery
+
+After run 5 the aircraft was left at 77 KIAS at full power, out of trim and
+decaying. Recovered with a direct write - neutral controls, trim 0.05, throttle
+0.60 - to 81.4 KIAS, 3,908 ft. The pilot then paused the simulator.
+
+### Also fixed
+
+* Body rates `P`/`Q` and elevator trim are read as **auxiliary** datarefs,
+  deliberately outside the freshness gate. Letting a damping channel go stale
+  must degrade the damping, not neutralize the controls on an airborne aircraft.
+  Their age is recorded in the trace (`body_rate_age_s`, `inf` when degraded), so
+  a zero meaning "not rolling" and a zero meaning "no data" never look alike in
+  flight-test evidence.
+* Slew history, altitude trim, speed trim and elevator trim are all cleared on
+  release, so a new engagement never resumes from a stale internal value.
+* The speed integral is frozen during a pitch test input: a deliberate speed
+  excursion is not something to integrate against.
+
+### Status
+
+`services/ai_pilot/tests/test_direct_backend.py` is now **80 offline tests**, up
+from 53; the full `services/ai_pilot` suite is 150. Every gain above is justified
+in-line against the measured flight it came from.
+
+**Card H0 remains UNFLOWN. No handling point is recorded as pass or fail, and
+none of this validates the aircraft or closes A-1.** Five defects found, five
+fixed, and the card has yet to reach its first input from a stabilized reference.
+
+
+## 2026-09-11 — direct backend FIRST FLIGHT: flown, tuned, and now recording traces
+
+The direct surface-control backend flew CAP 487 for the first time, in four live
+runs. Added `scripts/fly_direct_backend.py`, tuned one gain from measured data,
+and fixed two bugs plus a data-recording gap the flights exposed.
+
+### Run 1 - first flight, heading 189 to 350, 4,200 to 4,500 ft
+
+Lateral channel was good immediately. Bank pinned at +25.2 degrees, exactly the
+`MAX_BANK_DEG` clamp, through a 161-degree turn. Rollout 25.4 - 23.8 - 16.2 -
+10.3 - 6.5 - 4.1 - 2.1 - 0.9 with no overshoot. Heading settled 349.2-349.7
+against 350. Speed held 114.1-115.6 against a 115 target. Altitude moved only
+4,200 to 4,215 through the whole turn, which is the vertical loop compensating
+for lost vertical lift component unprompted.
+
+Vertical channel was badly under-gained: commanded 4,500, reached 4,412 in 170
+seconds, with vertical speed peaking at 214 fpm and decaying to 40-60 against an
+aircraft that climbs 900+. The gate reported "captured" at 4,401 - 99 ft low,
+just inside its own plus or minus 100 ft tolerance - so a loose tolerance masked
+a weak loop.
+
+### The tune: one variable, from physics not guesswork
+
+700 fpm at 125 KTAS is a 3.17 degree flight path angle, so roughly 6.2 degrees of
+commanded pitch. `VS_TO_PITCH` 0.004 was producing 700 * 0.004 = 2.8 degrees.
+Changed to 0.010, giving 7.0 degrees and still under `MAX_PITCH_DEG`. The
+pitch-to-elevator inner loop had tracked its command adequately, so it was left
+alone - one variable at a time.
+
+### Run 2 - retune validation, 4,236 to 5,500 ft
+
+    target 5,500 ft      before: fell 99 ft short    after: reached 5,510
+    sustained climb      before: ~200 fpm            after: ~450 fpm
+    capture              before: decayed to 40 fpm   after: clean, no overshoot
+
+Heading 020 held at 18.8-19.7. Speed 109-110.7 against 110.
+
+### Run 3 - westbound cruise hold
+
+Heading 269.2-269.6 against 270, within 0.8 degrees. Altitude 5,576-5,577,
+holding within ONE foot. Speed 114.3-115.4 against 115. Roll +0.5 to +0.8.
+Vertical speed within plus or minus 11 fpm. Tighter than first-guess gains had
+any right to be.
+
+### Two bugs the flights found
+
+`acquire()` returns `{'lease', 'next_sequence'}` and the runner passed the whole
+dict as the lease token, so the gate refused control. The gate was right; the
+runner was wrong.
+
+The more serious one: `release()` neutralized the controls even when the backend
+had never engaged. An aborted run therefore centred the yoke and set cruise
+throttle on an aircraft the pilot was flying - it cost 22 knots and put a wing
+down. Now tracked with an `_engaged` flag so the backend only hands back controls
+it actually took, with three regression tests including one asserting that a
+never-engaged release touches nothing.
+
+### The data gap
+
+The first three flights were not recorded anywhere. The runner printed to stdout
+and wrote nothing; the gate's event buffer is a 200-entry in-memory deque that
+dies with the process. For flight-test work the data is the deliverable, so that
+was a real gap rather than an oversight to note and move past.
+
+The runner now writes a JSONL trace to `~/.cache/capvsar/flight-tests/` with a
+header recording the gains and limits in force - a trace that cannot be
+attributed to a tune is not evidence of anything - and per-sample rows carrying
+both the observation and the COMMANDED outputs.
+
+Logging the commands mattered immediately. Run 4's trace shows throttle saturated
+at 1.000 with elevator at only +0.036 against a plus or minus 0.40 clamp, while
+commanding 700 fpm and achieving 382. The aircraft is power-limited at that
+weight and altitude, not control-limited, and the controller asking for more than
+the airframe can give is correct behaviour. Telemetry alone cannot distinguish a
+saturated loop from a slow one.
+
+### Still untested
+
+Descents, large speed changes, and the entire regime below 90 KIAS, which is
+every stall point. The gate's floor still blocks that and widening it for a test
+profile remains an untaken decision. `services/ai_pilot/maneuvers.py` is still
+unchanged. Suites: `services/ai_pilot/tests` 22 direct-backend tests OK, full
+suite green under `~/.cache/capvsar/capvsar-planner-venv`.
+
+## 2026-09-11 — ai_pilot: automated flight-test profiles (power-off stall, with recovery)
+
+Added `services/ai_pilot/flight_test.py` and
+`services/ai_pilot/tests/test_flight_test.py`. Second increment toward running
+real flight-test procedures, and the companion to the direct backend below.
+
+### Shape
+
+This mirrors the dimensional harness deliberately. `scripts/measure_c182t.py`
+compares measured geometry against a sourced master and reports pass, fail or
+unmeasured. A flight-test profile does the same for performance: measured break
+speed against the POH target, with a tolerance and an `unmeasured` verdict when
+a point aborts.
+
+A POH figure is not "fly until something happens"; it is the product of a
+technique. A power-off stall speed is flown wings level at constant altitude,
+power at idle, decelerating about a knot per second, and the number is the speed
+at the break. `StallTestProfile` expresses that technique.
+
+### Pure state machine, on purpose
+
+The profile owns no threads, no sockets and no simulator handles. It takes an
+observation and returns the commands to fly. Actuation is the caller's job via
+`direct_backend.XPlaneDirectBackend`. Separating the deciding from the actuating
+means the part that decides when to recover is fully inspectable and every
+safety rule is testable offline and deterministically - 25 tests, no simulator.
+
+### Safety model
+
+A stall point deliberately flies to the edge of controlled flight, outside the
+routine exercise envelope. That is only acceptable with stricter local guardrails:
+
+* entry floor 3,000 ft AGL for recovery room, against the routine 1,000 ft;
+* continuous aborts on AGL, bank, altitude loss, elapsed time and runaway pitch;
+* recovery triggers on the break OR on any abort - never only on success;
+* recovery reduces angle of attack FIRST, then adds power. Adding power at high
+  AoA without unloading is how a stall recovery becomes a secondary stall.
+
+Break detection requires a sharp sink AND high pitch together. Slow flight alone
+is not a break, and a nose-down descent is not a stall; both are covered by tests.
+The recorded speed is the minimum seen during the run, not the instantaneous
+value at the moment of detection, which lags.
+
+### A design weakness the tests caught
+
+The first version used the same 10-degree bank figure for both entry and abort,
+so a point could begin at the exact attitude that would abort it. That matters
+here specifically: entry bank changes the measured stall speed, which is why the
+POH tabulates 0, 30, 45 and 60 degrees as separate columns. Entry criteria are
+now deliberately tighter than abort criteria - 3 degrees of bank and 100 fpm to
+start, 10 degrees to abort - and a test asserts that relationship holds.
+
+### Data reduction
+
+`compare_to_target` returns pass, fail or unmeasured against a tolerance, and
+`scale_stall_speed` scales a POH target by the square root of weight. The POH
+tables are at 3,100 lb, and CAP 487 is currently loaded to 2,775 lb, so without
+scaling the comparison would be meaningless - the expected full-flap figure moves
+from 41 KIAS to about 39.
+
+### Not flown
+
+Nothing here has commanded the aircraft. The profile is not yet wired to the
+backend, and the backend is not yet wired into `maneuver_server`. The gate's
+90-KIAS floor still excludes every stall point; treating a test profile as a
+documented exception to that envelope is a decision that has not been taken.
+
+`services/ai_pilot/maneuvers.py` remains unchanged. Suites: `services/ai_pilot/tests`
+121 passed with 23 subtests under `~/.cache/capvsar/capvsar-planner-venv`;
+`tests.test_c182t_flight_model` and `tests.test_flightgear_c182` 24 OK.
+
+## 2026-09-11 — ai_pilot: direct surface-control backend, so an agent can fly aircraft without autopilots
+
+Added `services/ai_pilot/direct_backend.py` and
+`services/ai_pilot/tests/test_direct_backend.py`. First concrete step toward the
+ArduPlane direction the module has documented since it was written.
+
+### Why
+
+`XPlaneAutopilotBackend` commands the simulated aircraft's own autopilot, so the
+maneuver contract only works on aircraft that have one. `XPlaneDirectBackend`
+closes the loop on the primary flight controls instead, which makes the same
+contract usable on any aircraft - a Cub, a glider, an older CAP airframe.
+
+### The design decision that matters
+
+The backend implements the EXISTING `maneuvers.FlightBackend` protocol -
+`observe`, `select(heading_mag, altitude_indicated_ft)`, `release`, `pause` -
+rather than widening it to expose control surfaces. Two reasons:
+
+* `ManeuverGate` validates TARGETS against the exercise envelope. A target is
+  checkable ("is 4,500 ft inside the altitude block, is it above the clearance
+  floor over current terrain?"); a raw surface deflection is not. Routing
+  surfaces through the gate would keep the lease and the sequence numbers but
+  hollow out the envelope check that gives the gate its value.
+* A future ArduPlane adapter fits the same shape - command modes and targets,
+  let the controller fly the surfaces. Widening the contract to surfaces would
+  make ArduPlane harder to adopt, not easier.
+
+Consequence: `services/ai_pilot/maneuvers.py` is UNCHANGED. The gate, control
+lease, strictly increasing sequence, envelope checks and capture detection all
+keep working as they are, and this does not collide with the open AI-2
+acceptance. Selecting the new behaviour is a matter of which backend is handed
+to `ManeuverGate`.
+
+### Relationship to AI-1
+
+Direct surface control is exactly the capability AI-1 retired: the legacy
+`flight_controller.py` writes `yoke_pitch_ratio`, `yoke_roll_ratio`,
+`yoke_heading_ratio` and `throttle_ratio` with no authority contract, and its
+live routes were disabled (`mission_ksee_krnm --live` refused, REST mutation
+returns HTTP 410). This does not resurrect that path. It brings the same
+capability under the gate, where it has a lease, a sequence, an envelope and a
+fault path.
+
+### Fail-safe properties, and the tests that pin them
+
+Controls are written only while a `select` is active. `release` and `pause` stop
+the loop and neutralize. A telemetry watchdog neutralizes on staleness. The loop
+re-checks the exercise envelope itself rather than relying on the gate noticing
+first. Every output is hard clamped, and commanded bank is limited to 25 degrees,
+inside the gate's own 35, so routine operation does not trip the gate.
+
+One deliberate choice: neutralizing does NOT chop the throttle to zero. This runs
+on an airborne aircraft and dropping to idle unannounced is its own hazard, so
+the release path centres the controls and leaves cruise power.
+
+17 offline tests with a fake client - no simulator, no network. They cover AGL
+conversion, refusal to take control without fresh telemetry, correct turn
+direction including the short way across north, climb sense, output clamping
+under extreme error, all three envelope faults, and the release/pause paths.
+
+### Not flown
+
+The control laws are UNVALIDATED in the simulator. Gains are deliberately gentle
+and are expected to need tuning against CAP 487. Nothing has commanded the
+aircraft through this backend yet; it is not wired into `maneuver_server`, which
+still constructs `XPlaneAutopilotBackend`.
+
+Suites: `services/ai_pilot/tests` 96 passed with 23 subtests under
+`~/.cache/capvsar/capvsar-planner-venv`. A discover run under the system python
+still reports one pre-existing import error, because `test_maneuvers.py` imports
+`pytest` and the system interpreter does not have it; that is unrelated to this
+change. `tests.test_c182t_flight_model` and `tests.test_flightgear_c182` 24 OK.
+
+## 2026-09-11 — A-1 stage 2: offline dimensional harness and durable caches
+
+Added `scripts/measure_c182t.py`, a pinned numeric landmark fixture and donor-free
+regression tests. The harness reuses the strict converter parser, selects named
+features, separates structural/rendered bounds, derives prop dimensions from the
+hub axis and swept disc, and emits deterministic JSON plus three SVG overlays.
+All 9 unknowns remain unmeasured. The 15 published FS stations are reference-only
+because donor firewall registration is unproven. Wheel-contact re-posing is
+explicitly provisional until the POH two-inch nose-strut condition is established.
+
+Measured prop diameter is 79.255 in (fails the 79.0 in hard upper bound), main
+wheel track is 102.992 in (-4.64%), and horizontal tail span is 143.026 in
+(+2.16%). Length, height, wheelbase and clearance remain provisional. Donor span
+with strobes is within the proposed tolerance, but the emitted package lacks
+Strobe and BeaconOff. No geometry was corrected or dimension accepted for release.
+See `docs/C182T_MEASUREMENT_HARNESS.md` for selectors, all results and commands.
+
+Moved the operational donor, archive and pytest environment to `~/.cache/capvsar/`;
+kept compatibility symlinks and original temporary backups for concurrent users.
+Fetcher defaults and documented historical test commands now use durable paths;
+archive and file checksum enforcement is unchanged.
+
+Verified: two fresh donor-only builds and measurement outputs byte-identical
+(14 files); fixture replay matches live report byte-for-byte; 25 converter/harness
+checks pass with live comparison enabled, or 24 pass plus one explicitly optional
+skip with all real donor/archive reads denied. Console/radio: 90 passed, 17
+subtests passed, 8,891 existing warnings using the durable venv. Three overlays
+rendered and visually checked. `git diff --check` passes. No X-Plane interaction,
+installed-aircraft modification, converter winding change or other-agent lane edit.
+A-1 remains open; this records metrology progress alongside the concurrent
+flight-model work below, not aircraft acceptance or a production licensing decision.
+
+## 2026-09-11 — A-1 horizontal tail span corrected; flight-test card and capture tool added
+
+Closed the last sourced geometry gap in the flight model and set up the in-flight
+validation that none of today's corrections has yet had.
+
+### Horizontal tail span
+
+The POH three-view (Figure 1-1 Sheet 1, page 1-3, top view) gives 11 ft 8 in.
+The ACF had the stock C172S tail:
+
+    span = 2 * (|_part_x| + _semilen_SEG) = 2 * (0.300 + 5.300) = 11.200 ft
+    POH target                                                  = 11.6667 ft   -4.0%
+
+`_wing/8/_semilen_SEG` and `_wing/9/_semilen_SEG` go 5.300 -> 5.53333 ft, giving
+exactly 3.5560 m. Applied, and the aircraft reloads clean with no crash.
+
+This is the surface the elevator acts on, and the elevator was given its
+certificated 28/21 degree travel earlier today; leaving the surface 4% undersized
+would have kept pitch authority short by a different route.
+
+Chords are unchanged, so per-side area rises 20.70 -> 21.55 ft2, +4.1%. The
+direction is right - the 182's tail is genuinely larger than the 172's - but NO
+consulted source publishes a C182T horizontal tail AREA. Only the span is
+verified; the area is a consequence, not a sourced target, and is recorded that
+way in the code comment, the test docstring and the test card.
+
+### A null result worth recording
+
+The ACF's Vs 51 KIAS and Vso 41 KIAS were checked against POH Figure 2-2
+(page 2-5) and match the published airspeed indicator markings exactly: green arc
+51-140, white arc 41-100. Those were already correct and were not touched.
+
+### Flight-test card
+
+Everything corrected today - control travels, CG envelope, tail span - has been
+verified STATICALLY only: the right number in the right ACF record, confirmed by
+dataref after reload. None of it has been verified in flight.
+
+Added `docs/C182T_FLIGHT_TEST_CARD.md` with sourced targets from the POH:
+stall speeds at 3,100 lb for flaps up/20/FULL at both CG limits (Section 5
+Figure 5-4), sea-level rate of climb 924 FPM, max speed 150 KTAS, 80% power at
+7,000 ft 145 KTAS, and takeoff/landing distances, each with an entry condition
+and a tolerance.
+
+The card names A3 - power-off stall at FULL flap, expect 41 KIAS - as the single
+most diagnostic point, because full flap was 30 degrees until today and is now
+the certificated 38. If the extra 8 degrees is doing real aerodynamic work A3
+lands near 41; if it reads like the old 30-degree value, the flap change is
+cosmetic and the flap coefficients need attention instead.
+
+The card also says how to read a miss: Group A high across the board points at
+flaps or CG rather than the wing, since the wing already measures correct three
+independent ways; B1 low points at engine or propeller modelling, which were
+already correct before today.
+
+### Capture tool
+
+Added `scripts/capture_flight_test.py`, read-only telemetry capture: it sends
+RREF subscriptions and reads replies, issues no DREF writes and no commands.
+Live aircraft control stays reserved for `services.ai_pilot.maneuver_server` and
+its serialized maneuver gate per AI-1 and AI-2, so the agent does not fly these
+points - a human pilot or that maneuver server does, and the capture runs
+alongside.
+
+Smoke-tested against the live simulator: it read weight, altitude, KIAS, flap
+ratio, pitch and bank from the parked aircraft and correctly flagged that the
+current 2,782 lb loading is below the card's 3,100 lb condition. Traces are
+written to `~/.cache/capvsar/flight-tests/`, outside the repository.
+
+### State
+
+ACF_PATCHES now 49. `tests/test_c182t_flight_model.py` now 14 tests, adding a
+`HorizontalTailTests` class that pins the span, asserts left/right symmetry and
+asserts the stock 5.300 value is gone. Suites: flight-model 14 OK,
+`tests.test_flightgear_c182` 10 OK, console/radio 90 passed with 17 subtests.
+`git diff --check` clean apart from the pre-existing `docs/BOARD.md` warning.
+
+Flight model remaining: the vertical tail, which has no published target in any
+consulted source and stays recorded as unknown, and the in-flight validation
+itself, which is now blocked only on someone flying the card.
+
+## 2026-09-11 — A-1 flight model: CG envelope corrected; ACF _part_z convention resolved
+
+Corrected the CAP 487 centre-of-gravity envelope against TCDS 3A13. The blocker
+recorded in the previous entry - that ACF z could not be related to the Cessna
+fuselage-station datum - is resolved, and not by finding the datum.
+
+### The datum problem, and the way around it
+
+No consulted source locates the firewall (FS 0) in X-Plane's frame, and it is
+still not located. It turned out not to be needed: percentage of MAC is datum
+independent. The TCDS gives MAC = 58.8 in with the leading edge of MAC at
+FS 25.98 in, which converts every published CG station into a %MAC that can be
+placed in any frame.
+
+That required resolving one convention question first, and it is a large one.
+`_wing/0/_part_z` is the root QUARTER-CHORD, not the leading edge. The two
+readings differ by 0.25 x 5.20 ft = 1.30 ft, which is 27% MAC - big enough that
+guessing would have produced a seriously wrong envelope.
+
+Resolved empirically against the donor mesh, which shares the ACF part frame
+(independently confirmed: the ACF engine reference at -1.134 m sits 14 cm aft of
+the donor's propeller disc at -1.274 m). Predicted versus measured wing leading
+edge, under the quarter-chord reading:
+
+    |x| 1.35 m   predicted 0.579 m   measured 0.591 m   delta +11 mm
+    |x| 5.15 m   predicted 0.690 m   measured 0.702 m   delta +12 mm
+
+against a 396 mm separation between the quarter-chord and leading-edge
+interpretations. The tip chord also measures 3.63 ft against the ACF's 3.60 ft.
+
+### Cross-check: the wing is right, a third time
+
+Integrating the ACF wing planform (carry-through plus inner plus outer panel)
+gives MAC = 58.04 in against the TCDS 58.8 in, -1.3%. With span +0.56% and area
+-0.55% from the previous entry, that is three independent confirmations that the
+C172S-derived wing is already a correct C182T wing.
+
+### What was wrong
+
+    limit                 stock C172S      TCDS 3A13 C182T        now
+    _cgZ_fwd   2.900 ft = 18.73% MAC   FS 33.0 in = 11.94% MAC   2.571 ft
+    _cgZ_aft   3.900 ft = 39.40% MAC   FS 46.0 in = 34.05% MAC   3.641 ft
+
+The stock aft limit sat 5.35% MAC - about 3.1 inches - aft of the C182T's
+certificated aft limit, in the stability-reducing direction.
+
+LIMITATION, recorded deliberately: the TCDS forward limit is weight-scheduled
+(33.0 in at 2,250 lb and below, 35.5 in at 2,700 lb, 40.9 in at 3,100 lb) and
+X-Plane takes a single forward value. The most forward certificated point is
+used, so the envelope is correct at light weights and permissive at heavy ones.
+Modelling the taper needs a loading-system change, not an ACF constant.
+
+`acf/_cgZ` itself was left at 2.900 ft. It is the reference CG rather than a
+limit, and it now sits at 18.73% MAC, inside the corrected envelope.
+
+### Verification
+
+Two patches added (ACF_PATCHES now 47), each verified to match exactly one ACF
+record, applied, and live-verified after an aircraft reload. X-Plane reports the
+limits relative to the reference CG, which matches to the millimetre:
+
+    acf_cgZ_fwd  -0.1003 m = -0.329 ft   = 2.571 - 2.900   OK
+    acf_cgZ_aft  +0.2259 m = +0.741 ft   = 3.641 - 2.900   OK
+
+`tests/test_c182t_flight_model.py` now carries 11 tests, adding a
+`CentreOfGravityTests` class that pins both limits by station and by %MAC and
+asserts the stock C172S aft value is not still present. Suites:
+`tests.test_c182t_flight_model` 11 OK, `tests.test_flightgear_c182` 10 OK,
+console/radio 90 passed with 17 subtests, run against the migrated venv at
+`~/.cache/capvsar/capvsar-planner-venv`.
+
+Still outstanding in the flight model: horizontal tail span 11.20 ft against the
+POH's 11 ft 8 in (-4.0%), and the vertical tail, which has no published target in
+any consulted source and stays recorded as unknown.
+
+## 2026-09-11 — A-1 flight model: control travels corrected from TCDS; wing was already right
+
+Audited the CAP 487 flight model against the sourced C182T data and corrected
+the certificated control-surface travels. Changed `scripts/build_c182t_package.py`
+and added `tests/test_c182t_flight_model.py`. The new tests live in their own
+file to stay out of the lane handed to Codex in
+`docs/bugs/CODEX_RESUME_C182_HARNESS.md`.
+
+### Correction to earlier statements in this log and in session discussion
+
+"CAP 487 flies like a C172" was repeated several times today. The audit does not
+support it, and the claim should not be relied on.
+
+"0 of 40 ACF patches touch wing, body, gear or tail geometry" is literally true,
+but it is misleading about aerodynamic effect, because the C172S and C182T share
+essentially the same wing. Measured from the installed ACF:
+
+    main wing span   36.20 ft = 11.034 m   target 36 ft 0 in = 10.973 m   +0.56%
+    main wing area  173.04 ft2 (156.40 panels + 16.64 carry-through)
+                                           target 174.0 ft2              -0.55%
+    airfoil         NACA 2412              correct for both types
+
+Mass and powerplant were also already correct: empty 1,970 lb, max 3,100 lb,
+engine power limit 230 HP, RPM max and redline 2,400, type RCP_INJ, propeller
+3 blades at 2,400 design RPM. So the dominant aerodynamic surface, the mass and
+the powerplant were all right; what was actually wrong was smaller and specific.
+
+Note the span figure needs the root offset: the wing parts start at
+`_part_x` 1.6 ft from centreline, so span is 2 x (1.6 + 7.0 inner + 9.5 outer),
+and the 174 ft2 reference area includes the carry-through section through the
+fuselage that the wing parts do not cover.
+
+### What was actually wrong, and is now fixed
+
+Control-surface travels were the stock C172S values, materially smaller than the
+C182T's certificated travels. From TCDS 3A13 Rev 66 page 33:
+
+    surface          was (C172S)   TCDS 3A13 C182T   now
+    elevator up         20 deg       28 deg +/-1     28
+    elevator down       15 deg       21 deg +/-1     21
+    rudder left/right   20 deg       24 deg +0/-1    24
+    flap full down      30 deg       38 deg +0/-1    38
+    aileron up/down     20 / 15      20 / 15         unchanged, already correct
+
+That is short pitch authority, short yaw authority and 8 degrees of missing flap
+- all of which bear directly on approach speed, descent rate and slow flight,
+which is what the SAREX rehearsal use case actually exercises.
+
+Five patches were added to `ACF_PATCHES` (now 45 total), each verified to match
+exactly one record in the installed ACF, and applied. Live-verified after an
+aircraft reload: X-Plane reports acf_elev_up 28.0, acf_elev_dn 21.0,
+acf_rudd_lr 24.0, acf_ail1_up 20.0, acf_ail1_dn 15.0, all matching TCDS.
+
+### Still outstanding in the flight model
+
+- Horizontal tail span measures 11.20 ft = 3.414 m against the POH three-view's
+  11 ft 8 in = 3.556 m, 4.0% short. This is geometry rather than a scalar and was
+  not touched.
+- Vertical tail has no published target in the POH, TCDS or Specification and
+  Description, so it cannot be validated. Recorded as unknown.
+- CG limits could not be checked. The ACF uses `_cgZ_fwd` 2.90 ft and `_cgZ_aft`
+  3.90 ft measured from the ACF reference point, and the mapping between ACF z
+  and the Cessna fuselage station datum (lower front face of firewall) has not
+  been established. Do not compare those numbers to the TCDS 33.0-46.0 inch
+  range until that mapping is derived.
+
+`tests/test_c182t_flight_model.py` adds 7 tests pinning the travels, the weights
+and the TCDS airspeed limits, plus a hygiene test that every ACF patch pattern is
+anchored, valid and unique. They read only `ACF_PATCHES`, so they need no donor
+cache, no X-Plane and no network. Suites: 7 new, `tests.test_flightgear_c182`
+10 OK, console/radio 90 passed with 17 subtests. `git diff --check` clean apart
+from the pre-existing `docs/BOARD.md` warning.
+
+## 2026-09-11 — Codex handoff prepared for the A-1 measurement harness
+
+Added `docs/bugs/CODEX_RESUME_C182_HARNESS.md` as the continuation prompt for
+stage 2 of `docs/bugs/CLAUDE_RESUME_C182_DIMENSIONS.md`, the dimensional
+measurement harness. Handoff only; no code, asset or simulator file was changed
+and tests were not rerun beyond confirming the recorded baseline.
+
+The unit is scoped as entirely offline so it cannot contend with the simulator,
+which is a single shared resource. Its input contract is
+`scripts/c182t_dimension_master.json` (10 targets, a 15-entry station ladder,
+9 explicit unknowns) with `docs/C182T_DIMENSION_MASTER.md` as provenance.
+
+The prompt pins the facts that are easy to get wrong and expensive to rediscover:
+that X-Plane winds triangles opposite to the stored vertex normal and the guard
+test protecting it must not be reverted; that the converter's classification is
+fail-closed by design; that published length and height are measured in POH
+normal ground attitude and the donor mesh is not in it, its nose wheel sitting
+131 mm below the main-wheel plane; that published span includes wingtip strobes
+while `Strobe` is still unconverted, so a span measured today is structure-only
+and not comparable; and that the 9 unknown stations must be reported unmeasured
+rather than filled with plausible coordinates.
+
+It also carries the donor-free test requirement with the licence-safe mechanism -
+commit a derived landmark fixture of measured numbers only, pinned to the donor
+archive hash, since numeric measurements of a GPL mesh are not a distribution of
+that mesh - and a small second unit moving the donor cache, archive and pytest
+venv out of `/tmp`, where a reboot currently erases both the cache and the
+recorded test baseline.
+
+Out of scope for that unit: geometry correction, the registration texture
+placement, the five unconverted light fixtures, the Plane Maker model, and any
+use of the running simulator.
+
+## 2026-09-11 — A-1 winding fix CONFIRMED in X-Plane; registration placement still wrong
+
+The winding fix from the entry below is confirmed in the sim, lifting its
+offline-only caveat. X-Plane 12 started 12:02:37 with the corrected objects
+already installed at 11:59:42 and loaded the aircraft at 12:02:49, so the
+12:03:50 capture is a fresh load of the fixed build, not a stale one.
+
+Result: the cabin renders SOLID, the magenta patch at the firewall is GONE, the
+cabin windows are correctly transparent with the interior visible through them,
+and the silhouette reads as a proper C182 - swept fin, wing struts, wheel
+fairings, cowl, with the wingtip nav light lit. The see-through cabin, the
+magenta firewall patch and the exposed interior were all one bug.
+
+### What the fix revealed
+
+The CAP 487 registration is still wrong, and the change made alongside the
+winding fix did not help. On the PORT side the marking renders MIRRORED and sits
+far too low, running off the bottom of the fuselage side into the belly curve.
+
+That is diagnostic. The port side is painted by the first stamp at texel
+(1590,505), which is the one left UPRIGHT; only the second stamp at (1530,1120)
+was given the vertical flip. Port rendering mirrored from an un-flipped stamp
+means the atlas-band identification was wrong: the region at texel y 526-810 is
+not the port rear fuselage in the orientation assumed, so the earlier
+rotate(180)-to-FLIP_TOP_BOTTOM reasoning was applied to the wrong stamp.
+
+Both the placement coordinates and the per-side orientation remain unverified
+guesses. The reliable way to settle it is empirical rather than analytical: stamp
+an asymmetric test pattern - labelled glyphs on a coordinate grid - across the
+whole 4096x2048 atlas, render it, and read off directly which texture region
+paints which side and in what orientation. Two attempts to derive it from UV
+geometry already failed (a vertex-hit test misses large UV islands; a
+point-in-triangle test matched everything because degenerate zero-area UV
+surfaces contain every probe point).
+
+### A-1 exterior status
+
+Confirmed working: geometry, winding, cabin, glass, gear, wing, tail, control
+surfaces present, nav light. Still outstanding: the registration placement and
+orientation, and the five unconverted light fixtures (Strobe, NavLight.L/R,
+NavlightTransp, BeaconOff), of which Strobe and BeaconOff matter dimensionally.
+Plane Maker geometry remains entirely stock C172 and is untouched. A-1 stays open.
+
+## 2026-09-11 — A-1 root cause found: OBJ8 triangle winding was reversed
+
+The see-through cabin is a triangle-winding bug in the converter. Fixed in
+`scripts/convert_flightgear_c182.py` and locked with a new regression test.
+Verified OFFLINE ONLY - see the caveat below.
+
+### Root cause
+
+X-Plane winds triangles OPPOSITE to the stored vertex normal. Laminar's own
+`objects/fuselage.obj` is the reference: across 752 cabin-side faces and 212
+tailcone faces, its winding-derived normal agrees with its stored normal 0.0% of
+the time. The winding points inboard while the stored normals point outboard.
+
+AC3D winds the other way, and `_build_mesh` emitted AC3D's ref order directly, so
+our winding and normals AGREED (83.8% on the same cabin band). X-Plane therefore
+culled the near-side skin of every surface.
+
+That single fault predicts every symptom seen in the two X-Plane sessions:
+
+- see-through cabin: the near skin is culled, exposing the Laminar interior;
+- tailcone and cowl still look solid: nothing sits between their walls, so the
+  inside of the far wall is what renders and it reads as normal;
+- magenta patch at the firewall: the interior panel showing through culled cowl skin;
+- only geometry that sits inside the skin is exposed, which is why a mesh that is
+  provably complete still renders open.
+
+It also explains why every other variable tested negative. Header, texture, alpha
+channel, ANIM blocks and object grouping were all irrelevant because the faces
+were discarded before any of it applied.
+
+### Why the earlier offline render missed it
+
+The offline OBJ8 rasteriser written during the previous unit reported a complete
+solid fuselage. It culled faces using the same convention the converter assumed,
+so it faithfully reproduced the converter's own error. Checking against Laminar's
+shipped object instead of against our own reasoning is what broke this open;
+a self-written renderer is not an independent check of a convention question.
+
+### Fix
+
+`_build_mesh` now emits each triangle's refs reversed. `raw`, and therefore every
+stored vertex normal, is still computed from the original AC3D order, so normals
+keep pointing outboard and only the index order flips.
+
+Measured on the cabin-side band, |x| 0.45-0.72, z 0.30-2.50, y -0.40-0.30:
+
+    stock fuselage.obj (reference)   winding-outward   8.0%   winding/normal agree  0.0%
+    ours before fix                  winding-outward  82.8%   winding/normal agree 83.8%
+    ours after fix                   winding-outward   3.8%   winding/normal agree  2.9%
+
+Added `WindingConventionTests.test_winding_opposes_the_stored_normal`, which
+asserts the invariant directly on a synthetic AC3D quad and needs no donor cache.
+The converter suite is now 10 tests; console/radio remain 90 passed with 17
+subtests. The rebuilt objects are installed in the local X-Plane package.
+
+### Caveat
+
+Verified offline only. The measurement matches the stock reference closely and the
+mechanism accounts for every observed symptom, but the corrected build has NOT
+been seen rendering in X-Plane - the sim was shut down when the fix was made. One
+aircraft reload is needed to confirm; expect a solid cabin and no magenta patch.
+A-1 stays open until that is seen, and the registration placement and the five
+unconverted light fixtures (Strobe, NavLight.L/R, NavlightTransp, BeaconOff)
+remain outstanding regardless.
+
+## 2026-09-11 — A-1 exterior fault isolated to the converted OBJ; cause still unknown
+
+Second X-Plane session on the CAP 487 exterior. The see-through cabin is now
+bisected to our converted object rather than the sim, the aircraft package, or
+the Laminar interior, but the cause is NOT found. A-1 stays open.
+
+### The decisive result
+
+With everything else untouched, only slot 15 swapped:
+
+    stock fuselage.obj       -> cabin SOLID, no magenta patch
+    flightgear_c182t.obj     -> cabin see-through, magenta patch present
+
+So the Laminar interior is not overdrawing; the stock object occludes it from
+the identical slot with identical slot attributes. The fault is in our object.
+
+### What was eliminated, with evidence
+
+Against the converted object, all of the following were tested and ruled out:
+
+- texture alpha: rebuilt the texture as RGB (no alpha channel) - unchanged;
+- object header: substituted the stock TEXTURE/TEXTURE_LIT/TEXTURE_NORMAL and
+  GLOBAL_specular 1.0 so the header matched stock byte-for-byte in kind - unchanged;
+- animation: stripped every ANIM block - unchanged (and stock fuselage.obj itself
+  contains five ANIM blocks, so animation was never a distinguishing feature);
+- grouping: emitted a single group with one `TRIS 0 33861` and no other geometry
+  - unchanged;
+- data integrity: 16,081 VT lines scanned - zero NaN/Inf, zero zero-length
+  normals, zero non-unit normals, UVs within 0.004-0.996;
+- winding of the cabin skin specifically: 98.4% outward on the port side, 98.5%
+  on the starboard side;
+- glass: rebuilt the glazing object fully opaque (no BLEND_GLASS, opaque texture)
+  - unchanged, so the glass object is innocent;
+- ACF slot semantics: slot 18 restored to stock wings.obj - unchanged. (Slot 16
+  also changed role in the original patch, fuselage_gear.obj -> blank.)
+
+A minimal single-group, ANIM-free, stock-textured object built from our vertices
+still fails to occlude. An offline OBJ8 rasteriser written for this purpose
+(z-buffer, backface culling, orthographic side view) renders that same data as a
+complete solid fuselage - full cabin side, door, baggage door, belly, tailcone,
+with openings only at the window apertures. Whatever X-Plane objects to is not
+visible in the geometry.
+
+### Correction: the glazing change from the previous entry was wrong
+
+The previous entry added Windscreen.Int, Windscreen.Int.Back, Windscreen.Side.Left
+and Windscreen.Side.Right to the exterior glass object on the theory that they
+were missing cabin skin. Face-winding measurement shows they are interior
+surfaces - Windscreen.Int 2 faces outward against 320 inward, .Int.Back 2/66,
+both .Side panels 0/49 - which is what the donor's .Int naming implies. They are
+drawn from inside the cabin in FlightGear. Adding them put inward-facing
+translucent surfaces into the external view. They are now in a documented
+INTERIOR_ONLY set that the fail-closed guard recognises, and GLASS_NAMES is back
+to the genuine exterior glazing (Windscreen at 494/12 outward, Window.L/R, llglas).
+The claim that dropped glazing caused the see-through cabin was wrong.
+
+### Converter changes
+
+- GLASS_NAMES reverted to the four exterior glazing objects.
+- INTERIOR_ONLY added (4 objects) and wired into assert_all_objects_classified.
+- KNOWN_UNCONVERTED narrowed to the five light fixtures that are still genuinely
+  missing: Strobe, NavLight.L, NavLight.R, NavlightTransp, BeaconOff. Strobe and
+  BeaconOff remain dimensionally relevant per docs/C182T_DIMENSION_MASTER.md.
+- create_cap_texture: rotate(180) replaced with FLIP_TOP_BOTTOM. Measured from
+  the donor's Door.L/Door.R UVs, the two fuselage sides have separate atlas
+  regions and both run aft with increasing u, but the right side's v axis is
+  inverted, so only a vertical flip is wanted; rotate(180) also mirrored it
+  horizontally, which is why the registration rendered backwards. NOTE: this is
+  UNVERIFIED. The stamp coordinates (1590,505) and (1530,1120) are hardcoded and
+  two attempts to confirm which geometry they paint produced invalid results - a
+  vertex-hit test misses large UV islands, and a point-in-triangle test returned
+  every object because degenerate zero-area UV surfaces contain every probe point.
+  The registration placement needs its UV island derived properly.
+
+### Process failures worth recording
+
+- A blank object (POINT_COUNTS 0 0 0 0) placed in the glass slot 19 CRASHED
+  X-Plane on aircraft load, confirmed by a crash marker in Log.txt. The same
+  blank is harmless in slots 16 and 23-26. Never probe a slot by emptying it;
+  substitute real geometry instead.
+- `pgrep -x "X-Plane-x86_64"` NEVER matches: the process comm is "Main Thread".
+  This produced false "sim is down" readings, on the strength of which a second
+  X-Plane was launched while the first was still running. The second instance
+  then logged "Failed to initialize UDP network connectivity. (RAKNET) ... you are
+  already running another copy of X-Plane" and never bound port 49000, costing a
+  full restart. Use `pgrep -f "X-Plane 12/X-Plane-x86_64"`, and confirm UDP by
+  reading a dataref before acting.
+- The E/WEBSRV "could not bind to port 8086" alert is X-Plane's web server only
+  and is unrelated to UDP; the log itself says the sim functions normally.
+
+### State
+
+All aircraft files restored and hash-verified against /tmp/capvsar-c182-final:
+flightgear_c182t.obj 1fc7adfd, flightgear_c182t.png 89c5370e,
+flightgear_c182t_glass.obj db626f5a, and the ACF matches its backup d5a45a4f.
+Tests: `python3 -m unittest tests.test_flightgear_c182` 9 OK; console/radio 90
+passed with 17 subtests. `git diff --check` clean apart from the pre-existing
+docs/BOARD.md warning in another agent's file.
+
+### Next unit
+
+Do it offline, not against a live flight. Hand-write a minimal OBJ8 - a few large
+quads forming a box at the cabin station in our coordinate convention, nothing
+else - and test whether it occludes. If a hand-built box also fails to occlude,
+the fault is systemic in how write_obj8 emits vertex or index data and is not
+caught by validate_obj8 or by the offline rasteriser; bisect from there toward
+the real mesh. Also still open: the magenta patch at the firewall, the
+registration placement, and the five unconverted light fixtures.
+
+## 2026-09-11 — A-1 X-Plane visual acceptance run; exterior fails; selection now fails closed
+
+First X-Plane 12 inspection of the installed CAP 487 FlightGear C182 exterior.
+The exterior does NOT pass visual acceptance. Changed
+`scripts/convert_flightgear_c182.py` and `tests/test_flightgear_c182.py` only;
+no aircraft asset was rebuilt or reinstalled.
+
+Method trap worth recording: X-Plane started 09:45:34 and loaded the aircraft at
+09:50:47, while the FlightGear rebuild wrote the package at 09:56:11. The sim was
+therefore rendering a stale pre-rebuild load that looks exactly like the stock
+Laminar 172SP, down to the N172SP registration. Any future acceptance run must
+issue `sim/operation/reload_aircraft` first, or it measures the wrong aircraft.
+A second trap: X-Plane returns 0 for unrecognised dataref names, and stale RREF
+subscription IDs from a previous client alias onto new names, so a run was
+observed reporting `sim/graphics/view/view_is_external` as -0.524, which was
+actually `acf_gear_ynodef[0]`. Use a fresh receive port and sanity-check values.
+
+After reloading, defects visible in external view: the cabin region reads
+see-through to the Laminar interior, the CAP 487 registration renders mirrored,
+a magenta patch appears at the firewall station, and no spinner is distinguishable
+at the nose (the engine was running, so a prop disc rather than blades is
+expected there; not yet confirmed as a defect).
+
+Three candidate root causes were tested and ruled out with data. Texture alpha:
+`flightgear_c182t.png` is 100% opaque, alpha min and max both 255. Inverted
+triangle winding: a centroid test gives 100% outward-facing on the closed convex
+objects (both main wheels, nose wheel, spinner, windscreen, strobe), where a
+globally flipped model would read 0%; the 55-62% readings on rudder, ailerons and
+elevator are what a thin plate yields under that test and carry no information.
+Note also that `_build_mesh` derives every vertex normal from the winding itself,
+so stored normals cannot disagree with winding by construction. Interior
+protrusion through the shell: at the front-seat station the emitted C182 skin sits
+at half-width 0.635 m and the Laminar cockpit is 0.560 m, and the cabin floor
+clears the seat bottoms by 65 mm, so the interior fits inside the shell.
+
+The defect that was found is in object selection. Buckets are chosen by texture
+name (`Default.png`, `Lights.png`) plus hardcoded name lists, so every donor
+object carrying no texture falls through every bucket and is dropped silently:
+37 of the donor's 88 polygon objects were being discarded. 28 are correct to drop
+(ground-service chocks, cones, tiedowns, drain and cover props, the cold-weather
+kit, and duplicate or alternate-LOD geometry), but they were being dropped by
+accident rather than by decision. The remaining 9 are real gaps: `Strobe`,
+`NavLight.L`, `NavLight.R`, `NavlightTransp`, `BeaconOff`, `Windscreen.Int`,
+`Windscreen.Int.Back`, `Windscreen.Side.Left` and `Windscreen.Side.Right`.
+`Strobe` matters dimensionally, not just cosmetically: the published 36 ft 0 in
+span is defined with the wingtip strobes installed, and `BeaconOff` sits at the
+fin tip the published height is measured to.
+
+The converter now classifies every donor object explicitly through
+`DELIBERATELY_EXCLUDED` and `KNOWN_UNCONVERTED`, and `assert_all_objects_classified`
+raises on anything matching neither a bucket nor a documented exclusion, so this
+class of loss can no longer happen quietly when the donor changes. The guard was
+extracted as a pure function over name and texture, which makes it testable
+without the 136 MB donor cache; four new tests cover it and the suite is now 9
+tests that need no donor at all. This change is deliberately behaviour-preserving:
+all five generated OBJ files rebuild byte-for-byte identical to the installed
+package, so it documents and guards the gap without yet closing it.
+
+The see-through cabin, the mirrored registration and the magenta firewall patch
+remain unexplained and are the next unit of work. A-1 stays open; exterior
+dimensions, X-Plane visual acceptance, Plane Maker geometry and the production
+licensing route are all still outstanding. Separately confirmed by enumerating
+`ACF_PATCHES`: 0 of the 40 ACF patches touch wing, body, gear or tail geometry,
+so the Plane Maker side remains entirely stock C172. Live datarefs did confirm
+the weight patches, with empty 893.6 kg and max 1406.1 kg matching the POH, and
+aileron up travel at 20 degrees matching TCDS 3A13.
+
+Tests: `python3 -m unittest -v tests.test_flightgear_c182` 9 tests OK;
+`PYTHONPATH=. ~/.cache/capvsar/capvsar-planner-venv/bin/pytest tests/test_console.py
+tests/test_radio.py -q` 90 passed with 17 subtests. `git diff --check` reports
+only the pre-existing `docs/BOARD.md` blank-line warning, another agent's file.
+
+The running sim was left with the view restored and the G1000 MFD popup reopened,
+but the aircraft reload reset the cockpit, so SAR_DEMO must be reloaded.
+
 ## 2026-09-11 — Flight Data Recorder (FDR) tap & automated diagnostic test engine
 
 Implemented synchronous, high-rate Flight Data Recorder (FDR) tap and automated
@@ -89,7 +1070,7 @@ Maker work were part of this stage.
 
 Tests were rerun and match the recorded baseline: `python3 -m unittest
 tests.test_flightgear_c182` 5 tests OK, and `PYTHONPATH=.
-/tmp/capvsar-planner-venv/bin/pytest tests/test_console.py tests/test_radio.py
+~/.cache/capvsar/capvsar-planner-venv/bin/pytest tests/test_console.py tests/test_radio.py
 -q` 90 passed with 17 subtests. `git diff --check` reports one pre-existing
 blank-line-at-EOF warning in `docs/BOARD.md`, another agent's file, left
 untouched.
@@ -153,7 +1134,7 @@ python3 -m unittest -v tests.test_flightgear_c182
 Ran 5 tests in 0.003s
 OK
 
-PYTHONPATH=. /tmp/capvsar-planner-venv/bin/pytest tests/test_console.py tests/test_radio.py -q
+PYTHONPATH=. ~/.cache/capvsar/capvsar-planner-venv/bin/pytest tests/test_console.py tests/test_radio.py -q
 90 passed, 8891 warnings, 17 subtests passed in 3.30s
 ```
 
@@ -557,7 +1538,7 @@ per second, allowing it to start before X-Plane or survive a simulator restart
 without duplicating callbacks. Added tests for negated and quoted control text,
 retired APIs and tools, live-script refusal, and subscription renewal.
 
-Verified with `PYTHONPATH=.` and `/tmp/capvsar-planner-venv/bin/pytest`:
+Verified with `PYTHONPATH=.` and `~/.cache/capvsar/capvsar-planner-venv/bin/pytest`:
 
 ```text
 services/ai_pilot/tests -q
@@ -621,7 +1602,7 @@ mode requests, preserving already-active modes; it never imports hidden scenario
 truth or invokes a language model. Mock observations remain static, so command
 writes cannot masquerade as demonstrated aircraft performance.
 
-Verified with `PYTHONPATH=.` and `/tmp/capvsar-planner-venv/bin/pytest`:
+Verified with `PYTHONPATH=.` and `~/.cache/capvsar/capvsar-planner-venv/bin/pytest`:
 
 ```text
 services/ai_pilot/tests -q
@@ -877,7 +1858,7 @@ hour statement. This is not a claim to exactly reproduce the POH endurance
 chart, which uses normal climb instead. Tests also cover MP/RPM/altitude
 interpolation, table/80% limits, W&B defaults and all CG envelope breakpoints.
 
-Actual final suite output, using `/tmp/capvsar-planner-venv/bin/pytest`:
+Actual final suite output, using `~/.cache/capvsar/capvsar-planner-venv/bin/pytest`:
 
 ```text
 $ pytest services/flightplanner/tests/test_sar.py
@@ -979,7 +1960,7 @@ need internet — the FAA layers are the ones to brief from.
   — **72 passed.** This also closes two gaps I had been carrying: my P-11
   change to `main.py` and the CAP 487 fixtures in `test_setup_auth.py` had
   never been executed on this machine. They are now, and they pass. (Thanks to
-  the venv Codex left at `/tmp/capvsar-planner-venv` — this machine has no
+  the venv Codex left at `~/.cache/capvsar/capvsar-planner-venv` — this machine has no
   FastAPI of its own.)
 - Not verified: an actual run with the network physically blocked, and the
   pre-cache downloading real tiles. Both want a station, not this session.
@@ -1037,7 +2018,7 @@ functions and the FMS writer. Prompts 3 and 5-11 remain outstanding, and prompt
   Flask stub. They now explicitly mock their JSON boundary; HTTP regression
   tests exercise the real Flask client. No console or other-agent files edited.
 
-Installed test dependencies in `/tmp/capvsar-planner-venv`; no repository
+Installed test dependencies in `~/.cache/capvsar/capvsar-planner-venv`; no repository
 requirements changed. Actual final output (virtualenv pytest):
 
 ```text
