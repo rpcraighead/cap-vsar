@@ -96,6 +96,105 @@ tracking, pause and disconnect still require simulator acceptance testing. No
 ArduPlane, autonomous pattern tracking, speed control, ATC, takeoff or landing is
 claimed for this implementation.
 
+## Direct surface-control backend (2026-09-11)
+
+`direct_backend.XPlaneDirectBackend` flies CAP 487 on the **primary flight
+controls** — yoke, rudder, throttle and elevator trim — rather than through the
+GFC 700 autopilot. It implements the existing `maneuvers.FlightBackend` protocol,
+so the control lease, the strictly-increasing sequence, the exercise envelope and
+capture detection all apply to it exactly as they do to the autopilot backend.
+
+The point is to let an agent fly an aircraft that has **no autopilot**, and to
+make the airframe characterization cards (H0–H7) executable at all. It
+disengages the aircraft's autopilot on engaging, because it must own the control
+surfaces exclusively — an engaged GFC 700 would be driving the servos toward its
+own targets while this loop writes yoke ratios, and the two would fight.
+
+**This is a flight-test instrument, not a pilot.** Do not run it at the same time
+as `maneuver_server`, which would put two writers on the same surfaces.
+
+### Commands
+
+| Method | Card | What it does |
+|---|---|---|
+| `select(heading_mag, altitude_indicated_ft)` | — | the `FlightBackend` protocol command; heading and altitude holding |
+| `select_bank(bank_deg, altitude_ft)` | H2 | hold a commanded bank angle directly |
+| `select_airspeed(kias, throttle=None)` | H1, H3 | **speed-on-pitch**: pitch holds speed, throttle is the independent variable |
+| `set_flaps(ratio)` | H4 | flap actuation |
+| `apply_test_input(TestInput(axis, magnitude, duration_s, ramp_s))` | H0 | a bounded, ramped, **self-expiring** single-axis input superimposed on the loop |
+| `release()` | — | hand back control; neutralizes only if this backend actually engaged |
+| `pause()` | — | fault path |
+
+`TestInput` is frozen and expiry is checked inside the control loop rather than
+by a timer, so an input cannot outlive the loop that is applying it. Magnitude
+*and* duration are both bounded and both checkable, unlike a raw surface command.
+
+`release()` will not neutralize an aircraft this backend never commanded:
+centring the yoke and setting cruise throttle on an aircraft somebody else is
+flying disturbs their trim for no reason. Elevator trim is deliberately outside
+the neutralize set — handing an aircraft back with the trim slammed to neutral is
+an upset, not a release.
+
+### Control structure
+
+```
+heading  -> bank     -> aileron   (+ roll-rate damping)
+altitude -> VS       -> pitch     -> elevator  (+ pitch-rate damping)
+                        + altitude trim integrator
+speed    -> throttle  (PI, conditional integration)
+elevator -> elevator trim  (autotrim, deadband + rate limit)
+coordination: adverse-yaw feedforward + sideslip PI + right-rudder feedforward
+```
+
+Every surface command passes a **slew-rate limiter** as the last step before the
+wire, so nothing upstream — loop, clamp or test input — can produce a step at the
+controls.
+
+### Fail-closed rules
+
+These are not stylistic. Each one is a bug that was found in flight.
+
+* **Trim is never written without a readback.** Flying out of trim is
+  recoverable; writing a guessed trim position to an aircraft somebody else has
+  been flying is not.
+* **Body rates and trim are auxiliary datarefs, outside the freshness gate.**
+  Losing a damping channel must degrade the damping, not neutralize the controls
+  on an airborne aircraft. Their age is recorded as `body_rate_age_s` (`inf` when
+  degraded) so a degraded run is visible in the trace rather than silent.
+* **Integrators are conditional, not merely clamped.** Clamping the integral term
+  while the output is against a stop is not anti-windup.
+* **Integrators are frozen against a deliberate test input**, and cleared on
+  release, so a new engagement never resumes from a stale internal value.
+
+### Flying it
+
+```bash
+# supervised target holding through the real gate
+python3 scripts/fly_direct_backend.py --heading 120 --altitude 4500
+
+# card H0, control and trim confidence
+python3 scripts/fly_card_h0.py --run 6 --kias 100
+```
+
+`fly_card_h0.py` **refuses to take data off an unstabilized reference** (exit 3)
+and records each point's entry condition. `--force` flies it anyway and stamps
+the run as not a valid test point.
+
+Traces are JSONL under `~/.cache/capvsar/flight-tests/`, with the gain set in the
+header — a trace you cannot attribute to a tune is not evidence of anything.
+
+### Status
+
+**Not validated.** The gains hold a reference condition well enough to take data
+*from*; they are not a flight-model result and say nothing about the airframe.
+Card H0 has been attempted five times and remains **unflown** — it has not yet
+reached its first input from a stabilized reference. Five control-law defects
+were found and fixed in the process; all are recorded with trace evidence in
+`docs/C182T_H0_CONTROL_LAW_FINDINGS.md`.
+
+Offline coverage: 80 tests in `tests/test_direct_backend.py`, 150 across the
+service, none requiring X-Plane.
+
 ## Legacy scripted prototype
 
 The remaining sections describe the earlier experimental controller. Its live
