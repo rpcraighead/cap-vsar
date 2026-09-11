@@ -1,0 +1,298 @@
+{
+  "bounds": {
+    "all_rendered": {
+      "bounds_m": [
+        [
+          -5.56984,
+          5.57555
+        ],
+        [
+          -1.18673,
+          2.03333
+        ],
+        [
+          -1.70021,
+          6.80062
+        ]
+      ],
+      "objects": [
+        "Aileron.L",
+        "Aileron.R",
+        "Airframe",
+        "BaggageDoor",
+        "Blade1",
+        "Blade2",
+        "Blade3",
+        "CowlFlap.L",
+        "CowlFlap.L.Int",
+        "CowlFlap.R",
+        "CowlFlap.R.Int",
+        "Damp",
+        "Door.L",
+        "Door.R",
+        "DoorHandle.L",
+        "DoorHandle.R",
+        "Elevator",
+        "ElevatorTrim",
+        "ExtLight",
+        "FastProp",
+        "Flap.L",
+        "Flap.R",
+        "FrontWheel",
+        "LandingLight",
+        "MainStrut.L",
+        "MainStrut.R",
+        "MainWheel.L",
+        "MainWheel.R",
+        "NavLightGreen",
+        "NavLightRed",
+        "Navlight",
+        "NoseWheelFork",
+        "Plane.002X",
+        "Plane.003X",
+        "PlaneTailLight",
+        "PlaneX",
+        "Rudder",
+        "TaxiLight",
+        "TrenDEL_01_TrenDEL_01",
+        "TrenDEL_04_TrenDEL_04",
+        "TrenDEL_05_TrenDEL_05",
+        "WheelFairing.L",
+        "WheelFairing.R",
+        "WheelFairingNose",
+        "Window.L",
+        "Window.R",
+        "WindowFrame.L",
+        "WindowFrame.R",
+        "Windscreen",
+        "chrome_spinner",
+        "llglas"
+      ]
+    },
+    "structural": {
+      "bounds_m": [
+        [
+          -5.45575,
+          5.45575
+        ],
+        [
+          -1.18673,
+          2.03333
+        ],
+        [
+          -1.70021,
+          6.80062
+        ]
+      ],
+      "objects": [
+        "Aileron.L",
+        "Aileron.R",
+        "Airframe",
+        "BaggageDoor",
+        "Blade1",
+        "Blade2",
+        "Blade3",
+        "CowlFlap.L",
+        "CowlFlap.L.Int",
+        "CowlFlap.R",
+        "CowlFlap.R.Int",
+        "Damp",
+        "Door.L",
+        "Door.R",
+        "DoorHandle.L",
+        "DoorHandle.R",
+        "Elevator",
+        "ElevatorTrim",
+        "Flap.L",
+        "Flap.R",
+        "FrontWheel",
+        "MainStrut.L",
+        "MainStrut.R",
+        "MainWheel.L",
+        "MainWheel.R",
+        "NoseWheelFork",
+        "Rudder",
+        "TrenDEL_01_TrenDEL_01",
+        "TrenDEL_04_TrenDEL_04",
+        "TrenDEL_05_TrenDEL_05",
+        "WheelFairing.L",
+        "WheelFairing.R",
+        "WheelFairingNose",
+        "WindowFrame.L",
+        "WindowFrame.R",
+        "chrome_spinner"
+      ]
+    }
+  },
+  "donor_archive_sha256": "d81628fff8489af41d312c0e0bc14e1de2ac10a50d6c0c75f937441f81343fbe",
+  "donor_commit": "1359d63393c7fc9145953b081d151d93627e791a",
+  "known_unconverted": [
+    "BeaconOff",
+    "NavLight.L",
+    "NavLight.R",
+    "NavlightTransp",
+    "Strobe"
+  ],
+  "landmarks": {
+    "beacon_top": {
+      "object": "BeaconOff",
+      "point_m": [
+        0.00349,
+        2.10632,
+        6.1647
+      ],
+      "selector": "max axis 1; region=None; midpoint of tied extrema"
+    },
+    "fin_cap": {
+      "object": "Airframe",
+      "point_m": [
+        0.00257,
+        2.03333,
+        6.26371
+      ],
+      "selector": "max axis 1; region=None; midpoint of tied extrema"
+    },
+    "main_left_axle": {
+      "object": "MainWheel.L",
+      "point_m": [
+        -1.307995,
+        -0.8327950000000001,
+        1.37306
+      ],
+      "selector": "midpoint of tire referenced-vertex bounds"
+    },
+    "main_left_contact": {
+      "object": "MainWheel.L",
+      "point_m": [
+        -1.307995,
+        -1.05553,
+        1.37306
+      ],
+      "selector": "tire lowest up ordinate at axle right/aft; nominal mesh contact"
+    },
+    "main_right_axle": {
+      "object": "MainWheel.R",
+      "point_m": [
+        1.307995,
+        -0.832795,
+        1.37306
+      ],
+      "selector": "midpoint of tire referenced-vertex bounds"
+    },
+    "main_right_contact": {
+      "object": "MainWheel.R",
+      "point_m": [
+        1.307995,
+        -1.05508,
+        1.37306
+      ],
+      "selector": "tire lowest up ordinate at axle right/aft; nominal mesh contact"
+    },
+    "nose_axle": {
+      "object": "FrontWheel",
+      "point_m": [
+        0.0,
+        -1.00756,
+        -0.25459
+      ],
+      "selector": "midpoint of tire referenced-vertex bounds"
+    },
+    "nose_contact": {
+      "object": "FrontWheel",
+      "point_m": [
+        0.0,
+        -1.18673,
+        -0.25459
+      ],
+      "selector": "tire lowest up ordinate at axle right/aft; nominal mesh contact"
+    },
+    "prop_hub": {
+      "object": "Models/c182t.xml / converter.PROP_ROTATION",
+      "point_m": [
+        0.001089,
+        0.011581,
+        -1.462241
+      ],
+      "selector": "existing converter propeller rotation axis, not blade extrema"
+    },
+    "rudder_trailing_edge": {
+      "object": "Rudder",
+      "point_m": [
+        0.0015350000000000001,
+        1.827925,
+        6.80062
+      ],
+      "selector": "max axis 2; region=None; midpoint of tied extrema"
+    },
+    "spinner_apex": {
+      "object": "chrome_spinner",
+      "point_m": [
+        0.00256,
+        0.00321,
+        -1.70021
+      ],
+      "selector": "min axis 2; region=None; midpoint of tied extrema"
+    },
+    "strobe_left": {
+      "object": "Strobe",
+      "point_m": [
+        -5.46447,
+        0.8922,
+        0.89888
+      ],
+      "selector": "min axis 0; region=None; midpoint of tied extrema"
+    },
+    "strobe_right": {
+      "object": "Strobe",
+      "point_m": [
+        5.4673,
+        0.8922,
+        0.89888
+      ],
+      "selector": "max axis 0; region=None; midpoint of tied extrema"
+    },
+    "tail_left": {
+      "object": "Airframe",
+      "point_m": [
+        -1.81643,
+        0.41969,
+        5.36872
+      ],
+      "selector": "min axis 0; region=aft_outboard; midpoint of tied extrema"
+    },
+    "tail_right": {
+      "object": "Airframe",
+      "point_m": [
+        1.81644,
+        0.41969,
+        5.36872
+      ],
+      "selector": "max axis 0; region=aft_outboard; midpoint of tied extrema"
+    },
+    "wing_left": {
+      "object": "Airframe",
+      "point_m": [
+        -5.45575,
+        0.89717,
+        0.86876
+      ],
+      "selector": "min axis 0; region=None; midpoint of tied extrema"
+    },
+    "wing_right": {
+      "object": "Airframe",
+      "point_m": [
+        5.45575,
+        0.89717,
+        0.86876
+      ],
+      "selector": "max axis 0; region=None; midpoint of tied extrema"
+    }
+  },
+  "prop_axis": [
+    0.00038376229131130456,
+    0.04171709307826831,
+    0.9991293894544403
+  ],
+  "prop_radius_m": 1.0065381075262296,
+  "schema_version": 1
+}
