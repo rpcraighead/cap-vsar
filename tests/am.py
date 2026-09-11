@@ -240,6 +240,38 @@ function visible(id, is_vis)
     if _AM.images[id] then _AM.images[id].visible = (is_vis and true or false) end
     if _AM.texts[id] then _AM.texts[id].visible = (is_vis and true or false) end
     if _AM.canvases[id] then _AM.canvases[id].visible = (is_vis and true or false) end
+    if _AM.video_streams and _AM.video_streams[id] then _AM.video_streams[id].visible = (is_vis and true or false) end
+end
+
+function video_stream_add(source, x, y, w, h, ...)
+    local id = _AM.next_node_id
+    _AM.next_node_id = id + 1
+    _AM.video_streams = _AM.video_streams or {}
+    _AM.video_streams[id] = {
+        id = id, source = source, x = x, y = y, w = w, h = h,
+        visible = true
+    }
+    return id
+end
+
+_AM.user_props = {}
+function user_prop_add_enum(name, options, default, desc)
+    _AM.user_props[name] = default
+    return name
+end
+function user_prop_add_integer(name, min, max, default, desc)
+    _AM.user_props[name] = default
+    return name
+end
+function user_prop_add_boolean(name, default, desc)
+    _AM.user_props[name] = default
+    return name
+end
+function user_prop_get(prop_or_name)
+    if type(prop_or_name) == "string" and _AM.user_props[prop_or_name] ~= nil then
+        return _AM.user_props[prop_or_name]
+    end
+    return prop_or_name
 end
 
 function opacity(id, val)
@@ -594,6 +626,10 @@ class AirManager:
 
     def get_switches(self):
         return self.eval("return _AM.switches")
+
+    def set_avionics_power(self, on=True, volts=28.0):
+        self.write_dataref("sim/cockpit2/switches/avionics_power_on", "INT", 1 if on else 0)
+        self.write_dataref("sim/cockpit2/electrical/bus_volts", "FLOAT[6]", volts if on else 0.0)
 
     def close(self):
         if self.L:

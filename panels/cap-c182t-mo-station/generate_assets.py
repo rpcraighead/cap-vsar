@@ -8,25 +8,26 @@ import os
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
-CANVAS_WIDTH = 1920
-CANVAS_HEIGHT = 1080
+from panel_geometry import load_panel_geometry
+
+GEOMETRY = load_panel_geometry()
+LAYOUT_1 = GEOMETRY["layouts"][0]
+LAYOUT_2 = GEOMETRY["layouts"][1]
+
+CANVAS_WIDTH = LAYOUT_1["width"]
+CANVAS_HEIGHT = LAYOUT_1["height"]
 PANEL_COLOR = (28, 31, 38, 255)       # Matte charcoal cockpit panel (#1c1f26)
 BORDER_COLOR = (45, 52, 64, 255)      # Subtle panel framing bevel
 
-# Instrument bounding boxes
+# Instrument bounding boxes derived directly from info.xml
 INSTRUMENTS_LAYOUT1 = [
-    # (name, uuid, x, y, width, height)
-    ("MFD", "0b852ee1-6006-4e2b-9cdf-e397b3f16ab1", 40, 100, 1100, 715),
-    ("GMA1347", "1337420b-7420-4843-80eb-9d10c57a97d1", 1155, 100, 121, 715),
-    ("Becker517", "faefb90d-5704-48c7-8deb-c683d94b4eb3", 1360, 100, 460, 460),
-    ("TDFM136B", "26df5da8-8ce7-4255-bb0e-520453134609", 1310, 580, 560, 294),
+    (inst["short_name"], inst["uuid"], inst["x"], inst["y"], inst["width"], inst["height"])
+    for inst in LAYOUT_1["instruments"]
 ]
 
 INSTRUMENTS_LAYOUT2 = [
-    ("MFD", "0b852ee1-6006-4e2b-9cdf-e397b3f16ab1", 40, 100, 1100, 715),
-    ("GMA1347", "1337420b-7420-4843-80eb-9d10c57a97d1", 1155, 100, 121, 715),
-    ("RT600", "d783d409-9bfa-49f2-ad5d-883af29848d6", 1360, 100, 460, 460),
-    ("TDFM136B", "26df5da8-8ce7-4255-bb0e-520453134609", 1310, 580, 560, 294),
+    (inst["short_name"], inst["uuid"], inst["x"], inst["y"], inst["width"], inst["height"])
+    for inst in LAYOUT_2["instruments"]
 ]
 
 ROOT = Path(__file__).resolve().parents[2]

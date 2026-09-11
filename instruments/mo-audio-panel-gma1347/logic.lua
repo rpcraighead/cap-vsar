@@ -482,9 +482,12 @@ local function run_self_test()
     end)
 end
 
--- The GMA 1347 is powered by the avionics master (§ON/OFF Operation).
-xpl_dataref_subscribe("sim/cockpit2/switches/avionics_power_on", "INT", function(on)
-    local powered = (on or 0) ~= 0
+local MIN_BUS_VOLTS = 10.0
+local avionics_switch_on = false
+local bus_volts = 0.0
+
+local function update_power()
+    local powered = avionics_switch_on and (bus_volts >= MIN_BUS_VOLTS)
     if powered == st.powered then return end
     st.powered = powered
     if powered then
@@ -496,6 +499,17 @@ xpl_dataref_subscribe("sim/cockpit2/switches/avionics_power_on", "INT", function
         si_variable_write(var_fm_mic, false)
         refresh()
     end
+end
+
+-- The GMA 1347 is powered by the avionics master (§ON/OFF Operation) and bus voltage.
+xpl_dataref_subscribe("sim/cockpit2/switches/avionics_power_on", "INT", function(on)
+    avionics_switch_on = (on or 0) ~= 0
+    update_power()
+end)
+
+xpl_dataref_subscribe("sim/cockpit2/electrical/bus_volts", "FLOAT[6]", function(val)
+    bus_volts = type(val) == "table" and (val[1] or 0.0) or (type(val) == "number" and val or 0.0)
+    update_power()
 end)
 
 -- Ingest audio events to feed the clearance recorder buffer

@@ -376,7 +376,27 @@ local function draw_page_4(ctx)
     text(ctx, 1, 1, "C/S ANALYSE")
     text_right(ctx, 127, 1, "4")
 
-    local sync = msg and msg.sync or s.cs_sync
+    local sync, proto, hex15, country, has_pos, lat, lon, age
+    if msg then
+        sync     = msg.sync
+        proto    = msg.protocol
+        hex15    = msg.hex15
+        country  = msg.country
+        has_pos  = msg.has_pos
+        lat      = msg.lat
+        lon      = msg.lon
+        age      = 0
+    else
+        sync     = s.cs_sync
+        proto    = s.cs_protocol
+        hex15    = s.cs_hex15
+        country  = s.cs_country
+        has_pos  = s.cs_has_pos
+        lat      = s.cs_lat
+        lon      = s.cs_lon
+        age      = s.cs_msg_age
+    end
+
     if sync == 1 then
         text(ctx, 1, 10, "SYNC OK")
     elseif sync == 2 then
@@ -390,20 +410,16 @@ local function draw_page_4(ctx)
         return
     end
 
-    local proto = msg and msg.protocol or s.cs_protocol
     local PROTO = { [1] = "USER", [2] = "STANDARD", [3] = "NATIONAL" }
-    local base = proto % 4
+    local base = (proto or 0) % 4
     local name = PROTO[base] or "UNKNOWN"
-    if proto > 3 then name = name .. " TEST" end
+    if proto and proto > 3 then name = name .. " TEST" end
     text(ctx, 46, 10, name)
 
-    text(ctx, 1, 19, "ID " .. (msg and msg.hex15 or s.cs_hex15))
-    text(ctx, 1, 28, string.format("CTRY %03d", msg and msg.country or s.cs_country))
+    text(ctx, 1, 19, "ID " .. (hex15 or ""))
+    text(ctx, 1, 28, string.format("CTRY %03d", country or 0))
 
-    local has_pos = msg and msg.has_pos or s.cs_has_pos
-    if has_pos then
-        local lat = msg and msg.lat or s.cs_lat
-        local lon = msg and msg.lon or s.cs_lon
+    if has_pos and lat and lon then
         text(ctx, 1, 37, string.format("%s%06.3f", lat >= 0 and "N" or "S", math.abs(lat)))
         text(ctx, 1, 46, string.format("%s%07.3f", lon >= 0 and "E" or "W", math.abs(lon)))
     else
@@ -411,7 +427,7 @@ local function draw_page_4(ctx)
     end
 
     if st.stored_msg then text_right(ctx, 127, 46, "STORED") end
-    text(ctx, 1, 57, "T " .. df.format_timer(msg and 0 or s.cs_msg_age))
+    text(ctx, 1, 57, "T " .. df.format_timer(age))
     text_right(ctx, 127, 57, current_freq().label)
 end
 
@@ -583,10 +599,27 @@ local function power_off()
     redraw()
 end
 
+local MIN_BUS_VOLTS = 10.0
+local avionics_switch_on = false
+local bus_volts = 0.0
+local bus_powered = false
+
+local function update_bus_power()
+    local powered = avionics_switch_on and (bus_volts >= MIN_BUS_VOLTS)
+    if powered == bus_powered then return end
+    bus_powered = powered
+    if bus_powered then
+        power_on()
+    else
+        power_off()
+    end
+end
+
 -- ---------------------------------------------------------------- controls ---
 
 dcu.add_controls({
     power = function()
+        if not bus_powered then return end
         if st.power then power_off() else power_on() end
     end,
 
@@ -760,3 +793,13 @@ end)
 
 df.set_power(false)
 df_audio.stop()
+
+xpl_dataref_subscribe("sim/cockpit2/switches/avionics_power_on", "INT", function(on)
+    avionics_switch_on = (on or 0) ~= 0
+    update_bus_power()
+end)
+
+xpl_dataref_subscribe("sim/cockpit2/electrical/bus_volts", "FLOAT[6]", function(val)
+    bus_volts = type(val) == "table" and (val[1] or 0.0) or (type(val) == "number" and val or 0.0)
+    update_bus_power()
+end)

@@ -468,6 +468,46 @@ for i, p in ipairs(panel.LEDS) do
 end
 led_main, led_guard = led_lit[1], led_lit[2]
 
+local function power_on()
+    if st.power then return end
+    st.power = true
+    update_rx_lamps()
+    publish()
+    redraw()
+end
+
+local function power_off()
+    if not st.power then return end
+    st.power = false
+    st.level = 1
+    st.entry = nil
+    stop_scan()
+    st.tot_expired = false
+    if st.tot_timer then
+        timer_stop(st.tot_timer)
+        st.tot_timer = nil
+    end
+    update_rx_lamps()
+    publish()
+    redraw()
+end
+
+local MIN_BUS_VOLTS = 10.0
+local avionics_switch_on = false
+local bus_volts = 0.0
+local bus_powered = false
+
+local function update_bus_power()
+    local powered = avionics_switch_on and (bus_volts >= MIN_BUS_VOLTS)
+    if powered == bus_powered then return end
+    bus_powered = powered
+    if bus_powered then
+        power_on()
+    else
+        power_off()
+    end
+end
+
 -- ---------------------------------------------------------------- controls ---
 
 -- §1.1.1(3): Main encoder — volume, press for ON, press and hold for OFF.
@@ -481,26 +521,13 @@ dial_add("knob.png", panel.MAIN_ENC.x, panel.MAIN_ENC.y,
         redraw()
     end,
     function()  -- pressed
+        if not bus_powered then return end
         if not st.power then
-            st.power = true
-            update_rx_lamps()
-            publish()
-            redraw()
+            power_on()
         else
             -- Hold to switch off.
             main_hold_timer = timer_start(1500, 0, function()
-                st.power = false
-                st.level = 1
-                st.entry = nil
-                stop_scan()
-                st.tot_expired = false
-                if st.tot_timer then
-                    timer_stop(st.tot_timer)
-                    st.tot_timer = nil
-                end
-                update_rx_lamps()
-                publish()
-                redraw()
+                power_off()
             end)
         end
     end,
@@ -721,3 +748,13 @@ end)
 
 publish()
 redraw()
+
+xpl_dataref_subscribe("sim/cockpit2/switches/avionics_power_on", "INT", function(on)
+    avionics_switch_on = (on or 0) ~= 0
+    update_bus_power()
+end)
+
+xpl_dataref_subscribe("sim/cockpit2/electrical/bus_volts", "FLOAT[6]", function(val)
+    bus_volts = type(val) == "table" and (val[1] or 0.0) or (type(val) == "number" and val or 0.0)
+    update_bus_power()
+end)

@@ -61,6 +61,11 @@ class TestMOPanel(unittest.TestCase):
         self.assertEqual(aircraft_model.find("make").text, "Cessna")
         self.assertEqual(aircraft_model.find("model").text, "182T")
 
+    def test_simulator_compatibility_xplane_only(self):
+        """Verify panel only declares XPLANE support, not legacy FSX/P3D/FS2020."""
+        sims = [s.text for s in self.root.findall(".//flightSimulators/flightSimulator")]
+        self.assertEqual(sims, ["XPLANE"], f"Expected only ['XPLANE'], found {sims}")
+
     def test_layouts_presence(self):
         """Verify Becker 517 and RT-600 layouts exist."""
         layouts = self.root.findall(".//layout")
@@ -131,12 +136,33 @@ class TestMOPanel(unittest.TestCase):
 
             # MFD must have Display unit function = MFD property
             prop_found = False
+            streaming_found = False
             for prop in mfd.findall(".//property"):
                 name = prop.find("name")
                 val = prop.find("value")
                 if name is not None and name.text == "Display unit function" and val is not None and val.text == "MFD":
                     prop_found = True
+                if name is not None and name.text == "Streaming" and val is not None and val.text == "true":
+                    streaming_found = True
             self.assertTrue(prop_found, "MFD must specify 'Display unit function' = 'MFD'")
+            self.assertTrue(streaming_found, "MFD must specify 'Streaming' = 'true' in info.xml")
+
+    def test_panel_geometry_cross_check(self):
+        """Verify panel_geometry.load_panel_geometry parses info.xml accurately and matches assets generator."""
+        import sys
+        panel_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "panels", "cap-c182t-mo-station")
+        sys.path.insert(0, panel_dir)
+        import panel_geometry
+        geom = panel_geometry.load_panel_geometry(PANEL_XML_PATH)
+        self.assertEqual(geom["uuid"], "a4c8e710-5646-49e1-931f-4aeeb51e4490")
+        self.assertEqual(len(geom["layouts"]), 2)
+        for layout in geom["layouts"]:
+            self.assertEqual(layout["width"], 1920)
+            self.assertEqual(layout["height"], 1080)
+            self.assertEqual(len(layout["instruments"]), 4)
+            mfd = [i for i in layout["instruments"] if i["uuid"] == EXPECTED_INSTRUMENTS["MFD"]][0]
+            self.assertEqual(mfd["properties"].get("Streaming"), "true")
+            self.assertEqual(mfd["properties"].get("Display unit function"), "MFD")
 
     def test_installed_instrument_uuids_exist(self):
         """Verify all referenced instruments exist in Air Manager's library."""

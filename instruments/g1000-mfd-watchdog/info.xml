@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<pluginstrument>
+  <aircraft>Cessna 182T</aircraft>
+  <type>G1000 MFD Video Stream Watchdog</type>
+  <uuid>5c182e01-6006-4e2b-9cdf-e397b3f16ab2</uuid>
+  <author>CAP V-SAR</author>
+  <description>Video stream watchdog and recovery wrapper for the Garmin G1000 MFD in X-Plane 12. Prevents frozen moving map displays by monitoring frame arrival and connection status, displaying a prominent stale warning overlay when video drops, and automatically re-arming video_stream_add() upon reconnect.</description>
+  <compatibleFSX>false</compatibleFSX>
+  <compatibleP3D>false</compatibleP3D>
+  <compatibleXPL>true</compatibleXPL>
+  <compatibleFS2>false</compatibleFS2>
+  <compatibleFS2020>false</compatibleFS2020>
+  <version>1</version>
+  <configVersion>1</configVersion>
+  <pluginInterfaceVersion>100</pluginInterfaceVersion>
+  <prefWidth>2048</prefWidth>
+  <prefHeight>1536</prefHeight>
+  <source>PERSONAL</source>
+  <platforms>
+    <platform>WINDOWS</platform>
+    <platform>MAC</platform>
+    <platform>LINUX</platform>
+    <platform>RASPBERRY_PI</platform>
+  </platforms>
+  <tiers>
+    <tier>HOME_USE_STANDARD</tier>
+  </tiers>
+</pluginstrument>
+

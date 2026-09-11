@@ -18,10 +18,7 @@
       <make>Cessna</make>
       <model>182T</model>
       <flightSimulators>
-        <flightSimulator>FSX</flightSimulator>
         <flightSimulator>XPLANE</flightSimulator>
-        <flightSimulator>PREPAR3D</flightSimulator>
-        <flightSimulator>FS2020</flightSimulator>
       </flightSimulators>
       <layouts>
         <layout>
@@ -56,6 +53,10 @@
                 <property>
                   <name>Display unit function</name>
                   <value>MFD</value>
+                </property>
+                <property>
+                  <name>Streaming</name>
+                  <value>true</value>
                 </property>
               </properties>
             </instrument>
@@ -117,6 +118,10 @@
                 <property>
                   <name>Display unit function</name>
                   <value>MFD</value>
+                </property>
+                <property>
+                  <name>Streaming</name>
+                  <value>true</value>
                 </property>
               </properties>
             </instrument>

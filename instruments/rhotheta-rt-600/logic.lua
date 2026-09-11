@@ -387,10 +387,33 @@ end
 local function power_off()
     if boot_timer then timer_stop(boot_timer); boot_timer = nil end
     if dim_timer then timer_stop(dim_timer); dim_timer = nil end
+    for k, t in pairs(st.press_at) do
+        timer_stop(t)
+        st.press_at[k] = nil
+    end
+    for k in pairs(st.long_fired) do
+        st.long_fired[k] = false
+    end
     st.power, st.booting, st.dim_mode = false, false, false
     df.set_power(false)
     df_audio.stop()
     redraw()
+end
+
+local MIN_BUS_VOLTS = 10.0
+local avionics_switch_on = false
+local bus_volts = 0.0
+local bus_powered = false
+
+local function update_bus_power()
+    local powered = avionics_switch_on and (bus_volts >= MIN_BUS_VOLTS)
+    if powered == bus_powered then return end
+    bus_powered = powered
+    if bus_powered then
+        power_on()
+    else
+        power_off()
+    end
 end
 
 --- §2.1.4: DIM mode falls back to the prior page after ~3 s of inactivity.
@@ -478,10 +501,13 @@ local function dual(ctrl_key, short_fn, long_fn, clears_repeat)
             end)
         end,
         function()   -- release
-            if not st.power or st.booting then return end
             if st.press_at[ctrl_key] then
                 timer_stop(st.press_at[ctrl_key])
                 st.press_at[ctrl_key] = nil
+            end
+            if not st.power or st.booting then
+                st.long_fired[ctrl_key] = false
+                return
             end
             if not st.long_fired[ctrl_key] then short_fn() end
             st.long_fired[ctrl_key] = false
@@ -501,6 +527,7 @@ local rep_press,   rep_release   = dual("rep",
 
 dcu.add_controls({
     power = function()
+        if not bus_powered then return end
         if st.power then power_off() else power_on() end
     end,
 
@@ -578,3 +605,13 @@ end)
 
 df.set_power(false)
 df_audio.stop()
+
+xpl_dataref_subscribe("sim/cockpit2/switches/avionics_power_on", "INT", function(on)
+    avionics_switch_on = (on or 0) ~= 0
+    update_bus_power()
+end)
+
+xpl_dataref_subscribe("sim/cockpit2/electrical/bus_volts", "FLOAT[6]", function(val)
+    bus_volts = type(val) == "table" and (val[1] or 0.0) or (type(val) == "number" and val or 0.0)
+    update_bus_power()
+end)

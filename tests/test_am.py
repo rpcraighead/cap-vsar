@@ -98,8 +98,8 @@ class TestAirManagerHarness(unittest.TestCase):
             self.assertFalse(am.read_si_variable("cap_fm_mic_selected"))
             self.assertFalse(am.read_si_variable("cap_fm_audio_selected"))
 
-            # Turn on avionics master
-            am.write_dataref("sim/cockpit2/switches/avionics_power_on", "INT", 1)
+            # Turn on avionics master and bus power
+            am.set_avionics_power(True, 28.0)
             # Advance past 2s self test
             am.step_time(2000)
 
@@ -117,8 +117,7 @@ class TestAirManagerHarness(unittest.TestCase):
         """Becker 517 STORE suppresses 3 kHz tone on 121.5, and frequency dial change clears suppression."""
         with AirManager() as am:
             am.load_instrument("becker-sar-df-517")
-            # Power ON button: x=238, y=456
-            am.click_button_matching(x=238, y=456)
+            am.set_avionics_power(True, 28.0)
             # Advance past 10s boot screen
             am.step_time(10000)
 
@@ -147,7 +146,7 @@ class TestAirManagerHarness(unittest.TestCase):
         """GMA 1347 implements Table 6A.3.2 ICS isolation states and Split COM drops MO from mission net."""
         with AirManager() as am:
             am.load_instrument("mo-audio-panel-gma1347")
-            am.write_dataref("sim/cockpit2/switches/avionics_power_on", "INT", 1)
+            am.set_avionics_power(True, 28.0)
             am.step_time(2000)
 
             # Default mode is ALL
@@ -201,7 +200,7 @@ class TestAirManagerHarness(unittest.TestCase):
         """Clearance recorder buffers incoming COM transmissions and replays in reverse order on PLAY."""
         with AirManager() as am:
             am.load_instrument("mo-audio-panel-gma1347")
-            am.write_dataref("sim/cockpit2/switches/avionics_power_on", "INT", 1)
+            am.set_avionics_power(True, 28.0)
             am.step_time(2000)
 
             self.assertEqual(am.read_si_variable("cap_recorder_count"), 0)
@@ -276,6 +275,279 @@ class TestAirManagerHarness(unittest.TestCase):
             analog_sound = next(s for s in sounds if s.get("file") == "elt_analog_df.wav")
             self.assertEqual(analog_sound["state"], "stopped")
             self.assertEqual(noise_sound["state"], "stopped")
+
+    def test_becker_stored_frame_without_position_does_not_fall_through(self):
+        """I-4: Stored positionless 406 frame does not inherit coordinates from live frame."""
+        with AirManager() as am:
+            am.load_instrument("becker-sar-df-517")
+            am.set_avionics_power(True, 28.0)
+            am.step_time(10000)
+
+            # Switch to Page 4 (C/S ANALYSE) by turning PAGE knob (x=405, y=15) clockwise 3 times
+            am.turn_dial_matching(1, x=405, y=15)
+            am.turn_dial_matching(1, x=405, y=15)
+            am.turn_dial_matching(1, x=405, y=15)
+
+            # Feed live 406 frame WITHOUT position
+            am.eval("""
+                cap_df.state.cs_sync = 1
+                cap_df.state.cs_protocol = 1
+                cap_df.state.cs_country = 366
+                cap_df.state.cs_has_pos = false
+                cap_df.state.cs_hex15 = "AD4800000000000"
+            """)
+
+            # Press STORE (x=234, y=18) to save this positionless frame into st.stored_msg
+            am.click_button_matching(x=234, y=18)
+
+            # Now update the live stream with a frame that DOES have position
+            am.eval("""
+                cap_df.state.cs_has_pos = true
+                cap_df.state.cs_lat = 33.123
+                cap_df.state.cs_lon = -117.456
+            """)
+
+            # Press REP (x=320, y=18) to display the STORED message (st.shown_msg = st.stored_msg)
+            am.eval("_AM.drawn_commands = {}")
+            am.click_button_matching(x=320, y=18)
+
+            drawn = am.eval("return _AM.drawn_commands")
+            drawn_text = "".join(cmd[1] for cmd in drawn if cmd[0] == "txt")
+            self.assertIn("NOPOSITION", drawn_text)
+            self.assertNotIn("N033", drawn_text)
+            self.assertNotIn("W117", drawn_text)
+
+    def test_rt600_long_press_timer_cancelled_on_power_off(self):
+        """I-5: Holding F1 and powering off cancels long-press timer and preserves average store."""
+        with AirManager() as am:
+            am.load_instrument("rhotheta-rt-600")
+            am.set_avionics_power(True, 28.0)
+            am.step_time(5000)
+
+            f1_btn = am.find_button_matching(x=148, y=18)
+            power_btn = am.find_button_matching(x=238, y=456)
+
+            # Reset clear_average dataref
+            am.write_dataref("cap/df/clear_average", "INT", 0)
+
+            # Hold F1 down (press starts 1500ms timer for f1_long / clear_average)
+            am.press_button(f1_btn)
+            am.step_time(500)  # half a second into the press
+
+            # Power OFF while F1 is still held
+            am.click_button(power_btn)
+
+            # Release F1 while power is OFF
+            am.release_button(f1_btn)
+
+            # Step clock past the 1500ms long press window
+            am.step_time(2000)
+
+            # Assert clear_average was never triggered
+            self.assertEqual(am.read_dataref("cap/df/clear_average"), 0)
+
+            # Power back ON and verify still 0
+            am.click_button(power_btn)
+            am.step_time(5000)
+            self.assertEqual(am.read_dataref("cap/df/clear_average"), 0)
+
+    def test_cold_start_all_instruments_dark_and_unresponsive(self):
+        """I-6: Cold aircraft has all four instruments unpowered and local buttons are inert."""
+        # 1. Becker SAR-DF 517
+        with AirManager() as am:
+            am.load_instrument("becker-sar-df-517")
+            # Cold aircraft: avionics_power_on = 0, bus_volts = 0.0
+            am.eval("_AM.drawn_commands = {}")
+            am.eval("if canvas_id then canvas_draw(canvas_id, draw_lcd) end")
+            drawn = am.eval("return _AM.drawn_commands")
+            # Nothing drawn when unpowered
+            self.assertEqual(len(drawn), 0)
+            # Clicking power button when bus is unpowered must NOT turn it on
+            am.click_button_matching(x=238, y=456)
+            am.step_time(1000)
+            am.eval("_AM.drawn_commands = {}")
+            am.eval("if canvas_id then canvas_draw(canvas_id, draw_lcd) end")
+            drawn = am.eval("return _AM.drawn_commands")
+            self.assertEqual(len(drawn), 0)
+
+        # 2. RHOTHETA RT-600
+        with AirManager() as am:
+            am.load_instrument("rhotheta-rt-600")
+            am.eval("_AM.drawn_commands = {}")
+            am.eval("if canvas_id then canvas_draw(canvas_id, draw_lcd) end")
+            drawn = am.eval("return _AM.drawn_commands")
+            self.assertEqual(len(drawn), 0)
+            # Power button inert on cold bus
+            am.click_button_matching(x=238, y=456)
+            am.step_time(1000)
+            am.eval("_AM.drawn_commands = {}")
+            am.eval("if canvas_id then canvas_draw(canvas_id, draw_lcd) end")
+            drawn = am.eval("return _AM.drawn_commands")
+            self.assertEqual(len(drawn), 0)
+
+        # 3. Technisonic TDFM-136B
+        with AirManager() as am:
+            am.load_instrument("cap-fm-tdfm-136b")
+            self.assertFalse(am.read_si_variable("cap_fm_power_on"))
+            # Main encoder press inert on cold bus
+            am.click_dial_matching(x=80, y=202)
+            am.step_time(500)
+            self.assertFalse(am.read_si_variable("cap_fm_power_on"))
+
+        # 4. Garmin GMA 1347
+        with AirManager() as am:
+            am.load_instrument("mo-audio-panel-gma1347")
+            self.assertFalse(am.read_si_variable("cap_fm_mic_selected"))
+            self.assertFalse(am.read_si_variable("cap_fm_audio_selected"))
+            # Annunciator on images are all hidden when unpowered
+            ann_on_ids = am.eval("""
+                local ids = {}
+                for id, img in pairs(_AM.images) do
+                    if img.file == "ann_on.png" then table.insert(ids, id) end
+                end
+                return ids
+            """)
+            for ann_id in ann_on_ids:
+                self.assertFalse(am.is_visible(ann_id))
+
+    def test_avionics_master_on_boots_all_four_instruments(self):
+        """I-6: Turning avionics master on with valid bus voltage boots all 4 instruments."""
+        # 1. Becker boots into 10s startup window
+        with AirManager() as am:
+            am.load_instrument("becker-sar-df-517")
+            am.eval("_AM.drawn_commands = {}")
+            am.set_avionics_power(True, 28.0)
+            am.eval("for _, c in pairs(_AM.canvases) do canvas_draw(c.id, c.cb) end")
+            drawn = am.eval("return _AM.drawn_commands")
+            drawn_text = "".join(cmd[1] for cmd in drawn if cmd[0] == "txt")
+            self.assertTrue("SAR-DF 517" in drawn_text or "START" in drawn_text or len(drawn) > 0)
+
+        # 2. RT-600 boots into 5s boot animation
+        with AirManager() as am:
+            am.load_instrument("rhotheta-rt-600")
+            am.eval("_AM.drawn_commands = {}")
+            am.set_avionics_power(True, 28.0)
+            am.eval("for _, c in pairs(_AM.canvases) do canvas_draw(c.id, c.cb) end")
+            drawn = am.eval("return _AM.drawn_commands")
+            drawn_text = "".join(cmd[1] for cmd in drawn if cmd[0] == "txt")
+            self.assertTrue("RHOTHETA" in drawn_text or "RT-600" in drawn_text)
+            # Advance past 5s boot animation -> reaches operational page
+            am.step_time(5000)
+            am.eval("_AM.drawn_commands = {}")
+            am.eval("for _, c in pairs(_AM.canvases) do canvas_draw(c.id, c.cb) end")
+            drawn = am.eval("return _AM.drawn_commands")
+            drawn_text = "".join(cmd[1] for cmd in drawn if cmd[0] == "txt")
+            self.assertIn("DF", drawn_text)
+
+        # 3. TDFM boots on bus-up
+        with AirManager() as am:
+            am.load_instrument("cap-fm-tdfm-136b")
+            am.set_avionics_power(True, 28.0)
+            self.assertTrue(am.read_si_variable("cap_fm_power_on"))
+            self.assertEqual(am.read_si_variable("cap_fm_channel"), 1)
+
+        # 4. GMA boots into 2s self-test
+        with AirManager() as am:
+            am.load_instrument("mo-audio-panel-gma1347")
+            am.set_avionics_power(True, 28.0)
+            # Advance past 2s self-test
+            am.step_time(2000)
+            self.assertFalse(am.read_si_variable("cap_fm_mic_selected"))
+            # COM1 is active by default
+            am.click_button_matching("com3_mic")
+            self.assertTrue(am.read_si_variable("cap_fm_mic_selected"))
+
+    def test_bus_voltage_brownout_and_recovery(self):
+        """I-6: Bus voltage drop below 10V browns out instruments, and recovery reboots them."""
+        # 1. RT-600 brownout and reboot
+        with AirManager() as am:
+            am.load_instrument("rhotheta-rt-600")
+            am.set_avionics_power(True, 28.0)
+            am.step_time(5000)
+
+            # Operating normally on DF page
+            am.eval("_AM.drawn_commands = {}")
+            am.eval("for _, c in pairs(_AM.canvases) do canvas_draw(c.id, c.cb) end")
+            drawn = am.eval("return _AM.drawn_commands")
+            drawn_text = "".join(cmd[1] for cmd in drawn if cmd[0] == "txt")
+            self.assertIn("DF", drawn_text)
+
+            # Bus voltage drops below 10.0V threshold (e.g. 9.5V brownout)
+            am.write_dataref("sim/cockpit2/electrical/bus_volts", "FLOAT[6]", 9.5)
+            am.eval("_AM.drawn_commands = {}")
+            am.eval("for _, c in pairs(_AM.canvases) do canvas_draw(c.id, c.cb) end")
+            drawn = am.eval("return _AM.drawn_commands")
+            # Blank display (no text) during brownout
+            drawn_text = "".join(cmd[1] for cmd in drawn if cmd[0] == "txt")
+            self.assertEqual(drawn_text, "")
+
+            # Bus voltage recovers to 28.0V -> must reboot through boot animation
+            am.write_dataref("sim/cockpit2/electrical/bus_volts", "FLOAT[6]", 28.0)
+            am.eval("_AM.drawn_commands = {}")
+            am.eval("for _, c in pairs(_AM.canvases) do canvas_draw(c.id, c.cb) end")
+            drawn = am.eval("return _AM.drawn_commands")
+            drawn_text = "".join(cmd[1] for cmd in drawn if cmd[0] == "txt")
+            self.assertTrue("RHOTHETA" in drawn_text or "RT-600" in drawn_text)
+
+        # 2. TDFM brownout and reboot
+        with AirManager() as am:
+            am.load_instrument("cap-fm-tdfm-136b")
+            am.set_avionics_power(True, 28.0)
+            self.assertTrue(am.read_si_variable("cap_fm_power_on"))
+
+            # Brownout: bus drops below 10.0V
+            am.write_dataref("sim/cockpit2/electrical/bus_volts", "FLOAT[6]", 8.0)
+            self.assertFalse(am.read_si_variable("cap_fm_power_on"))
+
+            # Recovery: bus restores to 28.0V
+            am.write_dataref("sim/cockpit2/electrical/bus_volts", "FLOAT[6]", 28.0)
+            self.assertTrue(am.read_si_variable("cap_fm_power_on"))
+
+        # 3. GMA 1347 brownout and reboot
+        with AirManager() as am:
+            am.load_instrument("mo-audio-panel-gma1347")
+            am.set_avionics_power(True, 28.0)
+            am.step_time(2000)
+            am.click_button_matching("com3_mic")
+            self.assertTrue(am.read_si_variable("cap_fm_mic_selected"))
+
+            # Brownout
+            am.write_dataref("sim/cockpit2/electrical/bus_volts", "FLOAT[6]", 5.0)
+            self.assertFalse(am.read_si_variable("cap_fm_mic_selected"))
+
+            # Recovery
+            am.write_dataref("sim/cockpit2/electrical/bus_volts", "FLOAT[6]", 28.0)
+            # Reboots into self-test
+            am.step_time(2000)
+            # Re-select COM3 MIC
+            am.click_button_matching("com3_mic")
+            self.assertTrue(am.read_si_variable("cap_fm_mic_selected"))
+
+    def test_g1000_mfd_watchdog_stale_detection_and_rearm(self):
+        """O-7b: G1000 MFD watchdog monitors frame arrival, flags stale stream, and re-arms on recovery."""
+        with AirManager() as am:
+            am.load_instrument("g1000-mfd-watchdog")
+
+            # Initially armed
+            self.assertFalse(am.read_si_variable("g1000_mfd_stream_stale"))
+            self.assertEqual(am.read_si_variable("g1000_mfd_rearm_count"), 1)
+
+            # Heartbeat arrives from X-Plane
+            am.write_dataref("sim/version/xplane_internal_version", "INT", 120000)
+            am.write_dataref("sim/time/total_running_time_sec", "FLOAT", 100.0)
+            self.assertFalse(am.read_si_variable("g1000_mfd_stream_stale"))
+
+            # Advance clock past watchdog timeout (>=3.0s = 6 ticks of 500ms)
+            am.step_time(3500)
+
+            # Watchdog must flag stream as stale
+            self.assertTrue(am.read_si_variable("g1000_mfd_stream_stale"))
+
+            # Sim recovers, new frame arrives
+            am.write_dataref("sim/time/total_running_time_sec", "FLOAT", 104.0)
+            # Re-arms video stream and clears stale flag
+            self.assertFalse(am.read_si_variable("g1000_mfd_stream_stale"))
+            self.assertEqual(am.read_si_variable("g1000_mfd_rearm_count"), 2)
 
 
 if __name__ == "__main__":

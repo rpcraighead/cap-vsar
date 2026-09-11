@@ -123,10 +123,27 @@ for head in HEADS:
           and ("<prefHeight>%d</prefHeight>" % G["FACE"]) in info)
 
 print("\n== shared libraries and branding ==")
-for lib in ("dcu.lua", "lcd.lua", "cap_df.lua", "cap_df_audio.lua"):
-    a = open(os.path.join(ROOT, "instruments", HEADS[0], "lib", lib), encoding="utf-8").read()
-    b = open(os.path.join(ROOT, "instruments", HEADS[1], "lib", lib), encoding="utf-8").read()
-    check("lib/%s is identical in both heads" % lib, a == b)
+SHARED_DIR = os.path.join(ROOT, "instruments", "_shared")
+
+# lcd.lua is shared across Becker, RT-600, and TDFM
+shared_lcd = open(os.path.join(SHARED_DIR, "lib", "lcd.lua"), encoding="utf-8").read()
+for inst in ("becker-sar-df-517", "rhotheta-rt-600", "cap-fm-tdfm-136b"):
+    inst_lcd = open(os.path.join(ROOT, "instruments", inst, "lib", "lcd.lua"), encoding="utf-8").read()
+    check("%s: lib/lcd.lua matches shared source" % inst, inst_lcd == shared_lcd)
+
+# cap_df.lua, cap_df_audio.lua, dcu.lua are shared across the two DF heads
+for lib in ("cap_df.lua", "cap_df_audio.lua", "dcu.lua"):
+    shared_src = open(os.path.join(SHARED_DIR, "lib", lib), encoding="utf-8").read()
+    for head in HEADS:
+        inst_src = open(os.path.join(ROOT, "instruments", head, "lib", lib), encoding="utf-8").read()
+        check("%s: lib/%s matches shared source" % (head, lib), inst_src == shared_src)
+
+# Four shared WAV resources across the two DF heads
+for wav in ("elt_analog_clean.wav", "elt_analog_df.wav", "elt_noise.wav", "elt_406_burst.wav"):
+    shared_wav = open(os.path.join(SHARED_DIR, "resources", wav), "rb").read()
+    for head in HEADS:
+        inst_wav = open(os.path.join(ROOT, "instruments", head, "resources", wav), "rb").read()
+        check("%s: resources/%s matches shared source" % (head, wav), inst_wav == shared_wav)
 
 becker = open(os.path.join(ROOT, "instruments", HEADS[0], "logic.lua"), encoding="utf-8").read()
 # The Becker's own file may say "RT-600" in prose about the sibling instrument,

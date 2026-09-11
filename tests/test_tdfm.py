@@ -8,9 +8,11 @@ class TestTDFM136B(unittest.TestCase):
         """PTT held continuously unkeys after 60s, displays TOT warning, and locks out until released."""
         with AirManager() as am:
             am.load_instrument("cap-fm-tdfm-136b")
+            am.set_avionics_power(True, 28.0)
 
             # Turn on radio power via Main encoder press (x=80, y=202)
             am.press_dial_matching(x=80, y=202)
+            am.release_dial_matching(x=80, y=202)
             self.assertTrue(am.read_si_variable("cap_fm_power_on"))
 
             # MO selects COM3 MIC on GMA 1347
@@ -51,6 +53,7 @@ class TestTDFM136B(unittest.TestCase):
         """X-Plane copilot PTT dataref keys TDFM transmission when powered and COM3 MIC selected."""
         with AirManager() as am:
             am.load_instrument("cap-fm-tdfm-136b")
+            am.set_avionics_power(True, 28.0)
             am.press_dial_matching(x=80, y=202)  # Power ON
             am.write_si_variable("cap_fm_mic_selected", True)
 
@@ -81,7 +84,7 @@ class TestTDFM136B(unittest.TestCase):
             self.assertEqual(len(led_on_ids), 2, "Expected 2 'led_on.png' elements for Main and Guard")
             main_led_id, guard_led_id = led_on_ids[0], led_on_ids[1]
 
-            # Initially off when unpowered
+            # Initially off when unpowered (cold aircraft)
             self.assertFalse(am.is_visible(main_led_id))
             self.assertFalse(am.is_visible(guard_led_id))
 
@@ -89,8 +92,8 @@ class TestTDFM136B(unittest.TestCase):
             am.write_si_variable("cap_fm_main_rx", True)
             self.assertFalse(am.is_visible(main_led_id))
 
-            # Turn power ON
-            am.press_dial_matching(x=80, y=202)
+            # Turn power ON via avionics bus
+            am.set_avionics_power(True, 28.0)
             self.assertTrue(am.read_si_variable("cap_fm_power_on"))
             # Now Main LED must illuminate
             self.assertTrue(am.is_visible(main_led_id))
@@ -110,6 +113,7 @@ class TestTDFM136B(unittest.TestCase):
         """Authentic CAP fleet plan is loaded and 3-digit direct entry (e.g. 015 -> VFIRE 21) works."""
         with AirManager() as am:
             am.load_instrument("cap-fm-tdfm-136b")
+            am.set_avionics_power(True, 28.0)
             am.press_dial_matching(x=80, y=202)  # Power ON
 
             # Default channel is 1 (TAC 1, 148.1500 MHz, CTCSS 110.9 Hz)
@@ -154,6 +158,7 @@ class TestTDFM136B(unittest.TestCase):
         """Guard receiver operates independently with its own frequency, channel, and volume."""
         with AirManager() as am:
             am.load_instrument("cap-fm-tdfm-136b")
+            am.set_avionics_power(True, 28.0)
             am.press_dial_matching(x=80, y=202)  # Power ON
 
             # Main receiver is on TAC 1 (148.150 MHz)
@@ -192,7 +197,9 @@ class TestTDFM136B(unittest.TestCase):
         """Scan mode cycles memories, halts on carrier, and resumes after 2s hold delay."""
         with AirManager() as am:
             am.load_instrument("cap-fm-tdfm-136b")
+            am.set_avionics_power(True, 28.0)
             am.press_dial_matching(x=80, y=202)  # Power ON
+            am.release_dial_matching(x=80, y=202)
 
             self.assertEqual(am.read_si_variable("cap_fm_channel"), 1)
 
