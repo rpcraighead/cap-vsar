@@ -1,0 +1,450 @@
+{
+  "schema_version": 1,
+  "title": "CAP 487 C182T exterior dimensional measurement master",
+  "status": "sourced; tolerances proposed and not yet ratified",
+  "established": "2026-09-11",
+  "tracker_item": "A-1",
+  "aircraft": {
+    "make_model": "Cessna 182T Skylane",
+    "variant": "NAV III with GFC 700 AFCS (Garmin G1000 Integrated Cockpit System)",
+    "type_certificate": "FAA TC 3A13, Model 182T approved 23 February 2001",
+    "serial_range": "18280945 and on",
+    "notes": "Variant chosen to match the installed package identity 'Cessna 182T NAV III'. The simulated tail number is CAP 487."
+  },
+  "units": {
+    "primary": "metre",
+    "source_units": "US customary (feet/inches) as published",
+    "inch_to_metre": 0.0254,
+    "conversion_rule": "Exact: 1 in = 0.0254 m. Metric values below are converted, not independently published, except where the source prints its own metric value."
+  },
+  "sources": {
+    "POH": {
+      "id": "POH",
+      "title": "Cessna Model 182T NAV III GFC 700 AFCS Pilot's Operating Handbook and FAA Approved Airplane Flight Manual",
+      "part_number": "182TPHBUS-00 / 182TPHBUS-01",
+      "authority": "FAA approved; the AFM part number required by TCDS 3A13 NOTE 2 for a 182T with G1000 and GFC-700",
+      "url": "https://ilwg.cap.gov/media/cms/182TNavIIIGFC700InfoManual_4C95242EF1943.pdf",
+      "retrieved": "2026-09-11",
+      "sha256": "ba64adab5d6ed543f73b330f24301e72fdaba4f729c3661075fa55173fd2705c",
+      "primary_for": "exterior three-view dimensions and the reference attitude"
+    },
+    "TCDS": {
+      "id": "TCDS",
+      "title": "FAA Type Certificate Data Sheet No. 3A13",
+      "revision": "Revision 66, November 3, 2006",
+      "authority": "FAA certification document; governs the datum, leveling means and certificated limits",
+      "url": "https://peter-ftp.co.uk/aviation/misc-euroga/3A13.pdf",
+      "retrieved": "2026-09-11",
+      "sha256": "4141481297d55e5f5f26561b8fc1d1cf08308b7dfbf693c9adbe2ab703df855f",
+      "primary_for": "reference datum, leveling means, MAC, propeller limits, control surface travels, loading stations"
+    },
+    "SD": {
+      "id": "SD",
+      "title": "Specification and Description, Skylane 182T",
+      "revision": "December 2015, Revision C; unit 82451 to TBD",
+      "authority": "Cessna Aircraft Company (Textron Aviation) manufacturer publication",
+      "url": "https://tadistributors.com/wp-content/uploads/2016/03/182T-SD-Unit-82451-to-TBD-2015-Dec.pdf",
+      "retrieved": "2026-09-11",
+      "sha256": "4466093c4f534902588ba14eddac7ee09a53975f59c1438b872ff18aefcd7df5",
+      "primary_for": "cabin interior stations and door openings; corroborates headline dimensions",
+      "caveat": "Its dimension table is headed '1.2 APPROXIMATE DIMENSIONS'. Treat as corroborating, never as the acceptance master."
+    }
+  },
+  "attitudes": {
+    "normal_ground_attitude": {
+      "id": "normal_ground_attitude",
+      "definition": "Nose strut showing approximately 2 inches of strut, wings level.",
+      "source": "POH Figure 1-1 Sheet 2, page 1-4, NOTE",
+      "applies_to": "every dimension on the POH three-view, including overall length and overall height",
+      "note": "This is the attitude the published length and height are measured in. It is NOT the weighing/leveling attitude."
+    },
+    "leveling_attitude": {
+      "id": "leveling_attitude",
+      "definition": "Aircraft level on the leveling means: left side of tailcone at 139.65 in and 171.65 in aft of datum at equal waterline. Achieved at weighing by deflating the nose tire and/or raising or lowering the nose strut.",
+      "source": "TCDS 3A13 Rev 66 page 33 (Leveling Means); POH Section 6 Airplane Weighing Procedures step 2",
+      "applies_to": "weight and balance only",
+      "note": "Distinct from normal ground attitude. Do not measure three-view dimensions in this attitude."
+    }
+  },
+  "datum": {
+    "longitudinal": {
+      "name": "Fuselage station (FS), inches aft of datum",
+      "definition": "Lower portion of front face of firewall",
+      "source": "TCDS 3A13 Rev 66 page 33 (Reference Datum); POH Section 2 page 2-8 states 'Reference Datum: Front face of firewall'",
+      "sign_convention": "positive aft"
+    },
+    "vertical": {
+      "name": "Waterline (W.L.)",
+      "definition": "UNKNOWN. TCDS references '0.00 W.L.' when specifying rudder travel but does not locate the waterline datum.",
+      "source": "TCDS 3A13 Rev 66 page 33",
+      "status": "unknown"
+    },
+    "lateral": {
+      "name": "Buttock line (B.L.)",
+      "definition": "UNKNOWN. Not referenced in the consulted sources; assume B.L. 0 is the aircraft centreline for symmetry checks only.",
+      "status": "unknown"
+    }
+  },
+  "targets": [
+    {
+      "id": "overall_length",
+      "description": "Overall length",
+      "value_in": 348.0,
+      "value_m": 8.8392,
+      "printed_as": "29'-0\"",
+      "endpoint_from": "Spinner apex (forward-most point of the propeller spinner). Verified against the drawing: the forward extension line passes through the spinner tip, forward of the propeller blades.",
+      "endpoint_to": "Aft-most point of the rudder trailing edge. Verified against the drawing: the aft extension line passes through the rudder trailing-edge bulge, aft of the fin.",
+      "attitude": "normal_ground_attitude",
+      "source": "POH",
+      "page": "1-4, Figure 1-1 Sheet 2 (side view)",
+      "corroboration": "SD page 6, '1.2 APPROXIMATE DIMENSIONS', Overall Length 29 ft 0 in (8.84 m)",
+      "tolerance_proposed_pct": 1.0,
+      "ambiguity": "Printed to the whole foot. The drawing endpoints are unambiguous but the value carries the round-off of a headline figure."
+    },
+    {
+      "id": "wing_span",
+      "description": "Wing span, overall",
+      "value_in": 432.0,
+      "value_m": 10.9728,
+      "printed_as": "36'-0\"",
+      "endpoint_from": "Port wingtip outboard extremity INCLUDING the standard strobe light",
+      "endpoint_to": "Starboard wingtip outboard extremity INCLUDING the standard strobe light",
+      "attitude": "normal_ground_attitude",
+      "source": "POH",
+      "page": "1-3 Figure 1-1 Sheet 1 (front view); endpoint rule from the NOTE on page 1-4",
+      "note": "POH NOTE states verbatim: 'Wing span shown with standard strobe lights installed.' The span is therefore NOT the structural wingtip-to-wingtip distance.",
+      "corroboration": "SD page 6, Wing Span (overall) 36 ft 0 in (10.97 m)",
+      "tolerance_proposed_pct": 0.5,
+      "ambiguity": "Structural span without strobes is not published and must not be inferred by subtraction."
+    },
+    {
+      "id": "overall_height",
+      "description": "Overall height",
+      "value_in": 112.0,
+      "value_m": 2.8448,
+      "printed_as": "9'-4\"",
+      "endpoint_from": "Ground plane (under the tyres in normal ground attitude)",
+      "endpoint_to": "Top of the vertical fin tip. Reading the drawing at 450 dpi, the upper extension line is drawn from the fin cap including the small item faired into it (beacon/strobe); the two cannot be separated to better than 1-2 inches at drawing resolution.",
+      "attitude": "normal_ground_attitude",
+      "source": "POH",
+      "page": "1-4, Figure 1-1 Sheet 2 (side view)",
+      "corroboration": "SD page 6, Overall Height 9 ft 4 in (2.84 m)",
+      "tolerance_proposed_pct": 2.5,
+      "ambiguity": "HIGHEST-RISK TARGET. Two compounding ambiguities: (a) whether the fin-tip beacon is included; (b) height depends on nose strut extension and tyre pressure, which the attitude note fixes only as 'approximately 2 inches of strut'. A wider tolerance than length or span is justified; do not reshape the fin to chase this number alone."
+    },
+    {
+      "id": "main_wheel_track",
+      "description": "Main landing gear track (tread), wheel centre to wheel centre",
+      "value_in": 108.0,
+      "value_m": 2.7432,
+      "printed_as": "9'-0\"",
+      "endpoint_from": "Port main wheel centreline at the ground contact",
+      "endpoint_to": "Starboard main wheel centreline at the ground contact",
+      "attitude": "normal_ground_attitude",
+      "source": "POH",
+      "page": "1-3, Figure 1-1 Sheet 1 (front view)",
+      "tolerance_proposed_pct": 1.0,
+      "ambiguity": "The drawing dimension lines drop from the wheels; whether they mark wheel centre or tyre outer face is not annotated. Centre-to-centre is the conventional reading."
+    },
+    {
+      "id": "wheel_base",
+      "description": "Wheel base (nose wheel axle to main wheel axle line)",
+      "value_in": 66.5,
+      "value_m": 1.6891,
+      "printed_as": "66.5 inches",
+      "endpoint_from": "Centre of the nose wheel axle",
+      "endpoint_to": "Line stretched between the main wheel centres",
+      "attitude": "normal_ground_attitude",
+      "source": "POH",
+      "page": "1-4, Figure 1-1 Sheet 2, NOTE",
+      "corroboration": "POH Section 6 weighing 'measurement B' is defined between these same two features",
+      "tolerance_proposed_pct": 1.0,
+      "ambiguity": "Printed to 0.1 in, the most precisely stated exterior dimension available."
+    },
+    {
+      "id": "propeller_diameter",
+      "description": "Propeller diameter, McCauley B3D36C431/80VSA-1, 3 blades",
+      "value_in": 79.0,
+      "value_m": 2.0066,
+      "printed_as": "79\" MAX",
+      "limit_max_in": 79.0,
+      "limit_min_in": 77.5,
+      "limit_min_m": 1.9685,
+      "endpoint_from": "Blade tip",
+      "endpoint_to": "Diametrically opposite blade tip, through the hub axis",
+      "attitude": "n/a",
+      "source": "TCDS",
+      "page": "33 (Propeller Limits, 182S/182T item (2)); POH page 1-3 front view annotates '79\" MAX'",
+      "tolerance_rule": "Certification bound, not a tolerance: diameter must be within 77.5-79.0 in. Treat a measured value outside that band as a failure regardless of percentage error.",
+      "ambiguity": "None. This is the best-defined target in the set and makes an excellent scale sanity check."
+    },
+    {
+      "id": "horizontal_tail_span",
+      "description": "Horizontal tail span",
+      "value_in": 140.0,
+      "value_m": 3.556,
+      "printed_as": "11'-8\"",
+      "endpoint_from": "Port horizontal stabiliser tip",
+      "endpoint_to": "Starboard horizontal stabiliser tip",
+      "attitude": "normal_ground_attitude",
+      "source": "POH",
+      "page": "1-3, Figure 1-1 Sheet 1 (top view)",
+      "tolerance_proposed_pct": 1.0,
+      "ambiguity": "The dimension spans the stabiliser tips in plan view; whether it is taken at the stabiliser or elevator tip is not annotated, though they are flush on this airframe."
+    },
+    {
+      "id": "propeller_ground_clearance",
+      "description": "Propeller ground clearance",
+      "value_in": 10.875,
+      "value_m": 0.276225,
+      "printed_as": "10.875 inches",
+      "endpoint_from": "Ground plane",
+      "endpoint_to": "Bottom of the propeller disc (blade tip at the 6 o'clock position)",
+      "attitude": "normal_ground_attitude",
+      "source": "POH",
+      "page": "1-4, Figure 1-1 Sheet 2, NOTE",
+      "tolerance_proposed_in": 1.0,
+      "ambiguity": "Must be derived from the propeller disc geometry (hub axis and radius), NOT from the lowest modelled blade vertex, because the modelled blade clocking is arbitrary. Highly sensitive to nose strut extension and tyre pressure."
+    },
+    {
+      "id": "wing_area",
+      "description": "Wing area",
+      "value_ft2": 174.0,
+      "value_m2": 16.1653,
+      "printed_as": "174.0 square feet",
+      "source": "POH",
+      "page": "1-4, Figure 1-1 Sheet 2, NOTE",
+      "corroboration": "SD page 6, Area 174 ft2 (16.2 m2)",
+      "applies_to": "Plane Maker / flight-model stage, not the exterior mesh",
+      "ambiguity": "Reference wing area per the manufacturer's definition, which normally includes the area carried through the fuselage. Not directly measurable from a mesh silhouette."
+    },
+    {
+      "id": "min_turning_radius",
+      "description": "Minimum turning radius, pivot point to outboard wing tip",
+      "value_ft": 27.0,
+      "value_m": 8.2296,
+      "printed_as": "27.0 feet",
+      "source": "POH",
+      "page": "1-4, Figure 1-1 Sheet 2, NOTE",
+      "applies_to": "ground handling; informational for the mesh stage",
+      "ambiguity": "Depends on differential braking technique; not a structural dimension."
+    }
+  ],
+  "stations": {
+    "note": "Fuselage stations in inches aft of the datum (lower front face of firewall). These constrain longitudinal correction region by region, not just the headline length.",
+    "entries": [
+      {
+        "fs_in": -14.8,
+        "fs_m": -0.37592,
+        "feature": "Engine oil (9.0 qt) arm",
+        "source": "TCDS",
+        "page": "33"
+      },
+      {
+        "fs_in": 0.0,
+        "fs_m": 0.0,
+        "feature": "DATUM: lower portion of front face of firewall",
+        "source": "TCDS",
+        "page": "33"
+      },
+      {
+        "fs_in": 25.98,
+        "fs_m": 0.659892,
+        "feature": "Leading edge of MAC",
+        "source": "TCDS",
+        "page": "33"
+      },
+      {
+        "fs_in": 32.0,
+        "fs_m": 0.8128,
+        "feature": "Front seat range, forward limit",
+        "source": "TCDS",
+        "page": "33"
+      },
+      {
+        "fs_in": 33.0,
+        "fs_m": 0.8382,
+        "feature": "Forward CG limit at 2250 lb and below",
+        "source": "TCDS",
+        "page": "33"
+      },
+      {
+        "fs_in": 46.0,
+        "fs_m": 1.1684,
+        "feature": "Aft CG limit at 3100 lb and below",
+        "source": "TCDS",
+        "page": "33"
+      },
+      {
+        "fs_in": 46.5,
+        "fs_m": 1.1811,
+        "feature": "Wing fuel tanks arm (two 46 gal tanks)",
+        "source": "TCDS",
+        "page": "33"
+      },
+      {
+        "fs_in": 50.0,
+        "fs_m": 1.27,
+        "feature": "Front seat range, aft limit",
+        "source": "TCDS",
+        "page": "33"
+      },
+      {
+        "fs_in": 65.25,
+        "fs_m": 1.65735,
+        "feature": "Rear doorpost bulkhead (measured forward to the firewall along the cabin)",
+        "source": "SD",
+        "page": "5, Figure II side view"
+      },
+      {
+        "fs_in": 74.0,
+        "fs_m": 1.8796,
+        "feature": "Rear seat arm",
+        "source": "TCDS",
+        "page": "33"
+      },
+      {
+        "fs_in": 82.0,
+        "fs_m": 2.0828,
+        "feature": "Baggage area A, forward limit",
+        "source": "TCDS",
+        "page": "33"
+      },
+      {
+        "fs_in": 109.0,
+        "fs_m": 2.7686,
+        "feature": "Baggage area A aft / area B forward limit",
+        "source": "TCDS",
+        "page": "33"
+      },
+      {
+        "fs_in": 134.0,
+        "fs_m": 3.4036,
+        "feature": "Aft baggage bulkhead / rear wall of cabin",
+        "source": "TCDS + SD",
+        "page": "TCDS 33 (baggage area B aft limit); SD page 6 'Length (firewall to aft baggage bulkhead) 134 in' and Figure II chain 65.25 + 68.75 = 134.00",
+        "confidence": "high: three independent statements agree"
+      },
+      {
+        "fs_in": 139.65,
+        "fs_m": 3.54711,
+        "feature": "Forward leveling point, left side of tailcone",
+        "source": "TCDS",
+        "page": "33"
+      },
+      {
+        "fs_in": 171.65,
+        "fs_m": 4.35991,
+        "feature": "Aft leveling point, left side of tailcone",
+        "source": "TCDS",
+        "page": "33"
+      }
+    ]
+  },
+  "wing": {
+    "mac_in": 58.8,
+    "mac_m": 1.49352,
+    "mac_leading_edge_fs_in": 25.98,
+    "area_ft2": 174.0,
+    "source": "TCDS page 33",
+    "note": "MAC leading edge is a derived aerodynamic station, NOT the wing root leading edge. Do not use it to place the root rib."
+  },
+  "control_surface_travels": {
+    "source": "TCDS page 33",
+    "note": "Angular limits only. They constrain animation ranges, and the rudder pair constrains the fin hinge-line cant, but they do not locate any hinge line in space.",
+    "wing_flaps_down_deg": {
+      "value": 38,
+      "tol": "+0, -1"
+    },
+    "ailerons_deg": {
+      "up": 20,
+      "up_tol": "+/-2",
+      "down": 15,
+      "down_tol": "+/-2"
+    },
+    "elevator_deg": {
+      "up": 28,
+      "up_tol": "+/-1",
+      "down": 21,
+      "down_tol": "+/-1",
+      "reference": "relative to stabilizer"
+    },
+    "elevator_tab_deg": {
+      "up": 24,
+      "up_tol": "+/-2",
+      "down": 15,
+      "down_tol": "+/-1"
+    },
+    "rudder_deg": {
+      "parallel_to_0_00_WL": {
+        "right": 24,
+        "left": 24,
+        "tol": "+0, -1"
+      },
+      "perpendicular_to_hinge_line": {
+        "right": 27.2167,
+        "left": 27.2167,
+        "printed": "27 deg 13 min",
+        "tol": "+0, -1"
+      },
+      "derived_hinge_cant_deg_from_vertical": 28.15,
+      "derivation": "acos(24 / 27.2167) = 28.15 deg. The two published rudder travels differ only because one is measured parallel to the waterline and the other perpendicular to a canted hinge line; their ratio therefore fixes the hinge-line cant. This is the ONLY hinge-line geometry recoverable from the consulted sources."
+    }
+  },
+  "unknown": [
+    {
+      "item": "Wing root leading-edge, trailing-edge and root-rib stations",
+      "reason": "Not published in POH, TCDS or the Specification and Description. MAC leading edge at FS 25.98 is an aerodynamic reference, not the root LE.",
+      "action": "Do not invent. Either source a Cessna Model 182 Series Maintenance/Structural Repair Manual or Illustrated Parts Catalogue, or leave the wing longitudinal station uncorrected."
+    },
+    {
+      "item": "Firewall-to-windshield-base station, windshield rake",
+      "reason": "Not published in the consulted sources.",
+      "action": "Leave the cockpit region as the fixed anchor, which is what the plan already requires."
+    },
+    {
+      "item": "Cabin and baggage door opening fore/aft stations",
+      "reason": "SD publishes door heights and widths only, with no stations.",
+      "action": "Unknown. Door sizes may still be checked as sizes."
+    },
+    {
+      "item": "Aileron, flap and elevator hinge-line stations",
+      "reason": "Only angular travel limits are published.",
+      "action": "Unknown. Hinge pivots must continue to come from the donor's own Models/c182t.xml, not from published data."
+    },
+    {
+      "item": "Horizontal and vertical tail stations, chords, and vertical tail span/height above the fuselage",
+      "reason": "Only horizontal tail span (11 ft 8 in) is published.",
+      "action": "Unknown."
+    },
+    {
+      "item": "Individual nose-gear and main-gear fuselage stations",
+      "reason": "Not published as fixed values. POH Section 6 defines 'measurement A' from the main wheel centre line to a firewall plumb bob as a per-aircraft measurement taken at weighing.",
+      "action": "Use the published 66.5 in wheel base (their separation) as the constraint; do not assert an absolute gear station."
+    },
+    {
+      "item": "Waterline (W.L. 0.00) and buttock line datum locations",
+      "reason": "TCDS references 0.00 W.L. for rudder travel but never locates it.",
+      "action": "Unknown. All vertical targets must therefore be referenced to the ground plane in normal ground attitude, not to a waterline."
+    },
+    {
+      "item": "Wing dihedral, incidence and washout; airfoil section",
+      "reason": "Absent from TCDS 3A13 and from the POH and SD.",
+      "action": "Unknown. Relevant to the later Plane Maker stage, not to the exterior mesh."
+    },
+    {
+      "item": "Structural wing span excluding strobe lights",
+      "reason": "Published span is explicitly strobe-inclusive.",
+      "action": "Do not derive by subtraction."
+    }
+  ],
+  "harness_rules": [
+    "Every vertical target is referenced to the ground plane in normal ground attitude (nose strut approximately 2 in extended, wings level). A mesh whose modelled gear pose differs must be re-posed about the main-wheel axis before any height or clearance is compared.",
+    "Wing span must be measured to the wingtip strobe, not the structural tip.",
+    "Overall length must be measured spinner apex to rudder trailing edge, not to the propeller and not to a global bounding box.",
+    "Propeller diameter and ground clearance must be derived from the hub axis and disc radius, never from whichever blade vertex is currently lowest.",
+    "Propeller diameter is bounded by certification at 77.5-79.0 in; outside that band is a failure, not a percentage error.",
+    "Report structural bounds and all-rendered bounds separately; ground-service clutter, tiedowns and light lenses must never silently set an extremum.",
+    "Targets marked unknown must fail closed: the harness reports them as unmeasured rather than substituting a plausible value."
+  ]
+}

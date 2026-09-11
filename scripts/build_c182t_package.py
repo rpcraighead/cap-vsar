@@ -2,14 +2,26 @@
 """
 Build the Civil Air Patrol Cessna 182T NAV III (G1000) Aircraft Package for X-Plane 12.
 
-Adapts the high-fidelity Laminar Research Cessna 172SP G1000 into a dedicated,
-stand-alone Cessna 182T Skylane NAV III with authentic Lycoming IO-540-AB1A5 performance,
-3-blade constant-speed McCauley propeller, Garmin G1000 Manifold Pressure EIS,
-C182T weights, 87 gal fuel capacity, V-speeds, and Civil Air Patrol branding (N499CP).
+Combines the locally installed Laminar Research Cessna 172SP G1000 cockpit and
+systems with a locally converted, pinned GPL FlightGear C182 exterior. The
+result is a dedicated Cessna 182T Skylane NAV III prototype with Lycoming
+IO-540-AB1A5 performance, a 3-blade constant-speed McCauley propeller, Garmin
+G1000 Manifold Pressure EIS, C182T weights, 87 gal fuel capacity, V-speeds and
+Civil Air Patrol branding (CAP 487). The generated package is for local use;
+it must not be redistributed. See docs/FLIGHTGEAR_C182_GPL_PLAN.md.
+
+The simulated aircraft is CAP 487. It deliberately does NOT carry N499CP: that
+is a real Cessna 172S on the squadron's line, and stamping a real aircraft's
+registration onto a different simulated type confuses a crew about what they
+are flying and is not ours to do. The flight planner's 172S profile that once
+carried that registration was removed under L-7, so the planner now computes
+CAP 487 182T figures only. N499CP survives in CHANGELOG.md and the bug tracker,
+which record what was true when written.
 """
 
 from __future__ import annotations
 
+import argparse
 import colorsys
 import os
 import re
@@ -18,19 +30,42 @@ import sys
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
-SOURCE_DIR = Path("/home/ron/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP")
-TARGET_DIR = Path("/home/ron/X-Plane 12/Aircraft/CAP/Cessna 182T NAV III")
+from convert_flightgear_c182 import build_flightgear_objects
+from fetch_flightgear_c182 import DONOR_COMMIT, validate_donor
+
+
+DEFAULT_SOURCE_DIR = Path("/home/ron/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP")
+DEFAULT_TARGET_DIR = Path("/home/ron/X-Plane 12/Aircraft/CAP/Cessna 182T NAV III")
+DEFAULT_DONOR_DIR = Path(
+    os.environ.get(
+        "CAPVSAR_FLIGHTGEAR_C182_SOURCE",
+        str(Path.home() / ".cache" / "cap-vsar" / f"flightgear-c182-{DONOR_COMMIT}"),
+    )
+)
 
 # Complete dictionary of regex pattern -> replacement line for Cessna_182T_G1000.acf
 ACF_PATCHES = {
     # Metadata & Identification
     r"^P acf/_name .*": "P acf/_name Cessna Skylane 182T NAV III (G1000 CAP)",
     r"^P acf/_descrip .*": "P acf/_descrip Cessna 182T Skylane NAV III - 230HP Lycoming IO-540-AB1A5 - Garmin G1000 (Civil Air Patrol)",
-    r"^P acf/_tailnum .*": "P acf/_tailnum N499CP",
+    r"^P acf/_tailnum .*": "P acf/_tailnum CAP 487",
     r"^P acf/_ICAO .*": "P acf/_ICAO C182",
     r"^P acf/_author .*": "P acf/_author Laminar Research / CAP V-SAR Project",
     r"^P acf/_studio .*": "P acf/_studio Civil Air Patrol",
     r"^P _obja/0/_v10_att_file_stl .*": "P _obja/0/_v10_att_file_stl ../Cessna_182T_G1000_cockpit.obj",
+
+    # Exterior prototype: replace every visible/crash C172 attachment.  These
+    # paths are generated locally from the pinned GPL FlightGear C182 donor.
+    r"^P _obja/15/_v10_att_file_stl .*": "P _obja/15/_v10_att_file_stl flightgear_c182t.obj",
+    r"^P _obja/16/_v10_att_file_stl .*": "P _obja/16/_v10_att_file_stl flightgear_blank.obj",
+    r"^P _obja/17/_v10_att_file_stl .*": "P _obja/17/_v10_att_file_stl flightgear_c182t_propeller.obj",
+    r"^P _obja/18/_v10_att_file_stl .*": "P _obja/18/_v10_att_file_stl flightgear_c182t_prop_blur.obj",
+    r"^P _obja/19/_v10_att_file_stl .*": "P _obja/19/_v10_att_file_stl flightgear_c182t_glass.obj",
+    r"^P _obja/22/_v10_att_file_stl .*": "P _obja/22/_v10_att_file_stl flightgear_c182t_lights.obj",
+    r"^P _obja/23/_v10_att_file_stl .*": "P _obja/23/_v10_att_file_stl flightgear_blank.obj",
+    r"^P _obja/24/_v10_att_file_stl .*": "P _obja/24/_v10_att_file_stl flightgear_blank.obj",
+    r"^P _obja/25/_v10_att_file_stl .*": "P _obja/25/_v10_att_file_stl flightgear_blank.obj",
+    r"^P _obja/26/_v10_att_file_stl .*": "P _obja/26/_v10_att_file_stl flightgear_blank.obj",
 
     # Powerplant: Lycoming IO-540-AB1A5 (230 HP @ 2,400 RPM, 541 cu in, Fuel Injected)
     r"^P acf/_power_max_limit .*": "P acf/_power_max_limit 230.000000000",
@@ -67,6 +102,74 @@ ACF_PATCHES = {
     r"^P acf/_Vfem_kts .*": "P acf/_Vfem_kts 100.000000000",
     r"^P acf/_Vno_kts .*": "P acf/_Vno_kts 140.000000000",
     r"^P acf/_Vne_kts .*": "P acf/_Vne_kts 175.000000000",
+
+    # Control surface travel, from FAA TCDS 3A13 Rev 66 page 33 (Models 182S and
+    # 182T, "Control surface movements").  The stock C172S values that shipped in
+    # this package are materially smaller than the certificated C182T travels, so
+    # pitch authority, flap drag/lift and yaw authority were all short.
+    #
+    #   surface        stock C172S   TCDS 3A13 C182T
+    #   elevator up        20 deg      28 deg +/-1
+    #   elevator down      15 deg      21 deg +/-1   (relative to stabilizer)
+    #   rudder L/R         20 deg      24 deg +0/-1  (parallel to 0.00 W.L.)
+    #   flap full down     30 deg      38 deg +0/-1
+    #
+    # Ailerons already matched at 20 up / 15 down and are deliberately not patched.
+    # Flap detent 3 is the FULL position; detents 1 and 2 stay at 10 and 20, which
+    # match the 182T POH flap settings.
+    r"^P acf/_elev1_up .*": "P acf/_elev1_up 28.000000000",
+    r"^P acf/_elev1_dn .*": "P acf/_elev1_dn 21.000000000",
+    r"^P acf/_rudd1_lf .*": "P acf/_rudd1_lf 24.000000000",
+    r"^P acf/_rudd1_rt .*": "P acf/_rudd1_rt 24.000000000",
+    r"^P acf/_flap1_dn/3 .*": "P acf/_flap1_dn/3 38.000000000",
+
+    # Centre-of-gravity envelope, from TCDS 3A13 Rev 66 page 33 (C.G. Range,
+    # Model 182T) placed by percentage of MAC, which is datum independent.
+    #
+    # The ACF frame's origin is not the Cessna reference datum (lower front face
+    # of the firewall), and no consulted source locates the firewall in X-Plane's
+    # frame, so the limits are placed via %MAC instead:
+    #
+    #   TCDS  MAC = 58.8 in, leading edge of MAC at FS 25.98 in
+    #   ACF   _wing/0/_part_z is the root QUARTER-CHORD, confirmed against the
+    #         donor mesh: predicted vs measured wing leading edge agrees within
+    #         ~12 mm at two clean spanwise stations, against a 396 mm difference
+    #         between the quarter-chord and leading-edge readings.
+    #   so    root LE = 3.200 - 0.25*5.200 = 1.900 ft, MAC LE = 1.994 ft,
+    #         MAC = 4.837 ft (vs the TCDS 58.8 in, -1.3%)
+    #
+    #   FS 33.0 in -> 11.94% MAC -> 2.571 ft    (stock C172S value was 2.900)
+    #   FS 46.0 in -> 34.05% MAC -> 3.641 ft    (stock C172S value was 3.900)
+    #
+    # The stock aft limit sat at 39.40% MAC, 5.35% MAC (about 3.1 in) aft of the
+    # C182T's certificated aft limit - the stability-reducing direction.
+    #
+    # LIMITATION: the TCDS forward limit is weight-scheduled (33.0 in at 2,250 lb
+    # and below, 35.5 in at 2,700 lb, 40.9 in at 3,100 lb) while X-Plane takes a
+    # single forward value. The most forward certificated point is used, so the
+    # envelope is correct at light weights and permissive at heavy ones. Modelling
+    # the taper would need a loading-system change, not an ACF constant.
+    r"^P acf/_cgZ_fwd .*": "P acf/_cgZ_fwd 2.571000000",
+    r"^P acf/_cgZ_aft .*": "P acf/_cgZ_aft 3.641000000",
+
+    # Horizontal tail span, from the POH three-view (Figure 1-1 Sheet 1, page 1-3,
+    # top view, "11'-8""), the same sourced drawing used for span and length in
+    # docs/C182T_DIMENSION_MASTER.md.
+    #
+    #   span = 2 * (|_part_x| + _semilen_SEG) = 2 * (0.300 + 5.300) = 11.200 ft
+    #   POH target 11 ft 8 in = 11.6667 ft, so the stock C172S tail is 4.0% short
+    #   required semilen = 11.6667/2 - 0.300 = 5.53333 ft
+    #
+    # This is the surface the elevator acts on, and the elevator was separately
+    # given its certificated 28/21 degree travel above; leaving the surface 4%
+    # undersized would have kept pitch authority short by a different route.
+    #
+    # Chords are unchanged, so per-side area rises 20.70 -> 21.55 ft2 (+4.1%).
+    # That direction is right - the 182's tail is genuinely larger than the 172's -
+    # but note that NO consulted source publishes a C182T horizontal tail AREA, so
+    # only the span is verified. The area is a consequence, not a sourced target.
+    r"^P _wing/8/_semilen_SEG .*": "P _wing/8/_semilen_SEG 5.533330000",
+    r"^P _wing/9/_semilen_SEG .*": "P _wing/9/_semilen_SEG 5.533330000",
 }
 
 
@@ -91,10 +194,10 @@ def create_cap_badge_icon(src_icon_path: Path, dst_icon_path: Path, is_thumb: bo
             if not is_thumb:
                 draw.text((16, 8), "CIVIL AIR PATROL &bull; USAF AUXILIARY", fill=(255, 255, 255, 255))
                 draw.text((16, banner_h - 22), "CESSNA 182T NAV III &bull; LYCOMING IO-540 (230 HP)", fill=(212, 160, 23, 255))
-                draw.text((w - 140, 10), "N499CP", fill=(255, 255, 255, 255))
+                draw.text((w - 140, 10), "CAP 487", fill=(255, 255, 255, 255))
                 draw.text((16, h - banner_h + 8), "GARMIN G1000 SVT &bull; CONSTANT SPEED &bull; SAR MISSION READY", fill=(200, 220, 245, 255))
             else:
-                draw.text((4, 2), "CAP N499CP", fill=(255, 255, 255, 255))
+                draw.text((4, 2), "CAP 487", fill=(255, 255, 255, 255))
                 draw.text((4, h - banner_h + 2), "C182T G1000", fill=(212, 160, 23, 255))
 
             im.save(dst_icon_path, "PNG")
@@ -205,6 +308,10 @@ def add_prop_lever(target_dir: Path):
             s = S_LO + t * (S_HI - S_LO)
             rr, gg, bb = colorsys.hsv_to_rgb(TARGET_H, s, v)
             opx[x, y] = (round(rr * 255), round(gg * 255), round(bb * 255))
+    # X-Plane warned on the atlas crop's 194x87 dimensions. Resample to
+    # power-of-two dimensions; normalized UVs below still span the whole image.
+    texture_size = tuple(1 << (size - 1).bit_length() for size in out_img.size)
+    out_img = out_img.resize(texture_size, Image.Resampling.LANCZOS)
     out_img.save(out_png_path)
 
     local_map: dict[int, int] = {}
@@ -231,7 +338,12 @@ def add_prop_lever(target_dir: Path):
         out_lines.append("VT " + " ".join(fmt(c) for c in v))
     for i in range(0, len(local_idx), 10):
         chunk = local_idx[i:i + 10]
-        out_lines.append("IDX10 " + " ".join(str(c) for c in chunk))
+        # OBJ8 IDX10 requires exactly ten indices. Emit the remainder as IDX.
+        # https://developer.x-plane.com/article/obj8-file-format-specification/
+        if len(chunk) == 10:
+            out_lines.append("IDX10 " + " ".join(str(c) for c in chunk))
+        else:
+            out_lines.extend(f"IDX {c}" for c in chunk)
     out_lines += [
         "ANIM_begin",
         "ANIM_trans 0.000000 0.000000 0.000000 0.000000 0.000000 -0.089700 0.000000 1.000000 "
@@ -243,7 +355,7 @@ def add_prop_lever(target_dir: Path):
     ]
     out_obj_path.write_text("\n".join(out_lines))
     print(f"[+] Prop lever object: {out_obj_path.name} ({len(local_verts)} verts), "
-          f"texture {out_png_path.name} ({crop_w}x{crop_h}, Baron blue)")
+          f"texture {out_png_path.name} ({texture_size[0]}x{texture_size[1]}, Baron blue)")
 
 
 def register_prop_lever_obja(acf_path: Path):
@@ -288,27 +400,66 @@ def register_prop_lever_obja(acf_path: Path):
     print(f"[+] Registered prop_lever.obj as _obja/{new_index} in {acf_path.name}")
 
 
-def main():
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--source-dir",
+        type=Path,
+        default=DEFAULT_SOURCE_DIR,
+        help="installed Laminar C172SP directory supplying the cockpit and systems",
+    )
+    parser.add_argument(
+        "--target-dir",
+        type=Path,
+        default=DEFAULT_TARGET_DIR,
+        help="aircraft package directory to replace",
+    )
+    parser.add_argument(
+        "--flightgear-donor",
+        type=Path,
+        default=DEFAULT_DONOR_DIR,
+        help="pinned HHS81 FlightGear C182 source directory",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    source_dir = args.source_dir.expanduser().resolve()
+    target_dir = args.target_dir.expanduser().resolve()
+    donor_dir = args.flightgear_donor.expanduser().resolve()
+
     print("=" * 78)
     print("CAP V-SAR: Cessna 182T NAV III (G1000) Aircraft Package Builder")
     print("=" * 78)
 
-    if not SOURCE_DIR.is_dir():
-        print(f"[-] Source aircraft directory not found: {SOURCE_DIR}")
+    if not source_dir.is_dir():
+        print(f"[-] Source aircraft directory not found: {source_dir}")
+        sys.exit(1)
+    if source_dir == target_dir:
+        print("[-] Source and target aircraft directories must differ")
+        sys.exit(1)
+    try:
+        validate_donor(donor_dir)
+    except ValueError as exc:
+        print(f"[-] {exc}")
+        print("[*] Fetch the reviewed donor first with:")
+        print(f"    python3 scripts/fetch_flightgear_c182.py {donor_dir}")
         sys.exit(1)
 
-    print(f"[*] Source: {SOURCE_DIR}")
-    print(f"[*] Target: {TARGET_DIR}")
+    print(f"[*] Cockpit/systems source: {source_dir}")
+    print(f"[*] GPL exterior donor: {donor_dir} (commit {DONOR_COMMIT})")
+    print(f"[*] Target: {target_dir}")
 
     # 1. Clean / create target directory
-    if TARGET_DIR.exists():
+    if target_dir.exists():
         print(f"[*] Removing existing target directory...")
-        shutil.rmtree(TARGET_DIR)
-    TARGET_DIR.parent.mkdir(parents=True, exist_ok=True)
+        shutil.rmtree(target_dir)
+    target_dir.parent.mkdir(parents=True, exist_ok=True)
 
     print(f"[*] Cloning base airframe directory tree (~284 MB)...")
-    shutil.copytree(SOURCE_DIR, TARGET_DIR)
-    print(f"[+] Cloned successfully into {TARGET_DIR}")
+    shutil.copytree(source_dir, target_dir)
+    print(f"[+] Cloned successfully into {target_dir}")
 
     # 2. Remove non-G1000 airframe files (C172 analogue and seaplane variants)
     redundant_files = [
@@ -326,7 +477,7 @@ def main():
         "Cessna_172SP_seaplane_vrconfig.txt"
     ]
     for rf in redundant_files:
-        p = TARGET_DIR / rf
+        p = target_dir / rf
         if p.exists():
             p.unlink()
 
@@ -340,13 +491,20 @@ def main():
         "Cessna_172SP_G1000_vrconfig.txt": "Cessna_182T_G1000_vrconfig.txt",
     }
     for old_name, new_name in rename_map.items():
-        src = TARGET_DIR / old_name
-        dst = TARGET_DIR / new_name
+        src = target_dir / old_name
+        dst = target_dir / new_name
         if src.exists():
             src.rename(dst)
 
     # 4. Patch Cessna_182T_G1000.acf
-    acf_path = TARGET_DIR / "Cessna_182T_G1000.acf"
+    print("[*] Converting pinned FlightGear C182 exterior to X-Plane OBJ8...")
+    exterior_manifest = build_flightgear_objects(donor_dir, target_dir)
+    print(
+        "[+] C182 exterior converted: "
+        f"{sum(item['indices'] // 3 for item in exterior_manifest['generated_objects'])} triangles"
+    )
+
+    acf_path = target_dir / "Cessna_182T_G1000.acf"
     print(f"[*] Patching aircraft flight dynamics and engine in {acf_path.name}...")
 
     with acf_path.open("r", encoding="utf-8", errors="replace") as f:
@@ -374,11 +532,11 @@ def main():
     # 4b. Add a blue constant-speed prop lever to the 3D cockpit (the base C172SP
     # has no prop lever at all, since it's fixed-pitch) and register it in the acf.
     print(f"[*] Adding prop lever to 3D cockpit (blue, matches Baron 58 prop knob color)...")
-    add_prop_lever(TARGET_DIR)
+    add_prop_lever(target_dir)
     register_prop_lever_obja(acf_path)
 
     # 5. Clean up liveries and rename icon files
-    liveries_dir = TARGET_DIR / "liveries"
+    liveries_dir = target_dir / "liveries"
     if liveries_dir.exists():
         for liv in liveries_dir.iterdir():
             if liv.is_dir():
@@ -399,8 +557,8 @@ def main():
                 for f in liv.glob("Cessna_172SP_seaplane*"):
                     f.unlink()
 
-    # 6. Create dedicated Civil Air Patrol N499CP livery
-    cap_livery_dir = liveries_dir / "Civil Air Patrol (N499CP)"
+    # 6. Create dedicated Civil Air Patrol CAP 487 livery
+    cap_livery_dir = liveries_dir / "Civil Air Patrol (CAP 487)"
     print(f"[*] Building dedicated Civil Air Patrol livery in {cap_livery_dir.name}...")
     cap_livery_dir.mkdir(parents=True, exist_ok=True)
 
@@ -409,9 +567,18 @@ def main():
     if white_objs.is_dir():
         shutil.copytree(white_objs, cap_livery_dir / "objects", dirs_exist_ok=True)
 
+    # The donor UV atlas has a new filename, so the old C172 full-white files
+    # cannot override it.  Install the generated CAP 487 texture explicitly.
+    cap_objects = cap_livery_dir / "objects"
+    cap_objects.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(
+        target_dir / "objects" / "flightgear_c182t.png",
+        cap_objects / "flightgear_c182t.png",
+    )
+
     # 7. Generate CAP Badge Icons
-    icon_dst = TARGET_DIR / "Cessna_182T_G1000_icon11.png"
-    thumb_dst = TARGET_DIR / "Cessna_182T_G1000_icon11_thumb.png"
+    icon_dst = target_dir / "Cessna_182T_G1000_icon11.png"
+    thumb_dst = target_dir / "Cessna_182T_G1000_icon11_thumb.png"
     create_cap_badge_icon(icon_dst, icon_dst, is_thumb=False)
     create_cap_badge_icon(thumb_dst, thumb_dst, is_thumb=True)
 
@@ -449,9 +616,8 @@ def main():
         print(f"    - {label.ljust(26)}: {val}")
 
     print("\n[✓] Cessna 182T NAV III CAP package built successfully!")
-    print(f"[✓] Location: {TARGET_DIR}")
+    print(f"[✓] Location: {target_dir}")
 
 
 if __name__ == "__main__":
     main()
-
