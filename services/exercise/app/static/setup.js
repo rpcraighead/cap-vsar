@@ -3,11 +3,17 @@
  * Manages aircraft fleet, staff roster, code generation, and client-side QR rendering.
  */
 (function() {
+    // F-6: setup is round-tripped through /api/setup, so these cards render
+    // server-supplied strings. Escape before building HTML, including the
+    // quote, because two of these land inside attribute values.
+    const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c =>
+        ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+
     let currentSetup = {
         name: "Civil Air Patrol SAREX Exercise",
         num_aircraft: 1,
         aircraft: [
-            { id: "ac-1", callsign: "CAP 423", tail: "N499CP", df_model: "Becker SAR-DF 517", crew: ["pilot", "observer", "scanner"] }
+            { id: "ac-1", callsign: "CAP 423", tail: "CAP 487", df_model: "Becker SAR-DF 517", crew: ["pilot", "observer", "scanner"] }
         ],
         staff: [
             { role: "base", title: "Mission Radio Operator 1", callsign: "MRO 1" },
@@ -166,16 +172,16 @@
             card.innerHTML = `
                 <div class="ac-card-header">
                     <b>✈️ Aircraft ${idx + 1}</b>
-                    <span class="tag mono">${ac.callsign}</span>
+                    <span class="tag mono">${esc(ac.callsign)}</span>
                 </div>
                 <div class="form-grid" style="margin-top:10px">
                     <div>
                         <label>Call Sign</label>
-                        <input type="text" class="ac-callsign" data-index="${idx}" value="${ac.callsign}">
+                        <input type="text" class="ac-callsign" data-index="${idx}" value="${esc(ac.callsign)}">
                     </div>
                     <div>
                         <label>Tail Number</label>
-                        <input type="text" class="ac-tail" data-index="${idx}" value="${ac.tail}">
+                        <input type="text" class="ac-tail" data-index="${idx}" value="${esc(ac.tail)}">
                     </div>
                 </div>
                 <div style="margin-top:8px">
@@ -317,14 +323,16 @@
             if (item.role === "instructor") roleBadgeClass = "badge-instructor";
             if (item.role === "base") roleBadgeClass = "badge-base";
             if (item.role === "ground_team") roleBadgeClass = "badge-ground";
+            // Escape once, here, so the template below holds no raw server value.
+            const roleLabel = esc(String(item.role == null ? "" : item.role).toUpperCase());
 
             card.innerHTML = `
                 <div class="badge-top">
-                    <span class="role-badge ${roleBadgeClass}">${item.role.toUpperCase()}</span>
-                    <span class="badge-code mono">${item.code}</span>
+                    <span class="role-badge ${roleBadgeClass}">${roleLabel}</span>
+                    <span class="badge-code mono">${esc(item.code)}</span>
                 </div>
-                <div class="badge-title">${item.title}</div>
-                <div class="badge-meta mono">Callsign: <b>${item.callsign || "-"}</b></div>
+                <div class="badge-title">${esc(item.title)}</div>
+                <div class="badge-meta mono">Callsign: <b>${esc(item.callsign || "-")}</b></div>
 
                 <div class="badge-qr-container">
                     <div id="${qrId}" class="qr-canvas"></div>
@@ -332,12 +340,12 @@
                 </div>
 
                 <div class="badge-dest-info">
-                    <span class="dest-tag">Target: <b>${item.target_url || "/"}</b></span>
+                    <span class="dest-tag">Target: <b>${esc(item.target_url || "/")}</b></span>
                 </div>
 
                 <div class="badge-actions no-print">
-                    <button class="ghost btn-sm btn-copy" data-url="${joinUrl}">Copy Invite Link</button>
-                    <a href="${joinUrl}" target="_blank" class="navlink" style="color:var(--blue);border-color:var(--line);text-align:center;font-size:11px">Open</a>
+                    <button class="ghost btn-sm btn-copy" data-url="${esc(joinUrl)}">Copy Invite Link</button>
+                    <a href="${esc(joinUrl)}" target="_blank" class="navlink" style="color:var(--blue);border-color:var(--line);text-align:center;font-size:11px">Open</a>
                 </div>
             `;
             rosterGrid.appendChild(card);

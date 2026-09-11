@@ -40,7 +40,12 @@ def build_app(db_path=None, **tokens):
         db_path = tmp.name
 
     os.environ["CAPVSAR_DB"] = db_path
-    for mod in ("app.main", "app.access", "app.radio", "app.propagation", "app"):
+    # Every app.* module, not a hand-kept list: the console reads its database
+    # path and log settings from the environment at import time, so a module
+    # left in sys.modules keeps the previous test's database (C15-1 split the
+    # console into several of them, and a stale app.settings is invisible
+    # until a test mysteriously writes to the wrong file).
+    for mod in [m for m in list(sys.modules) if m == "app" or m.startswith("app.")]:
         sys.modules.pop(mod, None)
     main = importlib.import_module("app.main")
     main.init_db()
@@ -76,7 +81,7 @@ class SetupPersistenceTests(unittest.TestCase):
             "aircraft": [
                 {
                     "id": "ac-1",
-                    "tail": "N499CP",
+                    "tail": "CAP 487",
                     "callsign": "CAP 423",
                     "df_model": "RHOTHETA RT-600",
                     "crew": ["pilot", "observer", "scanner"]
@@ -155,7 +160,7 @@ class AuthenticationAndSessionTests(unittest.TestCase):
             "aircraft": [
                 {
                     "id": "ac-1",
-                    "tail": "N499CP",
+                    "tail": "CAP 487",
                     "callsign": "CAP 423",
                     "df_model": "RT-600",
                     "crew": ["pilot", "observer"]
@@ -232,7 +237,7 @@ class JoinRouteTests(unittest.TestCase):
             "aircraft": [
                 {
                     "id": "ac-1",
-                    "tail": "N499CP",
+                    "tail": "CAP 487",
                     "callsign": "CAP 423",
                     "df_model": "RT-600",
                     "crew": ["pilot"]
@@ -290,7 +295,7 @@ class RBACRouteEnforcementTests(unittest.TestCase):
             "aircraft": [
                 {
                     "id": "ac-1",
-                    "tail": "N499CP",
+                    "tail": "CAP 487",
                     "callsign": "CAP 423",
                     "df_model": "RT-600",
                     "crew": ["pilot", "observer"]

@@ -2,6 +2,7 @@
 import asyncio
 import os
 import tempfile
+import time
 from pathlib import Path
 import sys
 from types import SimpleNamespace
@@ -45,8 +46,10 @@ def sockets(monkeypatch):
         self.enqueue({'type':'tuned','channel':key,'epoch':1})
     monkeypatch.setattr(radio.MumbleRadio,'connect',connect)
     app=FastAPI();app.include_router(radio.router)
+    radio.OPERATORS.clear()
     with TestClient(app) as client: yield client,clients
     assert not radio.SESSIONS
+    assert not radio.OPERATORS, 'a shared radio outlived its last face'
     assert all(c.stopped for c in clients)
 
 
@@ -163,12 +166,12 @@ def test_rx_ignores_other_nets_old_epochs_and_half_duplex_tx():
         session=radio.MumbleRadio(None,'BASE');session.channel_id=3;session.epoch=2
         session.deliver_audio(9,4,2,'OTHER NET',bytes(1920))
         session.deliver_audio(9,3,1,'OLD NET',bytes(1920))
-        assert session.outgoing.empty()
+        assert session.queue_for(None).empty()
         session.deliver_audio(9,3,2,'SAME NET',bytes(1920))
-        assert (await session.outgoing.get())['speaker']=='SAME NET'
-        assert len(await session.outgoing.get())==1928
+        assert (await session.queue_for(None).get())['speaker']=='SAME NET'
+        assert len(await session.queue_for(None).get())==1928
         session.gate.press(1);session.deliver_audio(9,3,2,'SAME NET',bytes(1920))
-        assert session.outgoing.empty()
+        assert session.queue_for(None).empty()
     asyncio.run(check())
 
 
@@ -182,9 +185,9 @@ def test_tune_invalidates_ptt_and_old_audio_before_ack():
         await session.tune('alternate')
         assert not session.gate.active
         assert session.channel_id==4 and session.epoch==2
-        assert (await session.outgoing.get())['type']=='ptt'
-        assert (await session.outgoing.get())['type']=='tuned'
-        assert session.outgoing.empty()
+        assert (await session.queue_for(None).get())['type']=='ptt'
+        assert (await session.queue_for(None).get())['type']=='tuned'
+        assert session.queue_for(None).empty()
     asyncio.run(check())
 
 
@@ -219,3 +222,94 @@ def test_browser_radio_rejoins_with_backoff_and_an_audible_alarm():
     assert "connectionLost('Mission voice stopped responding." in source
     assert "state.context.addEventListener('statechange'" in source
     assert "context.state==='suspended' && state.wantOnline" in source
+
+
+# ---------------------------------------------------------------------- X-9
+# One Mumble client per browser SOCKET meant an operator with two radio faces
+# open burned two of the sixteen server sessions and showed up on the net as
+# two separate users - so the same desk could be called, and answer, as two
+# different stations.
+
+def wait_until(predicate, timeout=3.0):
+    """The server tears a face down on its own loop, so a test that closes a
+    socket and asserts immediately is racing it."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.01)
+    return predicate()
+
+
+def test_a_second_face_for_one_operator_shares_the_radio(sockets):
+    client, clients = sockets
+    with join(client) as first:
+        hello(first, 'MISSION BASE')
+        assert len(clients) == 1 and len(radio.SESSIONS) == 1
+        with join(client) as second:
+            hello(second, 'MISSION BASE')
+            # Same operator: one Mumble client, one session, one user on the net.
+            assert len(clients) == 1, 'a second Mumble session was opened'
+            assert len(radio.SESSIONS) == 1
+            live = next(iter(radio.SESSIONS))
+            assert len(live.faces) == 2, 'the second face did not attach'
+
+
+def test_a_different_operator_still_gets_their_own_radio(sockets):
+    client, clients = sockets
+    with join(client) as first:
+        hello(first, 'MISSION BASE')
+        with join(client) as second:
+            hello(second, 'MRO 2')
+            assert len(clients) == 2
+            assert len(radio.SESSIONS) == 2
+
+
+def test_the_callsign_match_ignores_case_and_spacing(sockets):
+    client, clients = sockets
+    with join(client) as first:
+        hello(first, 'MISSION BASE')
+        with join(client) as second:
+            hello(second, 'mission  base')
+            assert len(clients) == 1
+
+
+def test_closing_one_face_leaves_the_other_on_the_net(sockets):
+    client, clients = sockets
+    with join(client) as first:
+        hello(first, 'MISSION BASE')
+        with join(client) as second:
+            hello(second, 'MISSION BASE')
+        # The second face closed; the radio must still be up for the first.
+        live = next(iter(radio.SESSIONS))
+        assert wait_until(lambda: len(live.faces) == 1), 'the face never detached'
+        assert not clients[0].stopped, 'closing one tab cut the operator off'
+        assert len(radio.SESSIONS) == 1
+    # The last face closing takes the Mumble client with it. That teardown is
+    # asynchronous on the server side, so the fixture asserts it after the
+    # TestClient has drained rather than racing it here.
+
+
+def test_both_faces_hear_the_same_traffic(sockets):
+    client, clients = sockets
+    with join(client) as first:
+        hello(first, 'MISSION BASE')
+        with join(client) as second:
+            hello(second, 'MISSION BASE')
+            live = next(iter(radio.SESSIONS))
+            live.deliver_audio(9, live.channel_id, live.epoch, 'CAP 487', bytes(1920))
+            for face in (first, second):
+                assert face.receive_json()['speaker'] == 'CAP 487'
+                assert len(face.receive_bytes()) == 1928
+
+
+def test_sharing_does_not_consume_extra_session_slots(sockets, monkeypatch):
+    """The cap is on Mumble sessions, which is what the server actually
+    limits - not on browser tabs."""
+    client, clients = sockets
+    monkeypatch.setenv('CAPVSAR_RADIO_MAX_SESSIONS', '1')
+    with join(client) as first:
+        hello(first, 'MISSION BASE')
+        with join(client) as second:
+            hello(second, 'MISSION BASE')          # would have been refused
+            assert len(radio.SESSIONS) == 1

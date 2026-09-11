@@ -1,7 +1,7 @@
 // Aeronautical chart layers, shared by the instructor, mission base and
 // debrief views.
 //
-// Same tile services the N499CP flight planner uses
+// Same tile services the flight planner uses
 // (flightplanner.rpc-cyberflight.com): the FAA's public ArcGIS caches for the
 // sectional and enroute charts, Esri World Imagery, and OSM. URLs come from
 // /api/tile-sources so a wing running its own cache can repoint the console

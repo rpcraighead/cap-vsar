@@ -34,6 +34,18 @@ LEASE_SECONDS = 1.5
 # services/exercise/app/mumble_channels.py.
 CHANNELS = browser_nets()
 SESSIONS: set = set()
+
+# X-9: one Mumble client per BROWSER SOCKET meant an operator with two radio
+# faces open burned two of the server's sixteen sessions and, worse, appeared
+# on the net as two separate users - so a station could be called and answered
+# by what looked like two different people at the same desk. A radio is one
+# radio: the connection is keyed by operator, and extra faces attach to the
+# client that is already there.
+OPERATORS: dict = {}
+
+
+def operator_key(callsign: str) -> str:
+    return ' '.join(callsign.upper().split())
 CHANNEL_ACTIVITY: dict[str, float] = {}
 
 
@@ -110,16 +122,20 @@ class TransmitGate:
 
 class MumbleRadio:
     def __init__(self, sock, callsign):
-        self.sock = sock
         self.callsign = callsign
         self.client = None
         self.loop = asyncio.get_running_loop()
-        self.outgoing = asyncio.Queue(maxsize=32)
+        # X-9: every attached face gets its own outbound queue. One slow tablet
+        # must not stall the other face on the same desk, and a queue that
+        # overflows takes down that face only.
+        self.faces: dict = {}
+        self.attach(sock)
         self.connected = asyncio.Event()
         self.failed = False
         self.closed = False
         self.channel_id = None
         self.channel_key = None
+        self.channel_name = None
         self.epoch = 0
         self.gate = TransmitGate()
         self.request = 0
@@ -127,14 +143,44 @@ class MumbleRadio:
         self.credit = FRAME_BYTES * 5
         self.credit_at = time.monotonic()
 
+    def tuned_ack(self):
+        """The join acknowledgement, as this radio currently stands.
+
+        A face attaching to a radio that is already on the net (X-9) never ran
+        connect(), so nothing told it which net it had joined - it sat waiting
+        for a `tuned` that was only ever sent when the connection was first
+        made, and the page hung on "joining".
+        """
+        return {"type": "tuned", "channel": self.channel_key,
+                "epoch": self.epoch, "callsign": self.callsign,
+                "name": self.channel_name or self.channel_key}
+
+    def queue_for(self, sock):
+        """The outbound queue of one attached face."""
+        return self.faces[sock]
+
+    def attach(self, sock):
+        """Add a browser face to this radio and return its outbound queue."""
+        queue = asyncio.Queue(maxsize=32)
+        self.faces[sock] = queue
+        return queue
+
+    def detach(self, sock):
+        """Remove one face. True when that was the last one."""
+        self.faces.pop(sock, None)
+        return not self.faces
+
     def enqueue(self, item):
         if self.closed:
             return
-        if self.outgoing.full():
-            # Never accumulate delayed speech or silently drop control acks.
-            self.failed = True
-            return
-        self.outgoing.put_nowait(item)
+        for sock, queue in list(self.faces.items()):
+            if queue.full():
+                # Never accumulate delayed speech or silently drop control
+                # acks. One wedged face fails on its own; the rest of the desk
+                # keeps hearing the net.
+                self.failed = True
+                continue
+            queue.put_nowait(item)
 
     def disconnected(self, *args):
         def mark():
@@ -228,13 +274,15 @@ class MumbleRadio:
         self.epoch += 1
         self.rx_announced.clear()
         # Remove any queued old-channel audio before acknowledging a retune.
-        retained = []
-        while not self.outgoing.empty():
-            item = self.outgoing.get_nowait()
-            if isinstance(item, dict) and item.get('type') != 'rx':
-                retained.append(item)
-        for item in retained:
-            self.enqueue(item)
+        for sock, queue in list(self.faces.items()):
+            retained = []
+            while not queue.empty():
+                item = queue.get_nowait()
+                if isinstance(item, dict) and item.get('type') != 'rx':
+                    retained.append(item)
+            for item in retained:
+                if not queue.full():
+                    queue.put_nowait(item)
         path = os.getenv('CAPVSAR_MUMBLE_CHANNEL_PREFIX', '').strip('/')
         tree = ([p for p in path.split('/') if p] if path else []) + [choice['name']]
         channel = self.client.channels.find_by_tree(tree)
@@ -246,8 +294,8 @@ class MumbleRadio:
                 raise RuntimeError('The voice server did not confirm the selected net.')
             await asyncio.sleep(.04)
         self.channel_id, self.channel_key = target, key
-        self.enqueue({"type": "tuned", "channel": key, "epoch": self.epoch,
-                      "callsign": self.callsign, "name": choice['name']})
+        self.channel_name = choice['name']
+        self.enqueue(self.tuned_ack())
 
     async def command(self, data):
         action = data.get('action')
@@ -310,10 +358,11 @@ class MumbleRadio:
         self.credit -= len(pcm)
         self.client.sound_output.add_sound(pcm)
 
-    async def sender(self):
+    async def sender(self, sock):
+        queue = self.faces[sock]
         while True:
-            item = await self.outgoing.get()
-            send = self.sock.send_bytes(item) if isinstance(item, bytes) else self.sock.send_json(item)
+            item = await queue.get()
+            send = sock.send_bytes(item) if isinstance(item, bytes) else sock.send_json(item)
             await asyncio.wait_for(send, 3)
 
     async def watchdog(self):
@@ -324,9 +373,9 @@ class MumbleRadio:
             if self.gate.expired(time.monotonic()):
                 self.unkey('PTT released: transmit timer expired.', locked=True)
 
-    async def receiver(self):
+    async def receiver(self, sock):
         while True:
-            msg = await self.sock.receive()
+            msg = await sock.receive()
             if msg['type'] == 'websocket.disconnect':
                 return
             if msg.get('bytes') is not None:
@@ -363,9 +412,11 @@ async def stream(sock: WebSocket):
         if not os.getenv('CAPVSAR_MUMBLE_HOST'):
             await sock.send_json({"type": "error", "message": "Mission voice is not configured on this server."})
             return
-        if len(SESSIONS) >= int(os.getenv('CAPVSAR_RADIO_MAX_SESSIONS', '16')):
-            await sock.send_json({"type": "error", "message": "All browser radio connections are occupied."})
-            return
+        # The session cap is checked once the callsign is known (below): until
+        # then there is no way to tell a new operator, who needs a Mumble
+        # session, from a second face for an operator who already has one and
+        # needs nothing (X-9). This used to reject the second face outright
+        # whenever the net was full.
         raw = await asyncio.wait_for(sock.receive_text(), 15)
         if len(raw) > 2048:
             raise ValueError('Join request is too large.')
@@ -390,12 +441,30 @@ async def stream(sock: WebSocket):
         session = access.get_session_from_request(sock)
         if session and session.get('callsign'):
             name = session['callsign']
-        if len(SESSIONS) >= int(os.getenv('CAPVSAR_RADIO_MAX_SESSIONS', '16')):
-            raise ValueError('All browser radio connections are occupied.')
-        radio = MumbleRadio(sock, name)
-        SESSIONS.add(radio)
-        await radio.connect(hello.get('channel', 'primary'))
-        tasks = [asyncio.create_task(fn()) for fn in (radio.sender, radio.receiver, radio.watchdog)]
+        # X-9: a second face for an operator already on the net attaches to
+        # the radio they are already using. It costs no extra Mumble session,
+        # and the desk stays one station on the net instead of appearing twice.
+        key = operator_key(name)
+        existing = OPERATORS.get(key)
+        if existing is not None and not existing.closed and not existing.failed:
+            radio, shared = existing, True
+            queue = radio.attach(sock)
+            # Tell the new face where the radio already is, or it waits for a
+            # `tuned` that was sent before it existed.
+            queue.put_nowait(radio.tuned_ack())
+        else:
+            if len(SESSIONS) >= int(os.getenv('CAPVSAR_RADIO_MAX_SESSIONS', '16')):
+                raise ValueError('All browser radio connections are occupied.')
+            radio, shared = MumbleRadio(sock, name), False
+            SESSIONS.add(radio)
+            OPERATORS[key] = radio
+            await radio.connect(hello.get('channel', 'primary'))
+        # The watchdog belongs to the connection, not to each face, so only the
+        # face that opened it runs one.
+        pumps = [radio.sender(sock), radio.receiver(sock)]
+        if not shared:
+            pumps.append(radio.watchdog())
+        tasks = [asyncio.create_task(coro) for coro in pumps]
         done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         for task in done:
             task.result()
@@ -421,9 +490,16 @@ async def stream(sock: WebSocket):
             if tasks:
                 await asyncio.gather(*tasks, return_exceptions=True)
             if radio:
-                try:
-                    await radio.close()
-                finally:
-                    SESSIONS.discard(radio)
+                # Only the last face standing takes the Mumble client down
+                # with it; closing on the first tab to be shut would have cut
+                # the operator off mid-transmission on the other one.
+                last = radio.detach(sock)
+                if last:
+                    try:
+                        await radio.close()
+                    finally:
+                        SESSIONS.discard(radio)
+                        if OPERATORS.get(operator_key(radio.callsign)) is radio:
+                            OPERATORS.pop(operator_key(radio.callsign), None)
             with contextlib.suppress(Exception):
                 await asyncio.wait_for(sock.close(), 1)

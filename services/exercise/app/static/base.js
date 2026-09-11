@@ -1,6 +1,14 @@
 // Mission base view. No instructor controls, and no beacon position unless the
 // instructor has revealed it for debrief.
 const $ = id => document.getElementById(id);
+
+// F-6: nothing escapes server strings on the way out, and any LAN client can
+// POST message bodies, bearing notes and callsigns. Escape every server value
+// interpolated into HTML. Values already passed through toFixed() or
+// Math.round() are provably numeric and are left alone.
+const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c =>
+  ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+
 const map = L.map('map').setView([33.15, -117.18], 10);
 capvsarCharts(map, {view: 'base'});
 
@@ -63,9 +71,9 @@ function render() {
   if (sc) {
     const revealed = s && s.revealed;
     $('alertBox').innerHTML =
-      `<b>${sc.alert_kind || 'Tasking'}</b>
-       <div style="margin-top:5px">${sc.alert_text || sc.notes || ''}</div>
-       ${sc.alert_radius_nm ? `<div class="df" style="margin-top:6px">search area radius ${sc.alert_radius_nm} nm</div>` : ''}
+      `<b>${esc(sc.alert_kind || 'Tasking')}</b>
+       <div style="margin-top:5px">${esc(sc.alert_text || sc.notes || '')}</div>
+       ${sc.alert_radius_nm ? `<div class="df" style="margin-top:6px">search area radius ${esc(sc.alert_radius_nm)} nm</div>` : ''}
        ${revealed ? '<div class="df no" style="margin-top:6px">DEBRIEF - beacon truth shown on map</div>' : ''}`;
     if (sc.alert_lat != null && !alertCircle) {
       alertCircle = L.circle([sc.alert_lat, sc.alert_lon],
@@ -85,7 +93,7 @@ function render() {
   $('board').innerHTML = list.length ? list.map(a => {
     const age = state.server_time - a.t;
     const airborne = s ? fmtDur(state.server_time - s.started) : '--:--';
-    return `<div class="ac"><b>${a.callsign}</b>
+    return `<div class="ac"><b>${esc(a.callsign)}</b>
       <span class="tag">${age < 10 ? 'reporting' : Math.round(age) + 's stale'}</span>
       <div class="df">${a.alt_ft.toFixed(0)} ft &middot; hdg ${a.hdg_true.toFixed(0)}&deg;
         &middot; ${a.lat.toFixed(4)}, ${a.lon.toFixed(4)}</div>
@@ -99,7 +107,7 @@ function render() {
     const ll = [a.lat, a.lon];
     if (!acLayers[a.callsign]) {
       acLayers[a.callsign] = L.marker(ll, {icon: planeIcon(a.hdg_true)}).addTo(map)
-        .bindTooltip(a.callsign, {permanent:true, direction:'top', offset:[0,-8]});
+        .bindTooltip(esc(a.callsign), {permanent:true, direction:'top', offset:[0,-8]});
       // An aircraft that went quiet for 30 s and came back keeps its existing
       // track: replacing the polyline orphaned the old one on the map forever.
       if (trackLines[a.callsign]) trackLines[a.callsign].addLatLng(ll);
@@ -139,7 +147,7 @@ function addBearing(m) {
   L.polyline([[m.lat, m.lon], [lat2, lon2]],
     {color:'#c00000', weight:2, dashArray:'6,5', opacity:.8}).addTo(bearingLayer);
   $('bearings').innerHTML = bearingLog.map(b =>
-    `<div class="brg">${b.callsign} &rarr; ${b.bearing_true.toFixed(0)}&deg;T${b.note ? ' &middot; ' + b.note : ''}</div>`
+    `<div class="brg">${esc(b.callsign)} &rarr; ${b.bearing_true.toFixed(0)}&deg;T${b.note ? ' &middot; ' + esc(b.note) : ''}</div>`
   ).join('');
 }
 
@@ -151,7 +159,7 @@ function addMessage(m) {
   msgLog.unshift(m);
   $('messages').innerHTML = msgLog.map(x => {
     const t = new Date(x.t * 1000).toUTCString().slice(17, 22);
-    return `<div class="brg"><b>${t}Z ${x.sender}</b> &rarr; ${x.recipient}<br>${x.body}</div>`;
+    return `<div class="brg"><b>${t}Z ${esc(x.sender)}</b> &rarr; ${esc(x.recipient)}<br>${esc(x.body)}</div>`;
   }).join('');
 }
 

@@ -1,4 +1,12 @@
 const $ = id => document.getElementById(id);
+
+// F-6: nothing escapes server strings on the way out, and any LAN client can
+// POST message bodies, bearing notes and callsigns. Escape every server value
+// interpolated into HTML. Values already passed through toFixed() or
+// Math.round() are provably numeric and are left alone.
+const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c =>
+  ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+
 const map = L.map('map').setView([33.15, -117.18], 11);
 capvsarCharts(map, {view: 'instructor'});
 
@@ -38,7 +46,7 @@ function render() {
   const s = state.sortie, sc = state.scenario;
 
   $('sortieBox').innerHTML = s
-    ? `<b>${s.name}</b><br><span class="df">${s.stopped ? 'STOPPED' : 'running'} &middot; ${
+    ? `<b>${esc(s.name)}</b><br><span class="df">${s.stopped ? 'STOPPED' : 'running'} &middot; ${
         fmtDur((state.server_time - s.started))}${s.revealed ? ' &middot; <span class="no">truth revealed</span>' : ''}</span>`
     : 'no sortie running';
   $('startBtn').disabled  = !!(s && !s.stopped);
@@ -74,10 +82,10 @@ function render() {
       if (d.rx_open === false && d.valid) detail.push('RX closed / bearing held');
       const suffix = detail.length ? ` &middot; ${detail.join(' &middot; ')}` : '';
       df = d.valid
-        ? `<span class="ok">BRG ${Number(d.bearing_rel).toFixed(0)}&deg; rel</span> &middot; ${d.distance_nm} nm &middot; sig ${(d.signal*100).toFixed(0)}%${suffix}${d.note ? ` <span class="tag">${d.note}</span>` : ''}`
-        : `<span class="no">${d.note || 'no signal'}</span> &middot; ${d.distance_nm} nm${suffix}`;
+        ? `<span class="ok">BRG ${Number(d.bearing_rel).toFixed(0)}&deg; rel</span> &middot; ${esc(d.distance_nm)} nm &middot; sig ${(d.signal*100).toFixed(0)}%${suffix}${d.note ? ` <span class="tag">${esc(d.note)}</span>` : ''}`
+        : `<span class="no">${esc(d.note || 'no signal')}</span> &middot; ${esc(d.distance_nm)} nm${suffix}`;
     }
-    return `<div class="ac"><b>${a.callsign}</b> <span class="df">${a.alt_ft.toFixed(0)} ft &middot; hdg ${a.hdg_true.toFixed(0)}&deg;</span>
+    return `<div class="ac"><b>${esc(a.callsign)}</b> <span class="df">${a.alt_ft.toFixed(0)} ft &middot; hdg ${a.hdg_true.toFixed(0)}&deg;</span>
             <div class="df">${df}</div></div>`;
   }).join('') : 'none reporting';
 
@@ -86,7 +94,7 @@ function render() {
     seen.add(a.callsign);
     const ll = [a.lat, a.lon];
     if (!acLayers[a.callsign]) {
-      acLayers[a.callsign] = L.marker(ll, {icon: planeIcon(a.hdg_true)}).addTo(map).bindTooltip(a.callsign);
+      acLayers[a.callsign] = L.marker(ll, {icon: planeIcon(a.hdg_true)}).addTo(map).bindTooltip(esc(a.callsign));
       trackLines[a.callsign] = L.polyline([ll], {color:'#2e5496', weight:2, opacity:.65}).addTo(map);
     } else {
       acLayers[a.callsign].setLatLng(ll).setIcon(planeIcon(a.hdg_true));
@@ -120,7 +128,7 @@ function addBearing(m) {
   L.polyline([[m.lat, m.lon], [lat2, lon2]],
     {color:'#c00000', weight:2, dashArray:'6,5', opacity:.8}).addTo(bearingLayer);
   $('bearings').innerHTML = bearingLog.map(b =>
-    `<div class="brg">${b.callsign} &rarr; ${b.bearing_true.toFixed(0)}&deg;T${b.note ? ' &middot; ' + b.note : ''}</div>`
+    `<div class="brg">${esc(b.callsign)} &rarr; ${b.bearing_true.toFixed(0)}&deg;T${b.note ? ' &middot; ' + esc(b.note) : ''}</div>`
   ).join('');
 }
 
@@ -129,7 +137,7 @@ const fmtDur = s => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(Math.f
 // -------------------------------------------------------------------- wiring
 async function loadScenarios(selectId) {
   const r = await fetch('/api/scenarios'); const list = await r.json();
-  $('scenarioSel').innerHTML = list.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+  $('scenarioSel').innerHTML = list.map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
   if (selectId) $('scenarioSel').value = selectId;
   const show = () => {
     const s = list.find(x => x.id === $('scenarioSel').value);

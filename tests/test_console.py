@@ -18,10 +18,14 @@ from __future__ import annotations
 import importlib
 import json
 import os
+import re
+import shutil
+import sqlite3
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "services" / "exercise"))
@@ -56,7 +60,12 @@ def build_app(db_path=None, **tokens):
         name = db_path
     tmp = _Tmp()
     os.environ["CAPVSAR_DB"] = tmp.name
-    for mod in ("app.main", "app.access", "app.radio", "app.propagation", "app"):
+    # Every app.* module, not a hand-kept list: the console reads its database
+    # path and log settings from the environment at import time, so a module
+    # left in sys.modules keeps the previous test's database (C15-1 split the
+    # console into several of them, and a stale app.settings is invisible
+    # until a test mysteriously writes to the wrong file).
+    for mod in [m for m in list(sys.modules) if m == "app" or m.startswith("app.")]:
         sys.modules.pop(mod, None)
     main = importlib.import_module("app.main")
     # Schema creation lives in the lifespan hook, which TestClient only runs as
@@ -559,6 +568,455 @@ class F4Backfill(unittest.TestCase):
         self.assertIn('/api/messages?since=', source)
         self.assertIn('/api/bearings?since=', source)
         self.assertRegex(source, r'ws\.onopen\s*=.*backfill')
+
+
+class EffectsBelongToTheSortie(unittest.TestCase):
+    """X-6: an effect toggled mid-exercise must not rewrite the scenario.
+
+    set_effects() merged the posted dict straight into the scenario row, so an
+    instructor turning terrain masking off for one demonstration changed the
+    scenario definition permanently and every future sortie started with
+    masking off. Nobody would notice until a later exercise behaved oddly.
+    """
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.db = os.path.join(self.dir, "x6.db")
+        self.main, self.client, _ = build_app(db_path=self.db)
+        self.instr = {"X-CAPVSAR-Token": INSTRUCTOR}
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def _scenario_row_effects(self, sid):
+        with self.main.db() as c:
+            row = c.execute("SELECT effects FROM scenarios WHERE id=?",
+                            (sid,)).fetchone()
+        return json.loads(row["effects"] or "{}")
+
+    def test_changing_effects_leaves_the_scenario_row_untouched(self):
+        sid, oid = run_sortie(self.main, self.client, headers=self.instr)
+        before = self._scenario_row_effects(sid)
+        self.assertTrue(before.get("radio_horizon", True))
+
+        r = self.client.post("/api/sorties/effects",
+                             json={"radio_horizon": False,
+                                   "terrain_masking": False},
+                             headers=self.instr)
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertFalse(r.json()["radio_horizon"])
+
+        self.assertEqual(self._scenario_row_effects(sid), before,
+                         "the scenario definition was rewritten")
+
+    def test_the_change_is_stored_on_the_sortie(self):
+        _, oid = run_sortie(self.main, self.client, headers=self.instr)
+        self.client.post("/api/sorties/effects", json={"multipath": True},
+                         headers=self.instr)
+        with self.main.db() as c:
+            row = c.execute("SELECT effects FROM sorties WHERE id=?",
+                            (oid,)).fetchone()
+        self.assertTrue(json.loads(row["effects"])["multipath"])
+
+    def test_a_later_sortie_starts_from_the_scenario_not_the_last_sortie(self):
+        sid, _ = run_sortie(self.main, self.client, headers=self.instr)
+        self.client.post("/api/sorties/effects", json={"radio_horizon": False},
+                         headers=self.instr)
+        r = self.client.post("/api/sorties", json={"scenario_id": sid},
+                             headers=self.instr)
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertTrue(self.main.hub.scenario["effects"]["radio_horizon"],
+                        "the new sortie inherited the previous one's effects")
+
+    def test_a_resumed_sortie_keeps_the_effects_it_was_flying(self):
+        _, oid = run_sortie(self.main, self.client, headers=self.instr)
+        self.client.post("/api/sorties/effects", json={"cone_of_confusion": False},
+                         headers=self.instr)
+        main2, _, _ = build_app(db_path=self.db)
+        main2.rehydrate()
+        self.assertFalse(main2.hub.scenario["effects"]["cone_of_confusion"])
+
+    def test_an_unknown_effect_is_rejected_rather_than_stored(self):
+        run_sortie(self.main, self.client, headers=self.instr)
+        r = self.client.post("/api/sorties/effects",
+                             json={"radio_hrizon": False},   # typo
+                             headers=self.instr)
+        self.assertEqual(r.status_code, 422, r.text)
+
+    def test_effects_out_of_range_are_rejected(self):
+        run_sortie(self.main, self.client, headers=self.instr)
+        r = self.client.post("/api/sorties/effects",
+                             json={"multipath_offset_deg": 900.0},
+                             headers=self.instr)
+        self.assertEqual(r.status_code, 422, r.text)
+
+
+class InputIsValidated(unittest.TestCase):
+    """X-6: coordinates and sortie bodies were accepted unchecked."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.main, self.client, _ = build_app(
+            db_path=os.path.join(self.dir, "x6b.db"))
+        self.instr = {"X-CAPVSAR-Token": INSTRUCTOR}
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_out_of_range_beacon_is_refused(self):
+        # A transposed lat/lon pair - the commonest way this goes wrong.
+        r = self.client.post("/api/scenarios", json={
+            "name": "bad", "beacon_lat": -117.2, "beacon_lon": 33.1,
+        }, headers=self.instr)
+        self.assertEqual(r.status_code, 422, r.text)
+
+    def test_a_sortie_needs_a_scenario_id(self):
+        r = self.client.post("/api/sorties", json={}, headers=self.instr)
+        self.assertEqual(r.status_code, 422, r.text)
+
+
+class OperationalHygiene(unittest.TestCase):
+    """X-8: retention, pagination, and a healthcheck that means something."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.db = os.path.join(self.dir, "x8.db")
+        self.main, self.client, _ = build_app(db_path=self.db)
+        self.instr = {"X-CAPVSAR-Token": INSTRUCTOR}
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_track_pages_instead_of_returning_everything(self):
+        _, oid = run_sortie(self.main, self.client, headers=self.instr)
+        with self.main.db() as c:
+            for i in range(25):
+                c.execute("INSERT INTO positions VALUES (?,?,?,?,?,?,?)",
+                          (oid, "CAP-1", 1000.0 + i, 33.0, -117.0, 5500.0, 90.0))
+        first = self.client.get(f"/api/sorties/{oid}/track?limit=10").json()
+        self.assertEqual(len(first["positions"]), 10)
+        self.assertIsNotNone(first["next_since"])
+        second = self.client.get(
+            f"/api/sorties/{oid}/track?limit=10&since={first['next_since']}").json()
+        self.assertEqual(len(second["positions"]), 10)
+        self.assertGreater(second["positions"][0]["t"],
+                           first["positions"][-1]["t"])
+        last = self.client.get(
+            f"/api/sorties/{oid}/track?limit=10&since={second['next_since']}").json()
+        self.assertEqual(len(last["positions"]), 5)
+        self.assertIsNone(last["next_since"], "a short page is the last page")
+
+    def test_track_without_paging_arguments_still_works(self):
+        _, oid = run_sortie(self.main, self.client, headers=self.instr)
+        r = self.client.get(f"/api/sorties/{oid}/track")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("positions", r.json())
+
+    def test_retention_drops_old_positions_but_keeps_the_written_record(self):
+        _, old_oid = run_sortie(self.main, self.client, headers=self.instr)
+        with self.main.db() as c:
+            c.execute("INSERT INTO positions VALUES (?,?,?,?,?,?,?)",
+                      (old_oid, "CAP-1", 1.0, 33.0, -117.0, 5500.0, 90.0))
+            c.execute("INSERT INTO messages (sortie_id, t, sender, recipient,"
+                      " body) VALUES (?,?,?,?,?)",
+                      (old_oid, 1.0, "BASE", "CAP-1", "keep me"))
+        # The retention window lives in app.settings and is read at call time
+        # (C15-1), so that is where a test narrows it.
+        settings = sys.modules["app.settings"]
+        original = settings.POSITION_RETENTION_SORTIES
+        settings.POSITION_RETENTION_SORTIES = 1
+        try:
+            # A newer sortie pushes the old one out of the window.
+            run_sortie(self.main, self.client, headers=self.instr)
+            self.main.prune_positions()
+        finally:
+            settings.POSITION_RETENTION_SORTIES = original
+        with self.main.db() as c:
+            pos = c.execute("SELECT COUNT(*) n FROM positions WHERE sortie_id=?",
+                            (old_oid,)).fetchone()["n"]
+            msg = c.execute("SELECT COUNT(*) n FROM messages WHERE sortie_id=?",
+                            (old_oid,)).fetchone()["n"]
+        self.assertEqual(pos, 0, "old positions were not pruned")
+        self.assertEqual(msg, 1, "the written record must survive retention")
+
+    def test_health_reports_the_database(self):
+        r = self.client.get("/api/health")
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.json()["ok"])
+        self.assertEqual(r.json()["db"], "ok")
+
+    def test_health_fails_when_the_database_is_unusable(self):
+        system = sys.modules["app.routers.system"]
+        with patch.object(system, "db",
+                          side_effect=sqlite3.OperationalError("unable to open")):
+            r = self.client.get("/api/health")
+        self.assertEqual(r.status_code, 503)
+        self.assertFalse(r.json()["ok"])
+        self.assertIn("OperationalError", r.json()["db"])
+
+    def test_the_container_does_not_run_as_root(self):
+        dockerfile = (Path(__file__).resolve().parents[1] /
+                      "services/exercise/Dockerfile").read_text()
+        self.assertRegex(dockerfile, r"(?m)^USER\s+capvsar")
+        self.assertIn("useradd", dockerfile)
+
+    def test_the_ticker_is_cancelled_on_shutdown(self):
+        source = (Path(__file__).resolve().parents[1] /
+                  "services/exercise/app/main.py").read_text()
+        self.assertIn("task.cancel()", source)
+
+
+class Form110OnTheMumbleConsole(unittest.TestCase):
+    """F-9: the CAPF-110 log existed only on the retired /radio-legacy page,
+    so the console the MRO actually uses could not produce the one document
+    the role exists to produce."""
+
+    @classmethod
+    def setUpClass(cls):
+        static = Path(__file__).resolve().parents[1] / "services/exercise/app/static"
+        cls.js = (static / "mission-radio.js").read_text()
+        cls.html = (static / "mission-radio.html").read_text()
+        cls.legacy = (static / "radio.js").read_text()
+
+    def test_the_log_exists_on_the_new_console(self):
+        self.assertIn("commLogBody", self.html)
+        self.assertIn("CAP FORM 110", self.html)
+        for fn in ("function logEntry", "function renderLog", "function exportLog"):
+            self.assertIn(fn, self.js, fn)
+
+    def test_transmissions_are_logged_automatically(self):
+        self.assertIn("state.txStarted", self.js)
+        self.assertIn("outgoing:true", self.js)
+        # ...and received traffic, once per transmission rather than per packet.
+        self.assertIn("state.lastLogged", self.js)
+
+    def test_the_export_has_a_date_column(self):
+        """The legacy export had time only, so a sortie through 0000Z read as
+        though it went backwards."""
+        self.assertIn("'DATE'", self.js)
+        self.assertIn("slice(0, 10)", self.js)
+
+    def test_the_export_truncates_rather_than_only_padding(self):
+        """padEnd does not truncate: one long callsign pushed every column
+        after it out of line for the rest of the page."""
+        self.assertIn("function pad(", self.js)
+        self.assertIn("slice(0, width - 1)", self.js)
+        self.assertIn(".padEnd(width", self.js)
+
+    def test_the_blob_url_is_revoked(self):
+        self.assertIn("revokeObjectURL", self.js,
+                      "every export leaked its blob for the life of the page")
+
+    def test_the_log_never_uses_innerhtml_for_traffic(self):
+        """F-6 was the same class of bug in four other views, now escaped in
+        ServerStringsAreEscaped. The log must not reintroduce it."""
+        body = self.js[self.js.index("function renderLog"):
+                       self.js.index("function pad(")]
+        self.assertNotIn("innerHTML +=", body)
+        self.assertIn("textContent", body)
+
+    def test_typing_in_the_log_does_not_key_the_transmitter(self):
+        """The log cells are contenteditable and Space is the PTT key."""
+        self.assertIn("[contenteditable]", self.js)
+
+
+class LegacyConsoleAudio(unittest.TestCase):
+    """F-7: two bugs in /radio-legacy, which is still routed."""
+
+    @classmethod
+    def setUpClass(cls):
+        root = Path(__file__).resolve().parents[1]
+        cls.js = (root / "services/exercise/app/static/radio.js").read_text()
+        cls.main = (root / "services/exercise/app/main.py").read_text()
+
+    def test_sender_precedence_no_longer_throws_on_an_absent_sender(self):
+        """`a && b || c` parsed as `(a && b) || c`, so an undefined sender
+        fell through to c and dereferenced it."""
+        self.assertNotIn("if (msg.sender && msg.sender.startsWith('BASE (APX') || "
+                         "msg.sender.startsWith('BASE (IC-A'))", self.js)
+        self.assertIn("msg.sender && (msg.sender.startsWith('BASE (APX') ||", self.js)
+
+    def test_audio_is_armed_by_a_gesture_not_by_incoming_traffic(self):
+        self.assertIn("arm()", self.js)
+        self.assertIn("this.armed", self.js)
+        # The playback path must not create or resume a context on its own.
+        ensure = self.js[self.js.index("  ensureContext()"):
+                         self.js.index("  // Motorola P25")]
+        self.assertNotIn("new AudioCtx()", ensure)
+        self.assertNotIn("resume()", ensure)
+
+    def test_speech_is_gated_too(self):
+        speak = self.js[self.js.index("  speak(text, onEnd)"):]
+        self.assertIn("this.armed", speak[:600])
+
+    def test_the_legacy_console_is_still_routed(self):
+        """F-7 would close with /radio-legacy if it were retired. It is not:
+        the airband station it carries has no replacement until F-10."""
+        main, client, _ = build_app()
+        paths = {getattr(r, "path", None) for r in main.app.routes}
+        self.assertIn("/radio-legacy", paths)
+
+
+class TheConsoleIsSplitUp(unittest.TestCase):
+    """C15-1: main.py held the schema, the migrations, the truth filter, the
+    role checks, the hub, the retention policy and every route on one page.
+    X-3 happened in there, and the CalTopo relay and the IC/AOBD views had
+    nowhere obvious to land."""
+
+    APP = Path(__file__).resolve().parents[1] / "services/exercise/app"
+
+    def test_main_is_assembly_not_implementation(self):
+        main_src = (self.APP / "main.py").read_text()
+        self.assertLess(len(main_src.splitlines()), 260,
+                        "main.py is growing back into a monolith")
+        # Assembly wires routers up; it does not define routes itself.
+        self.assertNotIn("@app.get(", main_src)
+        self.assertNotIn("@app.post(", main_src)
+        self.assertIn("include_router", main_src)
+
+    def test_the_pieces_exist_and_each_does_one_thing(self):
+        for name in ("settings.py", "store.py", "roles.py", "hub.py",
+                     "models.py", "geo.py"):
+            self.assertTrue((self.APP / name).exists(), name)
+        for name in ("scenarios", "sorties", "telemetry", "comms", "system",
+                     "auth", "pages"):
+            self.assertTrue((self.APP / "routers" / f"{name}.py").exists(), name)
+
+    def test_only_the_store_talks_to_sqlite(self):
+        """A route that opens its own connection is how the schema ended up
+        spread across a thousand lines in the first place."""
+        for path in sorted((self.APP / "routers").glob("*.py")):
+            src = path.read_text()
+            self.assertNotIn("sqlite3.connect", src, path.name)
+            self.assertNotIn("CREATE TABLE", src, path.name)
+
+    def test_the_routes_all_survived_the_split(self):
+        """The split must not have dropped an endpoint on the floor."""
+        main, _, _ = build_app()
+        paths = {getattr(r, "path", None) for r in main.app.routes}
+        for path in ("/api/scenarios", "/api/sorties", "/api/sorties/stop",
+                     "/api/sorties/reveal", "/api/sorties/effects",
+                     "/api/sorties/{oid}/track", "/api/positions",
+                     "/api/bearings", "/api/messages", "/api/state",
+                     "/api/plugin/scenario", "/api/health", "/api/tile-sources",
+                     "/ws", "/login", "/api/auth/login", "/api/auth/me",
+                     "/api/auth/logout", "/join/{code}", "/setup", "/api/setup",
+                     "/api/setup/reset", "/", "/debrief", "/base", "/radio",
+                     "/radio-legacy", "/radio-ca.crt"):
+            self.assertIn(path, paths, f"{path} was lost in the split")
+
+    def test_the_names_other_code_imports_still_resolve(self):
+        main, _, _ = build_app()
+        for name in ("app", "hub", "db", "db_call", "init_db", "rehydrate",
+                     "prune_positions", "list_messages", "list_bearings"):
+            self.assertTrue(hasattr(main, name), f"app.main.{name} disappeared")
+
+
+class ServerStringsAreEscaped(unittest.TestCase):
+    """F-6: message bodies, senders, bearing notes and callsigns reached
+    innerHTML unescaped, and any LAN client can POST all of them. Nothing
+    escapes them server-side, so the views must.
+
+    Only values that actually flow into an HTML sink are checked. The same
+    fields are used all over these files as object keys and dedup strings,
+    where markup is inert.
+    """
+
+    VIEWS = ("base.js", "app.js", "debrief.js", "radio.js", "setup.js")
+    # Server-controlled string fields. Numbers reach HTML through toFixed()
+    # or Math.round(), neither of which can carry markup.
+    TAINTED = ("body", "sender", "recipient", "note", "callsign", "name",
+               "alert_text", "alert_kind", "id", "points", "distance_nm",
+               "channel", "title", "code", "role", "target_url", "tail")
+    # A read is safe when wrapped in esc(...) or used as a truthiness test.
+    READ = re.compile(r"((?:esc|escapeHtml)\(\s*)?\b[A-Za-z_$][\w$]*(?:\.[\w$]+)*\."
+                      r"(" + "|".join(TAINTED) + r")\b(\s*\?)?")
+    # bindTooltip renders a string as HTML, so it is an innerHTML sink too.
+    SINK = re.compile(r"\.innerHTML\s*\+?=|bindTooltip\(")
+
+    @classmethod
+    def setUpClass(cls):
+        static = Path(__file__).resolve().parents[1] / "services/exercise/app/static"
+        cls.src = {name: (static / name).read_text() for name in cls.VIEWS}
+
+    @classmethod
+    def _sink_statements(cls, src):
+        """Yield the text of each statement that writes HTML."""
+        for m in cls.SINK.finditer(src):
+            i, depth = m.end(), 0
+            while i < len(src):
+                c = src[i]
+                if c in "([{":
+                    depth += 1
+                elif c in ")]}":
+                    if depth == 0 and c == ")":
+                        break
+                    depth -= 1
+                elif c == ";" and depth == 0:
+                    break
+                elif c == "`":
+                    i += 1
+                    while i < len(src) and src[i] != "`":
+                        if src[i] == "\\":
+                            i += 1
+                        elif src[i:i + 2] == "${":
+                            d2 = 0
+                            i += 2
+                            while i < len(src):
+                                if src[i] == "{":
+                                    d2 += 1
+                                elif src[i] == "}":
+                                    if d2 == 0:
+                                        break
+                                    d2 -= 1
+                                i += 1
+                        i += 1
+                i += 1
+            yield src[m.start():i]
+
+    @classmethod
+    def _unescaped(cls, src):
+        found = []
+        for stmt in cls._sink_statements(src):
+            for r in cls.READ.finditer(stmt):
+                if r.group(1) or r.group(3):
+                    continue
+                found.append(r.group(0).strip())
+        return found
+
+    def test_every_view_defines_an_escape_helper(self):
+        for name, src in self.src.items():
+            with self.subTest(view=name):
+                self.assertTrue("const esc =" in src or "function escapeHtml" in src,
+                                f"{name} has no escape helper")
+                # The quote matters: two setup.js values sit in attributes.
+                for entity in ("&amp;", "&lt;", "&gt;", "&quot;"):
+                    self.assertIn(entity, src, f"{name} does not produce {entity}")
+
+    def test_the_shared_helper_also_escapes_the_apostrophe(self):
+        for name, src in self.src.items():
+            if "const esc =" not in src:
+                continue  # radio.js predates the shared helper
+            with self.subTest(view=name):
+                self.assertIn("&#39;", src)
+
+    def test_no_tainted_field_reaches_an_html_sink_unescaped(self):
+        for name, src in self.src.items():
+            with self.subTest(view=name):
+                raw = self._unescaped(src)
+                self.assertEqual(raw, [], f"{name} writes {raw} into HTML unescaped")
+
+    def test_the_check_would_notice_a_regression(self):
+        """A detector that cannot fail is worth nothing, so prove it fails."""
+        src = self.src["base.js"]
+        for original, reverted in (
+            ("${esc(x.body)}", "${x.body}"),
+            ("bindTooltip(esc(a.callsign)", "bindTooltip(a.callsign"),
+            ("+ esc(b.note)", "+ b.note"),
+        ):
+            with self.subTest(reverted=reverted):
+                self.assertIn(original, src, "the fix this test guards has moved")
+                self.assertNotEqual([], self._unescaped(src.replace(original, reverted)))
 
 
 if __name__ == "__main__":

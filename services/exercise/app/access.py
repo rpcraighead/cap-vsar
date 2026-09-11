@@ -267,7 +267,7 @@ def get_exercise_setup() -> dict:
                     {
                         "id": "ac-1",
                         "callsign": "CAP 423",
-                        "tail": "N499CP",
+                        "tail": "CAP 487",
                         "df_model": "Becker SAR-DF 517",
                         "crew": ["pilot", "observer", "scanner"]
                     }
@@ -312,7 +312,7 @@ def save_exercise_setup(name: str, num_aircraft: int, aircraft_list: list[dict],
         for ac_idx, ac in enumerate(aircraft_list, 1):
             ac_id = ac.get("id") or f"ac-{ac_idx}"
             callsign = ac.get("callsign") or f"CAP {420 + ac_idx}"
-            tail = ac.get("tail") or "N499CP"
+            tail = ac.get("tail") or "CAP 487"
             df_model = ac.get("df_model") or "Becker SAR-DF 517"
             num_suffix = callsign.split()[-1] if " " in callsign else str(ac_idx)
 

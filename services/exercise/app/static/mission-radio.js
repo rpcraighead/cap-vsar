@@ -6,6 +6,7 @@ const state = {
   stream: null, source: null, capture: null, playback: null, gain: null,
   started: 0, lastPong: 0, lastRx: 0, channels: [], config: null, timeout: null,
   wantOnline: false, reconnectTimer: null, reconnectAttempt: 0,
+  txStarted: 0, lastLogged: null, rxLogTimer: null,
 };
 const models = {
   apx4500: {className:'apx', title:'Motorola APX 4500 O2 control head', caption:'APX 4500 / O2 CONTROL HEAD',
@@ -20,6 +21,112 @@ const models = {
       ['Next net: arrow keys or wheel',569,216,84,84,'channel']]},
 };
 function notice(message='') { $('notice').textContent=message; $('notice').hidden=!message; }
+
+/* --------------------------------------------------------------------- F-9
+   CAP Form 110 communications log.
+
+   This lived only on /radio-legacy, so the console the MRO is actually meant
+   to use could not produce the one document the role exists to produce. On a
+   voice net the log records transmissions - who keyed, on which net, when -
+   and the operator writes in what was passed, which is how a real Form 110 is
+   kept. Entries are held in the page only; nothing is sent to the console.  */
+const commLog = [];
+const LOG_LIMIT = 500;
+
+function logEntry({from, to = 'ALL', net, outgoing = false, seconds = null, traffic = ''}) {
+  const entry = {
+    id: `e${Date.now().toString(36)}${commLog.length}`,
+    t: Date.now() / 1000, from, to, traffic, outgoing,
+    net: net || channel()?.name || $('netSelect').value || 'MISSION NET',
+    seconds,
+  };
+  commLog.unshift(entry);
+  if (commLog.length > LOG_LIMIT) commLog.length = LOG_LIMIT;
+  renderLog();
+  return entry;
+}
+
+function renderLog() {
+  const body = $('commLogBody');
+  if (!body) return;
+  if (!commLog.length) {
+    body.innerHTML = '<tr class="commlog-empty"><td colspan="6">No traffic logged yet.</td></tr>';
+    return;
+  }
+  body.textContent = '';
+  for (const entry of commLog) {
+    const when = new Date(entry.t * 1000);
+    const row = document.createElement('tr');
+    row.className = entry.outgoing ? 'tx' : 'rx';
+    const cells = [
+      ['mono', when.toISOString().slice(0, 10)],
+      ['mono dir', when.toISOString().slice(11, 19) + 'Z'],
+      ['net', entry.net],
+      ['', entry.from + (entry.seconds ? ` (${entry.seconds.toFixed(0)}s)` : '')],
+      ['', entry.to],
+    ];
+    for (const [cls, text] of cells) {
+      const td = document.createElement('td');
+      if (cls) td.className = cls;
+      td.textContent = text;          // textContent, never innerHTML (F-6)
+      row.appendChild(td);
+    }
+    const traffic = document.createElement('td');
+    traffic.className = 'traffic';
+    traffic.contentEditable = 'true';
+    traffic.spellcheck = false;
+    traffic.textContent = entry.traffic;
+    traffic.addEventListener('input', () => { entry.traffic = traffic.textContent.trim(); });
+    row.appendChild(traffic);
+    body.appendChild(row);
+  }
+}
+
+function pad(value, width) {
+  // The legacy export used padEnd alone, which does not truncate - one long
+  // callsign pushed every column after it out of line for the rest of the
+  // page. Truncate first, then pad.
+  const text = String(value ?? '');
+  return (text.length > width ? text.slice(0, width - 1) + '\u2026' : text).padEnd(width, ' ');
+}
+
+function exportLog() {
+  if (!commLog.length) { notice('No traffic logged yet.'); return; }
+  const station = ($('callsign').value || 'MISSION BASE').trim();
+  const rows = commLog.slice().reverse();
+  const opened = new Date(rows[0].t * 1000);
+  const lines = [
+    'CAP FORM 110 - COMMUNICATIONS LOG',
+    'CIVIL AIR PATROL V-SAR EXERCISE TRAFFIC - NOT AN ACTUAL MISSION RECORD',
+    `STATION: ${station}`,
+    `OPENED:  ${opened.toISOString().slice(0, 10)} ${opened.toISOString().slice(11, 19)}Z`,
+    `PRINTED: ${new Date().toISOString().slice(0, 19).replace('T', ' ')}Z`,
+    ''.padEnd(104, '='),
+    // The date column the legacy export never had: a sortie that runs through
+    // 0000Z produced a log that appeared to go backwards in time.
+    `${pad('DATE', 11)}| ${pad('TIME(Z)', 9)}| ${pad('NET', 16)}| ${pad('FROM', 22)}| ${pad('TO', 12)}| TRAFFIC`,
+    ''.padEnd(104, '-'),
+  ];
+  for (const entry of rows) {
+    const iso = new Date(entry.t * 1000).toISOString();
+    const from = entry.from + (entry.seconds ? ` (${entry.seconds.toFixed(0)}s)` : '');
+    lines.push(`${pad(iso.slice(0, 10), 11)}| ${pad(iso.slice(11, 19), 9)}| ` +
+               `${pad(entry.net, 16)}| ${pad(from, 22)}| ${pad(entry.to, 12)}| ${entry.traffic || ''}`);
+  }
+  lines.push(''.padEnd(104, '='), `${rows.length} entries.`);
+
+  const blob = new Blob([lines.join('\n') + '\n'], {type: 'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `CAPF110_${station.replace(/[^A-Za-z0-9]+/g, '_')}_${new Date().toISOString().slice(0, 10)}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // The legacy export never revoked it, so every export leaked its blob for
+  // the life of the page.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
 function channel() { return state.channels.find(c=>c.id===$('netSelect').value); }
 function send(data) {
   if (state.ws?.readyState===WebSocket.OPEN) { state.ws.send(JSON.stringify(data)); return true; }
@@ -103,6 +210,14 @@ function silenceMic() {
   state.tx=false; clearTimeout(state.timeout); state.timeout=null;
 }
 function releaseAll(message='') {
+  // F-9: log the transmission as it ends, so the duration is real. Anything
+  // under half a second is a mis-key, not traffic.
+  if(state.txStarted) {
+    const seconds=(Date.now()-state.txStarted)/1000;
+    state.txStarted=0;
+    if(seconds>=0.5) logEntry({from:($('callsign').value||'MISSION BASE').trim(),
+                               to:'NET', outgoing:true, seconds});
+  }
   state.held.clear(); silenceMic();
   state.request=(state.request+1)%2147483647;
   send({action:'ptt',active:false,request:state.request});
@@ -113,6 +228,7 @@ function press(source) {
   if(!state.online||state.tuning||state.held.has(source)) return;
   state.held.add(source);
   if(state.held.size===1) {
+    state.txStarted=Date.now();
     notice(); state.request=(state.request+1)%2147483647;
     state.context.resume().catch(()=>connectionLost('Headset audio is paused.'));
     send({action:'ptt',active:true,request:state.request});
@@ -284,9 +400,32 @@ function receive(data) {
     render();
   } else if(message.type==='rx' && !state.tx) {
     $('speaker').textContent=`${message.speaker} transmitting`;
+    // F-9: one entry per station per transmission, not one per packet.
+    if(message.speaker && message.speaker!==state.lastLogged) {
+      state.lastLogged=message.speaker;
+      logEntry({from:message.speaker, to:($('callsign').value||'MISSION BASE').trim()});
+    }
+    clearTimeout(state.rxLogTimer);
+    state.rxLogTimer=setTimeout(()=>{state.lastLogged=null;},3000);
   } else if(message.type==='pong') state.lastPong=Date.now();
   else if(message.type==='error'){disconnect();notice(message.message||'Voice connection unavailable.');}
 }
+
+$('logExport')?.addEventListener('click',exportLog);
+$('logClear')?.addEventListener('click',()=>{
+  if(!commLog.length||confirm('Clear the communications log? Export it first if you need the record.')) {
+    commLog.length=0; renderLog();
+  }
+});
+$('logAdd')?.addEventListener('click',()=>{
+  // A Form 110 records traffic the operator heard on the radio too, not only
+  // what passed through this console.
+  const entry=logEntry({from:($('callsign').value||'MISSION BASE').trim(), to:'NET'});
+  const row=$('commLogBody').querySelector('tr');
+  row?.querySelector('.traffic')?.focus();
+  return entry;
+});
+renderLog();
 
 $('joinForm').addEventListener('submit',event=>{event.preventDefault();if(state.wantOnline)disconnect();else connect();});
 $('modelApx').addEventListener('click',()=>setModel('apx4500'));

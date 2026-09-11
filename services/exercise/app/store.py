@@ -1,0 +1,153 @@
+"""
+SQLite for the exercise console: connections, schema, and retention (C15-1).
+
+Every route used to reach into the database directly from main.py, so the
+schema, the WAL settings, the migrations and the retention policy were spread
+through the same file as the HTTP handlers. This is the whole data layer.
+"""
+from __future__ import annotations
+
+import json
+import sqlite3
+import time
+import uuid
+from contextlib import contextmanager
+from pathlib import Path
+
+from starlette.concurrency import run_in_threadpool
+
+from . import access
+from . import settings
+from .settings import ALERT_COLUMNS, DB, SEED, log
+
+
+@contextmanager
+def db():
+    """A connection that commits on success, rolls back on error, and closes.
+
+    `with sqlite3.connect(...)` commits but never closes, which leaked a
+    connection per request. The timeout matters because the radio bridge shares
+    this process: a lock wait here is a gap in someone's transmission.
+    """
+    c = sqlite3.connect(DB, timeout=5.0)
+    c.row_factory = sqlite3.Row
+    try:
+        yield c
+        c.commit()
+    except Exception:
+        c.rollback()
+        raise
+    finally:
+        c.close()
+
+
+def _exec(sql: str, params: tuple = ()):
+    with db() as c:
+        c.execute(sql, params)
+
+
+def _fetchone(sql: str, params: tuple = ()):
+    with db() as c:
+        return c.execute(sql, params).fetchone()
+
+
+async def db_call(fn, *args):
+    """Run a blocking database function off the event loop.
+
+    Every handler here shares one loop with the Mumble bridge's 20 ms audio
+    frames (radio.py). A synchronous commit fsyncing on a bind mount stalls
+    that loop, trips the bridge's buffer check and unkeys the operator
+    mid-transmission, so database work belongs in a worker thread.
+    """
+    return await run_in_threadpool(fn, *args)
+
+
+# X-8: the console had no logging at all - two print() calls, one of them a
+# security warning. After an exercise the only record of what the instructor
+# did was whatever anyone wrote down. Sortie lifecycle events (start, stop,
+# reveal, effect change) go through here because that is the spine an
+# after-action review reads.
+
+def init_db():
+    Path(DB).parent.mkdir(parents=True, exist_ok=True)
+    with db() as c:
+        # WAL lets the 1 Hz ticker and the debrief read while a sortie writes,
+        # instead of serialising behind it. The setting lives in the database
+        # file, so this runs once and every later connection inherits it.
+        c.execute("PRAGMA journal_mode=WAL")
+        c.execute("PRAGMA synchronous=NORMAL")
+        c.executescript("""
+        CREATE TABLE IF NOT EXISTS scenarios (
+            id TEXT PRIMARY KEY, name TEXT NOT NULL, notes TEXT,
+            beacon_lat REAL, beacon_lon REAL, beacon_elev_ft REAL,
+            band TEXT, power REAL, effects TEXT, created REAL);
+        CREATE TABLE IF NOT EXISTS sorties (
+            id TEXT PRIMARY KEY, scenario_id TEXT, name TEXT,
+            started REAL, stopped REAL, revealed INTEGER DEFAULT 0,
+            effects TEXT);
+        CREATE TABLE IF NOT EXISTS positions (
+            sortie_id TEXT, callsign TEXT, t REAL,
+            lat REAL, lon REAL, alt_ft REAL, hdg_true REAL);
+        CREATE INDEX IF NOT EXISTS positions_sortie ON positions(sortie_id, t);
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, sortie_id TEXT, t REAL,
+            sender TEXT, recipient TEXT, body TEXT);
+        CREATE TABLE IF NOT EXISTS bearings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, sortie_id TEXT, callsign TEXT,
+            t REAL, lat REAL, lon REAL, bearing_true REAL, note TEXT);
+        """)
+        # additive migration for databases created before the alert model
+        existing = {r["name"] for r in c.execute("PRAGMA table_info(scenarios)")}
+        for col, typ in ALERT_COLUMNS:
+            if col not in existing:
+                c.execute(f"ALTER TABLE scenarios ADD COLUMN {col} {typ}")
+        # X-6: effects are a property of the sortie being flown, not of the
+        # scenario definition. Older databases have the column missing and
+        # their scenario rows carry whatever the last exercise left behind;
+        # nothing is migrated back out of those rows, because there is no way
+        # to tell an instructor's deliberate default from an effect they
+        # toggled once mid-exercise three weeks ago.
+        sortie_cols = {r["name"] for r in c.execute("PRAGMA table_info(sorties)")}
+        if "effects" not in sortie_cols:
+            c.execute("ALTER TABLE sorties ADD COLUMN effects TEXT")
+    access.init_auth_db()
+
+
+
+def prune_positions():
+    """Drop position history for sorties older than the retention window (X-8).
+
+    `positions` had no retention at all, so it grew for the life of the
+    console and /track got slower every exercise. Bearings and messages are
+    kept: they are the written record, they are small, and an after-action
+    review reads them. Positions are the bulk, and a replay of a sortie from
+    six months ago is not what the retention window is for.
+    """
+    keep_sorties = settings.POSITION_RETENTION_SORTIES
+    if keep_sorties <= 0:
+        return
+    try:
+        with db() as c:
+            keep = [r["id"] for r in c.execute(
+                "SELECT id FROM sorties ORDER BY started DESC LIMIT ?",
+                (keep_sorties,))]
+            if not keep:
+                return
+            marks = ",".join("?" * len(keep))
+            n = c.execute(
+                f"DELETE FROM positions WHERE sortie_id NOT IN ({marks})",
+                keep).rowcount
+        if n:
+            log.info("pruned %d position rows outside the last %d sorties",
+                     n, keep_sorties)
+    except sqlite3.Error as e:
+        log.warning("position prune failed: %s", e)
+
+
+
+def row_to_scenario(r) -> dict:
+    d = dict(r)
+    d["effects"] = json.loads(d["effects"] or "{}")
+    return d
+
+

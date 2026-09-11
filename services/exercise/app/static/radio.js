@@ -13,22 +13,44 @@ class RadioAudio {
     this.noiseNode = null;
     this.noiseGain = null;
     this.enabled = true;
+    this.armed = false;      // F-7: no audio until a gesture arms it
   }
 
-  ensureContext() {
+  /**
+   * Create or resume the AudioContext. Only ever call this from a user
+   * gesture (F-7).
+   *
+   * Incoming traffic used to call it, and a browser will not start an
+   * AudioContext outside a gesture: on iPad Safari the console stayed
+   * completely silent after joining until something was tapped, with nothing
+   * on screen saying so. The new console gets this right by arming on the
+   * join button; this does the same thing.
+   */
+  arm() {
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       this.ctx = new AudioCtx();
     }
-    if (this.ctx.state === 'suspended') {
-      this.ctx.resume();
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    this.armed = this.ctx.state === 'running';
+    return this.armed;
+  }
+
+  ensureContext() {
+    // Playback path. Never starts the context: if no gesture has armed audio
+    // yet there is nothing to play through, and saying so beats failing
+    // silently.
+    if (!this.ctx || this.ctx.state !== 'running') {
+      this.armed = false;
+      return false;
     }
+    return true;
   }
 
   // Motorola P25 3-tone permit to speak chirp: 941 Hz, 1336 Hz, 1209 Hz
   playP25Chirp() {
     if (!this.enabled) return;
-    this.ensureContext();
+    if (!this.ensureContext()) return;   // F-7: no gesture yet, nothing to play through
     const now = this.ctx.currentTime;
     const tones = [
       { freq: 941, dur: 0.035 },
@@ -59,7 +81,7 @@ class RadioAudio {
   // Motorola digital carrier squelch tail (120Hz click + noise cutoff)
   playP25Tail() {
     if (!this.enabled) return;
-    this.ensureContext();
+    if (!this.ensureContext()) return;   // F-7: no gesture yet, nothing to play through
     const now = this.ctx.currentTime;
 
     const osc = this.ctx.createOscillator();
@@ -80,7 +102,7 @@ class RadioAudio {
   // VHF-AM mechanical relay click
   playAmClick() {
     if (!this.enabled) return;
-    this.ensureContext();
+    if (!this.ensureContext()) return;   // F-7: no gesture yet, nothing to play through
     const now = this.ctx.currentTime;
 
     const osc = this.ctx.createOscillator();
@@ -101,7 +123,7 @@ class RadioAudio {
   // VHF-AM squelch burst (shhh-click)
   playAmSquelchBurst() {
     if (!this.enabled) return;
-    this.ensureContext();
+    if (!this.ensureContext()) return;   // F-7: no gesture yet, nothing to play through
     const now = this.ctx.currentTime;
 
     // Generate white noise buffer
@@ -136,6 +158,12 @@ class RadioAudio {
   // Text-To-Speech with simulated tactical radio voice
   speak(text, onEnd) {
     if (!('speechSynthesis' in window) || !$('chkTts').checked) {
+      if (onEnd) onEnd();
+      return;
+    }
+    // F-7: speech is subject to the same gesture rule as the AudioContext,
+    // and on iPad it fails silently. Skip rather than pretend it was spoken.
+    if (!this.armed) {
       if (onEnd) onEnd();
       return;
     }
@@ -344,7 +372,7 @@ function updateActiveRadioLabel() {
 
 function startTransmit() {
   if (transmitting) return;
-  audio.ensureContext();
+  audio.arm();
 
   // Check radio power
   if (activeRadio === 'apx' && (!apx.power || apx.vol === 0)) {
@@ -450,7 +478,7 @@ function addForm110Entry(item) {
 
   row.innerHTML = `
     <td><b>${timeZ}Z</b></td>
-    <td>${item.channel || 'MISSION NET'}</td>
+    <td>${escapeHtml(item.channel || 'MISSION NET')}</td>
     <td><b>${escapeHtml(item.sender)}</b></td>
     <td>${escapeHtml(item.recipient)}</td>
     <td>${escapeHtml(item.body)}</td>
@@ -527,7 +555,13 @@ function connectWebSocket() {
 
 function handleIncomingRadioTraffic(msg) {
   // Determine if it was an outgoing message sent by this console
-  if (msg.sender && msg.sender.startsWith('BASE (APX') || msg.sender.startsWith('BASE (IC-A')) {
+  // F-7: this was `a && b || c`, and && binds tighter than ||, so it parsed
+  // as `(sender && startsWith(APX)) || startsWith(IC-A)` - with no sender the
+  // first operand is falsy and the second one dereferences undefined and
+  // throws, taking the whole incoming-traffic handler with it. A server-side
+  // default was the only thing keeping it alive.
+  if (msg.sender && (msg.sender.startsWith('BASE (APX') ||
+                     msg.sender.startsWith('BASE (IC-A'))) {
     return; // Already logged locally
   }
 
@@ -598,7 +632,7 @@ function setupControls() {
 
   // --- MOTOROLA APX 6500 CONTROLS ---
   $('apxVolUp').addEventListener('click', () => {
-    audio.ensureContext();
+    audio.arm();
     if (apx.vol < 10) apx.vol++;
     apx.volAngle = (apx.vol - 5) * 20;
     apx.power = true;
@@ -606,7 +640,7 @@ function setupControls() {
   });
 
   $('apxVolDown').addEventListener('click', () => {
-    audio.ensureContext();
+    audio.arm();
     if (apx.vol > 0) apx.vol--;
     if (apx.vol === 0) apx.power = false;
     apx.volAngle = (apx.vol - 5) * 20;
@@ -614,7 +648,7 @@ function setupControls() {
   });
 
   $('apxChanUp').addEventListener('click', () => {
-    audio.ensureContext();
+    audio.arm();
     const zone = APX_ZONES[apx.zoneIdx];
     apx.chanIdx = (apx.chanIdx + 1) % zone.channels.length;
     apx.chanAngle = (apx.chanAngle + 22.5) % 360;
@@ -622,7 +656,7 @@ function setupControls() {
   });
 
   $('apxChanDown').addEventListener('click', () => {
-    audio.ensureContext();
+    audio.arm();
     const zone = APX_ZONES[apx.zoneIdx];
     apx.chanIdx = (apx.chanIdx - 1 + zone.channels.length) % zone.channels.length;
     apx.chanAngle = (apx.chanAngle - 22.5 + 360) % 360;
@@ -630,34 +664,34 @@ function setupControls() {
   });
 
   $('apxBtnHome').addEventListener('click', () => {
-    audio.ensureContext();
+    audio.arm();
     apx.zoneIdx = 0;
     apx.chanIdx = 2; // CC 1 (Default Command & Control)
     renderApx();
   });
 
   $('apxBtnZoneUp').addEventListener('click', () => {
-    audio.ensureContext();
+    audio.arm();
     apx.zoneIdx = (apx.zoneIdx + 1) % APX_ZONES.length;
     apx.chanIdx = 0;
     renderApx();
   });
 
   $('apxBtnZoneDown').addEventListener('click', () => {
-    audio.ensureContext();
+    audio.arm();
     apx.zoneIdx = (apx.zoneIdx - 1 + APX_ZONES.length) % APX_ZONES.length;
     apx.chanIdx = 0;
     renderApx();
   });
 
   $('apxBtnScan').addEventListener('click', () => {
-    audio.ensureContext();
+    audio.arm();
     apx.scan = !apx.scan;
     renderApx();
   });
 
   $('apxBtnMon').addEventListener('click', () => {
-    audio.ensureContext();
+    audio.arm();
     apx.mon = !apx.mon;
     if (apx.mon) {
       audio.playAmSquelchBurst();
@@ -674,39 +708,39 @@ function setupControls() {
 
   // --- ICOM IC-A120 CONTROLS ---
   $('icomPwrBtn').addEventListener('click', () => {
-    audio.ensureContext();
+    audio.arm();
     icom.power = !icom.power;
     renderIcom();
   });
 
   $('icomVolUp').addEventListener('click', () => {
-    audio.ensureContext();
+    audio.arm();
     if (icom.vol < 10) icom.vol++;
     icom.volAngle = (icom.vol - 5) * 20;
     renderIcom();
   });
   $('icomVolDown').addEventListener('click', () => {
-    audio.ensureContext();
+    audio.arm();
     if (icom.vol > 0) icom.vol--;
     icom.volAngle = (icom.vol - 5) * 20;
     renderIcom();
   });
 
   $('icomSqlUp').addEventListener('click', () => {
-    audio.ensureContext();
+    audio.arm();
     if (icom.sql < 10) icom.sql++;
     icom.sqlAngle = (icom.sql - 5) * 20;
     renderIcom();
   });
   $('icomSqlDown').addEventListener('click', () => {
-    audio.ensureContext();
+    audio.arm();
     if (icom.sql > 0) icom.sql--;
     icom.sqlAngle = (icom.sql - 5) * 20;
     renderIcom();
   });
 
   $('icomDialUp').addEventListener('click', () => {
-    audio.ensureContext();
+    audio.arm();
     if (icom.mode === 'CH') {
       icom.memIdx = (icom.memIdx + 1) % ICOM_PRESETS.length;
     } else {
@@ -718,7 +752,7 @@ function setupControls() {
   });
 
   $('icomDialDown').addEventListener('click', () => {
-    audio.ensureContext();
+    audio.arm();
     if (icom.mode === 'CH') {
       icom.memIdx = (icom.memIdx - 1 + ICOM_PRESETS.length) % ICOM_PRESETS.length;
     } else {
@@ -736,19 +770,19 @@ function setupControls() {
   });
 
   $('icomBtnChWx').addEventListener('click', () => {
-    audio.ensureContext();
+    audio.arm();
     icom.mode = (icom.mode === 'CH') ? 'VFO' : 'CH';
     renderIcom();
   });
 
   $('icomBtnScan').addEventListener('click', () => {
-    audio.ensureContext();
+    audio.arm();
     icom.scan = !icom.scan;
     renderIcom();
   });
 
   $('icomBtnPri').addEventListener('click', () => {
-    audio.ensureContext();
+    audio.arm();
     icom.pri = !icom.pri;
     renderIcom();
   });

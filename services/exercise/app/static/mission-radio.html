@@ -49,6 +49,28 @@
    <div class="transport-label"><span class="tiny-dot"></span> MUMBLE MISSION VOICE</div>
   </aside>
  </div>
+
+ <!-- F-9: the CAPF-110 communications log. It lived only in /radio-legacy,
+      the console nobody is meant to use, so the primary console could not do
+      the MRO's actual job - the log is the deliverable of the role. -->
+ <section class="commlog" id="commLogPanel" aria-labelledby="commLogHeading">
+  <div class="commlog-head">
+   <div><p class="eyebrow">CAP FORM 110</p><h2 id="commLogHeading">Communications log</h2></div>
+   <div class="commlog-actions">
+    <button id="logAdd" type="button" class="test-button">Add entry</button>
+    <button id="logExport" type="button" class="test-button">Export CAPF-110</button>
+    <button id="logClear" type="button" class="test-button">Clear</button>
+   </div>
+  </div>
+  <p class="setup-intro" id="logIntro">Transmissions are logged automatically. Click the traffic column to record what was passed.</p>
+  <div class="commlog-scroll">
+   <table class="commlog-table">
+    <thead><tr><th scope="col">Date</th><th scope="col">Time (Z)</th><th scope="col">Net</th><th scope="col">From</th><th scope="col">To</th><th scope="col">Traffic</th></tr></thead>
+    <tbody id="commLogBody"><tr class="commlog-empty"><td colspan="6">No traffic logged yet.</td></tr></tbody>
+   </table>
+  </div>
+ </section>
+
  <footer><span>CAP V-SAR / MISSION BASE STATION</span><a href="/static/radio-help.html">Radio references &amp; setup notes</a><span>APX 4500 + EFJOHNSON 5300</span></footer>
 </main>
 <div id="secureHelp" class="secure-overlay" hidden><section><p class="eyebrow">HEADSET ACCESS</p><h2>Open the secure radio page.</h2><p>Your browser needs HTTPS to use a microphone on another device.</p><a id="secureLink" class="join-button" href="#">Open HTTPS radio ↗</a><p class="field-help">For the local mission server, install its trusted certificate first. The setup notes explain the tablet and computer steps.</p><a href="/static/radio-help.html">Read setup notes</a></section></div>

@@ -1,37 +1,56 @@
 """
-Simplified DF propagation model.
+Mock-bridge DF stub. NOT the propagation model.
 
-SCOPE: this exists so the exercise console is demonstrable and testable before
-the X-Plane plugin exists. It models range, radio horizon, 406 burst cadence,
-cone of confusion and an optional multipath offset.
+`xplane/PI_capvsar_df.py` is the propagation model and the only authority on
+what a direction finder shows. It has the aircraft's real attitude, a terrain
+probe, the head and tuning the crew actually selected, a calibrated per-band
+link budget, squelch, averaging and TIMEHOLD. This file has none of that and
+never will: it exists so `mock_bridge.py` can drive the console, the map and
+the bearing log with no simulator attached.
 
-It deliberately does NOT model terrain masking, because that needs a terrain
-probe which only the simulator has. Per the implementation plan the
-authoritative engine lives in the XPPython3 plugin; this is the stand-in that
-lets the console, the map and the bearing log be built and validated first.
-When the real plugin lands it reports bearing/signal directly and this module
-is used only by the mock bridge.
+**It must never stand in for the plugin during a sortie** (P-11). It used to:
+`/api/positions` called it whenever a station omitted `df`, so a plugin that
+was loading, disabled or mid-reconnect silently handed the instructor a
+different DF picture than the crew was looking at - with no marker saying so.
+A DF display the exercise fabricated is worse than a blank one, because the
+instructor cannot tell it is fabricated. The console now requires a caller to
+ask for this explicitly (`mock: true`), and a real station that reports no
+receiver state gets silence.
+
+Where this stub does model something the plugin models, it uses the plugin's
+figure so the demo is not actively misleading - see BURST_LEN_S below, which
+`tests/test_propagation.py` pins to the plugin's own constant. The signal
+curve is deliberately NOT a copy of the plugin's link budget: this is a stub,
+not a second implementation to keep in step.
 """
 from __future__ import annotations
 import math, random
 from dataclasses import dataclass
 
-R_NM = 3440.065
+# C15-2: bearing and distance were spelled out here as well as in four other
+# places. They live in app/geo.py now. true_bearing keeps its old name because
+# that is what this module's callers say.
+from .geo import R_NM, bearing_true, distance_nm      # noqa: F401
+
+true_bearing = bearing_true
+
+# Matched to PI_capvsar_df.py's BURST_PERIOD_S / BURST_LEN_S. This file used
+# 1.5 s, and used it only to compose a note - the signal and the bearing stayed
+# live right through the 49.5 s a 406 beacon is silent.
+BURST_PERIOD_S = 50.0
+BURST_LEN_S = 0.44
 
 
-def true_bearing(lat1, lon1, lat2, lon2) -> float:
-    dlon = math.radians(lon2 - lon1)
-    la1, la2 = math.radians(lat1), math.radians(lat2)
-    y = math.sin(dlon) * math.cos(la2)
-    x = math.cos(la1) * math.sin(la2) - math.sin(la1) * math.cos(la2) * math.cos(dlon)
-    return (math.degrees(math.atan2(y, x)) + 360.0) % 360.0
+def is_406(band) -> bool:
+    """Band tolerant of the shapes the console stores it in.
 
-
-def distance_nm(lat1, lon1, lat2, lon2) -> float:
-    la1, la2 = math.radians(lat1), math.radians(lat2)
-    dla, dlo = la2 - la1, math.radians(lon2 - lon1)
-    a = math.sin(dla / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin(dlo / 2) ** 2
-    return 2 * R_NM * math.asin(min(1.0, math.sqrt(a)))
+    It was compared as the string "406" only, so a scenario carrying 406.0, the
+    float, or "406.025" got no burst cadence at all.
+    """
+    try:
+        return float(band) > 400.0
+    except (TypeError, ValueError):
+        return str(band).strip().startswith("406")
 
 
 def radio_horizon_nm(alt_ft_msl: float, beacon_elev_ft: float) -> float:
@@ -56,6 +75,9 @@ class DFResult:
     distance_nm: float
     in_cone: bool
     note: str = ""
+    # Always true from this module. It travels with the result so nothing
+    # downstream can present a stub reading as though the sim produced it.
+    synthetic: bool = True
 
 
 def compute(aircraft, beacon, effects, elapsed_s: float, squelch: float = 0.08) -> DFResult:
@@ -70,12 +92,17 @@ def compute(aircraft, beacon, effects, elapsed_s: float, squelch: float = 0.08) 
     power = float(beacon.get("power", 1.0))
     signal = min(1.0, power * 25.0 / max(d * d, 0.25))
 
-    # 406 transmits a short burst about every 50 s; between bursts the needle holds
+    # 406 radiates for 440 ms every 50 s. Between bursts nothing is arriving,
+    # so there is no signal and no bearing to take - the plugin gates the
+    # published value and carries the last bearing on TIMEHOLD. This stub has
+    # no TIMEHOLD, so it reports the gap honestly instead of inventing one.
     note = ""
-    if beacon.get("band") == "406" and effects.get("burst_cadence", True):
-        phase = elapsed_s % 50.0
-        if phase > 1.5:
-            note = f"holding - next burst in {50.0 - phase:.0f}s"
+    if is_406(beacon.get("band")) and effects.get("burst_cadence", True):
+        phase = elapsed_s % BURST_PERIOD_S
+        if phase > BURST_LEN_S:
+            return DFResult(False, None, None, 0.0, d, False,
+                            "between 406 bursts - next in %.0fs"
+                            % (BURST_PERIOD_S - phase))
 
     if signal < squelch:
         return DFResult(False, None, None, signal, d, False, "below squelch")

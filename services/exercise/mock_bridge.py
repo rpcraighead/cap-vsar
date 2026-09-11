@@ -11,18 +11,13 @@ UDP RREF and POSTing the same body. Nothing else changes.
 
     python3 mock_bridge.py --url http://localhost:8700 --callsign CAP-1
 """
-import argparse, json, math, time, urllib.request
+import argparse, json, math, os, sys, time, urllib.request
 
-R_NM = 3440.065
-
-
-def move(lat, lon, brg_deg, dist_nm):
-    b, d = math.radians(brg_deg), dist_nm / R_NM
-    la = math.radians(lat)
-    la2 = math.asin(math.sin(la) * math.cos(d) + math.cos(la) * math.sin(d) * math.cos(b))
-    lo2 = math.radians(lon) + math.atan2(math.sin(b) * math.sin(d) * math.cos(la),
-                                         math.cos(d) - math.sin(la) * math.sin(la2))
-    return math.degrees(la2), math.degrees(lo2)
+# C15-2: this had its own copy of the direct solution. The console's geodesy
+# lives in app/geo.py; this script runs from services/exercise/, so that
+# imports cleanly.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from app.geo import R_NM, move          # noqa: E402,F401
 
 
 def post(url, body):
@@ -52,9 +47,12 @@ def main():
         hdg = (65.0 + 90.0 * int(elapsed / leg_s)) % 360.0
         lat, lon = move(lat, lon, hdg, a.kts * a.rate / 3600.0)
         try:
+            # mock:true asks the console for its DF stub. Nothing else sets
+            # it: a real station's DF comes from the plugin or not at all
+            # (P-11).
             r = post(f"{a.url}/api/positions",
                      {"callsign": a.callsign, "lat": lat, "lon": lon,
-                      "alt_ft": a.alt, "hdg_true": hdg})
+                      "alt_ft": a.alt, "hdg_true": hdg, "mock": True})
             df = r.get("df")
             if df and df["valid"]:
                 print(f"  {elapsed:6.0f}s  brg {df['bearing_rel']:5.1f} rel  "

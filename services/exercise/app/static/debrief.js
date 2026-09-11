@@ -1,6 +1,14 @@
 // Replay a recorded sortie against beacon truth. Per the plan this is the
 // highest-value artefact the system produces, so it always shows the answer.
 const $ = id => document.getElementById(id);
+
+// F-6: nothing escapes server strings on the way out, and any LAN client can
+// POST message bodies, bearing notes and callsigns. Escape every server value
+// interpolated into HTML. Values already passed through toFixed() or
+// Math.round() are provably numeric and are left alone.
+const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c =>
+  ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+
 const map = L.map('map').setView([33.15, -117.18], 11);
 capvsarCharts(map, {view: 'debrief'});
 
@@ -48,7 +56,7 @@ async function loadList() {
   const list = await (await fetch('/api/sorties')).json();
   $('sortieSel').innerHTML = list.map(s => {
     const d = new Date(s.started*1000).toISOString().slice(0,16).replace('T',' ');
-    return `<option value="${s.id}">${d}Z — ${s.name} (${s.points} pts)</option>`;
+    return `<option value="${esc(s.id)}">${d}Z — ${esc(s.name)} (${esc(s.points)} pts)</option>`;
   }).join('') || '<option value="">no sorties recorded</option>';
   if (list.length) load($('sortieSel').value);
 }
@@ -88,7 +96,7 @@ async function load(id) {
   map.fitBounds(b.pad(0.15));
 
   $('sortieInfo').innerHTML =
-    `<b>${$('sortieSel').selectedOptions[0].text.split(' — ')[1] || ''}</b>
+    `<b>${esc($('sortieSel').selectedOptions[0].text.split(' — ')[1] || '')}</b>
      <div class="df">${P.length} position reports over ${fmt(t1-t0)}
      &middot; ${data.bearings.length} bearing cuts &middot; ${data.messages.length} messages</div>`;
 
@@ -106,7 +114,7 @@ async function load(id) {
       const verdict = best < 0.5 ? 'overhead the beacon'
                     : best < 2   ? 'localised' : 'did not close';
       return `<div style="border-left:3px solid ${AC_COLORS[i % AC_COLORS.length]};padding-left:8px;margin-bottom:8px">
-         <div><b>${cs}</b> — closest approach <b>${best.toFixed(2)} nm</b> at ${fmt(bestT)}</div>
+         <div><b>${esc(cs)}</b> — closest approach <b>${best.toFixed(2)} nm</b> at ${fmt(bestT)}</div>
          <div class="df">track flown ${flownNm.toFixed(1)} nm &middot; direct line ${direct.toFixed(1)} nm
          &middot; efficiency ${(direct/Math.max(flownNm,0.01)*100).toFixed(0)}%</div>
          <div class="df">${verdict}</div></div>`;
@@ -131,7 +139,7 @@ function seek(frac) {
     const hdg = headingOf(p, prev);
     if (!acMarkers[cs]) {
       acMarkers[cs] = L.marker([p.lat, p.lon], {icon: planeIcon(hdg)}).addTo(layers)
-        .bindTooltip(cs, {permanent:true, direction:'top', offset:[0,-8]});
+        .bindTooltip(esc(cs), {permanent:true, direction:'top', offset:[0,-8]});
     } else {
       acMarkers[cs].setLatLng([p.lat, p.lon]).setIcon(planeIcon(hdg));
     }
@@ -139,9 +147,9 @@ function seek(frac) {
 
   const ev = [];
   data.bearings.filter(b => b.t <= t).forEach(b =>
-    ev.push({t: b.t, s: `${b.callsign} bearing ${b.bearing_true.toFixed(0)}&deg;T${b.note ? ' — ' + b.note : ''}`}));
+    ev.push({t: b.t, s: `${esc(b.callsign)} bearing ${b.bearing_true.toFixed(0)}&deg;T${b.note ? ' — ' + esc(b.note) : ''}`}));
   data.messages.filter(m => m.t <= t).forEach(m =>
-    ev.push({t: m.t, s: `<b>${m.sender} &rarr; ${m.recipient}</b> ${m.body}`}));
+    ev.push({t: m.t, s: `<b>${esc(m.sender)} &rarr; ${esc(m.recipient)}</b> ${esc(m.body)}`}));
   ev.sort((a,b) => b.t - a.t);
   $('events').innerHTML = ev.length
     ? ev.map(e => `<div class="brg">${fmt(e.t - t0)} &nbsp; ${e.s}</div>`).join('')
