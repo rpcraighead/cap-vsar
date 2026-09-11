@@ -3,6 +3,543 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-11 — Flight Data Recorder (FDR) tap & automated diagnostic test engine
+
+Implemented synchronous, high-rate Flight Data Recorder (FDR) tap and automated
+post-flight diagnostic test engine under `services/ai_pilot/`:
+- `services/ai_pilot/fdr.py`: `FlightDataRecorder` tap sampling at 4–10 Hz across
+  aircraft kinematics, DF outputs (`cap/df/*`), panel configurations, scenario
+  truth (`cap/scenario/*`), aviation VHF radios, and CAP FM (TDFM-136B / GMA-1347).
+  Provides JSONL streaming, in-memory ring buffer (1,000 frames), and CSV export.
+- `services/ai_pilot/diagnostics.py`: `FlightDiagnosticEngine` with automated rules:
+  1. Spherical great-circle bearing math verification and RMS error bounds.
+  2. Authentic 406 MHz channel selectivity (Becker 517 Emergency fixed 406.025 MHz
+     vs RT-600 7 CPSAR groups and Becker Training mode).
+  3. Cone of confusion detection and inverted bearing suppression.
+  4. Squelch threshold and timehold decay validation.
+  5. Airframe wing/fuselage shadowing during banking turns.
+  6. CAP Radio hygiene: PTT interlock enforcement, TOT 60s timeout, Guard tuning.
+  7. COSPAS-SARSAT 15-Hex identifier integrity.
+- `services/ai_pilot/web_server.py`: Added REST endpoints (`/api/fdr/status`,
+  `/api/fdr/start`, `/api/fdr/stop`, `/api/fdr/analyze`, `/api/fdr/reports`,
+  `/api/fdr/report`).
+- `services/ai_pilot/static/board.html`: Integrated interactive FDR control bar,
+  live REC badge, frame counter, duration, and diagnostic scorecard drawer.
+- Test suite: Added `services/ai_pilot/tests/test_fdr.py` (12 tests). Full test
+  suite passing (44/44 tests).
+
+## 2026-09-11 — A-1 C182T dimensional measurement master established
+
+Completed stage 1 of `docs/bugs/CLAUDE_RESUME_C182_DIMENSIONS.md`: the
+source-backed measurement master for CAP 487's C182T exterior. Added
+`docs/C182T_DIMENSION_MASTER.md` (provenance and reasoning) and
+`scripts/c182t_dimension_master.json` (the machine-readable target profile the
+stage-2 harness will consume). No aircraft asset, converter, simulator file or
+existing test was changed.
+
+Targets were taken from the FAA-approved Cessna 182T NAV III GFC 700 AFCS POH
+(P/N 182TPHBUS-00/-01), FAA TCDS 3A13 Revision 66, and Cessna's December 2015
+Revision C Specification and Description. All three are recorded with URL, page
+and SHA-256; none is committed, since they are third-party copyrighted documents
+and fall under the release boundary in `docs/FLIGHTGEAR_C182_GPL_PLAN.md`.
+
+The decisive finding is that the sources define two different attitudes. The POH
+three-view NOTE states that normal ground attitude is "nose strut showing
+approximately 2 inches of strut, and wings level", and every published length
+and height is measured in it; the TCDS leveling means (left tailcone at 139.65
+and 171.65 inches aft of datum) is a weight-and-balance attitude only. Raw mesh
+extrema compared against 9 ft 4 in are therefore not a measurement. Reading the
+three-view at 450 dpi also fixed three endpoints that had been assumed: overall
+length runs from the spinner apex, not the propeller; it ends at the rudder
+trailing edge; and the 36 ft 0 in span explicitly includes the wingtip strobes,
+so structural span must not be derived by subtraction.
+
+The reference datum is the lower front face of the firewall, which makes the
+plan's chosen cockpit anchor exactly FS 0. A fuselage station ladder was
+assembled from TCDS loading stations plus the Specification and Description
+cabin figure; FS 134.0 for the aft baggage bulkhead is confirmed by three
+independent agreeing statements. The waterline datum is never located in any
+source, so all vertical targets are referenced to the ground plane instead.
+
+Nine requested items are recorded as unknown rather than invented, including the
+wing root leading- and trailing-edge stations, the windshield base, door opening
+stations, every aileron/flap/elevator hinge-line station, tail stations, and the
+individual gear stations — the POH treats the main-gear station as a per-aircraft
+weighing measurement, so only the 66.5 inch wheel base is published. The one
+hinge geometry that is recoverable is the rudder hinge cant, 28.15 degrees from
+vertical, derived from the TCDS publishing rudder travel in two frames. Closing
+the rest needs a Cessna maintenance, structural repair or parts manual; until
+then the wing, empennage and door regions have no sourced longitudinal target
+and stage 3 must leave their stations alone.
+
+A preliminary donor comparison using these endpoint rules is recorded as an
+informational appendix. Span with strobes is -0.37% and propeller diameter is
+79.17 in against a certificated 77.5-79.0 in band, while overall length is
+-3.83%, wheel base -3.64%, track -4.64% and height +8.58% to the fin top. No
+uniform or per-axis scale reconciles those, which refutes a whole-model scale
+more strongly than the handoff claimed, and the clustered longitudinal shortfall
+points at a regional fuselage and gear correction. The donor's nose wheel
+contact also sits 131 mm below its main-wheel plane, a pose impossible on flat
+ground, so its height and the very short propeller ground clearance are
+provisional until the mesh is re-posed.
+
+Tolerances in the profile are proposed, not ratified, and are marked as such.
+A-1 remains open: no harness, no geometry change, no X-Plane run and no Plane
+Maker work were part of this stage.
+
+Tests were rerun and match the recorded baseline: `python3 -m unittest
+tests.test_flightgear_c182` 5 tests OK, and `PYTHONPATH=.
+/tmp/capvsar-planner-venv/bin/pytest tests/test_console.py tests/test_radio.py
+-q` 90 passed with 17 subtests. `git diff --check` reports one pre-existing
+blank-line-at-EOF warning in `docs/BOARD.md`, another agent's file, left
+untouched.
+
+## 2026-09-11 — A-1 dimensional-correction handoff prepared for Claude
+
+Added `docs/bugs/CLAUDE_RESUME_C182_DIMENSIONS.md` as the continuation prompt
+for CAP 487's FlightGear C182 exterior. It records the pinned donor and hashes,
+the installed and preserved aircraft paths, the coordinate transform and
+animation-pivot dependency, the last passing test baseline, and the GPL and
+Laminar no-redistribution boundary.
+
+The next implementation unit begins with a source-backed landmark measurement
+harness and comparable structural measurement definitions. It then corrects
+the cowling, cabin/tailcone, wing, gear and empennage by region while anchoring
+the retained cockpit interface. A whole-model XYZ scale is explicitly rejected:
+the donor's raw bounds include different visible features than Cessna's
+published headline dimensions, and a global transform would move cockpit
+seams, wheel contacts and animation pivots together without proving any of
+them correct. Plane Maker geometry and flight-model calibration remain a
+separate required acceptance stage. No aircraft asset or simulator file was
+changed in this handoff-only update; tests were not rerun.
+
+## 2026-09-11 — A-1 FlightGear C182 exterior prototype built and installed
+
+Replaced CAP 487's visible stock C172 exterior attachments with a locally
+converted C182 exterior from HHS81's FlightGear project, pinned at commit
+`1359d63393c7fc9145953b081d151d93627e791a`. Added a checksum-verifying fetcher
+and a strict AC3D-to-X-Plane OBJ8 converter; no Blender install is required.
+The builder now emits separate airframe, three-blade propeller, prop-disc,
+glass and light objects, drives primary control surfaces and the propeller from
+X-Plane datarefs, and replaces all stock C172 exterior and broken-part ACF
+slots. It derives a CAP 487 texture from the donor's blank livery.
+
+The donor and generated donor-derived assets stay outside the Apache git tree.
+Every generated aircraft carries the GPL-2.0 text, a local-prototype notice and
+a manifest with the repository, commit, archive checksum, per-file donor checksums,
+object counts and bounds. Added `docs/FLIGHTGEAR_C182_GPL_PLAN.md` with the
+production choices: obtain a compatible dual license, ship a separately
+reviewed GPL exterior/source package that never contains Laminar files, or
+replace it with a clean-room model. `README.md`, `NOTICE` and `docs/SOURCES.md`
+now state the local-use and no-redistribution boundary.
+
+Built first at `/tmp/capvsar-c182t-flightgear-prototype`, then preserved the
+previous installed package as `Cessna 182T NAV III.pre-flightgear-20260911-20260911`
+and rebuilt the installed CAP 487 package. The installed main OBJ is byte-for-
+byte identical to staging. The build applied 40/40 expected ACF patches and
+produced 26,867 OBJ8 triangles. Orthographic inspection confirms a correct
+C182 silhouette and coordinate transform. Donor-native bounds are approximately
+8.50 m long, 10.91 m span and 3.22 m high; those differ from the authoritative
+C182T headline dimensions enough that the donor is not the dimensional master.
+
+A-1 remains open. X-Plane has not been launched to inspect the new exterior,
+texture, glass, lights, animation or cockpit alignment, and the Plane Maker
+body/wing/tail/gear and aerodynamic model still inherit C172 geometry. Those
+visual, dimensional and flight-model checks are the next acceptance stage; the
+combined local aircraft must not be redistributed.
+
+```text
+python3 -m unittest -v tests.test_flightgear_c182
+Ran 5 tests in 0.003s
+OK
+
+PYTHONPATH=. /tmp/capvsar-planner-venv/bin/pytest tests/test_console.py tests/test_radio.py -q
+90 passed, 8891 warnings, 17 subtests passed in 3.30s
+```
+
+## 2026-09-11 — A-1 opened: CAP 487 still has the C172S airframe
+
+Confirmed that `build_c182t_package.py` clones Laminar's stock Cessna 172 SP
+and changes identity and selected performance values without replacing the
+airframe geometry. A direct ACF comparison found no body, wing, tail or gear
+geometry changes. The installed `fuselage.obj`, `wings.obj`,
+`fuselage_gear.obj` and `fuselage_prop.obj` also have the same SHA-256 hashes as
+the stock 172 files. This leaves CAP 487 with the wrong exterior and an
+incompletely converted flight model. Opened P0 tracker item A-1 in the new C16
+Aircraft package fidelity cluster; this work is separate from Gemini's G1000
+instrument work.
+
+Searched for donors with source assets and explicit redistribution terms. The
+strongest technical candidate is HHS81's FlightGear C182S/T project: it is
+actively maintained, has an actual C182T variant, and includes the editable
+`dev/C182T.blend`. Its project is advertised as GPLv2+ and its root carries the
+GPLv2 license text. Apache-2.0 and GPLv2 are not compatible for a combined
+derivative distributed as this Apache project, so use would require a separate
+GPL aircraft distribution or permission from the relevant copyright holders.
+The native X-Plane candidate by Christopher Powell is a clean-sheet C182T, but
+it targets X-Plane 9.6-era systems and its exact license is CC BY-NC 3.0. It is
+useful as a reference prototype but cannot be treated as an Apache-licensed
+donor. No modern, source-available C182T donor with permissive Apache-compatible
+terms was found in this search.
+
+The recommended path is to ask the HHS81 contributors for a permissive dual
+license covering the exterior Blender source and textures. If that is not
+available, create a clean-room exterior from C182T dimensions and independently
+licensed references. Cessna's current specifications confirm 29 ft length,
+9 ft 4 in height and 36 ft span for the Skylane. No donor asset was downloaded
+into the repository, and no simulator or aircraft file was changed. This was a
+tracker/research-only pass; tests were not run.
+
+Sources:
+
+- https://github.com/HHS81/c182s
+- https://wiki.flightgear.org/Cessna_182T
+- https://github.com/cpowell/cessna_182T_skylane_for_xplane
+- https://www.apache.org/licenses/GPL-compatibility.html
+- https://cessna.txtav.com/en/piston/cessna-skylane
+
+## 2026-09-11 — F-6 fixed: server strings escaped in five console views
+
+Message bodies, senders, recipients, bearing notes and callsigns were
+interpolated into `innerHTML` unescaped. Any LAN client can POST `/api/messages`
+and `/api/bearings`, and nothing escapes those values server-side, so markup in a
+message body executed in every viewer's console. Added a shared `esc()` helper to
+base.js, app.js and debrief.js and escaped every server string reaching HTML.
+
+Leaflet `bindTooltip` renders a string as HTML, so the three data-driven tooltips
+were the same sink and are escaped too. Values that reach HTML through `toFixed()`
+or `Math.round()` are left alone, because a number cannot carry markup.
+
+radio.js already escaped sender, recipient and body, but not the channel name that
+this item's own description names; it now uses the existing `escapeHtml`. Found the
+same class of bug in setup.js, which the item did not list: its fleet and roster
+cards render `/api/setup` values, and two of them sit inside attribute values, so
+the helper escapes the quote as well. The role badge escapes once into a local
+variable rather than inside the template, so no raw server value appears there.
+
+Added `ServerStringsAreEscaped` to tests/test_console.py. It walks every
+`innerHTML` and `bindTooltip` statement in the five views and fails on any
+server-controlled field not wrapped in an escaper. Reads used as object keys,
+dedup strings or truthiness tests are deliberately not flagged, because markup is
+inert there. The class ends with a self-check that reverts three known fixes and
+asserts the detector notices, so the guard cannot silently stop working. Also
+corrected the neighbouring mission-radio docstring, which still described the four
+views as unescaped.
+
+Not verified in a browser against a live posted payload. No JavaScript engine is
+installed on this host, so the views were syntax-checked with esprima after
+shimming three constructs it does not support: optional catch binding, logical
+assignment and optional chaining. Those three appear in committed code and are
+unrelated to this change.
+
+Two pre-existing collection failures are worth recording, neither caused here.
+`pytest tests/` cannot collect at all because the untracked tests/test_geodesy.py
+and tests/test_propagation.py call `sys.exit()` at import. Separately
+tests/test_engine.py, test_faceplate.py and test_lcd_text.py fail to import under
+Python 3.14 with a recursion error.
+
+```text
+tests/test_console.py tests/test_radio.py -q
+90 passed, 17 subtests passed in 2.54s
+
+services/ai_pilot/tests -q
+66 passed, 23 subtests passed in 12.13s
+
+services/flightplanner/tests -q
+59 passed, 17 subtests passed in 7.58s
+```
+
+## 2026-09-11 — Planner doc pages renamed to CAP 487; builder docstring corrected
+
+Reviewing the shared working tree found the L-7 rename incomplete and a builder
+docstring that no longer matched the code. Both concern the same fact: N499CP is
+a real Cessna 172S on the squadron line and the simulated aircraft is CAP 487.
+
+`services/flightplanner/templates/guide.html` still carried "N499CP Flight
+Planner" in its title, brand and footer, and `docs/QUICKSTART.md` in its heading.
+That template renders every documentation page, so the Quick Start and User Guide
+pages showed a real aircraft's registration on a planner whose 172S profile L-7
+removed; it now computes CAP 487 182T figures only. `templates/index.html` was
+already renamed to CAP 487, so this applies the same name to the doc template and
+quickstart heading rather than inventing one. The planner README sentence
+recording the profile removal, and the existing index assertion, keep the
+registration deliberately.
+
+Added `test_doc_pages_do_not_carry_the_real_172s_registration`, covering all three
+documented slugs through `/guide/<slug>`. The index page was already asserted; the
+shared doc template was not, which is why the rename missed it. Confirmed the test
+fails when the registration is restored to the brand line, then restored the file.
+
+Corrected the `scripts/build_c182t_package.py` docstring, which claimed N499CP
+appeared "in exactly one place - the flight planner's profile for that real 172S".
+That profile no longer exists, and the remaining occurrences were the stale
+branding above. The docstring now records where the registration legitimately
+survives: CHANGELOG.md and the bug tracker, which describe what was true when
+written.
+
+Reviewed and left unchanged: tracker.json AI-6 lists `maneuver_server.py`, which
+has no diff this pass. That listing is correct, because `maneuver_server.py:102`
+and `:117` are the shutdown pause call sites the item describes.
+
+No aircraft asset, installed package or AI-pilot control path was touched, and no
+simulator command was sent. AI-2 and AI-4 remain open pending the repaired
+package's fresh X-Plane load and visual cockpit check.
+
+Required test output. Flask 3.1.3 and Markdown 3.10.3 were installed into the
+temporary venv, which could not previously import Flask; repository pins were not
+changed:
+
+```text
+services/flightplanner/tests -q
+59 passed, 17 subtests passed in 7.58s
+
+services/ai_pilot/tests -q
+66 passed, 23 subtests passed in 11.71s
+
+tests/test_console.py tests/test_radio.py -q
+86 passed in 2.45s
+```
+
+## 2026-09-11 — CAP 487 package repaired and installed; load check pending
+
+Confirmed the installed airframe matched all builder flight-model patches except
+the old N499CP tail number. Reproduced prop_lever.obj line 187: an IDX10 record
+contained only four indices. Laminar OBJ8 specifies exactly ten indices for IDX10;
+the builder now emits trailing indices individually as IDX. Its texture was
+194x87, matching the simulator warning; generation now resamples to 256x128
+while retaining normalized UVs. Existing concurrent builder edits were preserved.
+
+Built a full package in temporary staging, then validated 30/30 ACF patches,
+125 vertices, 534 indices/178 triangles, index ranges and record arity, texture
+dimensions and one prop-lever attachment. Generated vertex/UV/index sequence
+matches the installed mesh exactly. X-Plane was confirmed closed before install.
+Updated only the installed tail number, two selection icons, prop OBJ/PNG, and
+renamed the CAP livery to Civil Air Patrol (CAP 487), updating its two icons.
+Hashed every installed file to confirm unrelated assets, preferences and plugins
+were preserved. Backups are at:
+
+`/home/ron/X-Plane 12/Output/capvsar-backups/AI4-20260911-083735`
+
+Installed static validation passed. AI-4 and AI-2 remain open pending a fresh
+X-Plane load log and visual cockpit/prop-lever check. No simulator launch or
+control command was sent during this package work.
+
+Required test output (temporary venv, PYTHONPATH=., host socket access):
+
+```text
+pytest tests/test_console.py tests/test_radio.py -q
+86 passed, 8891 warnings in 2.62s
+```
+
+The initial sandboxed test run stalled and was terminated; the host-access run
+above completed. Python compilation and scoped git diff --check passed. No
+planner changes were made. Format reference:
+https://developer.x-plane.com/article/obj8-file-format-specification/
+
+## 2026-09-11 — Manual recovery after telemetry-loss test verified
+
+User reported stable after manually resuming. A four-second read-only RREF
+observation confirmed pause=0 throughout, altitude 4199.635–4199.636 ft,
+airspeed 122.422 KIAS, bank about 0.58 degrees and VVI about -0.23 ft/min.
+No control commands were sent; controller and relay remain stopped. Recorded
+manual recovery in AI-2; the installed CAP 487 package verification (AI-4)
+remains outstanding. No code changed or tests rerun for this observation-only
+confirmation. Latest required suite output is recorded in the preceding entry.
+
+## 2026-09-11 — Live telemetry-loss revocation and recovery verified
+
+Repeated the supervised test with relay isolation already verified and the
+user reporting stable flight. Pre-test observation: 4199.633 ft indicated,
+3540.332 ft AGL, 122.417 KIAS, bank 0.578 degrees, VVI -0.249 ft/min,
+telemetry age 0.104 seconds and sim paused=0. Acquired a lease without selecting
+a maneuver. The relay dropped 48 RREF replies for 5.007 seconds, forwarding
+control traffic unchanged. At 1.900 seconds after drop began, the controller
+reported `fault: Stale telemetry`, revoked the lease and sent `pause_on`.
+Independent direct readback showed paused=1. AP state 16418 and FD mode 2
+were preserved, as required for a telemetry fault.
+
+Telemetry returned with age 0.0026 seconds at the five-second sample. Ownership
+remained false. Only after confirming actual stale-data revocation and recovery,
+submitted the old lease: HTTP 400 `Control lease absent or revoked`.
+No maneuver command was accepted in this corrected trial. Stopped the unowned
+controller and relay, then cancelled the relay's seven RREF subscriptions.
+Left the simulator paused with the preexisting autopilot modes engaged.
+Visual fault-pause confirmation was requested; manual recovery remains pending.
+Evidence: `docs/bugs/AI_2_LOSS_LIVE_2026-09-11.jsonl`.
+
+AI-6 verification now includes live telemetry-fault pause. AI-2 remains open
+for the installed CAP 487 package mismatch/load errors (AI-4), and final manual
+recovery/visual confirmation. No production code changed in this test pass.
+
+Required post-run regression output, same temporary environment as below:
+
+```text
+services/ai_pilot/tests -q
+66 passed, 23 subtests passed in 12.02s
+
+tests/test_console.py tests/test_radio.py -q
+86 passed, 8891 warnings in 2.80s
+```
+
+## 2026-09-11 — Telemetry-loss test isolation corrected; live retry pending
+
+The temporary loopback relay dropped 47 RREF packets for five seconds, but
+prior direct subscriptions from earlier controller sessions continued supplying
+fresh telemetry to port 49005. This invalidated the loss trial: no stale-data
+fault or lease revocation occurred. The old-lease probe was consequently
+accepted and selected heading 320 / 3557.976 ft. This was a test-harness error,
+not evidence of faulty lease revocation. Stopped the owning controller cleanly;
+direct readback verified paused=1 and flight-director mode=1.
+
+Cancelled the seven earlier direct RREF subscriptions from port 49005, restarted
+one unowned controller through the relay, and verified isolation with the sim
+paused. Telemetry age rose through 1.027, 2.028, 3.029, 4.030 and 5.031 seconds,
+then returned to 0.010 seconds after automatic restoration. Ownership remained
+false throughout. No flight-control write was used for this isolation check.
+AI-2 remains open for the actual live fault trial; its invalid-attempt evidence
+is retained in `docs/bugs/AI_2_LOSS_INVALID_2026-09-11.jsonl`.
+
+No production code changed in this pass. Controller and relay remain running
+without ownership, ready for a manually resumed supervised retry. Simulator
+was left paused. The retry must confirm fault/revocation before issuing an
+old-lease rejection probe; do not assume that dropping relay packets proves
+all telemetry stopped.
+
+## 2026-09-11 — FLC and shutdown pause verified live (AI-5, AI-6 fixed)
+
+With the user supervising and managing power, selected heading 285 magnetic,
+4200 ft indicated using the corrected G1000 FLC path at 110 KIAS. Initial
+observation was 3984.975 ft / 106.669 KIAS. Direct readback confirmed AP state
+106 (heading, speed-by-pitch/FLC, altitude armed), speed selector 110 and
+altitude selector 4200. Measured climb reached approximately 391 ft/min while
+holding 110 KIAS. Sustained capture was reported after 50.555 seconds at
+4191.494 ft, heading 284.062, bank 0.739 degrees and VVI 91.618 ft/min.
+Subsequent AP state 16386 confirmed heading plus altitude hold.
+
+HTTP takeover revoked the lease; a sequence-2 heading request using the old
+lease returned HTTP 400 `Control lease absent or revoked`. Flight-director
+mode changed from 2 to 1, confirming servo disengagement. Acquired a fresh
+guarded lease without selecting any maneuver, then cleanly stopped the sole
+controller. Direct readback confirmed `sim/time/paused = 1`. The user explicitly
+confirmed seeing FLC change to ALT near 4200 ft, AP disengage and the simulator
+pause. AI-5 and AI-6 are fixed. The simulator was left paused, servos off and
+controller stopped; resumption remains manual.
+
+Evidence: `docs/bugs/AI_2_FLC_LIVE_2026-09-11.jsonl`. AI-2 remains open because
+the installed aircraft package still differs from the intended CAP 487 build
+(AI-4); the telemetry-loss-triggered live fault/recovery trial also remains
+unexercised. No aircraft repositioning, takeoff, landing or throttle writes
+were performed.
+
+Post-live-test results, same temporary Python 3.14/Pydantic 2.13.5 environment:
+
+```text
+services/ai_pilot/tests -q
+66 passed, 23 subtests passed in 12.00s
+
+tests/test_console.py tests/test_radio.py -q
+86 passed, 8891 warnings in 3.01s
+```
+
+## 2026-09-11 — FLC altitude selection and explicit pause command
+
+At the user's direction, changed the airborne altitude maneuver from V/S mode
+to the installed G1000 `sim/GPS/g1000n1_flc` command. Set a 110-KIAS exercise
+target using the always-knots airspeed selector; leave power with the supervising
+pilot. Existing speed-by-pitch/FLC mode is not toggled off. Removed the separate
+ALT-arm toggle from this G1000 path. Reference: installed X-Plane 12.4.3
+Commands.txt/DataRefs.txt and Laminar's autopilot dataref documentation:
+https://developer.x-plane.com/article/accessing-the-x-plane-autopilot-from-datarefs/
+
+Also established AI-6's cause from installed DataRefs.txt: `sim/time/paused` is
+read-only. Use explicit `sim/operation/pause_on` and `pause_off` commands instead
+of writing it. Updated README and regression tests for FLC climbs/descents,
+retaining existing modes, and pause commands that cannot toggle accidentally.
+
+Verification with the temporary Python 3.14/Pydantic 2.13.5 environment:
+
+```text
+services/ai_pilot/tests -q
+66 passed, 23 subtests passed in 11.47s
+
+tests/test_console.py tests/test_radio.py -q
+86 passed, 8891 warnings in 2.87s
+```
+
+AI-5 and AI-6 remain open pending live verification. No new control command was
+sent in this edit pass. Read-only live observation still showed pause=0,
+3990.585 ft, 109.640 KIAS and AP state 18. A cockpit/power readiness confirmation
+was requested before the FLC retest. AI-2 acceptance is still incomplete.
+
+## 2026-09-11 — Live Gate A trial: heading capture, altitude and pause failures
+
+Continued the user-supervised live trial through one maneuver-server instance.
+Acquired a fresh lease and selected heading 285 magnetic / 4000 ft indicated
+(sequence 1) from 273.480 / 3996.507. Controller measured sustained capture
+in 12.742 seconds; later observation was 284.315 / 3997.739, bank 0.313 degrees,
+VVI 5.098 ft/min. Cockpit annunciation confirmation was requested but not received;
+this is measured telemetry capture only. A 6500-ft target returned HTTP 400
+`Target outside exercise limits` and did not consume sequence 2.
+
+Sequence 2 selected 4200 ft, but the aircraft remained around 3997 ft after
+roughly 40 seconds. Direct RREF readback showed heading selector 285, altitude
+selector 4200, VVI selector 0, AP state 18 and flight-director mode 2. Added
+AI-5; no altitude capture was claimed and the cause was not guessed.
+
+Clean SIGINT shutdown while owning control exercised the backend pause request.
+The server exited, but direct `sim/time/paused` readback was 0. Added AI-6 and
+immediately told the user to pause locally; autopilot may remain engaged. No
+live takeover/disconnect or stale-lease re-engagement test was completed. AI-2
+remains open. Raw sampled observations/events are retained in
+`docs/bugs/AI_2_LIVE_2026-09-11.jsonl`. No aircraft repositioning was performed.
+
+Post-run verification with the same temporary Python 3.14/Pydantic 2.13.5
+environment documented below, using `PYTHONPATH=.`:
+
+```text
+services/ai_pilot/tests -q
+64 passed, 23 subtests passed in 11.41s
+
+tests/test_console.py tests/test_radio.py -q
+86 passed, 8891 warnings in 3.03s
+```
+
+Passing automated tests do not supersede the observed live failures. Neither
+failure was patched during flight. The controller is stopped; manual simulator
+recovery remains necessary.
+
+## 2026-09-11 — Live RREF telemetry receiver repaired (AI-3)
+
+Live X-Plane 12.4.3 returned `RREF,` packets that the AI-pilot receiver
+silently discarded. Accept the observed comma header alongside existing NUL
+replies. Added receive-loop regression coverage for both headers, callbacks,
+cached observations and rejection of unrelated headers.
+
+After restarting the unowned controller, live status reported heading 93.063
+magnetic, 3999.688 ft indicated, 1458.778 ft AGL, 122.635 KIAS, 1.206 degrees
+bank, -0.147 ft/min and telemetry age 0.028 seconds. No control lease was
+acquired and no aircraft-control command was sent. AI-2 remains open: these
+observations prove telemetry reception, not maneuver capture or cockpit modes.
+
+Exact suite output using the temporary venv with `PYTHONPATH=.`:
+
+```text
+services/ai_pilot/tests -q
+64 passed, 23 subtests passed in 12.01s
+
+tests/test_console.py tests/test_radio.py -q
+86 passed, 8891 warnings in 2.98s
+```
+
+Reboot cleared the old temporary environment. Python 3.14 could not build the
+old Pydantic 2.10.4 pin; these tests used Pydantic 2.13.5 with FastAPI 0.115.6.
+Repository dependency pins were not changed. Warnings are dependency deprecations.
+
+Unfixed finding AI-4: the installed aircraft still declares N499CP and its
+load reports `prop_lever.obj:187` IDX10 out of range plus a non-power-of-two
+prop-lever texture. Aircraft assets were not edited. NVIDIA host checks now
+succeed with userspace and loaded module both 595.91.07.
+
 ## 2026-09-11 — AI pilot control-path retirement and live-test finding
 
 Fixed tracker item AI-1 by retiring every legacy AI-pilot mutation path that

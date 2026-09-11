@@ -22,6 +22,8 @@ from urllib.parse import parse_qs, urlparse
 
 from . import board_manager
 from .c182t_checklists import ALL_CHECKLISTS, ChecklistPhase
+from .diagnostics import FlightDiagnosticEngine
+from .fdr import FlightDataRecorder
 from .flight_controller import FlightController, haversine_distance_nm
 from .lightweight_agent import LightweightAgent
 from .xplane_udp import XPlaneUDPClient
@@ -44,6 +46,8 @@ class AIPilotRequestHandler(BaseHTTPRequestHandler):
     client: XPlaneUDPClient
     controller: FlightController
     agent: LightweightAgent
+    fdr: FlightDataRecorder
+    diag_engine: FlightDiagnosticEngine
 
     def log_message(self, format: str, *args: Any) -> None:
         # Quieten normal access logs
@@ -107,6 +111,14 @@ class AIPilotRequestHandler(BaseHTTPRequestHandler):
             self._send_json({"messages": self.agent.get_chat_history()})
         elif path == "/api/board":
             self._send_json(board_manager.read_board())
+        elif path == "/api/fdr/status":
+            self._send_json(self.fdr.get_status())
+        elif path == "/api/fdr/ring":
+            self._send_json({"frames": self.fdr.get_ring_buffer()})
+        elif path == "/api/fdr/reports":
+            self._handle_get_fdr_reports()
+        elif path == "/api/fdr/report":
+            self._handle_get_fdr_report(url.query)
         else:
             # Static file serving
             rel_path = path.lstrip("/")
@@ -171,6 +183,19 @@ class AIPilotRequestHandler(BaseHTTPRequestHandler):
             md = body.get("markdown", "")
             board_manager.save_raw_markdown(md)
             self._send_json({"status": "ok", "board": board_manager.read_board()})
+
+        elif path == "/api/fdr/start":
+            sess_name = body.get("session_name")
+            filepath = self.fdr.start_recording(sess_name)
+            self._send_json({"status": "started", "file": str(filepath)})
+
+        elif path == "/api/fdr/stop":
+            self._handle_fdr_stop()
+
+        elif path == "/api/fdr/analyze":
+            frames = self.fdr.get_ring_buffer()
+            report = self.diag_engine.evaluate_frames(frames, session_id="RING_BUFFER")
+            self._send_json({"report": report.to_dict()})
 
         elif path in {
             "/api/checklists/run",
@@ -277,6 +302,87 @@ class AIPilotRequestHandler(BaseHTTPRequestHandler):
             "chat_messages_count": len(self.agent.chat_history),
         })
 
+    def _handle_get_fdr_reports(self) -> None:
+        out_dir = self.fdr.output_dir
+        reports = []
+        if out_dir.is_dir():
+            for p in sorted(out_dir.glob("*.report.json"), reverse=True):
+                try:
+                    data = json.loads(p.read_text(encoding="utf-8"))
+                    reports.append({
+                        "id": p.stem.replace(".report", ""),
+                        "session_id": data.get("session_id"),
+                        "generated_at": data.get("generated_at"),
+                        "summary_status": data.get("summary_status"),
+                        "scorecard": data.get("scorecard", {}),
+                        "duration_seconds": data.get("duration_seconds", 0.0),
+                        "total_frames": data.get("total_frames", 0),
+                    })
+                except Exception:
+                    pass
+        self._send_json({"reports": reports})
+
+    def _handle_get_fdr_report(self, query_str: str) -> None:
+        qs = parse_qs(query_str)
+        report_id = qs.get("id", [None])[0]
+        out_dir = self.fdr.output_dir
+        if not report_id:
+            json_files = sorted(out_dir.glob("*.report.json"), reverse=True) if out_dir.is_dir() else []
+            if not json_files:
+                self._send_json({"error": "No reports found"}, status=404)
+                return
+            target_file = json_files[0]
+        else:
+            target_file = out_dir / f"{report_id}.report.json"
+
+        if not target_file.is_file():
+            self._send_json({"error": "Report not found"}, status=404)
+            return
+
+        try:
+            data = json.loads(target_file.read_text(encoding="utf-8"))
+            md_file = target_file.with_name(f"{target_file.stem.replace('.report', '')}.report.md")
+            md_content = md_file.read_text(encoding="utf-8") if md_file.is_file() else ""
+            data["markdown"] = md_content
+            self._send_json(data)
+        except Exception as e:
+            self._send_json({"error": f"Error loading report: {e}"}, status=500)
+
+    def _handle_fdr_stop(self) -> None:
+        filepath = self.fdr.stop_recording()
+        frames = []
+        if filepath and filepath.is_file():
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    for line in f:
+                        if line.strip():
+                            frames.append(json.loads(line))
+            except Exception as e:
+                logger.error("Error reading saved FDR file: %s", e)
+
+        if not frames:
+            frames = self.fdr.get_ring_buffer()
+            session_id = "MEMORY_RING"
+        else:
+            session_id = filepath.stem if filepath else "SESSION"
+
+        report = self.diag_engine.evaluate_frames(frames, session_id=session_id)
+
+        if filepath and filepath.is_file():
+            try:
+                md_path = filepath.with_name(f"{filepath.stem}.report.md")
+                json_path = filepath.with_name(f"{filepath.stem}.report.json")
+                md_path.write_text(report.to_markdown(), encoding="utf-8")
+                json_path.write_text(json.dumps(report.to_dict(), indent=2), encoding="utf-8")
+            except Exception as e:
+                logger.error("Error writing diagnostic report files: %s", e)
+
+        self._send_json({
+            "status": "stopped",
+            "file": str(filepath) if filepath else None,
+            "report": report.to_dict(),
+        })
+
 
 def run_web_server(
     host: str = "0.0.0.0",
@@ -289,10 +395,14 @@ def run_web_server(
     client = XPlaneUDPClient(host=xp_host, port=xp_port, mock=not live)
     controller = FlightController(client)
     agent = LightweightAgent(controller)
+    fdr = FlightDataRecorder(client)
+    diag_engine = FlightDiagnosticEngine()
 
     AIPilotRequestHandler.client = client
     AIPilotRequestHandler.controller = controller
     AIPilotRequestHandler.agent = agent
+    AIPilotRequestHandler.fdr = fdr
+    AIPilotRequestHandler.diag_engine = diag_engine
 
     server = ThreadingHTTPServer((host, port), AIPilotRequestHandler)
     logger.info("================================================================================")
@@ -306,6 +416,7 @@ def run_web_server(
     except KeyboardInterrupt:
         logger.info("Shutting down AI Pilot web server...")
     finally:
+        fdr.stop_recording()
         client.stop()
         server.server_close()
 
