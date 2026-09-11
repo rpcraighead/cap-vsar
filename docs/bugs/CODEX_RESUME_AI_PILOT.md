@@ -4,6 +4,35 @@ Paste this entire prompt into Codex after the simulator host has rebooted.
 
 ---
 
+## 2026-09-11 live-session update — read before the original handoff
+
+The reboot and most live checks below have now been completed. Read the latest
+CHANGELOG entries and AI-2 through AI-6 before repeating anything. NVIDIA versions
+match 595.91.07. AI-3 fixed RREF comma-header reception. AI-5 now uses G1000 FLC
+at a 110-KIAS exercise target, with pilot-managed power; altitude capture was
+measured in 50.555 seconds and visually confirmed. AI-6 uses explicit pause_on:
+shutdown pause and telemetry-loss fault pause were both verified live. Heading
+capture, pilot takeover and old-lease refusal also passed.
+
+Latest loss test: five-second relay drop, stale-data fault and revocation after
+1.900 seconds, pause=1, fresh telemetry restored, old lease refused. The controller
+and relay are stopped; relay subscriptions were cancelled. Simulator last observed
+paused with preexisting AP modes still engaged (fault behavior preserves AP).
+Manual recovery has since been verified: user reported stable and four seconds
+of read-only telemetry confirmed pause=0, 4199.636 ft, 122.422 KIAS and near-zero
+vertical speed. Controller and relay remain stopped. Latest fault-pause visual
+confirmation was requested; direct pause=1 was observed during the fault.
+
+AI-4 update: the builder and installed package have now been repaired. Tailnum
+is CAP 487, trailing indices use IDX, and texture is 256x128; full installed
+static checks passed. Backups are recorded in CHANGELOG.md. AI-2 and AI-4 remain
+open pending fresh X-Plane load/log and visual prop-lever/cockpit verification. Do not edit other agents' aircraft lanes
+or reinstall/reload silently. The original pre-reboot diagnosis below is history,
+not current driver state. Raw observations are in docs/bugs/AI_2_*_2026-09-11.jsonl;
+the LOSS_INVALID file is explicitly an invalidated trial, not a controller failure.
+
+---
+
 Continue the CAP V-SAR AI Mission Pilot work from the 2026-09-11 handoff. The
 user authorizes the supervised live X-Plane Gate A acceptance described below.
 Do not attempt takeoff, landing, autonomous flight, or any ground operation.

@@ -257,7 +257,9 @@ class XPlaneUDPClient:
 
     def set_paused(self, paused: bool) -> None:
         """Pause or unpause simulator."""
-        self.send_dref("sim/time/paused", 1.0 if paused else 0.0)
+        # DataRefs.txt marks sim/time/paused read-only. Commands.txt exposes
+        # idempotent on/off commands; a toggle could accidentally resume.
+        self.send_command("sim/operation/pause_on" if paused else "sim/operation/pause_off")
 
     # --------------------------------------------------------------------------
     # Telemetry Cache Access
@@ -302,7 +304,9 @@ class XPlaneUDPClient:
                 continue
 
             header = data[:5]
-            if header == b"RREF\x00":
+            # Live X-Plane 12.4.3 replies use a comma in byte five;
+            # retain NUL replies used by older peers and protocol fixtures.
+            if header in (b"RREF\x00", b"RREF,"):
                 self._parse_rref(data[5:])
             elif header == b"DATA\x00" or header == b"DATA@":
                 self._parse_data(data[5:])

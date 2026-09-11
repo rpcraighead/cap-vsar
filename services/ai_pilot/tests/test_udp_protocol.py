@@ -2,11 +2,44 @@
 
 import struct
 import unittest
+from unittest.mock import Mock
 
 from services.ai_pilot.xplane_udp import XPlaneUDPClient
 
 
 class TestUDPProtocol(unittest.TestCase):
+    def test_pause_uses_explicit_commands_not_read_only_dataref(self):
+        client = XPlaneUDPClient(mock=True)
+        client.send_command = Mock()
+        client.send_dref = Mock()
+        client.set_paused(True)
+        client.send_command.assert_called_once_with('sim/operation/pause_on')
+        client.send_command.reset_mock()
+        client.set_paused(False)
+        client.send_command.assert_called_once_with('sim/operation/pause_off')
+        client.send_dref.assert_not_called()
+
+    def test_receive_rref_reply_headers(self):
+        for header in (b"RREF,", b"RREF\x00", b"WRNG,", b"RREF?"):
+            with self.subTest(header=header):
+                client = XPlaneUDPClient(mock=True)
+                received = []
+                ref = "sim/flightmodel/position/indicated_airspeed"
+                sub_id = client.subscribe_dref(ref, callback=lambda *args: received.append(args))
+                client._sock = Mock()
+                client._sock.recvfrom.side_effect = [
+                    (header + struct.pack("<if", sub_id, 110.5), ("127.0.0.1", 49001)),
+                    OSError("end of test stream"),
+                ]
+                client._running = True
+                client._listen_loop()
+                if header in (b"RREF,", b"RREF\x00"):
+                    self.assertEqual(received, [(ref, 110.5)])
+                    self.assertEqual(client.get_dref(ref), 110.5)
+                else:
+                    self.assertEqual(received, [])
+                client.stop()
+
     def test_pack_dref(self):
         dref = "sim/cockpit2/controls/parking_brake_ratio"
         val = 1.0

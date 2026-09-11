@@ -261,12 +261,16 @@ class XPlaneAutopilotBackend:
         if not state & 2:
             c.send_dref('sim/cockpit/autopilot/autopilot_state', 2)  # Heading engage
         if abs(altitude_indicated_ft - current) > 100:
-            if not state & 16:
-                c.send_dref('sim/cockpit/autopilot/autopilot_state', 16)  # VS engage
-            c.send_dref('sim/cockpit2/autopilot/vvi_dial_ft_per_min',
-                        500 if altitude_indicated_ft > current else -500)
-            if not state & 32:
-                c.send_dref('sim/cockpit/autopilot/autopilot_state', 32)  # Altitude arm
+            # Commands.txt (X-Plane 12.4.3): G1000 FLC button. FLC couples
+            # speed-by-pitch with altitude preselect; do not toggle ALT arm
+            # separately on the G1000. AP state bit 8 is speed-by-pitch;
+            # bit 64 is its legacy FLC alias (Laminar reference above).
+            if not state & (8 | 64):
+                c.send_command('sim/GPS/g1000n1_flc')
+            # Exercise target, not a POH climb-performance claim. Power is
+            # managed by the supervising pilot. Use the always-knots dataref
+            # documented in the installed Resources/plugins/DataRefs.txt.
+            c.send_dref('sim/cockpit2/autopilot/airspeed_dial_kts', 110)
         elif not state & 16384:
             c.send_dref('sim/cockpit/autopilot/autopilot_state', 16384)  # Hold current altitude
         c.send_dref('sim/cockpit2/autopilot/flight_director_mode', 2)

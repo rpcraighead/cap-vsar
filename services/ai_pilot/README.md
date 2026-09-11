@@ -47,6 +47,11 @@ The full-match parser rejects negations, compound instructions, bare bearings,
 specified left/right turns, and unsupported commands without aircraft writes.
 Altitude is **pilot-indicated altitude**: set the aircraft altimeter correctly.
 Power remains manually managed. There is no voice or LLM dependency in this path.
+Altitude changes greater than 100 ft use the G1000 FLC command with a 110-KIAS
+exercise target. The supervising pilot supplies climb/descent power; FLC does
+not command a fixed climb rate. Confirm FLC, the speed bug, selected altitude
+and subsequent altitude capture on the cockpit displays. This target is an
+exercise setting, not a POH performance figure.
 
 `maneuvers.FlightBackend` defines `observe`, `select`, `release`, and `pause`.
 `XPlaneAutopilotBackend` implements it using the simulated aircraft autopilot;
@@ -69,6 +74,8 @@ behavior, not acknowledgement of a UDP write. Events are bounded to 200 in memor
 requests cannot re-engage through that lease. Verify disconnect in the cockpit.
 A telemetry/envelope fault revokes control and requests simulation pause, leaving
 existing autopilot modes alone. Shutdown while owning control also requests pause.
+Pause uses the explicit `sim/operation/pause_on` command: `sim/time/paused` is
+a read-only observation, not a writable control.
 UDP pause/disconnect delivery is not guaranteed; verify locally. Recovery requires
 checking the aircraft, resuming X-Plane manually and acquiring a new lease.
 

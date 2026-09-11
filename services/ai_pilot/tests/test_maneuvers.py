@@ -171,16 +171,21 @@ def test_missing_live_observations_renew_subscriptions_without_duplicate_callbac
     assert all(callback is None for _, callback in calls[initial_count:])
 
 
-def test_mode_requests_order_and_vertical_speed():
+@pytest.mark.parametrize('target', [4000, 5000])
+def test_altitude_change_uses_g1000_flc_and_knots_target(target):
     c = XPlaneUDPClient(mock=True)
     backend = XPlaneAutopilotBackend(c)
     c.set_mock_dref(backend.DATAREFS['altitude_indicated_ft'], 4500)
     c.set_mock_dref('sim/cockpit/autopilot/autopilot_state', 0)
     writes = []
     c.send_dref = lambda ref, val: writes.append((ref, val))
-    backend.select(90, 5000)
-    assert [v for r, v in writes if r.endswith('/autopilot_state')] == [2, 16, 32]
-    assert ('sim/cockpit2/autopilot/vvi_dial_ft_per_min', 500) in writes
+    c.send_command = lambda cmd: writes.append(('command', cmd))
+    backend.select(90, target)
+    assert [v for r, v in writes if r.endswith('/autopilot_state')] == [2]
+    assert ('command', 'sim/GPS/g1000n1_flc') in writes
+    assert ('sim/cockpit2/autopilot/airspeed_dial_kts', 110) in writes
+    assert writes.index(('sim/cockpit2/autopilot/altitude_dial_ft', target)) < writes.index(('command', 'sim/GPS/g1000n1_flc'))
+    assert not any('vvi_dial' in ref for ref, _ in writes)
 
 
 def test_http_validation_and_control_cycle(setup):
@@ -216,8 +221,10 @@ def test_existing_modes_are_not_toggled_off():
     c = XPlaneUDPClient(mock=True)
     backend = XPlaneAutopilotBackend(c)
     c.set_mock_dref(backend.DATAREFS['altitude_indicated_ft'], 4500)
-    c.set_mock_dref('sim/cockpit/autopilot/autopilot_state', 2 | 16 | 32)
+    c.set_mock_dref('sim/cockpit/autopilot/autopilot_state', 2 | 8 | 32)
     writes = []
     c.send_dref = lambda ref, val: writes.append((ref, val))
+    c.send_command = lambda cmd: writes.append(('command', cmd))
     backend.select(100, 5000)
     assert not [r for r, v in writes if r.endswith('/autopilot_state')]
+    assert not [r for r, v in writes if r == 'command']
