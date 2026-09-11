@@ -1,0 +1,4 @@
+# Core dependencies use Python 3.12+ standard library (socket, struct, threading, math, json, urllib)
+# Optional enhancements:
+pydantic>=2.0.0
+pytest>=8.0.0

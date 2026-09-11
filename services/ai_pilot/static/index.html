@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CAP 487 • AI Pilot Deck (Cessna 182T NAV III)</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="deck-container">
+    <!-- Top Flight Header -->
+    <header class="flight-header">
+      <div class="brand">
+        <div class="badge-cap">CIVIL AIR PATROL</div>
+        <div class="aircraft-title">
+          <span class="tailnum">CAP 487</span>
+          <span class="type">CESSNA 182T SKYLANE NAV III</span>
+          <span class="engine">IO-540 (230 HP)</span>
+        </div>
+      </div>
+
+      <div class="route-banner">
+        <span class="dep">KSEE 27R</span>
+        <span class="arrow">➔</span>
+        <span class="dest">KRNM 27</span>
+        <span class="dist" id="dist-display">13.2 NM</span>
+      </div>
+
+      <div class="status-group">
+        <div class="indicator-badge" id="sim-link-badge">
+          <span class="dot"></span> <span id="sim-link-text">SIM LINK: OK</span>
+        </div>
+        <div class="phase-badge" id="flight-phase-badge">COLD_AND_DARK</div>
+        <button class="btn-primary" id="btn-toggle-auto">🤖 AUTO-PILOT: OFF</button>
+      </div>
+    </header>
+
+    <!-- Main Flight Deck Grid -->
+    <main class="flight-grid">
+      <!-- Left Column: Primary Flight Display (PFD) Instruments -->
+      <section class="panel pfd-panel">
+        <div class="panel-header">
+          <h2>PRIMARY FLIGHT INSTRUMENTS</h2>
+          <span class="subtext">G1000 SVT TELEMETRY</span>
+        </div>
+
+        <div class="gauges-cluster">
+          <!-- Airspeed Tape -->
+          <div class="gauge-card speed-card">
+            <div class="gauge-label">AIRSPEED (KIAS)</div>
+            <div class="tape-value" id="val-airspeed">0</div>
+            <div class="gauge-sub">GS: <span id="val-gs">0</span> KTS</div>
+            <div class="speed-v-markers">
+              <span class="v-tag">Vs: 51</span>
+              <span class="v-tag">Vr: 60</span>
+              <span class="v-tag">Vy: 80</span>
+            </div>
+          </div>
+
+          <!-- Artificial Horizon / Attitude Indicator -->
+          <div class="gauge-card attitude-card">
+            <div class="gauge-label">ATTITUDE INDICATOR</div>
+            <div class="canvas-wrapper">
+              <canvas id="attitudeCanvas" width="220" height="180"></canvas>
+            </div>
+            <div class="attitude-readouts">
+              <span>PITCH: <strong id="val-pitch">0.0°</strong></span>
+              <span>ROLL: <strong id="val-roll">0.0°</strong></span>
+            </div>
+          </div>
+
+          <!-- Altimeter Tape -->
+          <div class="gauge-card alt-card">
+            <div class="gauge-label">ALTITUDE (MSL)</div>
+            <div class="tape-value" id="val-alt">388</div>
+            <div class="gauge-sub">AGL: <span id="val-agl">0</span> FT</div>
+            <div class="gauge-sub">VVI: <span id="val-vvi">0</span> FPM</div>
+          </div>
+        </div>
+
+        <!-- Directional Gyro / Heading Bug -->
+        <div class="heading-cluster">
+          <div class="gauge-card heading-card">
+            <div class="heading-row">
+              <div class="h-col">
+                <span class="h-label">MAG HEADING</span>
+                <span class="h-val" id="val-heading">274°</span>
+              </div>
+              <div class="h-col">
+                <span class="h-label">HEADING BUG</span>
+                <span class="h-val text-cyan" id="val-hdg-bug">274°</span>
+              </div>
+              <div class="h-col">
+                <span class="h-label">ALT BUG</span>
+                <span class="h-val text-cyan" id="val-alt-bug">4,500 FT</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Engine & Secondary Systems -->
+        <div class="engine-cluster">
+          <div class="engine-item">
+            <span class="eng-name">TACH RPM</span>
+            <div class="eng-bar"><div class="fill" id="bar-rpm" style="width: 0%"></div></div>
+            <span class="eng-val" id="val-rpm">0 RPM</span>
+          </div>
+          <div class="engine-item">
+            <span class="eng-name">MANIFOLD PRESS</span>
+            <div class="eng-bar"><div class="fill" id="bar-mp" style="width: 0%"></div></div>
+            <span class="eng-val" id="val-mp">0.0 IN HG</span>
+          </div>
+          <div class="engine-item">
+            <span class="eng-name">FLAPS</span>
+            <span class="eng-val text-green" id="val-flaps">0° (UP)</span>
+          </div>
+          <div class="engine-item">
+            <span class="eng-name">BRAKES</span>
+            <span class="eng-val text-amber" id="val-brakes">PARK SET</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Center Column: Mission Navigation & Flight Controls -->
+      <section class="panel nav-panel">
+        <div class="panel-header">
+          <h2>MISSION PROFILE & FLIGHT COMMANDS</h2>
+          <span class="subtext">KSEE ➔ KRNM</span>
+        </div>
+
+        <!-- Flight Progress Bar -->
+        <div class="progress-box">
+          <div class="progress-labels">
+            <span>KSEE (388')</span>
+            <span>Santee Turn (1.5k')</span>
+            <span>Iron Mtn (4.5k')</span>
+            <span>Ramona Valley</span>
+            <span>KRNM (1395')</span>
+          </div>
+          <div class="flight-progress-bar">
+            <div class="progress-fill" id="flight-progress-fill" style="width: 5%"></div>
+            <div class="aircraft-marker" id="aircraft-marker">✈</div>
+          </div>
+        </div>
+
+        <!-- Quick Flight Commands -->
+        <div class="commands-grid">
+          <button class="cmd-btn btn-spawn" id="cmd-spawn">📍 Spawn KSEE 27R</button>
+          <button class="cmd-btn" id="cmd-start-engine">⚡ Start Engine</button>
+          <button class="cmd-btn" id="cmd-takeoff">🚀 Takeoff Roll (27R)</button>
+          <button class="cmd-btn" id="cmd-climb">🏔️ Enroute Climb 4500'</button>
+          <button class="cmd-btn" id="cmd-descent">📉 Descend Ramona 2400'</button>
+          <button class="cmd-btn" id="cmd-approach">🎯 Intercept Rwy 27</button>
+          <button class="cmd-btn" id="cmd-land">🛬 Land & Stop</button>
+          <button class="cmd-btn btn-danger" id="cmd-shutdown">🛑 Shutdown & Secure</button>
+        </div>
+
+        <!-- Event Log -->
+        <div class="events-log-container">
+          <div class="log-title">FLIGHT EVENT LOG</div>
+          <div class="events-log" id="events-log">
+            <div class="log-line text-dim">Flight event logger ready.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Checklists & AI Copilot Chat -->
+      <section class="panel copilot-panel">
+        <div class="panel-header">
+          <h2>AI COPILOT & CHECKLISTS</h2>
+          <span class="subtext">AUTHENTIC C182T POH</span>
+        </div>
+
+        <!-- Checklist Tabs -->
+        <div class="checklist-selector-row">
+          <select id="checklist-select" class="checklist-dropdown">
+            <option value="BEFORE_ENGINE_START">1. Before Starting Engine</option>
+            <option value="ENGINE_START">2. Engine Starting</option>
+            <option value="BEFORE_TAKEOFF">3. Before Takeoff (Runup)</option>
+            <option value="TAKEOFF_AND_CLIMB">4. Takeoff & Climb</option>
+            <option value="CRUISE">5. Cruise</option>
+            <option value="DESCENT">6. Descent</option>
+            <option value="BEFORE_LANDING">7. Before Landing</option>
+            <option value="AFTER_LANDING">8. After Landing</option>
+            <option value="SHUTDOWN_AND_SECURING">9. Shutdown & Securing</option>
+          </select>
+          <button class="btn-run-checklist" id="btn-run-checklist">▶ Run Checklist</button>
+        </div>
+
+        <!-- Active Checklist Items List -->
+        <div class="checklist-box" id="checklist-box">
+          <!-- Populated dynamically via app.js -->
+        </div>
+
+        <!-- AI Copilot Chat Terminal -->
+        <div class="chat-terminal">
+          <div class="chat-header">
+            <span>CO-PILOT INTERFACE (NATURAL LANGUAGE)</span>
+            <span class="online-indicator">● ACTIVE</span>
+          </div>
+          <div class="chat-messages" id="chat-messages">
+            <!-- Messages populated via app.js -->
+          </div>
+          <form class="chat-input-bar" id="chat-form">
+            <input type="text" id="chat-input" placeholder="Tell the copilot what to do (e.g. 'climb to 4500', 'run before takeoff checklist', 'land now')..." autocomplete="off">
+            <button type="submit" class="btn-send">SEND</button>
+          </form>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
+

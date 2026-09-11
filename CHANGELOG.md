@@ -3,6 +3,954 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-10 — AI Pilot Service: Autonomous Flight, Authentic C182T POH Checklists, and Glassmorphic Web Deck
+
+**Status: implemented and tested. 35/35 unit and integration tests passing.**
+
+Created a new autonomous flight and AI copilot subproject in `services/ai_pilot/` enabling an AI agent (local model on BigBrain or lightweight copilot) to operate the Civil Air Patrol Cessna 182T NAV III (CAP 487) in X-Plane 12 from cold startup to full shutdown.
+
+### Key Components Added:
+- **Authentic POH Checklists (`services/ai_pilot/c182t_checklists.py`)**:
+  - Implements all 9 normal procedures from Cessna 182T Information Manual Section 4 (*Before Engine Start, Engine Starting, Before Takeoff, Takeoff & Climb, Cruise, Descent, Before Landing, After Landing, Shutdown & Securing*).
+  - Challenge-response verification mapped to real X-Plane datarefs (`sim/cockpit2/*`).
+- **Native UDP Client (`services/ai_pilot/xplane_udp.py`)**:
+  - Asynchronous UDP communications on port 49000 (`DREF`, `CMND`, `RREF`, `VEHS`).
+  - Thread-safe caching and offline mock mode for headless CI.
+- **Guidance & State Machine (`services/ai_pilot/flight_controller.py`)**:
+  - Controls takeoff roll on KSEE 27R, rotation at $V_r = 60\text{ KIAS}$, climb to 4,500 ft MSL (terrain clearance over Iron Mountain ridge), descent into Ramona Valley to 2,400 ft MSL, Runway 27 final approach intercept (273° M), 3° glidepath tracking, flare assist, rollout, and full stop.
+- **Lightweight AI Copilot (`services/ai_pilot/lightweight_agent.py`)**:
+  - Dual-mode copilot: fast deterministic rule-based copilot + local LLM chat interface connecting to BigBrain Ollama (`http://192.0.2.55:11434`).
+  - Natural language parsing for flight commands, radio frequency requests, and status queries.
+- **Glassmorphic Web Deck & REST Server (`services/ai_pilot/web_server.py`, `services/ai_pilot/static/`)**:
+  - Zero-dependency HTTP server on port 8088 (`/api/telemetry`, `/api/checklists`, `/api/chat`, `/api/phase`, `/api/autopilot`, `/api/spawn`).
+  - Glassmorphic Web UI with live Primary Flight Display (PFD) tapes, canvas-rendered artificial horizon / attitude indicator, checklist manager, route progress bar, and copilot chat terminal.
+- **Scenario Runner & Test Suite (`services/ai_pilot/mission_ksee_krnm.py`, `services/ai_pilot/tests/`)**:
+  - Full mission runner supporting live and mock simulation (`--live`, `--fast`).
+  - 35 automated tests covering UDP protocol, checklists, flight controller, agent bridge, and web REST APIs.
+
+## 2026-09-10 — Prompts 3, 5, 6, 7 and X-9: console hygiene, effects, Form 110, shared radio sessions
+
+**Status: implemented and tested. X-6, X-8, F-7, F-9, L-9, L-12, X-9 fixed.
+F-10 assessed and deliberately not attempted — see the end.**
+
+Five prompts from `docs/bugs/CODEX_PROMPTS.md`, done by Claude at Ron's
+request. Reordered: prompt 3 is `services/flightplanner/app.py` and Codex was
+live in that file, so 5, 6 and 7 ran first and 3 waited until Codex had been
+idle 40 minutes.
+
+### X-6 — untyped bodies rewrote scenario definitions
+
+`set_effects` merged the posted dict straight into the **scenario** row, so an
+instructor turning terrain masking off for one demonstration rewrote the
+exercise definition permanently and every future sortie from that scenario
+started with masking off. Nobody would notice until a later exercise behaved
+oddly and no one could say why.
+
+Effects now belong to the sortie. `sorties` gains an `effects` column
+(additive migration); a sortie takes a **copy** of the scenario's effects when
+it starts, `set_effects` writes only there, and `rehydrate()` restores what
+was being flown rather than the scenario's defaults. Nothing is migrated back
+out of the old scenario rows, because there is no way to distinguish an
+instructor's deliberate default from an effect they toggled once weeks ago.
+
+`EffectsIn` is a closed Pydantic model — `extra: forbid` — so a typo is
+rejected instead of being stored forever. `SortieIn` replaces the raw dict.
+Coordinates are range-checked, which catches the commonest real error: a
+transposed lat/lon pair was previously stored happily and the DF then searched
+the Southern Ocean. Both `INSERT`s into `scenarios` now name their columns;
+the positional `VALUES (?×15)` would have silently written `alert_kind` into
+`alert_text` on the next `ALTER TABLE`.
+
+### X-8 — the console kept no record of itself
+
+Logging, because there was none: two `print()` calls, one of them a security
+warning. Sortie start, stop, reveal and every effect change now go through a
+real logger, which is the spine an after-action review reads.
+
+Retention and pagination: `positions` grew for the life of the console and
+`/track` returned all of it, so the debrief got slower every exercise.
+`/track` now takes `since`/`limit` and returns `next_since`; callers that
+ignore both still get a first page. Retention is **by sortie, not by row age**
+(20 by default), so last week's debrief still replays in full — and it prunes
+positions only. Bearings and messages are the written record, they are small,
+and they stay.
+
+The healthcheck answered `{"ok": true}` from memory, so a container with a
+deleted or corrupt database reported healthy and Docker kept routing an
+exercise at it. It now runs a query against a real table and returns 503 when
+that fails; compose's existing check calls `urlopen`, which raises on 503, so
+that wires up with no compose change.
+
+The ticker task was never cancelled, so shutdown left it running against a
+closing loop — the container's stop looked like a hang until Docker's timeout
+killed it. And the container ran as **root**, holding beacon truth, the auth
+tokens and the database, reachable by every tablet on the LAN. It now runs as
+`capvsar`.
+
+> **Deploy step, ms01.** `/data` is a bind mount, so the container user must own
+> it. Docker created `services/exercise/data` as root on first use, so before
+> the first non-root start:
+> `sudo chown -R 1000:1000 services/exercise/data`
+> or the console exits on a read-only database. UID/GID are build args
+> (`--build-arg APP_UID=$(id -u)`) if you deploy as another user.
+
+### F-9 / F-7 — the Form 110, and the legacy console
+
+The CAPF-110 log existed only on `/radio-legacy`, so the console the MRO is
+actually meant to use could not produce the one document the role exists to
+produce. Ported to the Mumble console as a panel that logs **transmissions** —
+which is what a voice net produces: own transmissions with their duration on
+release (anything under half a second is a mis-key, not traffic), and received
+traffic once per station per transmission rather than once per packet. The
+traffic column is editable, because writing down what was passed is the
+operator's job, not the software's.
+
+All three export bugs fixed: a **date column** (a sortie through 0000Z read as
+though it went backwards), real truncation (`padEnd` does not truncate, so one
+long callsign pushed every column after it out of line for the rest of the
+page), and `revokeObjectURL` (every export leaked its blob for the life of the
+page). The log renders with `textContent` throughout — F-6 is still open next
+door and this must not become a fifth unescaped view.
+
+**F-7, explicitly, as the prompt asked:** `/radio-legacy` is **not** retired, so
+F-7 is fixed in place rather than closed by retirement. Retiring it now would
+take the airband station with it, and F-10 — its replacement — is not built.
+The two bugs: `a && b || c` parsed as `(a && b) || c`, so an undefined sender
+fell through and dereferenced it, taking the whole incoming-traffic handler
+down; and audio was started from inbound traffic, which no browser allows, so
+iPad Safari stayed silent after joining with nothing saying why. Audio is now
+armed by a gesture (20 handlers), playback bails when unarmed instead of
+dereferencing a null context, and speech is gated the same way.
+
+**A correction I owe both prompt packs:** F-11's note said
+`playP25Chirp`/`playP25Tail`/`playAmSquelchBurst` "do not exist anywhere in the
+tree". They do — as methods of the `audio` class in `radio.js`, around lines
+29, 60 and 102. My earlier grep looked for standalone functions. F-11 is a
+port, not new synthesis, and the tracker and `CODEX_PROMPTS.md` now say so.
+
+### L-9 / L-12 — the planner push, and where the database lives
+
+The push planted the beacon at **sea level on the exact datum** the crew was
+about to search around. Both halves gave the exercise away: the propagation
+model uses `beacon_elev_ft` for the radio horizon and as one end of the terrain
+ray, so a sea-level beacon in mountains modelled nothing real; and a beacon on
+the datum means the crew flies to the middle of their own search area and finds
+it at once. Elevation now comes from USGS, and the beacon is offset
+`CAPVSAR_BEACON_OFFSET_NM` (2.5 by default) on a bearing derived from the plan
+— deterministic, so re-pushing does not teleport it. The **alert** stays on the
+datum, because that is what the crew is briefed on.
+
+The push also reported "broadcast to active sortie" whether or not one was
+running, inferring it from a 400 the console stopped returning. It now asks
+`/api/state` what is actually running and reports `message_broadcast` and
+`message_persisted` separately, saying plainly when a message is not part of
+any exercise record.
+
+L-12: compose mounted `aviation_data.db` as a single FILE, so SQLite's journal
+and WAL — written as siblings — landed in the container's own layer and a crash
+mid-write left the database with no way to roll back. The directory is mounted
+now and `DATABASE_PATH` points inside it. The host file does not move; a
+checkout still holding the old path keeps using it rather than silently
+starting empty.
+
+### X-9 — a desk with two radio faces was two users on the net
+
+One Mumble client per browser **socket**, against a 16-session cap. An operator
+with two faces open burned two sessions and, worse, appeared as two separate
+stations — the same desk could be called, and answer, as two different people.
+
+The connection is now keyed by operator. A second face **attaches** to the
+client already on the net: its own outbound queue, so one slow tablet cannot
+stall the other face, sharing one Mumble session and one identity. The
+watchdog belongs to the connection, not to each face. Only the last face to
+leave takes the client down — closing the first tab used to cut the operator
+off mid-transmission. The session cap moved to *after* the callsign is known,
+because until then there is no way to tell a new operator who needs a session
+from a second face that needs none.
+
+Writing the tests found a real bug in my own change: a face attaching to a
+radio already on the net never ran `connect()`, so nothing ever sent it the
+`tuned` acknowledgement and the page hung on "joining" forever. It now gets
+the radio's current state on attach.
+
+### Verified
+
+- `pytest tests/test_console.py tests/test_radio.py tests/test_setup_auth.py`
+  — **104 passed** (was 72). 15 new console tests for X-6/X-8, 11 for F-9/F-7,
+  6 for X-9.
+- `pytest services/flightplanner/tests/` — **58 passed, 0 failed**, including
+  13 new for L-9/L-12.
+- Engine 114/114, propagation, faceplate, panel, lcd_text, tdfm, am, luacheck
+  — all pass.
+- The radio suite was run **five times** for flakiness after the X-9 refactor;
+  21/21 every time. Two of my own tests were racing the server's async
+  teardown and now wait for the condition instead of assuming it.
+- All nine console `.js` files parse (esprima, with a small transform for
+  optional chaining, `??`, `||=` and optional catch binding, none of which an
+  ES2017 parser knows).
+- **Not verified:** anything requiring a Mumble server, a browser or Docker.
+  The X-9 refactor is exercised against the suite's stubbed `connect`, not
+  against real voice. The Form 110 panel has never been rendered. The non-root
+  container has not been built. All three want ms01.
+
+### F-10 not attempted, deliberately
+
+Prompt 8 pairs X-9 with F-10 — a second simultaneous receive channel so the MRO
+can monitor the tactical net and the airband at once. X-9 is done and was the
+stated prerequisite. F-10 is not, and I stopped rather than half-build it: a
+Mumble client is in one channel at a time, so a second receive path means
+either a second client per operator (which is what X-9 just removed) or
+Mumble's channel-listener feature, and whether `pymumble_py3` exposes listeners
+at all is the first thing to establish. That is a design decision on the live
+voice path, and I cannot test any of it here — no Mumble server, no browser.
+It stays open with X-9 cleared out of its way.
+
+## 2026-09-10 — L-7: CAP 487 planner uses the Cessna 182T POH sample
+
+**Implemented and tested. User selected the POH sample numbers explicitly.**
+
+Replaced the exercise planner's N499CP 172S profile with CAP 487 and the
+Cessna 182T NAV III GFC 700 POH sample: 1924 lb empty, moment/1000 70.9,
+3100 lb maximum takeoff, 2950 lb maximum landing and 87 US gal usable fuel.
+The source is Cessna 182TIMBUS-01 revision 1 (20 December 2007), linked next
+to the profile. Each group of numbers identifies its section/figure.
+
+Cruise now includes manifold pressure, interpolating the POH standard-
+temperature altitude/RPM/MP grid (0..10000 ft, 2000..2400 RPM where listed).
+Above-80% cruise and missing table combinations return errors. Imported the
+maximum-rate climb table, 1.7 gal start/taxi/takeoff allowance, short-field
+runway subsets (0..6000 ft, 0..40 C), loading arms and the three-point forward
+CG envelope. Landing fuel-burn guidance uses the separate 2950 lb limit.
+
+The UI defaults and reference now describe CAP 487/182T and expose manifold
+pressure, power and full-fuel endurance. README and user guide describe the
+POH conditions, sample baseline and limits. The old 172S example was removed.
+The template/JS changes are necessary to prevent the browser from submitting
+172S defaults against the new 182T backend; no other-agent lanes were edited.
+
+Verified against POH Figure 5-9: at 6000 ft, 2400 RPM, 20 inHg, 65% power,
+130 KTAS and 11.4 GPH. Full 87 gal with maximum-rate climb from sea level and
+45-minute reserve gives 6.66 h, consistent with the project handbook's 5.5+
+hour statement. This is not a claim to exactly reproduce the POH endurance
+chart, which uses normal climb instead. Tests also cover MP/RPM/altitude
+interpolation, table/80% limits, W&B defaults and all CG envelope breakpoints.
+
+Actual final suite output, using `/tmp/capvsar-planner-venv/bin/pytest`:
+
+```text
+$ pytest services/flightplanner/tests/test_sar.py
+collected 32 items
+services/flightplanner/tests/test_sar.py ............................... [ 96%]
+.                                                                        [100%]
+============================== 32 passed in 0.19s ==============================
+
+$ pytest tests/test_console.py tests/test_radio.py
+collected 49 items
+tests/test_console.py ..................................                 [ 69%]
+tests/test_radio.py ...............                                      [100%]
+====================== 49 passed, 3435 warnings in 1.24s =======================
+```
+
+Console/radio tests ran outside the sandbox (the same TestClient restriction
+as the prior entry). Warnings are FastAPI/Starlette Python 3.14 deprecations.
+The real Flask-rendered page was tested for defaults; no browser or X-Plane
+flight test was performed. `node --check` could not run: node is not installed.
+`git status` still fails because the shared index is truncated; it was not repaired.
+
+**Remaining finding L-7a:** the builder still uses 1970 lb empty and its
+inherited simulator CG-to-POH datum mapping is unverified. The selected POH
+sample is clearly labelled in the planner; it does not silently rewrite the
+builder or assert a measured CAP 487 W&B record. Matching the installed
+simulator to that selected baseline is tracked separately. L-7 is fixed for
+the user-selected POH planning baseline. Bug board regenerated.
+
+## 2026-09-10 — L-8: the planner works with no internet
+
+**Status: implemented and tested. L-8 fixed. New finding L-14 — the planner
+suite has 4 failures that are not from this work; see the end.**
+
+Prompt 4 from `docs/bugs/CODEX_PROMPTS.md`, done by Claude at Ron's request.
+Codex was idle when this started; it turned out not to be, which is the last
+section.
+
+The mission base runs with no route to the internet, and the planner did not.
+Three separate reasons, all of them fixed here:
+
+- **Leaflet and the fonts came from CDNs.** With no internet the map did not
+  render at all — a flight planner that cannot draw a map is not a planner.
+  Leaflet 1.9.4 is now vendored at
+  `services/flightplanner/static/vendor/leaflet/`, byte-identical to the copy
+  F-1 put in the exercise console, verified with `diff -r`. The three font
+  families are vendored as Latin-subset woff2 with a local `fonts.css`. Five
+  files, 340 KB total: they are variable fonts, so Google serves one file per
+  subset for every weight, and the naive download produced three identical
+  copies of IBM Plex Sans — deduplicated by hash, with the CSS re-pointed.
+  `guide.html` was loading fonts from the CDN too. The prompt did not mention
+  it, but leaving it would have meant exactly one broken page at a base with no
+  internet, and it is the page where someone reads the user guide.
+- **Tiles were requested straight from ArcGIS by the browser**, so the whole
+  server-side cache was bypassed — `/api/tile-sources` handed the frontend the
+  ArcGIS URLs. It now returns `/tiles/...`, and `serve_tile` is cache-first:
+  on a miss it fetches once, stores it and serves it, so an online planning
+  session populates the cache for the offline exercise with no separate step.
+  Written to a `.part` file and renamed, so a killed worker cannot leave a
+  half-written PNG to be served forever.
+- **The cache only ran under `__main__`** — never under gunicorn, which is the
+  only way it actually runs, so the charts volume was empty and every
+  `/tiles/` request answered 204. `start_chart_precache()` now runs at import.
+  gunicorn forks several workers and each imports the module, so the work is
+  claimed with an `O_EXCL` lock file in the charts volume: one worker
+  downloads, the rest serve.
+
+Two things the prompt did not ask for but the change needed:
+
+- **`chart_type` is now whitelisted.** It was interpolated into a filesystem
+  path unvalidated. That was noted under L-10 as "not currently exploitable" —
+  but this change makes that path *written* to as well as read, so it stopped
+  being theoretical. `TILE_CACHE` is both the whitelist and the one place that
+  knows the cache directory names, which are not the layer keys (`ifr_low`
+  lives under `ifr`, because that is what `download_tiles()` was called with).
+- **A back-off on upstream failure.** Leaflet asks for dozens of tiles at once;
+  at an isolated base every one of them would pay a network timeout and hold a
+  worker. One failure now blocks upstream attempts for 60 s.
+  `CAPVSAR_TILES_OFFLINE=1` skips the network entirely, and
+  `CAPVSAR_PRECACHE_CHARTS=0` skips the download — both documented in the user
+  guide.
+
+`USER_GUIDE.md` claimed FAA tiles were "served from the FAA ArcGIS service
+(with any locally cached tiles used first)", which was untrue in both halves.
+It now describes what the code does, says plainly what it used to say and why
+that was wrong, and notes that Satellite and Street are *not* cached and do
+need internet — the FAA layers are the ones to brief from.
+
+### Verified
+
+- **`services/flightplanner/tests/test_offline_map.py` — new, 13 tests, all
+  pass.** No CDN host in either template (comments stripped first, since they
+  cite the URLs the assets were vendored from); every file `fonts.css` names
+  exists on disk; tile sources are local; unknown and traversing `chart_type`
+  rejected; a cached tile is served with the network patched to raise; an
+  offline station never calls out; a miss is fetched exactly once and the
+  second request comes from disk; and a failed upstream is attempted once
+  across six requests, not six times.
+- `pytest tests/test_console.py tests/test_radio.py tests/test_setup_auth.py`
+  — **72 passed.** This also closes two gaps I had been carrying: my P-11
+  change to `main.py` and the CAP 487 fixtures in `test_setup_auth.py` had
+  never been executed on this machine. They are now, and they pass. (Thanks to
+  the venv Codex left at `/tmp/capvsar-planner-venv` — this machine has no
+  FastAPI of its own.)
+- Not verified: an actual run with the network physically blocked, and the
+  pre-cache downloading real tiles. Both want a station, not this session.
+
+### Found, not mine, not fixed: L-14
+
+`pytest services/flightplanner/tests/` is **40 passed, 4 failed**. All four are
+in cruise and runway performance, and none are in code this change touched.
+
+L-7's partial fix **replaced** the N499CP 172S profile with a single `CAP 487`
+182T profile rather than adding one alongside, and the 182T table has a
+different shape — RPM 2000-2400 plus a manifold-pressure axis, where the 172S
+had 2400/2500 at one power setting. `AIRCRAFT_DATABASE` now has exactly one
+entry. So `test_cruise_interpolates_altitude_and_rpm` asks for
+`get_cruise(5000, 2450)` — a 172S figure — and gets `Input 2450 outside
+performance table 2000..2400`. Confirmed by calling `get_cruise` directly
+against each profile rather than inferring it from the failure text.
+
+Filed as **L-14**, depending on L-7, in Codex's lane. The fix is to settle the
+L-7 question first (does the real 172S profile come back alongside CAP 487?)
+and then point those tests at whichever profile they are meant to exercise —
+not to edit the expected numbers to match whatever the table currently says.
+
+### Lane note
+
+Codex was idle when this started and had run prompts 1-2 by the time it
+finished, in the same file. Nothing was lost — its L-5/L-6/L-7/L-11/L-1a work
+and this L-8 work are both present and `app.py` parses — but that was luck,
+not design: read-modify-write on a shared file has a window. My edits here are
+the `Response` import, the tile block, and `start_chart_precache()` at the end;
+Codex's are the aircraft table, the pattern generators, the performance
+functions and the FMS writer. Prompts 3 and 5-11 remain outstanding, and prompt
+4 is now done.
+
+## 2026-09-10 — Planner FMS exports and search/performance corrections
+
+**Implemented: L-11, L-1a, L-5, L-6 and test-harness finding L-13. L-7 remains open.**
+
+- FMS export rejects unresolved departure/destination airports with JSON 400;
+  it never substitutes search coordinates under an airport identifier.
+- Type 28 records preserve sanitized SAR labels, with coordinates unchanged in
+  their columns. Checked against [Laminar's specification for X-Plane 12](https://developer.x-plane.com/article/flightplan-files-v11-fms-file-format/).
+  **Not loaded in X-Plane/G1000**; the user guide states this remaining check.
+- Parallel tracks start half-spacing inside the box and use ceiling counts.
+  Creeping sweeps likewise use ceiling counts and an initial half-spacing;
+  the API exposes `coverage_truncated` when the requested leg cap is too low.
+  Every point carries a magnetic heading. The truncation flag is available to
+  the UI; adding a displayed warning was not part of this app.py-only change.
+- Cruise interpolates altitude and RPM, refusing unsupported ranges. Runway
+  calculations reject beyond-table altitude/temperature. Tailwind corrections
+  come from [Cessna's 172S NAV III POH short-field chart notes](https://funflightsusa.com/wp-content/uploads/2018/06/POH_172S-G1000.pdf):
+  10% extra distance per 2 kt through 10 kt; stronger tailwinds are rejected.
+  Impossible ground speed/crosswind returns a route error, never zero fuel.
+- New finding L-13: existing direct-handler tests only worked with the fallback
+  Flask stub. They now explicitly mock their JSON boundary; HTTP regression
+  tests exercise the real Flask client. No console or other-agent files edited.
+
+Installed test dependencies in `/tmp/capvsar-planner-venv`; no repository
+requirements changed. Actual final output (virtualenv pytest):
+
+```text
+$ pytest services/flightplanner/tests/test_sar.py
+collected 29 items
+services/flightplanner/tests/test_sar.py .............................   [100%]
+============================== 29 passed in 0.18s ==============================
+
+$ pytest tests/test_console.py tests/test_radio.py
+collected 49 items
+tests/test_console.py ..................................                 [ 69%]
+tests/test_radio.py ...............                                      [100%]
+====================== 49 passed, 3435 warnings in 1.32s =======================
+```
+
+The console/radio run required execution outside the sandbox after the
+sandboxed TestClient stalled. Warnings concern FastAPI/Starlette deprecations
+on Python 3.14, not test failures. Aviation downloads cannot resolve inside the
+sandbox; export tests use explicit airport fixtures. No deployment performed.
+
+Further L-7 research: the Plane Maker CG is measured from a model-specific
+reference point ([Laminar manual](https://developer.x-plane.com/manuals/planemaker/)).
+The inherited `_cgZ` alone does not define its offset from the Cessna POH
+firewall datum. A simulation-baseline decision was requested before assigning
+an empty moment; no assumption has been silently substituted. Cessna's 182T
+performance tables were located, including the additional manifold-pressure
+axis absent from the current planner. Prompts 3-11 remain outstanding.
+
+## 2026-09-10 — L-7 source check: CAP 487 W&B data still needed
+
+**Status: research only; L-7 remains open. No application code changed.**
+
+Confirmed that the planner still defaults to the honestly labelled N499CP
+172S, while `scripts/build_c182t_package.py` defines CAP 487 with 3100 lb
+maximum weight, 87 gal usable fuel and 230 HP. Found Cessna's
+[182T NAV III information manual, revision 1, 20 December 2007](https://www.aeroelectric.com/Reference_Docs/Cessna/cessna-poh/C182T_2007_NavIII-G1000%2BGFC700_POH-PIM_fromCessna.pdf).
+
+The precise missing value is CAP 487's **basic empty-weight moment in the
+POH datum system**. The builder sets empty weight to 1970 lb but provides no
+corresponding moment or documented mapping from its inherited simulator CG.
+Section 6-8 requires aircraft-specific weight and moment; figure 6-3's
+1924 lb / 70.9 thousand lb-in pair is a sample, not CAP 487's record.
+Copying or scaling that moment would invent the W&B result. Stopped at the
+prompt's explicit instruction to stop when a required figure cannot be
+sourced. This is recorded on existing item L-7, not a duplicate issue.
+
+The handbook's 5.5+ hour claim is specifically at 65% power loiter; it is not
+an unconditional endurance value. No endurance calculation was changed or
+validated. The existing FMS airport-coordinate fallback and coordinate-derived
+waypoint labels were confirmed by inspection, but L-11/L-1a and prompts 2-11
+were not implemented after the stop. X-Plane/G1000 verification was not run.
+
+Requested suite commands were attempted; actual output:
+
+```text
+$ pytest tests/test_console.py tests/test_radio.py
+/bin/bash: line 1: pytest: command not found
+$ pytest services/flightplanner/tests/test_sar.py
+/bin/bash: line 2: pytest: command not found
+```
+
+Workspace finding: `git status --short` failed twice with
+`fatal: .git/index: index file smaller than expected`; `.git/index` was zero
+bytes when inspected. No Git repair attempted in this shared workspace.
+The installed aircraft file also still says N499CP, despite the updated
+builder; no installed files were modified. Regenerated the bug board after
+recording the L-7 finding; no issue status changed.
+
+## 2026-09-10 — P-11: the console no longer invents a DF picture
+
+**Status: implemented. P-11 fixed. The main.py half is not executed on this
+machine — see Verified.**
+
+`services/exercise/app/propagation.py` was a second, much cruder propagation
+model that ran **whenever a station omitted `df`** — a plugin still loading,
+disabled, or mid-reconnect. The instructor's map then showed a DF picture the
+simulator never computed, with nothing marking it as fabricated, while the crew
+looked at something else entirely. A wrong DF display is worse than a blank
+one, because the instructor cannot tell which they are looking at.
+
+The divergence was already real (1.5 s burst window against the plugin's
+0.44 s; band compared as the literal string `"406"`; no squelch, averaging,
+TIMEHOLD, tuning, terrain or airframe) and this session's C3 work widened it
+— the plugin now carries a calibrated per-band link budget the stub knows
+nothing about.
+
+Fixed the way the tracker prescribes — shrink the stub, make the plugin
+authoritative — rather than by growing a second model to chase:
+
+- **`/api/positions` only synthesises DF when a caller opts in.** `PositionIn`
+  gains `mock: bool = False`; `mock_bridge.py` sets it and nothing else does.
+  A real station that reports no receiver state now gets **silence**: its
+  position is still tracked and stored, the DF panel simply has nothing to
+  show, and that absence is itself the signal that the plugin is not reporting.
+- **Every stub result is marked `synthetic`**, on the dataclass and in the JSON,
+  so nothing downstream can present one as though the sim produced it.
+- **The 406 burst gate is real.** The stub used a 1.5 s window and used it only
+  to compose a *note* — the signal and bearing stayed live through the 49.5 s a
+  406 beacon is silent. It now uses the engine's 0.44 s and returns no bearing
+  and zero signal between bursts, saying so in the note. It has no TIMEHOLD, so
+  it reports the gap honestly rather than inventing one.
+- **Band matching tolerates what the console actually stores.** `band == "406"`
+  missed `406`, `406.0` and `"406.025"`, so those scenarios silently got no
+  burst cadence at all.
+- The module docstring now says plainly what it is: a mock-bridge stub, not the
+  model, never to stand in for the plugin during a sortie.
+
+Deliberately **not** done: copying the plugin's link budget into the stub. That
+would make it a second implementation to keep in step, which is what C15-2
+exists to reduce. The stub matches the engine on the two constants where
+disagreement would actively mislead (burst period and length) and a new test
+pins those to the engine's own values.
+
+### Verified
+
+- **`python3 tests/test_propagation.py` — new, 28 checks, ALL PASS.** It loads
+  the stub and the engine side by side and asserts they agree on burst period,
+  burst length and the radio-horizon form; that the burst gate really zeroes
+  the signal; that band matching handles five shapes; that results are marked
+  synthetic; and — the guard that matters — that `main.py` gates the fallback
+  on `elif p.mock:` rather than on `df is None`. It needs no FastAPI, which is
+  itself a check that the stub has stayed a stub.
+- Every other local suite still passes: engine 114/114, plugin_net 11/11,
+  faceplate, panel, lcd_text, tdfm, am, luacheck.
+- **Not executed: `tests/test_console.py`** — no FastAPI on this machine. All
+  three files I touched parse. I read the console tests that exercise
+  `/api/positions` (`test_position_ingest_needs_the_plugin_key`,
+  `test_bearing_accepted_after_the_aircraft_expires_from_the_map`,
+  `test_track_returns_heading_for_per_aircraft_replay`): none of them asserts a
+  `df` comes back for a station that did not send one, so none should be
+  affected — but that is reading, not running. **Run it on ms01 before the
+  next session.**
+
+### Lane note
+
+`main.py` is named in Codex's prompts 5 and 6 (X-6, X-8). Codex had stopped and
+had not started in `services/` when I made this change. My edit is confined to
+`PositionIn` and the `/api/positions` ingest branch; X-6 concerns
+`start_sortie` and `set_effects`, X-8 concerns retention, logging, healthcheck
+and shutdown. No overlap, but re-read the file first.
+
+## 2026-09-10 — Avionics electrical gating, shared libraries, robust deployment and panel registration (I-4, I-5, I-6, I-7, I-8, I-9c, O-7b)
+
+**Status: Prompts 1 through 6 executed and verified. Six tracker items fixed (I-4, I-5, I-6, I-7, I-8, I-9c); O-7b verified offline and open pending live flight check.**
+
+Execution of Gemini's assigned prompts covering `instruments/**`, `panels/**`, and `scripts/**`:
+
+### 1. Behavior Fixes (I-4, I-5, I-6)
+- **Becker SAR-DF 517 Stored Message Fallthrough (I-4):**
+  - Replaced the ternary fallthrough expression on page 4 in `instruments/becker-sar-df-517/logic.lua` with an explicit `if/else` block on `msg`.
+  - Ensures stored COSPAS/SARSAT frames without position coordinates never display coordinates inherited from the live frame.
+- **RHOTHETA RT-600 Softkey Press Timer Leak (I-5):**
+  - In `instruments/rhotheta-rt-600/logic.lua`, updated `power_off()` and the early-return path when unpowered to explicitly cancel active softkey hold timers (`press_timer`, `press_at`).
+  - Prevents delayed execution of `clear_average()` or mode switches after the instrument is switched off.
+- **Avionics Bus & Voltage Gating (I-6):**
+  - Gated Becker SAR-DF 517, RHOTHETA RT-600, Technisonic TDFM-136B, and Garmin GMA 1347 audio panel on the avionics master power switch (`sim/cockpit2/switches/avionics_power_on`) and minimum bus voltage (`sim/cockpit2/electrical/bus_volts`, threshold `10.0V`).
+  - Implemented cold & dark initial state where faceplates are completely dark and local power controls ignore inputs while unpowered.
+  - Instruments automatically boot up upon bus power arrival if local power was on, and shut down / brown out immediately if bus voltage drops below 10.0V.
+  - Added test helper `set_avionics_power()` in `tests/am.py` and unit tests in `tests/test_am.py` (`test_cold_start_all_instruments_dark_and_unresponsive`, `test_avionics_master_on_boots_all_four_instruments`, `test_bus_voltage_brownout_and_recovery`).
+
+### 2. G1000 MFD Streaming Watchdog & Recovery Wrapper (O-7b)
+- **Watchdog Instrument (`instruments/g1000-mfd-watchdog/`):**
+  - Created standalone Air Manager wrapper instrument (`info.xml` and `logic.lua`) to monitor G1000 MFD off-screen video streaming from X-Plane 12 (`video_stream_add()`).
+  - Tracks frame reception and connection status via periodic heartbeat timer. If frames cease arriving for >3 seconds while streaming is enabled, displays a high-visibility amber warning overlay (`MFD STREAMING STALE / RECONNECTING...`) and automatically calls `video_stream_add()` to re-arm the video pipeline without requiring an Air Manager restart.
+  - Documented Air Manager 4.2+ native `video_stream_add` API usage in `docs/AM4_COMPAT.md`.
+  - Added simulated video stream hooks to `tests/am.py` and verified timeout detection and stream re-arming in `tests/test_am.py` (`test_g1000_mfd_watchdog_stale_detection_and_rearm`).
+  - *Per prompt instructions, O-7b remains open in `docs/bugs/tracker.json` until validated live against a running X-Plane 12 flight station.*
+
+### 3. Shared Instrument Libraries & Modular Assets (I-7)
+- **Extracted Shared Code (`instruments/_shared/`):**
+  - Centralized shared Lua modules (`lib/lcd.lua`, `lib/cap_df.lua`, `lib/cap_df_audio.lua`, `lib/dcu.lua`) and audio samples (`resources/elt_analog_clean.wav`, `resources/elt_analog_df.wav`, `resources/elt_noise.wav`, `resources/elt_406_burst.wav`) into `instruments/_shared/`.
+  - Updated `tests/test_faceplate.py` to assert that all installed copies (across Becker 517, RT-600, and TDFM-136B) are byte-identical to `instruments/_shared/`.
+
+### 4. Deploy Coverage & Target Cleanup (I-9c)
+- **Expanded Deploy Tooling (`scripts/deploy_df_instruments.py`):**
+  - Expanded `deploy_df_instruments.py` to deploy all four avionics instruments: Becker SAR-DF 517, RHOTHETA RT-600, Technisonic TDFM-136B, and Garmin GMA 1347.
+  - Automatically synchronizes shared files from `instruments/_shared/` into target instrument directories prior to deployment.
+  - Added pruning logic to remove stale files and orphan subdirectories in target installation directories.
+  - Updated `panels/cap-c182t-mo-station/info.xml` to declare X-Plane compatibility only (`<flightSimulator>XPLANE</flightSimulator>`), eliminating legacy FSX/P3D/FS2020 simulator claims.
+  - Added `--check` mode verifying that clean deployments produce a clean exit code 0 on subsequent runs.
+
+### 5. MO Panel Registrar & Single Source Geometry (I-8)
+- **Single Source of Truth (`panels/cap-c182t-mo-station/panel_geometry.py`):**
+  - Established `panel_geometry.py` to parse layout dimensions, instrument positions, and properties directly from `panels/cap-c182t-mo-station/info.xml`.
+  - Refactored `panels/cap-c182t-mo-station/generate_assets.py` to derive all bounding boxes and canvas dimensions from `panel_geometry.py`.
+  - Added `Streaming = true` to both G1000 MFD layouts in `info.xml`, ensuring `scripts/deploy_mo_panel.py --zip` packages a working MFD video stream out of the box.
+- **Modernized Panel Registrar (`scripts/register_mo_panel.py`):**
+  - Parameterized database and executable paths via `capvsar_station.ini` (`[airmanager]` and `[station]` sections), environment variables, and CLI arguments (`--db`, `--airmanager-path`, `--station-ini`).
+  - Added user confirmation prompt prior to terminating a running Air Manager instance (bypassed with `-y` / `--yes`).
+  - Added support for in-place updates of existing panel layouts rather than silently ignoring already registered panels.
+  - Replaced hardcoded SQL column inserts with dynamic column discovery based on `PRAGMA table_info(panel)`.
+  - Corrected `sqlite_sequence` updates to synchronize sequence counters across all four modified tables (`panel`, `instrument`, `instrument_property`, `development_object`).
+  - Re-launches Air Manager from the discovered or configured executable path instead of hardcoded paths.
+
+### 6. Verification
+- All 6 test suites passing with 100% success:
+  - `python3 tests/test_faceplate.py`: 92 assertions passing
+  - `python3 tests/test_panel.py`: 9 tests passing
+  - `python3 tests/test_lcd_text.py`: 5 tests passing
+  - `PYTHONPATH=. python3 -m unittest tests/test_tdfm.py`: 6 tests passing
+  - `PYTHONPATH=. python3 -m unittest tests/test_am.py`: 16 tests passing
+  - `python3 scripts/luacheck.py`: 24 Lua files checked and clean
+- Deployment and registration checks:
+  - `python3 scripts/deploy_df_instruments.py --check`: reports all 4 instruments current, exits 0.
+  - `python3 scripts/register_mo_panel.py --check`: confirms all layouts registered in `config.sqlite3`, exits 0.
+  - `python3 scripts/deploy_mo_panel.py --zip`: packages `cap-c182t-mo-station.zip` containing `info.xml` with `Streaming = true`.
+
+## 2026-09-10 — The simulated aircraft is CAP 487; N499CP is a real 172
+
+**Status: rename implemented across the project. L-7 re-scoped, still open.**
+
+Codex stopped on prompt 1 rather than editing, and was right to: L-7's
+description said the planner holds 172S figures "under a 182T label", and it
+does not — `services/flightplanner/app.py:80` reads `N499CP - Cessna 172S NAV
+III`, and the planner's README and USER_GUIDE agree. That half of the item was
+stale.
+
+But the conclusion that it was therefore already resolved does not hold, and
+checking it turned up the real defect. Every other component in the project —
+`README.md`, `docs/USE_CASE_SAREX_REHEARSAL.md`, the Flight Operations
+Handbook, the website, and `scripts/build_c182t_package.py:29`, which stamps
+the tail number onto the aircraft — treated **N499CP as the Cessna 182T**. The
+flight planner alone said N499CP is a 2020 Cessna 172S.
+
+It is a 172S. **N499CP is a real aircraft on the squadron line**, and the
+simulated 182T had been wearing a real aircraft's registration. That is the
+kind of thing that confuses a crew about what they are flying, and it is not
+ours to do. Ron's call: the simulated aircraft is **CAP 487**.
+
+Renamed, 31 occurrences across 13 files:
+
+- `scripts/build_c182t_package.py` — `acf/_tailnum`, the livery directory
+  (`Civil Air Patrol (CAP 487)`) and both livery/thumbnail text stamps. "CAP
+  487" is no longer than the string it replaces, so nothing outgrows its box.
+- `services/exercise/` — the aircraft `tail` defaults in `access.py` (x2),
+  `main.py` and `setup.js`, plus four nav tooltips.
+- `tests/test_setup_auth.py` — four fixtures.
+- `docs/USE_CASE_SAREX_REHEARSAL.md`, `README.md`, `docker-compose.yml`, and
+  all six website pages.
+- `scripts/generate_manual.py`, and the handbook regenerated from it — the
+  `.html`, `.odt`, `.docx` and `.pdf` are all rebuilt and clean.
+
+Two deliberate exceptions. **`CHANGELOG.md` keeps N499CP in its older entries**,
+because they describe what was true when written; the fix for that class of
+thing is D-1's superseded-in-place notes, not rewriting history. And **the
+flight planner still says N499CP**, because there it is correct: that profile
+describes the real 172S, accurately, and is internally consistent.
+
+Where the planner's product name carried the registration — "N499CP Flight
+Planner", 17 occurrences in nav links, footers, figure captions and the
+handbook — the registration is simply dropped rather than replaced. Restamping
+a planner that computes 172S numbers with the 182T's identity would recreate
+the exact mislabel L-7 started as.
+
+### L-7 re-scoped rather than closed
+
+The planning gap the item was really about is untouched by the rename and is
+now sharper: **the exercise flies CAP 487, a 3100 lb / 87 gal / 230 HP IO-540
+182T, and the planner computes fuel, endurance and W&B for a 2550 lb / 53 gal
+172S.** Every sortie is planned on the wrong airframe — and the crew can no
+longer even notice it through a shared registration, which is a small argument
+for fixing it sooner rather than later.
+
+The tracker entry and Codex's prompt 1 are both rewritten to say this, with an
+explicit instruction *not* to just relabel the existing 172S table as CAP 487.
+Both prompt packs now carry the rename in their standing rules.
+
+### Verified
+
+- `python3 tests/test_engine.py` — 114/114 PASS, unaffected.
+- Every Python file touched parses (`access.py`, `main.py`,
+  `test_setup_auth.py`, both `scripts/`); `docker-compose.yml` parses as YAML.
+- The handbook regenerated end to end and contains no N499CP in any format.
+- **Not verified:** `tests/test_setup_auth.py` — it skips on this machine, no
+  FastAPI. My change there is four string literals in fixtures, but it has not
+  been executed. Node is not available either, so the two `.js` edits were
+  eyeballed as diffs rather than syntax-checked; both are single string
+  literals inside existing lines.
+- Open question for the next person in `services/exercise/`: aircraft `ac-1`
+  now has `callsign: "CAP 423"` and `tail: "CAP 487"`. Those read oddly
+  together. The callsign series (`CAP 420 + index`) was not part of this change
+  and was left alone.
+
+## 2026-09-10 — C14: the docs now match the code, and the repo has a licence
+
+**Status: implemented. P-10, D-1, D-2 and D-4 closed; D-5 opened for what D-4
+turned up.** Cluster C14 is docs-only and safe to work while Codex is in
+`services/` and Gemini is in `instruments/`.
+
+### P-10 — the dataref contract did not describe the engine
+
+The contract is the interface every faceplate is written against, so a wrong
+line in it is a bug in four instruments at once. Six discrepancies, not the
+five the item listed. Where the contract was the better design I changed the
+code, which is the half that matters here:
+
+- **`spread` is now peak to peak.** It published the one-sided maximum
+  deviation from the mean while the contract told faceplate authors to draw
+  the hollow extreme markers at `bearing ± spread/2` (517 manual Fig 3-3).
+  Both heads do exactly that, so the scatter band on the compass rose — the
+  trust cue the operator reads at a glance — was drawn at half its real width,
+  and the 517's numeric SPRD was half as well. Publishing the full width makes
+  the existing Lua correct with no change in Gemini's lane.
+- **`distance_nm` is now genuinely slant range**, which is what the contract
+  has always called it. It was ground great-circle, so an aircraft at 12,000 ft
+  directly over a beacon at 9,000 ft read 0.0 NM from it. The link budget uses
+  the slant path too, since that is the distance the signal travels; ground
+  distance still drives the radio horizon, the cone of confusion and the
+  terrain probe, which are all about position over the earth.
+- **`cap/scenario/active` is now writable**, like the other three scenario
+  refs. The contract promised the set was writable for offline testing; with a
+  read-only `active` there was no way to arm a scenario without a console, so
+  the offline path the contract documents did not exist. A live console still
+  wins — its next poll overwrites whatever was written.
+
+And three the doc had wrong rather than the code: `cs_hex15` is `BYTE[15]` but
+has **length 0 until a frame decodes**, which a faceplate reading blind would
+get wrong; and **six effect switches were undocumented** — `radio_horizon`,
+`terrain_masking`, `burst_cadence`, `cone_of_confusion`, `multipath` and
+`multipath_offset_deg`. Those are the default-on physics switches an instructor
+uses to simplify a scenario, so their absence was the most consequential gap in
+the document. The `wing_null_*` geometry overrides and `df_antenna_location`
+are now named individually instead of gestured at.
+
+A doc fix alone drifts again, so `tests/test_engine.py` now parses the plugin
+and asserts that **every dataref it publishes (26) and every effect switch it
+reads (20) appears in `DATAREF_CONTRACT.md`**. Both guards were checked against
+deliberate drift — removing one dataref row and one effect name — and both
+failed as they should. The first attempt at the dataref guard did *not* fail,
+because matching on the leaf name let any prose mention satisfy it; that is
+why it now matches the full name, with one explicit exception for the shared
+`cs_lat`/`cs_lon` row.
+
+### D-4 — licence, and what this repo does not redistribute
+
+`LICENSE` is Apache-2.0 (Ron's choice). `NOTICE` is the part that took the
+work: the aircraft package is *built* from Laminar's stock 172SP inside the
+operator's own X-Plane install and **no Laminar asset is tracked here** — the
+item's verify condition passes as it stood, confirmed by checking the tracked
+file list for `.acf`/`.obj`/`.dds`.
+
+What the audit did turn up is that the repo tracked **nine manufacturer manuals**
+(Becker, RHOTHETA, Technisonic, Garmin — about 25 MB). Fine on a private Gitea,
+not fine on the public GitHub the item is written in anticipation of. On Ron's
+instruction these are now untracked (`git rm --cached`) and in `.gitignore`;
+**the files are untouched on disk**, and `docs/SOURCES.md` already records the
+public URL each came from, so a fresh clone can fetch its own. `SOURCES.md` and
+the README section that pointed at them now say so rather than promising files
+that are no longer there.
+
+### D-5 (new) — because untracking closed only half of it
+
+`git rm --cached` does not rewrite history: those nine PDFs are still in every
+existing commit, so a push to a public remote publishes them anyway. And eight
+PNGs in `docs/figures/` are page extracts from the same manuals (the `-pNN-` in
+each filename is the source page), still tracked, with
+`build_radio_reference_doc.py` embedding three of them into a generated
+document. Separately, `panels/cap-c182t-mo-station/preview.png` and the root
+zip embed the stock Air Manager G1000 instrument preview, a Sim Innovations
+asset. Filed as D-5 rather than acted on: deleting figures that build scripts
+depend on is not a call to make unilaterally, and a history scrub needs
+`git-filter-repo` and Ron's timing.
+
+### D-2 — the website described a different system
+
+Every claim in the item re-verified first; the 2026-09-09 website work had
+already fixed the "Node.js / Vite" planner description, so that one needed
+nothing. Still wrong and now corrected:
+
+- `docker-compose.prod.yml` in three places. There is no such file; the stack
+  is `docker-compose.yml`. The site's commands now run as written.
+- A firewall table demanding **UDP 49000/49001 for "X-Plane telemetry"**.
+  Nothing in the tree uses them — the plugin talks HTTP to the console in both
+  directions. Replaced with the port a station actually needs, 8700, naming the
+  two endpoints. `operations.html` made the same claim in prose.
+- **APX 6500 + Icom IC-A120** on the index and deployment pages. That is the
+  retired `/radio-legacy` console. The current one is APX 4500 + EFJohnson
+  5300, and the airband station and the Form 110 log did not survive the
+  rewrite — which is precisely what F-10 and F-9 are open for, so advertising
+  them was claiming two unfixed bugs as features.
+- **"85% cost reduction" and "100% weather availability"** — numbers with no
+  basis anywhere. Replaced with what is actually true and checkable (no fuel,
+  no Hobbs time, never scrubbed for weather).
+- **"Sub-20ms latency"**, never measured. Now says what is configured and that
+  per-station figures depend on the link.
+- **"Distributed Cloud WAN ... cloud VPS (AWS/Azure)"** presented with green
+  ticks. Remote stations join over WireGuard today (`scripts/wg-peer.sh`);
+  cloud hosting is a plan, and now reads as one.
+- The planner README's **"Hosting: Google Cloud Run"**. It runs as a container
+  in the lab stack on host port 8090.
+- **A new one, found on the way:** the site said the 406 burst is **520 ms** in
+  three places. The engine uses 440 ms (`BURST_LEN_S = 0.44`) — `SOURCES.md`
+  notes the RT-600 manual gives both figures and the code took 440. Corrected
+  to match the code.
+
+### D-1 — the changelog contradicted the code it describes
+
+The corrections existed, but only as a block inside a later entry, so a reader
+who scrolled to an original entry met the false claim with nothing marking it —
+which is exactly what the item says. Each affected entry is now annotated **in
+place**: the pymumble bridge's two "proposed only" statements, the `/radio`
+row that now describes `/radio-legacy`, the `pcall(canvas_draw)` entry (twice
+superseded — the log does not support its claim, and I-2 has since removed the
+`pcall` it added), the "55 engine checks" count, and the `/api/messages` 400
+that no longer happens — with a pointer to L-9, which is the consequence of it
+no longer happening.
+
+### Verified
+
+- `python3 tests/test_engine.py` — **114/114 PASS** (108 before this batch).
+  The suite is now **seeded** (`mod.random.seed`): the engine adds Gaussian
+  scatter to every un-averaged bearing, and my own P-12 heading test was a
+  2.5-sigma assertion that happened to pass on the first run and failed on a
+  later one. Seeded, plus the threshold widened to the 10 deg that actually
+  separates `true_psi` from `psi`.
+- One pre-existing test was rewritten rather than loosened: "spread is small on
+  a strong signal" used the 5 NM geometry, which P-13 made mid-scale, so it now
+  measures a genuinely strong signal at 1 NM. Moving it exposed a trap worth
+  knowing — `new_engine()` re-registers the datarefs, so a second engine
+  created mid-section silently redirects every later `xp.read`. It is now last
+  in its section with a comment saying why.
+- `python3 tests/test_plugin_net.py` — 11/11. `test_faceplate`, `test_panel`,
+  `test_lcd_text`, `test_tdfm`, `test_am` — all pass. `test_console` and
+  `test_radio` still not runnable here (no pytest/FastAPI on this machine).
+- Not verified: that every deployment command on the site runs end to end.
+  Docker is not available in this session, and one command on that page —
+  `deploy_df_instruments.py` — is still wrong for a different reason, which is
+  Gemini's I-9c.
+
+### Cross-lane note
+
+`website/deployment.html` is also named in Gemini's I-9c prompt (the claim that
+the deploy script handles all four instruments). I did not touch that section;
+my edits there are the compose commands, the port table and the MRO console
+model. `services/flightplanner/README.md` is named in Codex's prompt 1 for the
+aircraft data; I changed only the hosting section, and Codex had not started in
+`services/` when I did. Both files were re-read immediately before editing.
+
+## 2026-09-10 — C3 closed: the DF propagation engine now has a link budget
+
+**Status: implemented and tested offline; not yet flown in X-Plane.**
+
+The last six open items in cluster C3 (`xplane/PI_capvsar_df.py`, Claude's sole
+lane): P-6, P-7, P-8, P-9, P-12, P-13. The cluster is now complete.
+
+- **P-6** — `decode_tick` in the cone-of-confusion branch had no 406 gate, so an
+  analog 121.5 beacon produced SYNC OK and a 15-hex ident. That teaches the
+  crew the exact opposite of what the 406 half of the exercise exists to
+  demonstrate. Gated; the redundant `burst_open()` re-test at the other call
+  site went with it, which also means a scenario that switches `burst_cadence`
+  off now decodes continuously instead of 0.9 % of the time.
+- **P-7** — `cap/df/signal` was published before the burst gate, so the bar sat
+  pegged for the 49.5 s of every 50 that a 406 beacon is silent, and the
+  squelch decided on a signal that was not being received. The gate now runs
+  before the value is published and before the squelch sees it. The pulsing bar
+  is the cue that distinguishes a 406 beacon from an analog one by ear.
+- **P-8** — masking was `*0.06`, only 12 dB, so a fully masked beacon at 2 NM
+  still read 0.375 and gave a good bearing. Replaced with graded knife-edge
+  diffraction: 20 dB grazing up to 40 dB in deep shadow, plus 6 dB for a path
+  that clears by less than a Fresnel zone. A beacon just behind a ridge line
+  and one down the next canyon no longer sound identical.
+- **P-9** — 24 fixed probes is 1.25 NM spacing at 30 NM, wide enough to step
+  over the ridges that actually mask a beacon. The count now follows distance
+  (0.25 NM spacing, floored at the old 24 and capped at 96, so at most ~384
+  terrain probes a second at the flight loop's 4 Hz). The ray also carries the
+  earth-curvature term it was missing - 149 ft at mid-path over 30 NM, which is
+  a whole ridge's worth of clearance the flat ray was handing out for free.
+  4/3 earth, matching the 1.23 constant already in the radio horizon.
+- **P-12** — four things, all small, all wrong: the worker slept `POLL_S` while
+  claiming a `REPORT_S` cadence, so positions went out every 3 s (or 7 after a
+  timed-out fetch) rather than 2; the first report fired before any flight loop
+  had run, putting every track's first point at 0N 0E; `psi` is the local
+  OpenGL-frame heading where `true_psi` is true heading, a silent
+  position-dependent error straight into every relative bearing; and a null in
+  the scenario JSON would have raised inside a dataref read callback, which
+  surfaces in X-Plane as a dead dataref rather than as a traceback anyone sees.
+  The poll and the report are now separate methods on independent absolute
+  deadlines, checked on a 0.5 s tick.
+- **P-13** — the signal model was `25/d^2` on every band, saturating inside
+  5 NM, so a 0.1 W 121.5 ELT and a 5 W 406 beacon differed only in cadence and
+  decode, never in range - and "406 is heard much further out", the fact the
+  fleet-replacement argument rests on, was not modelled at all. Replaced with a
+  free-space link budget in dB: published ERP (0.1 W / 5 W), path loss, then
+  terrain and airframe losses, mapped onto the 0..1 bar at the end. Calibrated
+  against two anchors - the heads' published ~1 uV/m sensitivity (about
+  -117 dBm at 121.5 for a half-wave dipole) and a 20 dB ground/installation
+  loss for a beacon lying in clutter with a bent antenna. That produces a
+  bearing on 121.5 to about 50 NM, on 406 to about 105 NM (2.1x), and a
+  decodable 406 frame to about 44 NM, which is where CAP aircrew figures sit.
+  Multipath is now driven by the terrain probe that already runs - strongest
+  where the path is blocked or grazing, absent on an open path, and wandering
+  with the aircraft's position - instead of a 40 deg step for 12 s in every 36
+  regardless of terrain or range, whose rhythm crews learned instead of its
+  cause.
+
+Two existing assertions changed with P-13 rather than being worked around: at
+5 NM a 0.1 W 121.5 ELT is now about half scale rather than pegged, so the two
+`signal > 0.9` checks in the airframe-shadowing section now compare against the
+unshadowed link-budget value instead of a magic number. Nothing else moved.
+
+Verified:
+
+- `python3 tests/test_engine.py` — **108/108 PASS** (was 73; 35 new checks
+  covering all six items, including the band-range separation P-13 is for).
+- `python3 tests/test_plugin_net.py` — 11/11 PASS.
+- `python3 tests/test_faceplate.py`, `tests/test_panel.py`,
+  `tests/test_lcd_text.py`, `PYTHONPATH=. python3 tests/test_tdfm.py`,
+  `tests/test_am.py` — all pass, unaffected.
+- `tests/test_console.py` and `tests/test_radio.py` were NOT run: this machine
+  has no pytest or FastAPI installed. Nothing in `services/` was touched.
+- Not flown in X-Plane. `true_psi` is read with a fallback to `psi` for a sim
+  that lacks it, and the probe-count change is bounded, but both want a bring-up
+  check before the next session.
+
+`tests/xp.py` gained `true_psi` (falling back to `psi` so existing tests are
+unaffected), which is the only file outside Claude's lane that changed.
+
+Also written: `docs/bugs/CODEX_PROMPTS.md` — eleven PR-sized prompts covering
+every open item in Codex's lanes (C6 L-8, C7 X-6/X-8, C8 F-6/F-8, C9 F-7/F-9/
+F-10/F-11/F-12/F-13/X-9, C10 L-1a/L-5/L-6/L-7/L-9/L-11/L-12, C11 L-10),
+ordered so that prompts touching the same file never run in parallel. Claims in
+the prompts were re-verified against the tree rather than copied from the
+tracker: `escapeHtml` does exist in `radio.js` and `item.channel` is the
+unescaped field, `/radio-legacy` is still routed from `main.py:856`, the Form
+110 export with its `padEnd` and unrevoked blob URL is still legacy-only, and
+`mission-radio.js` has no log at all. F-13's prompt points at the CAP channel
+card already implemented for I-11 (`instruments/cap-fm-tdfm-136b/logic.lua:42`
+onward) rather than asking Codex to coordinate names with Gemini — that half is
+already done.
+
+And `docs/bugs/GEMINI_PROMPTS.md` — six prompts covering the seven open items in
+Gemini's lanes (C12 O-7b/I-4/I-5/I-6, C13 I-7/I-8/I-9c), same shape, ordered so
+the two DF `logic.lua` files are never touched by two prompts at once and so the
+tooling chain runs `_shared` -> deploy -> registrar.
+
+Verifying those against the tree corrected three things in `tracker.json`
+itself, which are now fixed in the JSON:
+
+- **I-6** cited `mo-audio-panel-gma1347/logic.lua:389` for the GMA's
+  `avionics_power_on` subscription; it is at line 486. The substance stands -
+  grep confirms no other instrument references `avionics_power_on` or
+  `bus_volts` at all.
+- **I-7** said three WAVs are byte-identical across the two DF heads. It is
+  four: `elt_analog_clean`, `elt_analog_df`, `elt_noise`, `elt_406_burst`.
+  Also confirmed by checksum that `lcd.lua` is identical across *three*
+  instruments while `tests/test_faceplate.py:126-129` only checks the DF pair,
+  so the TDFM copy is exactly as unguarded as the item claims.
+- **I-8** cited `scripts/generate_assets.py`, which does not exist. The file is
+  `panels/cap-c182t-mo-station/generate_assets.py`.
+
+I-4, I-5, I-9c and the rest verified as written, including the exact
+`msg and msg.has_pos or s.cs_has_pos` idiom at the heart of I-4 - which is a
+bug class, not one line: the same pattern is used for sync, protocol, hex15 and
+country on the surrounding lines, and the prompt says so.
+
 ## 2026-09-09 — CAP-VSAR Website unification: Distributed SAREX, Virtual ICS & CalTopo integration
 
 **Status: completed, validated across all HTML documents with zero broken anchors/assets.**
@@ -1580,9 +2528,9 @@ Checked before proposing anything, so the plan is sized to reality:
 | Mumble voice server | Built, running (`capvsar-mumble`, `docker-compose.yml` on ms01) |
 | Exercise console (instructor / `/base` mission base / `/debrief`) | Built, running (`capvsar-exercise`) |
 | Flight planner (search patterns, `.fms` export, V-SAR push) | Built, running (`capvsar-flightplanner`), targets Cloud Run already |
-| MRO Base Radio web app (`/radio`) | Just landed in this log as "implemented, verified live" - not yet independently reviewed here. From its own description (REST + WebSocket, canned reports, simulated radio sound effects, a CAP Form 110 log) it reads as a **dispatch/logging console with simulated audio**, not a bridge onto the real Mumble voice net the aircrews actually talk on. Worth clarifying intent before counting it as "the radio operator's console" in the CONOPS sense - it may be a complementary tool alongside real voice rather than a replacement for it. |
+| MRO Base Radio web app (`/radio`) | **[D-1, 2026-09-10: this describes what is now `/radio-legacy`.** The console was rewritten; `/radio` is the Mumble-backed APX 4500 / EFJohnson 5300 face, and it carries real voice, which answers the doubt raised in this row. The CAP Form 110 log, however, is still legacy-only — tracked as F-9.] Just landed in this log as "implemented, verified live" - not yet independently reviewed here. From its own description (REST + WebSocket, canned reports, simulated radio sound effects, a CAP Form 110 log) it reads as a **dispatch/logging console with simulated audio**, not a bridge onto the real Mumble voice net the aircrews actually talk on. Worth clarifying intent before counting it as "the radio operator's console" in the CONOPS sense - it may be a complementary tool alongside real voice rather than a replacement for it. |
 | IC / AOBD role-differentiated consoles | Not built. Today there is one shared `/base` view (alert intake, status board, bearings, tasking), not separate per-role views. |
-| Browser-native voice bridge (pymumble backend, WebSocket audio to the browser) | Proposed only (see "Design proposal: Mission Base WebUI virtual radio" elsewhere in this log), not implemented. Distinct from `/radio` above - this is the one that would let a browser-only staff member actually hear and key the real mission net without a native Mumble client. |
+| Browser-native voice bridge (pymumble backend, WebSocket audio to the browser) | ~~Proposed only~~ **SUPERSEDED (D-1, 2026-09-10): this is implemented.** `services/exercise/app/radio.py` runs the pymumble bridge and `/radio` carries live voice. Read the rest of this row as of its own date. Distinct from `/radio` above - this is the one that would let a browser-only staff member actually hear and key the real mission net without a native Mumble client. |
 
 So "a base with a couple web apps for IC, AOBD, radio operator" is partly
 redeployment (the console and, pending review, `/radio`) and partly new
@@ -1711,7 +2659,9 @@ The canonical plugin source now lives at `xplane/PI_capvsar_df.py` and
 X-Plane. `tests/test_engine.py` defaults to the tracked source instead of the
 unversioned installed copy.
 
-Validation: all 55 engine checks pass, including opposite banks, top/belly
+Validation [**corrected, D-1 2026-09-10: the suite did not have 55 checks at
+this date — a later audit counted 50. It has 114 today.**]: all engine checks
+pass, including opposite banks, top/belly
 reversal, combined terrain and airframe masking, strong-signal penetration,
 instantaneous audio versus held bearing, disabled-effect compatibility, and
 406 burst state. All faceplate checks and all seven MO-panel tests also pass.
@@ -1831,6 +2781,13 @@ Manager's own log, and one that doesn't require the licensed application to
 be running to re-check after a future edit.
 
 ### 3. Becker / RT-600: a *different* `canvas_draw` symptom, mitigated but not proven fixed
+
+> **SUPERSEDED (D-1, 2026-09-10), twice over.** First, the claim below that the
+> current code still produces this error is not supported by
+> `~/Air Manager/log.txt` — re-checked, the log does not show it. Second, the
+> `pcall` this entry adds as the mitigation has since been **removed** by the
+> I-2 fix, on the grounds that swallowing the error hid real ones. Read this as
+> the reasoning of the day, not as a description of the code.
 
 The other entry's "Restored the required callback argument on each ...
 `canvas_draw(canvas_id, draw_callback)` call" fixed a real bug — calling
@@ -2107,6 +3064,11 @@ non-numeric `lat`/`lon`) now returns 400 instead of an unhandled `KeyError`.
 
 ### Found in the process: `/api/messages` rejects the push
 
+> **NO LONGER TRUE (D-1, 2026-09-10).** `/api/messages` does not return 400 for
+> this payload any more. That has its own consequence, tracked as L-9: the
+> planner's "no sortie running" branch is now dead code, so the UI reports a
+> successful broadcast whether or not anything was persisted.
+
 The verification POST above logged `scenario_created: true` but
 `message_sent: false`. The exercise console's own log shows why:
 `POST /api/messages HTTP/1.1 400 Bad Request` — the flight planner's
@@ -2228,6 +3190,12 @@ Pre-flight planning and in-flight search pattern execution are now unified:
      "Ops Normal" updates to Mission Base.
 
 ## 2026-09-07 — Design proposal: Mission Base WebUI virtual radio (pymumble) and MRO console
+
+> **SUPERSEDED (D-1, 2026-09-10).** This was a proposal and it was built. The
+> pymumble bridge is `services/exercise/app/radio.py`; the console it describes
+> shipped and was then rewritten — the faceplates are now APX 4500 and
+> EFJohnson 5300 on `/radio`, and the console described here is `/radio-legacy`.
+> Kept for the reasoning, not as a description of the system.
 
 **Status: proposed.** Architecture and UI specification for integrating a virtual
 Civil Air Patrol Mission Radio Operator (MRO) communications console and
