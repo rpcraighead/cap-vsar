@@ -200,7 +200,7 @@
   <div class="doc-subtitle">Flight Operations Handbook & Multi-Station Training Manual</div>
   <p style="font-size: 12pt; color: #475569; max-width: 500px; margin: 0 auto;">
     Standardized procedures for Civil Air Patrol electronic search and rescue training,
-    featuring the Cessna 182T NAV III Mission Observer station, N499CP flight planning,
+    featuring the Cessna 182T NAV III Mission Observer station, flight planning,
     and distributed exercise simulation.
   </p>
   
@@ -231,7 +231,7 @@ a true crew-resource-management (CRM) environment partitioned across distinct fu
 <ul>
   <li><b>Flight Deck / Simulator (X-Plane 12):</b> Runs aircraft aerodynamics and the custom <code>PI_capvsar_df.py</code> Python plugin, probing real terrain for line-of-sight propagation, cone of confusion, and 406 MHz burst cadences.</li>
   <li><b>Mission Observer (MO) Station:</b> Runs on a dedicated secondary monitor or laptop via Air Manager / Air Player, presenting the G1000 MFD, GMA 1347 Audio Panel, Direction Finder head, and Technisonic TDFM-136B radio.</li>
-  <li><b>Mission Planning Module (N499CP Flight Planner):</b> Runs as a containerized service on <code>ms01:8090</code>, generating geodetic search patterns and pushing flight plans to the simulator and exercise server.</li>
+  <li><b>Mission Planning Module (Flight Planner):</b> Runs as a containerized service on <code>ms01:8090</code>, generating geodetic search patterns and pushing flight plans to the simulator and exercise server.</li>
   <li><b>Exercise Control & Mission Base (Web Console):</b> Hosted on <code>ms01:8700</code>, providing real-time radar positions, scenario fault injection, message logging, and debrief track analysis.</li>
 </ul>
 
@@ -244,14 +244,14 @@ a true crew-resource-management (CRM) environment partitioned across distinct fu
 <div class="page-break"></div>
 <h1>2. Flight Planning & Search Pattern Module</h1>
 <p>
-Pre-flight mission planning and in-flight search pattern execution are powered by the <b>N499CP Flight Planner</b>
+Pre-flight mission planning and in-flight search pattern execution are powered by the <b>Flight Planner</b>
 (deployed on <code>ms01:8090</code>). The planner combines FAA sectional raster charts with real-time performance
 polar calculations for the Cessna 182T / 172S NAV III.
 </p>
 
 <div class="figure-container">
   <img class="figure-img" src="/home/ron/Projects/cap-vsar/docs/figures/manual/fig_flightplanner_main.png" style="width:6.2in;height:3.88in;" width="595" height="372" alt="Flight Planner Moving Map">
-  <div class="figure-caption">Figure 1: N499CP Flight Planner Moving Map with FAA Sectional Overlay & Nav-Log Drawer</div>
+  <div class="figure-caption">Figure 1: Flight Planner Moving Map with FAA Sectional Overlay & Nav-Log Drawer</div>
 </div>
 
 <h2>2.1 CAP Search Pattern Generators</h2>
@@ -409,7 +409,7 @@ To build realistic electronic search skills, instructors can toggle discrete rad
 </p>
 <ul>
   <li><b>Radio Horizon (Line-of-Sight):</b> Computes spherical earth curvature and terrain shielding. The DF receiver remains silent until the crew climbs above the visual radio horizon.</li>
-  <li><b>406 Burst Cadence & Timehold:</b> Emulates true 406 MHz beacon behavior &mdash; an instantaneous 0.5-second burst every 50 seconds. The DF head holds the decoded bearing during the 50-second silence.</li>
+  <li><b>406 Burst Cadence & Timehold:</b> Emulates 406 MHz beacon behavior &mdash; a 440 ms burst every 50 seconds. The DF head holds the decoded bearing during the silence.</li>
   <li><b>Cone of Confusion:</b> When the aircraft flies directly over the beacon, the relative bearing needle spins and the signal drops momentarily, confirming station passage.</li>
   <li><b>Multipath Reflections:</b> Injects mountain-ridge reflections that deflect the apparent bearing by up to 40&deg;, testing the crew's ability to cross-check bearings.</li>
 </ul>
@@ -457,47 +457,40 @@ The debrief engine replays the recorded flight second-by-second against the unma
 <p>
 De-coupled from the situational radar map, the <b>Base Radio Console</b> (<code>http://ms01:8700/radio</code>) provides
 a standalone, touch- and mouse-operable communications station for Mission Radio Operators using tablets (e.g. iPad)
-or laptops. The application emulates the two primary ground radio systems deployed across Civil Air Patrol base stations:
+or laptops. The current console provides two selectable VHF-FM control-head presentations over one authenticated Mumble mission-net session:
 </p>
 
-<h3>Motorola APX 6500 (VHF-FM Tactical & Land Mobile Net)</h3>
+<h3>Motorola APX 4500 O2 Control Head</h3>
 <p>
-The standard CAP tactical mobile and base transceiver, providing digital P25 and analog FM communications across
-136&ndash;174 MHz. Used by the MRO to manage the primary mission net, coordinate ground search teams, and
-maintain air-to-ground tactical contact with the Mission Observer on the airborne Technisonic TDFM-136B radio:
+The APX-style faceplate provides touch targets, keyboard PTT, mission-net selection,
+headset volume and visible connection, receive and transmit state. Net names come from
+the exercise radio service rather than a hard-coded frequency card.
 </p>
 <ul>
-  <li><b>Zone 1 (Tactical Net):</b> <code>TAC 1</code> (148.150 MHz), <code>TAC 2</code> (148.125 MHz), <code>CC 1</code> (150.225 MHz P25 NAC $293), <code>CC 2</code> (149.275 MHz P25), <code>AIR 1</code> (150.5375 MHz), <code>AIR 2</code>, <code>SAR 1</code>, and <code>GUARD</code>.</li>
-  <li><b>Physical Controls & Display:</b> High-contrast vacuum-fluorescent green-cyan OLED display with RSSI signal meter; rotary VOL/PWR and CHANNEL knobs with touch steppers; illuminated softkeys (<code>HOME</code>, <code>ZONE ▲/▼</code>, <code>SCAN</code>, <code>MON</code>, <code>DIM</code>); and tri-color TX/RX/SCAN LEDs.</li>
-  <li><b>Acoustic Simulation:</b> Authentic Motorola 3-tone P25 talkgroup permit chirp (941/1336/1209 Hz) upon keying PTT, followed by digital squelch tail on release.</li>
+  <li><b>Voice:</b> Live browser audio uses the shared Mumble bridge and one client per browser station.</li>
+  <li><b>Controls:</b> Momentary or latched PTT, net stepping, home-net selection and headset volume.</li>
+  <li><b>Logging:</b> Transmit and receive events feed the editable CAP Form 110 log with UTC timestamps.</li>
 </ul>
 
 <div class="figure-container">
-  <img class="figure-img" src="/home/ron/Projects/cap-vsar/docs/figures/manual/fig_radio_apx.png" style="width:6.2in;height:3.88in;" width="595" height="372" alt="Motorola APX 6500 Base Radio Console">
-  <div class="figure-caption">Figure 7: Motorola APX 6500 VHF-FM Tactical Base Radio & MRO Dispatch Console</div>
+  <img class="figure-img" src="/home/ron/Projects/cap-vsar/docs/figures/manual/fig_radio_console.png" style="width:6.2in;height:3.88in;" width="595" height="372" alt="Current Mission Base Radio Console">
+  <div class="figure-caption">Figure 7: Current Mission Base Radio Console with the APX 4500 O2 presentation selected</div>
 </div>
 
-<h3>Icom IC-A120 (VHF-AM Aeronautical Transceiver)</h3>
+<h3>EFJohnson 5300 Control Head</h3>
 <p>
-The standard desktop and vehicle aviation transceiver deployed at CAP base stations, staging hangars, and flight line
-dispatch to communicate directly with search aircraft on aeronautical VHF-AM frequencies (118.000&ndash;136.975 MHz):
+The EFJohnson presentation uses the same live voice connection, selected mission net and Form 110 log. Switching
+faceplates does not create a second Mumble client or interrupt the active session.
 </p>
 <ul>
-  <li><b>Channel Presets:</b> Pre-programmed CAP aeronautical channels: <code>CH 01</code> (123.100 MHz &mdash; SAR Primary), <code>CH 02</code> (122.900 MHz &mdash; SAR Secondary / Multicom), <code>CH 03</code> (121.500 MHz &mdash; Emergency Guard / ELT Monitor), <code>CH 04</code> (122.775 MHz &mdash; Air-to-Air), <code>CH 05</code> (123.050 MHz &mdash; Unicom), and <code>CH 06</code> (126.200 MHz &mdash; Military SAR).</li>
-  <li><b>VFO Tuning & Display:</b> Ice-blue backlit LCD with large 7-segment frequency digits, memory alias, audio bar meter, and rotary tuning dial with 25 kHz / 1 MHz push-toggle stepping.</li>
-  <li><b>Acoustic Simulation:</b> Authentic VHF-AM mechanical relay click, 1000 Hz sidetone hiss, and squelch noise burst (*shhh-klick*).</li>
+  <li><b>Shared session:</b> APX and EFJohnson presentations are two views of the same operator connection.</li>
+  <li><b>Known gaps:</b> Airband monitoring, operational sidetone and full hardware-key behavior remain open tracker items.</li>
 </ul>
 
-<div class="figure-container">
-  <img class="figure-img" src="/home/ron/Projects/cap-vsar/docs/figures/manual/fig_radio_icom.png" style="width:6.2in;height:3.88in;" width="595" height="372" alt="Icom IC-A120 Aviation Base Radio Console">
-  <div class="figure-caption">Figure 8: Icom IC-A120 VHF-AM Aeronautical Air-to-Ground Base Station Console</div>
-</div>
-
-<h3>Dual Station Equipment Rack & CAP Form 110 Comms Log</h3>
+<h3>CAP Form 110 Communications Log</h3>
 <p>
-The console supports a <b>Dual Station Rack View</b> (<code>/radio?mode=dual</code>) running both radios concurrently for dual watch.
-The dispatch section includes a live <b>CAP Form 110 Communications Log</b> that automatically records all transmissions
-with UTC timestamps and network tags, one-touch tactical canned reports, and a plain-text log export tool.
+The radio page includes a live <b>CAP Form 110 Communications Log</b>. It records keyed and received events with UTC
+timestamps and network identity; the MRO enters the traffic text and can export the completed log as plain text.
 </p>
 
 <!-- SECTION 6 -->
@@ -506,7 +499,7 @@ with UTC timestamps and network tags, one-touch tactical canned reports, and a p
 
 <p>
 To fulfill the operational need for an authentic, high-performance search platform in X-Plane 12, a dedicated
-<b>Cessna 182T Skylane NAV III</b> (tail number <code>N499CP</code>) has been engineered as a standalone airframe package.
+<b>Cessna 182T Skylane NAV III</b> (tail number <code>CAP 487</code>) has been engineered as a standalone airframe package.
 Adapted from Laminar Research's high-fidelity Cessna 172SP G1000 base model via <code>scripts/build_c182t_package.py</code>,
 the package incorporates complete Lycoming IO-540 flight dynamics, a 3-blade constant-speed propeller, and automatic
 Garmin G1000 Manifold Pressure EIS instrumentation.
@@ -514,7 +507,7 @@ Garmin G1000 Manifold Pressure EIS instrumentation.
 
 <div class="figure-container">
   <img class="figure-img" src="/home/ron/Projects/cap-vsar/docs/figures/manual/fig_c182t_aircraft.png" style="width:6.2in;height:3.49in;" width="595" height="335" alt="Cessna 182T NAV III CAP Aircraft Selection">
-  <div class="figure-caption">Figure 9: Civil Air Patrol Cessna 182T NAV III (N499CP) Aircraft Package & Selection Banner</div>
+  <div class="figure-caption">Figure 8: Civil Air Patrol Cessna 182T NAV III (CAP 487) Aircraft Package & Selection Banner</div>
 </div>
 
 <h3>Powerplant & Propeller Integration</h3>
@@ -740,27 +733,27 @@ The full narrative, including the current system limitations that apply to a thr
   </tr>
   <tr>
     <td>2. Radio Mode Selection</td>
-    <td>Select <b>Motorola APX 6500</b> (FM Tactical), <b>Icom IC-A120</b> (AM Aviation), or <b>Dual Station Rack</b></td>
+    <td>Select the <b>Motorola APX 4500 O2</b> or <b>EFJohnson 5300</b> presentation</td>
   </tr>
   <tr>
     <td>3. Power & Volume Check</td>
-    <td>Turn VOL knob clockwise; verify display illuminates and audio sidetone is active</td>
+    <td>Select microphone and listening devices, join the mission net, and run the headset test</td>
   </tr>
   <tr>
-    <td>4. APX 6500 Tactical Net</td>
-    <td>Verify Zone 1, select <code>TAC 1</code> (148.150 MHz) or assigned mission net</td>
+    <td>4. Mission Net</td>
+    <td>Select the assigned net from the server-provided list and verify the home-net control</td>
   </tr>
   <tr>
-    <td>5. IC-A120 Airband Net</td>
-    <td>Verify <code>CH 01</code> (123.100 MHz SAR PRI) or assigned air-to-ground frequency</td>
+    <td>5. Connection State</td>
+    <td>Verify the page shows connected and identifies the selected mission net</td>
   </tr>
   <tr>
     <td>6. Squelch Adjustment</td>
-    <td>Adjust SQL knob until background receiver hiss cuts; verify SQL flag clears</td>
+    <td>Set headset volume and confirm received mission-net audio is intelligible</td>
   </tr>
   <tr>
     <td>7. Comms Check with Sortie</td>
-    <td>Click <b>Radio Check</b> or key PTT (Spacebar): <i>"CAP499, Mission Base: Radio check, how do you copy?"</i></td>
+    <td>Hold PTT (Spacebar): <i>"CAP 487, Mission Base: radio check, how do you copy?"</i></td>
   </tr>
   <tr>
     <td>8. CAP Form 110 Logging</td>

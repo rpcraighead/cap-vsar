@@ -113,7 +113,7 @@
               </li>
               <li class="feature-list-item">
                 <span class="feature-check-icon">✓</span>
-                <span><b>MRO Console:</b> Tablet running APX 6500 & IC-A120 virtual radio console.</span>
+                <span><b>MRO Console:</b> Tablet running the APX 4500 / EFJohnson 5300 virtual radio console.</span>
               </li>
               <li class="feature-list-item">
                 <span class="feature-check-icon">✓</span>
@@ -127,14 +127,14 @@
         <div class="card">
           <div class="card-body">
             <div class="card-tag">Topology C &bull; Wing-Wide Exercise</div>
-            <h3 class="card-title">Distributed Cloud WAN</h3>
+            <h3 class="card-title">Distributed WAN</h3>
             <p class="card-desc">
-              Connect multiple aircraft and geographically dispersed squadrons into unified wing-wide search operations over secure internet connections.
+              Connect multiple aircraft and geographically dispersed squadrons into unified wing-wide search operations over secure connections. Remote stations join today over a WireGuard tunnel to the exercise host (<code>scripts/wg-peer.sh</code> hands a participant their config and QR code); hosting the exercise on a cloud VPS instead of a squadron machine is planned, not built &mdash; see <code>docs/LAB_HOSTED_DEPLOYMENT_PLAN.md</code>.
             </p>
             <ul class="feature-list" style="margin-top: 14px;">
               <li class="feature-list-item">
                 <span class="feature-check-icon">✓</span>
-                <span><b>Cloud Server:</b> Central exercise host on cloud VPS (AWS/Azure) or Wing HQ.</span>
+                <span><b>Remote Stations:</b> WireGuard peers into the exercise host; the shipped <code>docker-compose.yml</code> is a single-host lab stack and reaches nothing from the internet until the ports in <code>infra/ROUTER.md</code> are forwarded.</span>
               </li>
               <li class="feature-list-item">
                 <span class="feature-check-icon">✓</span>
@@ -250,7 +250,7 @@ cd /srv/capvsar
 # Build dedicated Cessna 182T NAV III standalone package
 python3 scripts/build_c182t_package.py \
   --xplane-dir "/opt/x-plane-12" \
-  --tail-number "N499CP" \
+  --tail-number "CAP 487" \
   --overwrite</code></pre>
           </div>
         </div>
@@ -293,10 +293,10 @@ python3 scripts/register_mo_panel.py</code></pre>
           </div>
           <div class="tech-body">
             <pre><code># Launch background container suite
-docker compose -f docker-compose.prod.yml up -d
+docker compose up -d
 
 # Verify container health status
-docker compose -f docker-compose.prod.yml ps</code></pre>
+docker compose ps</code></pre>
           </div>
         </div>
       </div>
@@ -379,7 +379,7 @@ python3 scripts/build_station_kit.py \
             <tr>
               <td><code>8090</code></td>
               <td>TCP</td>
-              <td>N499CP Flight Planner</td>
+              <td>Flight Planner</td>
               <td>Web mapping frontend serving FAA VFR sectional tiles and FMS flight plans.</td>
             </tr>
             <tr>
@@ -389,16 +389,10 @@ python3 scripts/build_station_kit.py \
               <td>Low-latency tactical voice communication between aircrew and base.</td>
             </tr>
             <tr>
-              <td><code>49000</code></td>
-              <td>UDP</td>
-              <td>X-Plane Telemetry In</td>
-              <td>Receives high-rate flight dynamics, positioning, and engine datarefs from X-Plane.</td>
-            </tr>
-            <tr>
-              <td><code>49001</code></td>
-              <td>UDP</td>
-              <td>X-Plane Dataref Out</td>
-              <td>Transmits DF bearing cuts, beacon activations, and RF squelch states back to aircraft.</td>
+              <td><code>8700</code></td>
+              <td>TCP</td>
+              <td>Exercise console (station side)</td>
+              <td>Each X-Plane station's plugin posts position to <code>/api/positions</code> and reads beacon truth from <code>/api/plugin/scenario</code> over HTTP. This is the only port a simulator station needs outbound; X-Plane's own UDP ports are not used by CAP V-SAR.</td>
             </tr>
           </tbody>
         </table>
@@ -447,7 +441,7 @@ python3 scripts/build_station_kit.py \
             <li><a href="operations.html#exercise-setup" class="footer-link">Fleet & Exercise Setup</a></li>
             <li><a href="operations.html#base-radio" class="footer-link">MRO Base Radio</a></li>
             <li><a href="operations.html#repeaters" class="footer-link">CA Wing Repeaters</a></li>
-            <li><a href="operations.html#flight-planner" class="footer-link">N499CP Flight Planner</a></li>
+            <li><a href="operations.html#flight-planner" class="footer-link">Flight Planner</a></li>
             <li><a href="operations.html#form-110" class="footer-link">CAP Form 110 Comms</a></li>
           </ul>
         </div>

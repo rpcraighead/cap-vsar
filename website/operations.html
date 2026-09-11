@@ -52,7 +52,7 @@
         Mission Base, Ground Radio & SAR Planning
       </h1>
       <p class="hero-description" style="max-width: 820px; margin-top: 10px;">
-        A comprehensive search-and-rescue mission does not begin or end in the cockpit. CAP V-SAR delivers an integrated ground command ecosystem—from the <b>Mission Radio Operator (MRO)</b> touch-friendly console to the <b>N499CP Automated SAR Flight Planner</b> and <b>Post-Sortie Telemetry Debrief</b>.
+        A comprehensive search-and-rescue mission does not begin or end in the cockpit. CAP V-SAR delivers an integrated ground command ecosystem—from the <b>Mission Radio Operator (MRO)</b> touch-friendly console to the <b>Automated SAR Flight Planner</b> and <b>Post-Sortie Telemetry Debrief</b>.
       </p>
     </div>
   </section>
@@ -61,23 +61,23 @@
   <section class="section" id="base-radio">
     <div class="container">
       <div class="spotlight-row">
-        <div class="spotlight-img-frame" data-lightbox="images/fig_radio_dual.png" data-caption="CAP V-SAR Dual Base Radio Console - Motorola APX 4500 (VHF-FM) and Icom IC-A120 (VHF-AM) operating simultaneously">
-          <img src="images/fig_radio_dual.png" alt="Dual Base Radio Console">
+        <div class="spotlight-img-frame" data-lightbox="images/fig_radio_console.png" data-caption="Current mission-base radio console with the Motorola APX 4500 O2 control head selected">
+          <img src="images/fig_radio_console.png" alt="Current mission-base radio console">
         </div>
         <div class="spotlight-content">
           <span class="section-kicker">Radio Communications Hub</span>
           <h2 class="spotlight-title">MRO Base Radio Console</h2>
           <p class="spotlight-desc">
-            Operating at <code>http://ms01:8700/radio</code>, the Virtual Base Radio console provides Mission Radio Operators with a full-fidelity hardware emulation designed specifically for laptops, desktops, and touch-screen tablets in the field command trailer.
+            Operating at <code>http://ms01:8700/radio</code>, the Virtual Base Radio console provides Mission Radio Operators with a touch-friendly mission-net and Form 110 workflow for laptops, desktops, and tablets.
           </p>
           <ul class="feature-list">
             <li class="feature-list-item">
               <span class="feature-check-icon">✓</span>
-              <span><b>Dual Radio Emulation:</b> Run both the Motorola APX 4500 and Icom IC-A120 concurrently in a side-by-side or stacked rack configuration (<code>/radio?mode=dual</code>).</span>
+              <span><b>Selectable Control Heads:</b> Switch between Motorola APX 4500 O2 and EFJohnson 5300 presentations while remaining on the same configured VHF-FM mission net.</span>
             </li>
             <li class="feature-list-item">
               <span class="feature-check-icon">✓</span>
-              <span><b>Web Audio Acoustic Engine:</b> Authentic 3-tone P25 digital talkgroup permit chirp, aviation AM side-tone, mechanical relay clicks, and squelch tail gate.</span>
+              <span><b>Live Mumble Voice:</b> Join the mission net from the browser, select the microphone and listening device, and use momentary or latched PTT.</span>
             </li>
             <li class="feature-list-item">
               <span class="feature-check-icon">✓</span>
@@ -95,55 +95,49 @@
       <div class="card-grid" style="grid-template-columns: repeat(2, 1fr); margin-top: 40px;">
         <!-- APX 4500 Card -->
         <div class="card">
-          <div class="card-media" data-lightbox="images/fig_radio_apx.png" data-caption="Motorola APX 4500 VHF-FM Base Radio - P25 Tactical Net Console">
-            <img src="images/fig_radio_apx.png" alt="Motorola APX 4500 Radio">
-          </div>
           <div class="card-body">
             <div class="card-tag">VHF-FM Tactical Communications</div>
             <h3 class="card-title">Motorola APX 4500 VHF-FM Console</h3>
             <p class="card-desc">
-              The primary land mobile radio for CAP incident command and wing-wide tactical communications. Emulates authentic digital and analog channel operations.
+              An O2-style control-head presentation for the browser mission-radio station. The selected mission net and live voice state come from the exercise radio service.
             </p>
             <ul class="feature-list" style="margin-top: 14px;">
               <li class="feature-list-item">
                 <span class="feature-check-icon">✓</span>
-                <span><b>Zone/Channel Management:</b> Zone 1 (Command/Air-to-Ground), Zone 2 (Tactical Primary), and Zone 3 (Inter-agency interoperability).</span>
+                <span><b>Mission-Net Selection:</b> Step through the net list supplied by the exercise server and return to the configured home net.</span>
               </li>
               <li class="feature-list-item">
                 <span class="feature-check-icon">✓</span>
-                <span><b>P25 Digital Audio:</b> Simulated digital audio packetization with distinctive 3-tone permit beep upon keying up.</span>
+                <span><b>Live PTT State:</b> The display reports connection, receive and transmit state while the browser voice bridge carries audio.</span>
               </li>
               <li class="feature-list-item">
                 <span class="feature-check-icon">✓</span>
-                <span><b>Volume & Squelch Knobs:</b> Interactive continuous rotary encoders with visual tick markers and decibel readouts.</span>
+                <span><b>Operator Controls:</b> Touch targets, keyboard support, headset volume and home/net controls are available from the same page.</span>
               </li>
             </ul>
           </div>
         </div>
 
-        <!-- Icom IC-A120 Card -->
+        <!-- EFJohnson 5300 Card -->
         <div class="card">
-          <div class="card-media" data-lightbox="images/fig_radio_icom.png" data-caption="Icom IC-A120 VHF-AM Aviation Base Radio - Airband Comms Console">
-            <img src="images/fig_radio_icom.png" alt="Icom IC-A120 Radio">
-          </div>
           <div class="card-body">
-            <div class="card-tag">VHF-AM Aviation Communications</div>
-            <h3 class="card-title">Icom IC-A120 Airband Transceiver</h3>
+            <div class="card-tag">VHF-FM Mission Communications</div>
+            <h3 class="card-title">EFJohnson 5300 Console</h3>
             <p class="card-desc">
-              Dedicated VHF-AM transceiver for monitoring aircraft airborne frequencies, flight release confirmations, and emergency guard channels.
+              An alternate mobile/base control-head presentation using the same authenticated Mumble mission-net session and Form 110 workflow.
             </p>
             <ul class="feature-list" style="margin-top: 14px;">
               <li class="feature-list-item">
                 <span class="feature-check-icon">✓</span>
-                <span><b>Aviation Frequencies:</b> 118.000 to 136.975 MHz with 8.33 kHz / 25 kHz channel spacing simulation.</span>
+                <span><b>Shared Session:</b> Switching the faceplate does not create a second Mumble client or drop the active mission-net connection.</span>
               </li>
               <li class="feature-list-item">
                 <span class="feature-check-icon">✓</span>
-                <span><b>Preset Emergency Channels:</b> Instant 1-touch jump to 121.500 Guard, 122.900 SAR Secondary, and 123.100 SAR Primary.</span>
+                <span><b>Form 110:</b> Transmit and receive events feed the editable communications log with UTC timestamps and net identity.</span>
               </li>
               <li class="feature-list-item">
-                <span class="feature-check-icon">✓</span>
-                <span><b>Backlit Segment LCD:</b> Authentic high-contrast amber dot-matrix display with scanning indicators.</span>
+                <span class="feature-check-icon">!</span>
+                <span><b>Current Limits:</b> Airband monitoring, operational sidetone and full hardware-key behavior remain tracked work.</span>
               </li>
             </ul>
           </div>
@@ -175,12 +169,12 @@
   <section class="section" id="flight-planner" style="background-color: var(--bg-surface-muted);">
     <div class="container">
       <div class="spotlight-row spotlight-reverse">
-        <div class="spotlight-img-frame" data-lightbox="images/fig_flightplanner_sar.png" data-caption="N499CP Flight Planner - Automatic Geodetic Search Pattern Generator with FAA Sectional Chart Underlay">
+        <div class="spotlight-img-frame" data-lightbox="images/fig_flightplanner_sar.png" data-caption="Flight Planner - Automatic Geodetic Search Pattern Generator with FAA Sectional Chart Underlay">
           <img src="images/fig_flightplanner_sar.png" alt="SAR Flight Planner Search Patterns">
         </div>
         <div class="spotlight-content">
           <span class="section-kicker">Pre-Sortie Navigation</span>
-          <h2 class="spotlight-title">N499CP Automated SAR Flight Planner</h2>
+          <h2 class="spotlight-title">Automated SAR Flight Planner</h2>
           <p class="spotlight-desc">
             Hosted at <code>http://ms01:8090</code>, the dedicated web-based flight planner combines live georeferenced FAA VFR sectional charts with mathematical SAR pattern generation, eliminating manual plotting errors.
           </p>
@@ -271,7 +265,7 @@
   <section class="section" id="mission-base">
     <div class="container">
       <div class="spotlight-row">
-        <div class="spotlight-img-frame" data-lightbox="images/fig_mission_base.png" data-caption="Mission Base Command Map (ms01:8700/base) - Live telemetry, bearing cuts from N499CP, and target truth triangulation">
+        <div class="spotlight-img-frame" data-lightbox="images/fig_mission_base.png" data-caption="Mission Base Command Map (ms01:8700/base) - Live telemetry, bearing cuts from CAP 487, and target truth triangulation">
           <img src="images/fig_mission_base.png" alt="Mission Base Situational Map">
         </div>
         <div class="spotlight-content">
@@ -283,7 +277,7 @@
           <ul class="feature-list">
             <li class="feature-list-item">
               <span class="feature-check-icon">✓</span>
-              <span><b>Live Aircraft Position Vector:</b> Continuous display of N499CP's true position, altitude MSL/AGL, ground speed, and heading vector.</span>
+              <span><b>Live Aircraft Position Vector:</b> Continuous display of CAP 487's true position, altitude MSL/AGL, ground speed, and heading vector.</span>
             </li>
             <li class="feature-list-item">
               <span class="feature-check-icon">✓</span>
@@ -357,7 +351,7 @@
             <h3 class="card-title">1–4 Aircraft Stepper & Aircrew Allocations</h3>
           </div>
           <p style="color: var(--cap-gray-600); margin-bottom: 16px; font-size: 0.95rem;">
-            Instructors can select from 1 to 4 participating search aircraft with a single click. Tail numbers (<code>N499CP</code>, <code>N992CP</code>, <code>N104CP</code>, <code>N722CP</code>), direction finder instruments (Becker SAR-DF 517 or RHOTHETA RT-600), and aircrew positions are provisioned automatically.
+            Instructors can select from 1 to 4 participating search aircraft with a single click. Tail numbers (<code>CAP 487</code>, <code>N992CP</code>, <code>N104CP</code>, <code>N722CP</code>), direction finder instruments (Becker SAR-DF 517 or RHOTHETA RT-600), and aircrew positions are provisioned automatically.
           </p>
           <div style="background: var(--cap-gray-50); border: 1px solid var(--cap-gray-200); border-radius: var(--radius-md); padding: 16px; margin-bottom: 16px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
@@ -376,7 +370,7 @@
           <ul class="feature-list">
             <li class="feature-list-item">
               <span class="feature-check-icon">✓</span>
-              <span><b>Independent X-Plane Instances:</b> Each tail connects to its own simulator station via UDP telemetry port mapping (49000, 49001, 49002, 49003).</span>
+              <span><b>Independent X-Plane Instances:</b> Each tail runs its own simulator station. The station's plugin reports position to the exercise console over HTTP and reads beacon truth back the same way &mdash; there is no UDP telemetry mapping to configure.</span>
             </li>
             <li class="feature-list-item">
               <span class="feature-check-icon">✓</span>
@@ -644,7 +638,7 @@
             <li><a href="operations.html#exercise-setup" class="footer-link">Fleet & Exercise Setup</a></li>
             <li><a href="operations.html#base-radio" class="footer-link">MRO Base Radio</a></li>
             <li><a href="operations.html#repeaters" class="footer-link">CA Wing Repeaters</a></li>
-            <li><a href="operations.html#flight-planner" class="footer-link">N499CP Flight Planner</a></li>
+            <li><a href="operations.html#flight-planner" class="footer-link">Flight Planner</a></li>
             <li><a href="operations.html#form-110" class="footer-link">CAP Form 110 Comms</a></li>
           </ul>
         </div>
@@ -671,4 +665,3 @@
   <script src="js/main.js"></script>
 </body>
 </html>
-

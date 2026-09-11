@@ -20,7 +20,7 @@ learned at home instead of introducing them.
   (SET) signing off aircrew tasks.
 - **Virtual sessions:** three evenings, two weeks out, one week out, and two
   days out. Everyone joins from home over WireGuard. Aircrews fly the
-  Cessna 182T NAV III (N499CP) in X-Plane 12 with the Mission Observer (MO)
+  Cessna 182T NAV III (CAP 487) in X-Plane 12 with the Mission Observer (MO)
   station in Air Manager; base staff use the exercise console and the base
   radio console on tablets; everyone talks on the Mumble mission net.
 

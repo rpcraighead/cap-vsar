@@ -252,7 +252,7 @@
             <tr>
               <td><b>Burst Transmission Duration</b></td>
               <td>520 milliseconds (long format)</td>
-              <td>Triggers instantaneous 520 ms DF strobe flag in datarefs and triggers audio pulse.</td>
+              <td>Triggers the 440&nbsp;ms DF strobe flag in the datarefs and the matching audio pulse.</td>
             </tr>
             <tr>
               <td><b>Modulation & Bit Rate</b></td>
@@ -325,7 +325,7 @@
               <td><code>cap/df/burst_active</code></td>
               <td>Int (Boolean: 0 or 1)</td>
               <td>Instantaneous</td>
-              <td>Set to 1 during the active 520 ms 406 MHz COSPAS-SARSAT RF burst; 0 during quiet period.</td>
+              <td>Set to 1 during the active 440&nbsp;ms 406 MHz COSPAS-SARSAT RF burst; 0 during the quiet period.</td>
             </tr>
             <tr>
               <td><code>cap/df/cone_of_confusion</code></td>
@@ -421,7 +421,7 @@ xpl_dataref_subscribe("cap/df/bearing_rel_deg", "FLOAT",
         <span class="section-kicker">Deployment Infrastructure</span>
         <h2 class="spotlight-title">Microservice Container Architecture</h2>
         <p class="spotlight-desc">
-          CAP V-SAR backend components are packaged as isolated, lightweight Docker containers orchestrated via <code>docker-compose.prod.yml</code>.
+          CAP V-SAR backend components are packaged as isolated, lightweight Docker containers orchestrated via <code>docker-compose.yml</code>.
         </p>
       </div>
 
@@ -451,7 +451,7 @@ xpl_dataref_subscribe("cap/df/bearing_rel_deg", "FLOAT",
             <div class="card-tag">Port 64738 &bull; Murmur UDP</div>
             <h4 class="card-title">mumble-server</h4>
             <p class="card-desc">
-              Sub-20ms latency tactical voice network connecting pilot headsets, observer stations, and ground radio operators with channel separation and radio PTT effects.
+              Tactical voice network connecting pilot headsets, observer stations, and ground radio operators with channel separation and radio PTT effects. Mumble is configured for low-latency Opus on the LAN; end-to-end figures for a given station depend on its link and have not been measured here.
             </p>
           </div>
         </div>
@@ -561,7 +561,7 @@ xpl_dataref_subscribe("cap/df/bearing_rel_deg", "FLOAT",
             <li><a href="operations.html#exercise-setup" class="footer-link">Fleet & Exercise Setup</a></li>
             <li><a href="operations.html#base-radio" class="footer-link">MRO Base Radio</a></li>
             <li><a href="operations.html#repeaters" class="footer-link">CA Wing Repeaters</a></li>
-            <li><a href="operations.html#flight-planner" class="footer-link">N499CP Flight Planner</a></li>
+            <li><a href="operations.html#flight-planner" class="footer-link">Flight Planner</a></li>
             <li><a href="operations.html#form-110" class="footer-link">CAP Form 110 Comms</a></li>
           </ul>
         </div>
