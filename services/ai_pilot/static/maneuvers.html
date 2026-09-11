@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>CAP 487 · Airborne maneuver deck</title>
+<style>body{font:18px system-ui;max-width:850px;margin:3rem auto;padding:1rem;background:#10202c;color:#edf5fa}button,input{font:inherit;padding:.7rem;margin:.3rem}input{width:90%}pre{white-space:pre-wrap;background:#172f40;padding:1rem}#takeover{background:#ffca70}small{display:block;color:#bacbd7}</style>
+<h1>CAP 487 · Airborne maneuver deck</h1>
+<p>Position the aircraft in a cleared exercise block before acquiring control. Manage power manually. Stop other AI pilot controllers before using this deck.</p>
+<small>Prototype: heading and indicated-altitude selection. No terrain lookahead, ATC, automatic takeoff, landing or speed control. Confirm the aircraft altimeter setting. Telemetry or envelope faults request a simulator pause.</small>
+<button id="acquire">Acquire control</button><button id="takeover">I have control · disconnect AP</button>
+<form id="command"><label for="text">Maneuver</label><input id="text" placeholder="heading 090 magnetic" autocomplete="off"><button>Execute</button></form>
+<small>Also: maintain 4500 feet indicated. One explicit command at a time. Directional turns are not supported yet.</small>
+<p id="reply" role="status"></p><pre id="state"></pre>
+<script>
+let lease=null, sequence=0, busy=false;
+const reply=document.querySelector('#reply'), state=document.querySelector('#state');
+async function post(path,body){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw Error(d.error);return d;}
+document.querySelector('#acquire').onclick=async()=>{try{const d=await post('/api/acquire',{});lease=d.lease;sequence=0;reply.textContent='Control acquired. Ready for maneuver.';}catch(e){reply.textContent=e.message;}};
+document.querySelector('#takeover').onclick=async()=>{lease=null;try{const d=await post('/api/takeover',{});reply.textContent=d.readback;}catch(e){reply.textContent='Disconnect request failed. Use cockpit controls. '+e.message;}};
+document.querySelector('#command').onsubmit=async e=>{e.preventDefault();if(busy)return;if(!lease){reply.textContent='Acquire control first.';return;}busy=true;const submittedLease=lease;try{const d=await post('/api/maneuver',{lease,sequence:sequence+1,text:document.querySelector('#text').value});if(lease===submittedLease){sequence++;reply.textContent=d.readback;}}catch(e){reply.textContent=e.message;}finally{busy=false;}};
+async function poll(){try{const r=await fetch('/api/status');const d=await r.json();if(!d.owned)lease=null;state.textContent=JSON.stringify(d,null,2);}catch(e){state.textContent='Telemetry unavailable. Verify aircraft locally.';}setTimeout(poll,500);}poll();
+</script></html>

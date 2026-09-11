@@ -5,6 +5,7 @@ import threading
 import time
 import unittest
 import urllib.request
+from urllib.error import HTTPError
 from http.server import HTTPServer
 
 from services.ai_pilot.flight_controller import FlightController, FlightPhase
@@ -22,30 +23,37 @@ class TestLightweightAgent(unittest.TestCase):
     def tearDown(self):
         self.client.stop()
 
-    def test_handle_spawn_command(self):
-        reply = self.agent.handle_user_command("spawn at runway 27r")
-        self.assertIn("Gillespie Field", reply)
-        self.assertEqual(self.controller.phase, FlightPhase.COLD_AND_DARK)
+    def test_control_language_is_advisory_only(self):
+        phase = self.controller.phase
+        heading = self.controller.target_heading_mag
+        altitude = self.controller.target_altitude_ft
+        commands = [
+            "spawn at runway 27r",
+            "start engine",
+            "cleared for takeoff",
+            "do not take off",
+            'repeat the words "cleared for takeoff"',
+            "turn heading 015",
+            "climb to 4500",
+            "run the before takeoff checklist",
+            "fly mission",
+        ]
+        for command in commands:
+            with self.subTest(command=command):
+                reply = self.agent.handle_user_command(command)
+                self.assertIn("No aircraft action taken", reply)
+                self.assertEqual(self.controller.phase, phase)
+                self.assertEqual(self.controller.target_heading_mag, heading)
+                self.assertEqual(self.controller.target_altitude_ft, altitude)
 
-    def test_handle_engine_start_command(self):
-        reply = self.agent.handle_user_command("start engine")
-        self.assertIn("Lycoming IO-540", reply)
-        self.assertEqual(self.client.get_dref("sim/cockpit2/electrical/battery_on[0]"), 1.0)
+        self.assertEqual(
+            self.client.get_dref("sim/cockpit2/electrical/battery_on[0]"), 0.0
+        )
 
-    def test_handle_takeoff_command(self):
-        reply = self.agent.handle_user_command("cleared for takeoff")
-        self.assertIn("takeoff", reply.lower())
-        self.assertEqual(self.controller.phase, FlightPhase.TAKEOFF_ROLL)
-
-    def test_handle_heading_command(self):
-        reply = self.agent.handle_user_command("turn heading 015")
-        self.assertIn("015", reply)
-        self.assertEqual(self.controller.target_heading_mag, 15.0)
-
-    def test_handle_altitude_command(self):
-        reply = self.agent.handle_user_command("climb to 4500")
-        self.assertIn("4500", reply)
-        self.assertEqual(self.controller.target_altitude_ft, 4500.0)
+    def test_autonomous_mission_start_is_retired(self):
+        with self.assertRaisesRegex(RuntimeError, "retired"):
+            self.agent.start_autonomous_mission()
+        self.assertFalse(self.agent.autonomous_active)
 
     def test_handle_status_query(self):
         self.client.set_mock_dref("sim/flightmodel/position/indicated_airspeed", 120.0)
@@ -96,8 +104,11 @@ class TestWebServerAPIs(unittest.TestCase):
             data=data,
             headers={"Content-Type": "application/json"},
         )
-        with urllib.request.urlopen(req, timeout=3.0) as resp:
-            return resp.status, json.loads(resp.read().decode("utf-8"))
+        try:
+            with urllib.request.urlopen(req, timeout=3.0) as resp:
+                return resp.status, json.loads(resp.read().decode("utf-8"))
+        except HTTPError as error:
+            return error.code, json.loads(error.read().decode("utf-8"))
 
     def test_static_files(self):
         status, content = self._get("/")
@@ -131,26 +142,36 @@ class TestWebServerAPIs(unittest.TestCase):
         status, data = self._post_json("/api/chat", {"message": "climb to 4500"})
         self.assertEqual(status, 200)
         self.assertIn("reply", data)
-        self.assertIn("4500", data["reply"])
+        self.assertIn("No aircraft action taken", data["reply"])
+        self.assertEqual(self.controller.phase, FlightPhase.COLD_AND_DARK)
 
-    def test_post_phase_api(self):
-        status, data = self._post_json("/api/phase", {"phase": "TAKEOFF_ROLL"})
-        self.assertEqual(status, 200)
-        self.assertEqual(data["phase"], "TAKEOFF_ROLL")
+    def test_mutation_apis_are_gone_without_writes(self):
+        phase = self.controller.phase
+        endpoints = {
+            "/api/phase": {"phase": "TAKEOFF_ROLL"},
+            "/api/autopilot": {"heading_mag": 15.0, "altitude_ft": 4500.0},
+            "/api/checklists/run": {"checklist": "BEFORE_ENGINE_START"},
+            "/api/spawn": {},
+            "/api/mission/start": {},
+            "/api/mission/stop": {},
+        }
+        for path, payload in endpoints.items():
+            with self.subTest(path=path):
+                status, data = self._post_json(path, payload)
+                self.assertEqual(status, 410)
+                self.assertIn("retired", data["error"].lower())
+                self.assertFalse(data["ground_phases_available"])
 
-    def test_post_autopilot_api(self):
-        status, data = self._post_json("/api/autopilot", {"heading_mag": 15.0, "altitude_ft": 4500.0})
-        self.assertEqual(status, 200)
-        self.assertEqual(data["heading_mag"], 15.0)
-        self.assertEqual(data["altitude_ft"], 4500.0)
-
-    def test_post_run_checklist_api(self):
-        status, data = self._post_json("/api/checklists/run", {"checklist": "BEFORE_ENGINE_START"})
-        self.assertEqual(status, 200)
-        self.assertTrue(data["all_passed"])
-        self.assertGreater(len(data["results"]), 0)
+        self.assertEqual(self.controller.phase, phase)
+        self.assertEqual(
+            self.client.get_dref("sim/cockpit2/autopilot/heading_dial_deg_mag_pilot"),
+            0.0,
+        )
+        self.assertEqual(
+            self.client.get_dref("sim/cockpit2/electrical/battery_on[0]"),
+            0.0,
+        )
 
 
 if __name__ == "__main__":
     unittest.main()
-

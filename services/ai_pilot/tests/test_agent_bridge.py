@@ -19,11 +19,7 @@ class TestAgentBridge(unittest.TestCase):
     def test_tool_schemas_valid(self):
         self.assertGreater(len(HERMES_TOOLS), 0)
         tool_names = [t["function"]["name"] for t in HERMES_TOOLS]
-        self.assertIn("get_flight_telemetry", tool_names)
-        self.assertIn("execute_checklist", tool_names)
-        self.assertIn("command_flight_phase", tool_names)
-        self.assertIn("set_autopilot", tool_names)
-        self.assertIn("spawn_on_runway", tool_names)
+        self.assertEqual(tool_names, ["get_flight_telemetry"])
 
     def test_dispatch_get_flight_telemetry(self):
         self.client.set_mock_dref("sim/flightmodel/position/indicated_airspeed", 110.0)
@@ -36,26 +32,34 @@ class TestAgentBridge(unittest.TestCase):
         self.assertAlmostEqual(res["alt_msl_ft"], 4500.0, places=0)
         self.assertIn("distance_to_krnm_nm", res)
 
-    def test_dispatch_execute_checklist(self):
-        res = self.bridge.dispatch_tool("execute_checklist", {"checklist_name": "BEFORE_ENGINE_START"})
-        self.assertTrue(res["success"])
-        self.assertEqual(res["checklist"], "Before Starting Engine")
-        self.assertTrue(res["all_passed"])
+    def test_mutation_tools_are_retired_without_writes(self):
+        initial_phase = self.controller.phase
+        tools = {
+            "execute_checklist": {"checklist_name": "BEFORE_ENGINE_START"},
+            "command_flight_phase": {"phase": "TAKEOFF_ROLL"},
+            "set_autopilot": {
+                "heading_mag": 15.0,
+                "altitude_ft": 4500.0,
+                "vs_fpm": 700.0,
+            },
+            "spawn_on_runway": {},
+        }
+        for name, args in tools.items():
+            with self.subTest(name=name):
+                res = self.bridge.dispatch_tool(name, args)
+                self.assertFalse(res["success"])
+                self.assertIn("retired", res["error"].lower())
+                self.assertFalse(res["ground_phases_available"])
 
-    def test_dispatch_command_flight_phase(self):
-        res = self.bridge.dispatch_tool("command_flight_phase", {"phase": "TAKEOFF_ROLL"})
-        self.assertTrue(res["success"])
-        self.assertEqual(self.controller.phase, FlightPhase.TAKEOFF_ROLL)
-
-        # Invalid phase
-        res_invalid = self.bridge.dispatch_tool("command_flight_phase", {"phase": "FLY_TO_MARS"})
-        self.assertFalse(res_invalid["success"])
-
-    def test_dispatch_set_autopilot(self):
-        res = self.bridge.dispatch_tool("set_autopilot", {"heading_mag": 15.0, "altitude_ft": 4500.0, "vs_fpm": 700.0})
-        self.assertTrue(res["success"])
-        self.assertEqual(self.client.get_dref("sim/cockpit2/autopilot/heading_dial_deg_mag_pilot"), 15.0)
-        self.assertEqual(self.client.get_dref("sim/cockpit2/autopilot/altitude_dial_ft"), 4500.0)
+        self.assertEqual(self.controller.phase, initial_phase)
+        self.assertEqual(
+            self.client.get_dref("sim/cockpit2/autopilot/heading_dial_deg_mag_pilot"),
+            0.0,
+        )
+        self.assertEqual(
+            self.client.get_dref("sim/cockpit2/electrical/battery_on[0]"),
+            0.0,
+        )
 
 
 if __name__ == "__main__":

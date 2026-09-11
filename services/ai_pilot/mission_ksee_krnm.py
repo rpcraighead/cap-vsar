@@ -2,7 +2,7 @@
 """
 Mission Scenario: Gillespie Field (KSEE 27R) to Ramona Airport (KRNM 27)
 ------------------------------------------------------------------------
-Executes the full flight scenario for the Civil Air Patrol Cessna 182T NAV III:
+Exercises the retired full-flight prototype against its offline mock only:
 1. Cold & Dark setup on KSEE Runway 27R.
 2. Authentic POH Before Start & Engine Start checklists.
 3. Engine runup & Before Takeoff checklist.
@@ -22,7 +22,6 @@ import logging
 import sys
 import time
 
-from .agent_bridge import AgentBridge
 from .c182t_checklists import (
     get_after_landing_checklist,
     get_before_engine_start_checklist,
@@ -181,7 +180,13 @@ class MockFlightSimulator:
 
 
 def run_mission(live: bool = False, host: str = "127.0.0.1", port: int = 49000, fast_sim: bool = False) -> bool:
-    """Execute complete flight from KSEE 27R to KRNM 27."""
+    """Run the offline prototype; refuse its unvalidated live control route."""
+    if live:
+        logger.error(
+            "Live scripted mission control is retired. Position CAP 487 airborne "
+            "manually and use services.ai_pilot.maneuver_server --live."
+        )
+        return False
     logger.info("================================================================================")
     logger.info("  MISSION DISPATCH: CIVIL AIR PATROL C182T NAV III (CAP 487)")
     logger.info("  ROUTE: GILLESPIE FIELD (KSEE 27R) -> RAMONA AIRPORT (KRNM 27)")
@@ -190,8 +195,6 @@ def run_mission(live: bool = False, host: str = "127.0.0.1", port: int = 49000, 
 
     client = XPlaneUDPClient(host=host, port=port, mock=not live)
     controller = FlightController(client)
-    bridge = AgentBridge(controller)
-
     mock_sim = None if live else MockFlightSimulator(client, controller)
 
     try:
@@ -274,7 +277,10 @@ def run_mission(live: bool = False, host: str = "127.0.0.1", port: int = 49000, 
 
 def main():
     parser = argparse.ArgumentParser(description="Cessna 182T NAV III Autonomous Flight: KSEE 27R to KRNM 27")
-    parser.add_argument("--live", action="store_true", help="Connect to live X-Plane 12 UDP instance on port 49000")
+    parser.add_argument(
+        "--live", action="store_true",
+        help="Retired compatibility flag; live scripted control is refused",
+    )
     parser.add_argument("--host", default="127.0.0.1", help="X-Plane UDP host (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=49000, help="X-Plane UDP port (default: 49000)")
     parser.add_argument("--fast", action="store_true", help="Fast execution in mock mode")

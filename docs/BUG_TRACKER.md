@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 82 items, 40 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 84 items, 41 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -10,11 +10,11 @@ IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split ou
 
 | | critical | high | medium | low | total |
 |---|---|---|---|---|---|
-| by severity | 8 | 21 | 34 | 19 | 82 |
+| by severity | 8 | 23 | 34 | 19 | 84 |
 
 | P0 | P1 | P2 | P3 |
 |---|---|---|---|
-| 10 | 22 | 34 | 16 |
+| 10 | 24 | 34 | 16 |
 
 | Component | Items |
 |---|---|
@@ -23,7 +23,7 @@ IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split ou
 | Exercise console (frontend) | 12 |
 | X-Plane plugin / engine | 12 |
 | Exercise console (backend) | 12 |
-| Deployment / infrastructure | 8 |
+| Deployment / infrastructure | 10 |
 | Docs / record | 6 |
 
 ## Priority definitions
@@ -40,7 +40,7 @@ _Wave dates track the illustrative calendar in docs/USE_CASE_SAREX_REHEARSAL.md 
 - **Wave 0** (1 items) — Now — make the work safe to do at all.
 - **Wave 1** (10 items) — Before session 1 (base stand-up). Nothing flies; base, planner and comms must work.
 - **Wave 2** (20 items) — Before session 2 (full mission, three aircraft, injected effects).
-- **Wave 3** (31 items) — Before session 3 (dress rehearsal) and the live SAREX.
+- **Wave 3** (33 items) — Before session 3 (dress rehearsal) and the live SAREX.
 - **Wave 4** (20 items) — After the SAREX — architecture, tooling, CalTopo phase 2.
 
 ## Clusters
@@ -63,7 +63,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | C12 | Instrument runtime | I-1, I-2, O-7b, I-10, I-3, I-4, I-5, I-6, I-11, I-14, I-12, I-13, I-15, I-17 | Gemini — instruments/** outright, including the DF heads |
 | C13 | Instrument tooling & shared libs | I-8, I-9a, I-7, I-9c | Gemini — instrument tooling; I-9a Lua harness is its first task |
 | C14 | Contract & documentation truth | D-1, D-2, D-3, D-4, P-10, I-9b | docs only, safe in parallel |
-| C15 | Service boundaries (architecture) | C15-1, P-11, C15-2 | unassigned — after C2 and C7 settle |
+| C15 | Service boundaries (architecture) | AI-1, AI-2, C15-1, P-11, C15-2 | unassigned — after C2 and C7 settle |
 
 ## Board
 
@@ -117,6 +117,8 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 | ID | Pri | Sev | Title | Component | Cluster | Effort | Depends on | Status |
 |---|---|---|---|---|---|---|---|---|
+| [AI-1](#ai-1) | P1 | high | Legacy AI pilot entrypoints bypass maneuver validation | infra | C15 | M | — | fixed |
+| [AI-2](#ai-2) | P1 | high | Complete live CAP 487 maneuver-controller acceptance | infra | C15 | M | AI-1 | open |
 | [O-5](#o-5) | P1 | high | Mumble server has no per-role ACLs and images float | infra | C5 | M | X-2, O-4 | fixed |
 | [O-7a](#o-7a) | P1 | high | Air Manager seat count for three MO stations unconfirmed | infra | C5 | S | — | resolved |
 | [D-1](#d-1) | P2 | medium | CHANGELOG entries contradict the code they describe | docs | C14 | S | — | open |
@@ -524,6 +526,29 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Fix:** Determine whether X-Plane 12 accepts an arbitrary identifier on a type 28 record and treats the lat/lon columns as authoritative. If it does, emit the generator's label (sanitised to the character set the FMS allows) and keep the coordinates in the columns. If it does not, say so in the user guide so the AOBD briefs coordinates instead.
 - **Done when:** Load an exported pattern in X-Plane 12 and read the leg names on the G1000 flight plan page.
 - **Depends on:** L-1
+
+### AI-1
+
+**Legacy AI pilot entrypoints bypass maneuver validation**
+
+`P1` · `high` · `bug` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort M · wave 3 · **fixed**
+
+- **Files:** `services/ai_pilot/lightweight_agent.py`, `services/ai_pilot/web_server.py`, `services/ai_pilot/agent_bridge.py`
+- **Problem:** Legacy substring chat matching can execute a negated takeoff instruction and announces a clearance without ATC state. Direct-write web/tool routes bypass the new airborne maneuver gate. The new maneuver_server isolates its controller but cannot exclude unrelated legacy processes from X-Plane.
+- **Fix:** Retire or migrate legacy mutation entrypoints to an explicit authority/phase contract, including control ownership shared by every writer. Do not expose autonomous ground phases until clearance state and command semantics are implemented.
+- **Done when:** Negated and quoted instructions never write controls; all enabled entrypoints honor takeover and one control owner; takeoff cannot manufacture its own clearance.
+
+### AI-2
+
+**Complete live CAP 487 maneuver-controller acceptance**
+
+`P1` · `high` · `task` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort M · wave 3 · **open**
+
+- **Files:** `services/ai_pilot/maneuvers.py`, `services/ai_pilot/maneuver_server.py`, `services/ai_pilot/README.md`, `scripts/launch_xplane12.sh`, `docs/bugs/CODEX_RESUME_AI_PILOT.md`
+- **Problem:** The supervised airborne maneuver gate and X-Plane adapter are covered by packet-level tests, but live CAP 487 handling, G1000/GFC 700 annunciations, capture, pilot takeover, pause, and disconnect behavior remain unverified. The 2026-09-11 acceptance attempt could not start X-Plane because NVIDIA userspace 595.91.07 did not match the loaded 595.84 kernel module.
+- **Fix:** Use scripts/launch_xplane12.sh to reject mismatched NVIDIA driver state and strip the inherited Snap environment. Reboot the simulator host to load the matching NVIDIA kernel module, then run the supervised Gate A acceptance profile with CAP 487 positioned airborne.
+- **Done when:** Observe and record representative heading and altitude capture, command rejection outside the envelope, pilot takeover, pause, and disconnect behavior in X-Plane 12; confirm the cockpit annunciations agree with controller state and that only one process owns the controls.
+- **Depends on:** AI-1
 
 ### O-5
 

@@ -3,6 +3,111 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-11 — AI pilot control-path retirement and live-test finding
+
+Fixed tracker item AI-1 by retiring every legacy AI-pilot mutation path that
+bypassed the supervised airborne maneuver gate. The legacy chat agent and web
+deck are now observation-only; their former control, checklist, spawn, phase and
+mission endpoints return an explicit refusal without writing simulator state.
+The Hermes bridge exposes telemetry only, and the scripted KSEE–KRNM mission
+refuses live mode before creating an X-Plane client. Mock mission playback
+remains available for deterministic regression tests. Updated the AI-pilot
+README to direct live control through the maneuver deck on port 8089.
+
+Hardened the live X-Plane backend after finding that RREF subscriptions were
+sent only once: the controller now renews missing or stale subscriptions once
+per second, allowing it to start before X-Plane or survive a simulator restart
+without duplicating callbacks. Added tests for negated and quoted control text,
+retired APIs and tools, live-script refusal, and subscription renewal.
+
+Verified with `PYTHONPATH=.` and `/tmp/capvsar-planner-venv/bin/pytest`:
+
+```text
+services/ai_pilot/tests -q
+63 passed, 19 subtests passed in 12.15s
+
+tests/test_console.py tests/test_radio.py -q
+86 passed, 8891 warnings in 2.70s
+```
+
+`git diff --check` and Python bytecode compilation also passed. The console and
+radio warnings are dependency deprecations from FastAPI, Starlette and AnyIO.
+
+Live Gate A acceptance did not run. The maneuver server started without taking
+control and reported no telemetry, while X-Plane 12 failed during GLX startup.
+The host has NVIDIA userspace and on-disk kernel module 595.91.07, but the
+currently loaded kernel module is 595.84; the kernel logged an API mismatch and
+`nvidia-smi` could not communicate with the driver. Launching from the inherited
+Snap environment is independently unsupported by X-Plane. Added
+`scripts/launch_xplane12.sh`, which removes the inherited Snap variables and
+checks the loaded module against the installed NVIDIA driver before launching;
+its preflight check correctly refused the current 595.84/595.91.07 mismatch
+with exit status 78. Added open tracker item AI-2 for the live CAP 487
+acceptance after a normal reboot. Added
+`docs/bugs/CODEX_RESUME_AI_PILOT.md` as a self-contained post-reboot handoff;
+`docs/bugs/CODEX_PROMPTS.md` links to it at the top so the next VS Code session
+can resume the authorized live procedure without relying on chat history. No
+simulator control command was sent.
+
+## 2026-09-10 — AI Mission Pilot concept of operations
+
+Created `docs/CAP_V-SAR_AI_Mission_Pilot_CONOPS.docx` and a matching PDF
+reading copy. The 12-page draft uses the established V-SAR document branding
+and frames the AI Mission Pilot as a virtual crewmate for Mission Observer
+practice. It defines human authority, training modes, hidden-truth boundaries,
+the maneuver command lifecycle, communications and ATC modes, simulator safety
+responses, evaluation evidence, current implementation status, delivery gates
+and a bounded ArduPlane feasibility decision.
+
+Verified the final Word package with archive, section, heading, image, field,
+style and accessibility audits. Accessibility reported zero high, medium or low
+findings. LibreOffice rendered all 12 pages without clipped text, broken rows or
+orphaned continuation pages; every page was visually inspected. The source
+`CAP_V-SAR_Summary_10pg.docx` remained unchanged. This is a project-review
+concept and does not claim Civil Air Patrol approval or completed live-flight
+validation.
+
+## 2026-09-10 — AI pilot: airborne maneuver interface and X-Plane backend
+
+Implemented `services/ai_pilot/maneuvers.py`, an explicit backend protocol and
+serialized control gate; `maneuver_server.py`, a separate loopback deck on 8089;
+and `static/maneuvers.html`. README now recommends this airborne entrypoint and
+labels the existing scripted web/LLM controllers as legacy experiments.
+
+The gate checks fresh per-field observations, finite targets, an exercise altitude
+block and an explicitly provisional airborne envelope. It rejects ambiguous text,
+negations, unsupported direction/units and extra fields. Leases and increasing
+sequences reject replay and commands after takeover. Completion requires sustained
+measured capture. Faults revoke ownership and request simulation pause. The
+X-Plane adapter selects heading and indicated altitude via documented autopilot
+mode requests, preserving already-active modes; it never imports hidden scenario
+truth or invokes a language model. Mock observations remain static, so command
+writes cannot masquerade as demonstrated aircraft performance.
+
+Verified with `PYTHONPATH=.` and `/tmp/capvsar-planner-venv/bin/pytest`:
+
+```text
+services/ai_pilot/tests -q
+68 passed in 14.48s
+
+tests/test_console.py tests/test_radio.py -q
+86 passed, 8891 warnings in 2.67s
+```
+
+The warnings are dependency deprecations. Initial test collection needed the
+repository on PYTHONPATH; socket-based tests required execution outside the
+sandbox. No planner code changed; its suite was not required for this change.
+
+Findings/remaining limits: AI-1 records the legacy chat/direct-write bypasses;
+they remain open and those processes must be stopped before using this deck.
+The duplicate-instance lock does not arbitrate unrelated simulator plugins.
+No live X-Plane flight was attempted, so aircraft handling, cockpit indications,
+and UDP pause/disconnect delivery remain unverified. Terrain lookahead, power/
+speed control, prescribed turn direction, voice, ATC and automatic ground phases
+are not implemented. ArduPlane is a future backend, not an installed controller;
+its X-Plane 12 compatibility and CAP 487 tuning still require a feasibility trial.
+No existing tracker item was closed by this implementation.
+
 ## 2026-09-10 — AI Pilot Service: Autonomous Flight, Authentic C182T POH Checklists, and Glassmorphic Web Deck
 
 **Status: implemented and tested. 35/35 unit and integration tests passing.**

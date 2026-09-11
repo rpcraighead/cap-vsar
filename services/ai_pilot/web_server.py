@@ -1,9 +1,9 @@
 """
-Lightweight Web Server & REST API for AI Pilot
-----------------------------------------------
-Zero-dependency HTTP server built using Python's standard library.
-Serves the Glassmorphic Flight Deck Web UI and provides real-time REST API
-endpoints for telemetry, checklist execution, autopilot controls, and agent chat.
+Legacy observation-only Web Deck for AI Pilot
+---------------------------------------------
+The original mutation endpoints are retired.  This compatibility server may
+display telemetry, checklist references, status, and advisory chat, but the
+validated airborne maneuver deck is the only supported controller.
 """
 
 from __future__ import annotations
@@ -20,8 +20,8 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib.parse import parse_qs, urlparse
 
-from .c182t_checklists import ALL_CHECKLISTS, ChecklistPhase, get_checklist_by_name
-from .flight_controller import FlightController, FlightPhase, haversine_distance_nm
+from .c182t_checklists import ALL_CHECKLISTS, ChecklistPhase
+from .flight_controller import FlightController, haversine_distance_nm
 from .lightweight_agent import LightweightAgent
 from .xplane_udp import XPlaneUDPClient
 
@@ -35,7 +35,7 @@ class ThreadingHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
 
 
 class AIPilotRequestHandler(BaseHTTPRequestHandler):
-    """HTTP Request Handler for AI Pilot Web Interface."""
+    """Read-only compatibility handler for the legacy AI Pilot deck."""
 
     server_version = "AIPilot/1.0"
 
@@ -144,50 +144,19 @@ class AIPilotRequestHandler(BaseHTTPRequestHandler):
             reply = self.agent.handle_user_command(user_text)
             self._send_json({"reply": reply, "messages": self.agent.get_chat_history()})
 
-        elif path == "/api/checklists/run":
-            checklist_name = body.get("checklist", "")
-            cl = get_checklist_by_name(checklist_name)
-            if not cl:
-                self._send_json({"error": f"Checklist {checklist_name} not found"}, status=404)
-                return
-            results = cl.run(self.client, delay_between_items=0.02)
+        elif path in {
+            "/api/checklists/run",
+            "/api/phase",
+            "/api/autopilot",
+            "/api/spawn",
+            "/api/mission/start",
+            "/api/mission/stop",
+        }:
             self._send_json({
-                "checklist": cl.title,
-                "all_passed": all(r["passed"] for r in results),
-                "results": results,
-            })
-
-        elif path == "/api/phase":
-            new_phase_str = body.get("phase", "")
-            try:
-                new_phase = FlightPhase(new_phase_str)
-                self.controller.set_phase(new_phase)
-                self.agent.add_message("copilot", f"Flight phase manually set to: {new_phase.value}")
-                self._send_json({"success": True, "phase": self.controller.phase.value})
-            except ValueError:
-                self._send_json({"error": f"Invalid phase: {new_phase_str}"}, status=400)
-
-        elif path == "/api/autopilot":
-            hdg = float(body.get("heading_mag", self.controller.target_heading_mag))
-            alt = float(body.get("altitude_ft", self.controller.target_altitude_ft))
-            vs = float(body["vs_fpm"]) if "vs_fpm" in body else None
-            self.controller.target_heading_mag = hdg
-            self.controller.target_altitude_ft = alt
-            self.controller._engage_autopilot(hdg_mag=hdg, alt_ft=alt, vs_fpm=vs)
-            self._send_json({"success": True, "heading_mag": hdg, "altitude_ft": alt, "vs_fpm": vs})
-
-        elif path == "/api/spawn":
-            self.controller.spawn_on_ksee_27r()
-            self.agent.add_message("copilot", "Aircraft positioned on Gillespie Field (KSEE) Runway 27R.")
-            self._send_json({"success": True, "phase": self.controller.phase.value})
-
-        elif path == "/api/mission/start":
-            self.agent.start_autonomous_mission()
-            self._send_json({"success": True, "autonomous_active": True})
-
-        elif path == "/api/mission/stop":
-            self.agent.stop_autonomous_mission()
-            self._send_json({"success": True, "autonomous_active": False})
+                "error": "Legacy aircraft mutation endpoint retired",
+                "control_endpoint": "http://127.0.0.1:8089",
+                "ground_phases_available": False,
+            }, status=HTTPStatus.GONE)
 
         else:
             self.send_error(HTTPStatus.NOT_FOUND, "API endpoint not found")
@@ -204,6 +173,8 @@ class AIPilotRequestHandler(BaseHTTPRequestHandler):
         data = {
             "phase": fc.phase.value,
             "autonomous_active": self.agent.autonomous_active,
+            "control_enabled": False,
+            "control_endpoint": "http://127.0.0.1:8089",
             "position": {
                 "lat": round(t.lat, 6),
                 "lon": round(t.lon, 6),
@@ -273,6 +244,8 @@ class AIPilotRequestHandler(BaseHTTPRequestHandler):
             "mock_mode": self.client.mock,
             "phase": self.controller.phase.value,
             "autonomous_active": self.agent.autonomous_active,
+            "control_enabled": False,
+            "control_endpoint": "http://127.0.0.1:8089",
             "chat_messages_count": len(self.agent.chat_history),
         })
 
@@ -289,17 +262,15 @@ def run_web_server(
     controller = FlightController(client)
     agent = LightweightAgent(controller)
 
-    # Initial position
-    controller.spawn_on_ksee_27r()
-
     AIPilotRequestHandler.client = client
     AIPilotRequestHandler.controller = controller
     AIPilotRequestHandler.agent = agent
 
     server = ThreadingHTTPServer((host, port), AIPilotRequestHandler)
     logger.info("================================================================================")
-    logger.info("  AI PILOT WEB INTERFACE RUNNING AT: http://%s:%d", "127.0.0.1" if host == "0.0.0.0" else host, port)
-    logger.info("  SIMULATOR LINK: %s", "LIVE X-Plane 12 (UDP 49000)" if live else "MOCK (Offline Mode)")
+    logger.info("  LEGACY AI PILOT OBSERVATION DECK: http://%s:%d", "127.0.0.1" if host == "0.0.0.0" else host, port)
+    logger.info("  SIMULATOR LINK: %s", "LIVE READ-ONLY X-Plane 12" if live else "MOCK (Offline Mode)")
+    logger.info("  AIRCRAFT CONTROL: RETIRED; use http://127.0.0.1:8089")
     logger.info("================================================================================")
 
     try:
@@ -312,10 +283,10 @@ def run_web_server(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="AI Pilot Web Server")
+    parser = argparse.ArgumentParser(description="Legacy read-only AI Pilot Web Server")
     parser.add_argument("--host", default="0.0.0.0", help="HTTP host (default: 0.0.0.0)")
     parser.add_argument("--port", type=int, default=8088, help="HTTP port (default: 8088)")
-    parser.add_argument("--live", action="store_true", help="Connect to live X-Plane 12 instance")
+    parser.add_argument("--live", action="store_true", help="Read telemetry from live X-Plane 12")
     parser.add_argument("--xp-host", default="127.0.0.1", help="X-Plane UDP host")
     parser.add_argument("--xp-port", type=int, default=49000, help="X-Plane UDP port")
     args = parser.parse_args()
@@ -326,4 +297,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

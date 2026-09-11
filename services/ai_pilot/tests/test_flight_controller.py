@@ -77,6 +77,11 @@ class TestFlightController(unittest.TestCase):
         success = run_mission(live=False, fast_sim=True)
         self.assertTrue(success)
 
+    def test_legacy_live_mission_is_refused_before_creating_a_client(self):
+        from services.ai_pilot.mission_ksee_krnm import run_mission
+
+        self.assertFalse(run_mission(live=True))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1744,6 +1744,52 @@
       "fix": "Mount the DIRECTORY - ./services/flightplanner/data:/app/data - and point DATABASE_PATH at /app/data/aviation_data.db so the journal stays with the database. The host file does not move, so no migration. Left for Codex because app.py is its lane and it had uncommitted work there.",
       "verify": "A write leaves its journal on the host volume, not inside the container.",
       "depends_on": []
+    },
+    {
+      "id": "AI-1",
+      "title": "Legacy AI pilot entrypoints bypass maneuver validation",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 3,
+      "effort": "M",
+      "component": "infra",
+      "cluster": "C15",
+      "status": "fixed",
+      "files": [
+        "services/ai_pilot/lightweight_agent.py",
+        "services/ai_pilot/web_server.py",
+        "services/ai_pilot/agent_bridge.py"
+      ],
+      "problem": "Legacy substring chat matching can execute a negated takeoff instruction and announces a clearance without ATC state. Direct-write web/tool routes bypass the new airborne maneuver gate. The new maneuver_server isolates its controller but cannot exclude unrelated legacy processes from X-Plane.",
+      "fix": "Retire or migrate legacy mutation entrypoints to an explicit authority/phase contract, including control ownership shared by every writer. Do not expose autonomous ground phases until clearance state and command semantics are implemented.",
+      "verify": "Negated and quoted instructions never write controls; all enabled entrypoints honor takeover and one control owner; takeoff cannot manufacture its own clearance.",
+      "depends_on": []
+    },
+    {
+      "id": "AI-2",
+      "title": "Complete live CAP 487 maneuver-controller acceptance",
+      "type": "task",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 3,
+      "effort": "M",
+      "component": "infra",
+      "cluster": "C15",
+      "status": "open",
+      "files": [
+        "services/ai_pilot/maneuvers.py",
+        "services/ai_pilot/maneuver_server.py",
+        "services/ai_pilot/README.md",
+        "scripts/launch_xplane12.sh",
+        "docs/bugs/CODEX_RESUME_AI_PILOT.md"
+      ],
+      "problem": "The supervised airborne maneuver gate and X-Plane adapter are covered by packet-level tests, but live CAP 487 handling, G1000/GFC 700 annunciations, capture, pilot takeover, pause, and disconnect behavior remain unverified. The 2026-09-11 acceptance attempt could not start X-Plane because NVIDIA userspace 595.91.07 did not match the loaded 595.84 kernel module.",
+      "fix": "Use scripts/launch_xplane12.sh to reject mismatched NVIDIA driver state and strip the inherited Snap environment. Reboot the simulator host to load the matching NVIDIA kernel module, then run the supervised Gate A acceptance profile with CAP 487 positioned airborne.",
+      "verify": "Observe and record representative heading and altitude capture, command rejection outside the envelope, pilot takeover, pause, and disconnect behavior in X-Plane 12; confirm the cockpit annunciations agree with controller state and that only one process owns the controls.",
+      "depends_on": [
+        "AI-1"
+      ]
     }
   ]
 }
