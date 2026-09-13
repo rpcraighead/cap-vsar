@@ -31,7 +31,8 @@ from urllib.parse import urlsplit
 
 from fastapi import (Depends, FastAPI, HTTPException, Request, Response,
                      WebSocket, WebSocketDisconnect)
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
@@ -132,6 +133,36 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="CAP V-SAR Exercise Console", lifespan=lifespan)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, exc: RequestValidationError):
+    """422 for a bad body, even when the bad value cannot be serialised.
+
+    FE-8 made the models reject non-finite floats. FastAPI's default handler
+    then echoes the offending input back in the error detail - and json.dumps
+    refuses to serialise NaN or Infinity, so rejecting a NaN bearing raised
+    inside the error handler and the caller got a 500 with no explanation
+    instead of a 422 naming the field. Scrub the echoed input; keep everything
+    else the default handler would have said.
+    """
+    def clean(value):
+        if isinstance(value, float) and not math.isfinite(value):
+            return str(value)
+        if isinstance(value, dict):
+            return {k: clean(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [clean(v) for v in value]
+        return value
+
+    errors = []
+    for err in exc.errors():
+        err = dict(err)
+        if "input" in err:
+            err["input"] = clean(err["input"])
+        err.pop("ctx", None)          # may hold the original exception object
+        errors.append(err)
+    return JSONResponse(status_code=422, content={"detail": errors})
 
 
 

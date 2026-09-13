@@ -144,7 +144,7 @@ def track(oid: str, since: float = 0.0, limit: int = TRACK_PAGE_DEFAULT):
     limit = max(1, min(int(limit), TRACK_PAGE_MAX))
     with db() as c:
         rows = c.execute(
-            "SELECT callsign, t, lat, lon, alt_ft, hdg_true FROM positions"
+            "SELECT callsign, t, lat, lon, alt_ft, hdg_true, df_json FROM positions"
             " WHERE sortie_id=? AND t > ? ORDER BY t LIMIT ?",
             (oid, since, limit)).fetchall()
         brgs = c.execute(
@@ -159,7 +159,19 @@ def track(oid: str, since: float = 0.0, limit: int = TRACK_PAGE_DEFAULT):
     # gets no beacon, which is what the debrief view's "never revealed"
     # message was always written for.
     revealed = bool(s and s["revealed"])
-    positions = [dict(r) for r in rows]
+    positions = []
+    for r in rows:
+        row = dict(r)
+        raw = row.pop("df_json", None)
+        # The DF telemetry is beacon truth in another form: bearing_true plus
+        # distance_nm from a known position is a fix. It travels only once the
+        # sortie is revealed, exactly like the beacon itself (V2-5).
+        if revealed and raw:
+            try:
+                row["df"] = json.loads(raw)
+            except (TypeError, ValueError):
+                pass
+        positions.append(row)
     return {
         "positions": positions,
         # None when this is the last page. The debrief follows it until it is.

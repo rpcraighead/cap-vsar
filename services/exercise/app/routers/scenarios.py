@@ -43,14 +43,16 @@ def create_scenario(s: ScenarioIn):
         # written alert_kind into alert_text and nothing would have raised.
         c.execute(
             "INSERT INTO scenarios (id, name, notes, beacon_lat, beacon_lon,"
-            " beacon_elev_ft, band, power, effects, created, alert_kind,"
-            " alert_text, alert_lat, alert_lon, alert_radius_nm)"
+            " beacon_elev_ft, band, beacon_freq_hz, power, effects, created,"
+            " alert_kind, alert_text, alert_lat, alert_lon, alert_radius_nm)"
             " VALUES (:id, :name, :notes, :beacon_lat, :beacon_lon,"
-            " :beacon_elev_ft, :band, :power, :effects, :created, :alert_kind,"
-            " :alert_text, :alert_lat, :alert_lon, :alert_radius_nm)",
+            " :beacon_elev_ft, :band, :beacon_freq_hz, :power, :effects,"
+            " :created, :alert_kind, :alert_text, :alert_lat, :alert_lon,"
+            " :alert_radius_nm)",
             {"id": sid, "name": s.name, "notes": s.notes,
              "beacon_lat": s.beacon_lat, "beacon_lon": s.beacon_lon,
              "beacon_elev_ft": s.beacon_elev_ft, "band": s.band,
+             "beacon_freq_hz": s.beacon_freq_hz,
              "power": s.power, "effects": json.dumps(s.effects),
              "created": time.time(), "alert_kind": s.alert_kind,
              "alert_text": s.alert_text, "alert_lat": s.alert_lat,

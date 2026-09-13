@@ -23,9 +23,20 @@ from ..models import MessageIn
 router = APIRouter()
 
 @router.post("/api/messages", dependencies=[base_or_instructor])
-async def send_message(m: MessageIn):
-    """Retasking and coordination text. Supplements voice and leaves a record."""
+async def send_message(m: MessageIn, request: Request):
+    """Retasking and coordination text. Supplements voice and leaves a record.
+
+    FE-8: `sender` used to be whatever the client put in the body, so a
+    base-role student could sign a message "INSTRUCTOR" and it appeared that
+    way on every console and in the sortie record. Where the caller has a
+    session, the session's callsign is the sender and the body's field is
+    ignored; with no session (the local, unconfigured mode) it falls back as
+    before.
+    """
     now = time.time()
+    session = access.get_session_from_request(request)
+    sender = (session.get("callsign") or session.get("title")) if session else None
+    sender = sender or m.sender
     message_id = None
     if hub.sortie and not hub.sortie.get("stopped"):
         # After a sortie is stopped its record is closed: late traffic is
@@ -35,9 +46,9 @@ async def send_message(m: MessageIn):
                 return c.execute(
                     "INSERT INTO messages (sortie_id, t, sender, recipient, body)"
                     " VALUES (?,?,?,?,?)",
-                    (hub.sortie["id"], now, m.sender, m.recipient, m.body)).lastrowid
+                    (hub.sortie["id"], now, sender, m.recipient, m.body)).lastrowid
         message_id = await db_call(go)
-    msg = {"type": "message", "id": message_id, "t": now, "sender": m.sender,
+    msg = {"type": "message", "id": message_id, "t": now, "sender": sender,
            "recipient": m.recipient, "body": m.body}
     hub.messages.append(msg)
     await hub.broadcast(msg)

@@ -41,6 +41,15 @@ class Client:
 def sockets(monkeypatch):
     monkeypatch.setenv('CAPVSAR_MUMBLE_HOST', 'test-only')
     monkeypatch.delenv('CAPVSAR_RADIO_ACCESS_CODE', raising=False)
+    # Start every radio test from a console with no roles configured, whatever
+    # ran before. test_console.py and test_setup_auth.py's build_app() sets
+    # CAPVSAR_TOKEN_* directly in os.environ rather than through monkeypatch
+    # and never clears them, so in a combined run those tokens leaked in here.
+    # That was harmless until FE-4 made the join gate depend on them, at which
+    # point this file's results depended on which files pytest had already
+    # collected. A test whose outcome depends on its neighbours is not a test.
+    for role in ('INSTRUCTOR', 'BASE', 'PLUGIN'):
+        monkeypatch.delenv(f'CAPVSAR_TOKEN_{role}', raising=False)
     clients=[]
     async def connect(self, key):
         self.client=Client();clients.append(self.client)

@@ -31,6 +31,14 @@ def db():
     """
     c = sqlite3.connect(DB, timeout=5.0)
     c.row_factory = sqlite3.Row
+    # FE-9: `synchronous` is a per-CONNECTION pragma - only `journal_mode`
+    # persists in the file. init_db() set it once and every later connection
+    # silently reverted to FULL, so each commit fsynced: exactly the stall X-3
+    # set out to remove, moved into a worker thread rather than fixed. WAL plus
+    # NORMAL is the correct pairing and is durable against process crash (only
+    # a power loss can lose the last commits, which for exercise telemetry is
+    # the right trade).
+    c.execute("PRAGMA synchronous=NORMAL")
     try:
         yield c
         c.commit()
@@ -110,6 +118,22 @@ def init_db():
         sortie_cols = {r["name"] for r in c.execute("PRAGMA table_info(sorties)")}
         if "effects" not in sortie_cols:
             c.execute("ALTER TABLE sorties ADD COLUMN effects TEXT")
+        # V2-5: the recorded track held only where the aircraft was, never what
+        # the direction finder was showing at the time. The debrief could
+        # therefore score the bearings the crew *reported* but never compare
+        # them against what the needle actually did - which is the teaching
+        # moment the whole exercise exists for. The plugin already sends this
+        # on every position report; it was being thrown away.
+        pos_cols = {r["name"] for r in c.execute("PRAGMA table_info(positions)")}
+        if "df_json" not in pos_cols:
+            c.execute("ALTER TABLE positions ADD COLUMN df_json TEXT")
+        # A scenario may name the exact 406 channel the beacon transmits on.
+        # Without it a 406 beacon is assumed to be on 406.025, which the Becker
+        # always hears - so the Becker-vs-RT-600 coverage lesson, the reason
+        # both heads were built, cannot be set up from the console (B-5).
+        scen_cols = {r["name"] for r in c.execute("PRAGMA table_info(scenarios)")}
+        if "beacon_freq_hz" not in scen_cols:
+            c.execute("ALTER TABLE scenarios ADD COLUMN beacon_freq_hz INTEGER")
     access.init_auth_db()
 
 

@@ -703,7 +703,8 @@ class OperationalHygiene(unittest.TestCase):
         _, oid = run_sortie(self.main, self.client, headers=self.instr)
         with self.main.db() as c:
             for i in range(25):
-                c.execute("INSERT INTO positions VALUES (?,?,?,?,?,?,?)",
+                c.execute("INSERT INTO positions (sortie_id, callsign, t, lat,"
+                          " lon, alt_ft, hdg_true) VALUES (?,?,?,?,?,?,?)",
                           (oid, "CAP-1", 1000.0 + i, 33.0, -117.0, 5500.0, 90.0))
         first = self.client.get(f"/api/sorties/{oid}/track?limit=10").json()
         self.assertEqual(len(first["positions"]), 10)
@@ -727,7 +728,8 @@ class OperationalHygiene(unittest.TestCase):
     def test_retention_drops_old_positions_but_keeps_the_written_record(self):
         _, old_oid = run_sortie(self.main, self.client, headers=self.instr)
         with self.main.db() as c:
-            c.execute("INSERT INTO positions VALUES (?,?,?,?,?,?,?)",
+            c.execute("INSERT INTO positions (sortie_id, callsign, t, lat,"
+                          " lon, alt_ft, hdg_true) VALUES (?,?,?,?,?,?,?)",
                       (old_oid, "CAP-1", 1.0, 33.0, -117.0, 5500.0, 90.0))
             c.execute("INSERT INTO messages (sortie_id, t, sender, recipient,"
                       " body) VALUES (?,?,?,?,?)",
@@ -1085,3 +1087,192 @@ class BearingInteractionPolicy(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class InputBounds(unittest.TestCase):
+    """FE-8: every request body reached the database unvalidated.
+
+    The one that bit hardest: Pydantic v2 accepts NaN for a float by default
+    and Starlette's JSON parser accepts the bare `NaN` literal, so a NaN
+    bearing was stored - SQLite writes it as NULL - and base.js then threw on
+    `b.bearing_true.toFixed(0)`. Because a reconnecting console replays the
+    bearing log, that one row killed the log for the rest of the sortie.
+    """
+
+    def setUp(self):
+        self.main, self.client, self.db = build_app(
+            instructor=INSTRUCTOR, base=BASE, plugin=PLUGIN)
+        self.instr = {"X-CAPVSAR-Token": INSTRUCTOR}
+        self.base = {"X-CAPVSAR-Token": BASE}
+        self.plug = {"X-CAPVSAR-Token": PLUGIN}
+        run_sortie(self.main, self.client, headers=self.instr)
+        self.client.post("/api/positions", headers=self.plug, json={
+            "callsign": "CAP-1", "lat": 33.1, "lon": -117.2,
+            "alt_ft": 5500.0, "hdg_true": 90.0})
+
+    def tearDown(self):
+        os.unlink(self.db)
+
+    def post_bearing(self, **kw):
+        body = {"callsign": "CAP-1", "bearing_true": 45.0}
+        body.update(kw)
+        return self.client.post("/api/bearings", json=body, headers=self.base)
+
+    def test_a_nan_bearing_is_refused(self):
+        # Sent as raw bytes: `NaN` is not valid JSON, but Python's json module
+        # (and therefore Starlette) accepts the literal, which is how it ever
+        # reached the model.
+        r = self.client.post(
+            "/api/bearings",
+            headers={**self.base, "content-type": "application/json"},
+            content=b'{"callsign":"CAP-1","bearing_true":NaN}')
+        self.assertEqual(r.status_code, 422, "a NaN bearing was accepted")
+        self.assertEqual(self.client.get("/api/bearings", headers=self.base).json(), [],
+                         "a NaN bearing reached the log and will break it on replay")
+
+    def test_out_of_range_bearings_are_refused(self):
+        # A compass bearing is [0, 360). 360 is 0 and belongs to the next lap.
+        for value in (360.0, -1.0, 720.0):
+            with self.subTest(bearing=value):
+                self.assertEqual(self.post_bearing(bearing_true=value).status_code, 422)
+
+    def test_an_infinite_bearing_is_refused(self):
+        # Raw bytes again: httpx will not serialise Infinity either, so this
+        # can only be sent the way a hand-rolled client would send it.
+        r = self.client.post(
+            "/api/bearings",
+            headers={**self.base, "content-type": "application/json"},
+            content=b'{"callsign":"CAP-1","bearing_true":Infinity}')
+        self.assertEqual(r.status_code, 422)
+        self.assertEqual(self.client.get("/api/bearings", headers=self.base).json(), [])
+
+    def test_a_normal_bearing_still_works(self):
+        self.assertEqual(self.post_bearing(bearing_true=359.9).status_code, 200)
+
+    def test_position_bounds(self):
+        bad = [{"lat": 91.0}, {"lat": -91.0}, {"lon": 181.0}, {"hdg_true": 360.0},
+               {"hdg_true": -1.0}, {"alt_ft": 100000.0}, {"callsign": "x"},
+               {"callsign": "no/slashes"}]
+        for override in bad:
+            with self.subTest(**override):
+                body = {"callsign": "CAP-1", "lat": 33.0, "lon": -117.0,
+                        "alt_ft": 5000.0, "hdg_true": 10.0}
+                body.update(override)
+                r = self.client.post("/api/positions", json=body, headers=self.plug)
+                self.assertEqual(r.status_code, 422, f"accepted {override}")
+
+    def test_oversized_text_is_refused(self):
+        self.assertEqual(self.post_bearing(note="x" * 501).status_code, 422)
+        self.assertEqual(self.client.post(
+            "/api/messages", json={"body": "y" * 2001}, headers=self.base).status_code, 422)
+        self.assertEqual(self.client.post(
+            "/api/messages", json={"body": ""}, headers=self.base).status_code, 422)
+
+    def test_a_base_caller_cannot_sign_a_message_as_the_instructor(self):
+        r = self.client.post("/api/messages", headers=self.base,
+                             json={"body": "all aircraft return", "sender": "INSTRUCTOR"})
+        self.assertEqual(r.status_code, 200)
+        sent = self.client.get("/api/messages", headers=self.base).json()[-1]
+        self.assertNotEqual(sent["sender"], "INSTRUCTOR",
+                            "a base client signed a message as the instructor")
+
+
+class BeaconChannel(unittest.TestCase):
+    """B-5: a 406 scenario has to be able to name the exact channel.
+
+    Without it the engine assumes 406.025, which a Becker in Emergency mode
+    always hears - so the Becker-vs-RT-600 coverage difference, the reason both
+    heads exist, could not be staged from the console at all.
+    """
+
+    def setUp(self):
+        self.main, self.client, self.db = build_app(instructor=INSTRUCTOR, plugin=PLUGIN)
+        self.instr = {"X-CAPVSAR-Token": INSTRUCTOR}
+
+    def tearDown(self):
+        os.unlink(self.db)
+
+    def make(self, **kw):
+        body = {"name": "chan", "beacon_lat": 33.0, "beacon_lon": -117.0,
+                "band": "406"}
+        body.update(kw)
+        return self.client.post("/api/scenarios", json=body, headers=self.instr)
+
+    def test_a_channel_on_the_grid_is_accepted_and_kept(self):
+        r = self.make(beacon_freq_hz=406_037_000)
+        self.assertEqual(r.status_code, 200, r.text)
+        row = [s for s in self.client.get("/api/scenarios", headers=self.instr).json()
+               if s["id"] == r.json()["id"]][0]
+        self.assertEqual(row["beacon_freq_hz"], 406_037_000)
+
+    def test_off_grid_channels_are_refused(self):
+        for hz in (406_038_000, 406_021_000, 406_079_000):
+            with self.subTest(hz=hz):
+                self.assertEqual(self.make(beacon_freq_hz=hz).status_code, 422)
+
+    def test_the_frequency_must_match_the_band(self):
+        self.assertEqual(self.make(band="121.5", beacon_freq_hz=406_037_000).status_code, 422)
+        self.assertEqual(self.make(band="121.5", beacon_freq_hz=121_500_000).status_code, 200)
+
+    def test_it_is_optional(self):
+        self.assertEqual(self.make().status_code, 200)
+
+    def test_the_plugin_receives_it(self):
+        sid = self.make(beacon_freq_hz=406_037_000).json()["id"]
+        self.client.post("/api/sorties", json={"scenario_id": sid}, headers=self.instr)
+        body = self.client.get("/api/plugin/scenario",
+                               headers={"X-CAPVSAR-Token": PLUGIN}).json()
+        self.assertEqual(body["scenario"]["beacon_freq_hz"], 406_037_000)
+
+
+class DFTelemetryIsRecorded(unittest.TestCase):
+    """V2-5: the track held where the aircraft was, never what the DF showed."""
+
+    def setUp(self):
+        self.main, self.client, self.db = build_app(
+            instructor=INSTRUCTOR, base=BASE, plugin=PLUGIN)
+        self.instr = {"X-CAPVSAR-Token": INSTRUCTOR}
+        self.plug = {"X-CAPVSAR-Token": PLUGIN}
+
+    def tearDown(self):
+        os.unlink(self.db)
+
+    def report(self):
+        self.client.post("/api/positions", headers=self.plug, json={
+            "callsign": "CAP-1", "lat": 33.1, "lon": -117.2, "alt_ft": 5500.0,
+            "hdg_true": 90.0,
+            "df": {"valid": True, "bearing_rel": 12.5, "bearing_true": 102.5,
+                   "signal": 0.42, "distance_nm": 9.2, "in_cone": False}})
+
+    def test_it_is_stored_and_returned_after_reveal(self):
+        _, oid = run_sortie(self.main, self.client, reveal=True, headers=self.instr)
+        self.report()
+        track = self.client.get(f"/api/sorties/{oid}/track", headers=self.instr).json()
+        self.assertTrue(track["positions"], "no positions recorded")
+        self.assertEqual(track["positions"][-1]["df"]["bearing_true"], 102.5)
+
+    def test_it_is_withheld_before_reveal(self):
+        _, oid = run_sortie(self.main, self.client, headers=self.instr)
+        self.report()
+        track = self.client.get(f"/api/sorties/{oid}/track").json()
+        self.assertTrue(track["positions"])
+        # bearing_true + distance_nm from a known position IS the beacon.
+        for point in track["positions"]:
+            self.assertNotIn("df", point, "DF telemetry leaked before reveal")
+        self.assertIsNone(track["beacon"])
+
+
+class ConnectionPragmas(unittest.TestCase):
+    """FE-9: `synchronous` is per-connection; only journal_mode persists."""
+
+    def setUp(self):
+        self.main, self.client, self.db = build_app()
+
+    def tearDown(self):
+        os.unlink(self.db)
+
+    def test_every_connection_is_wal_and_normal(self):
+        with self.main.db() as c:
+            self.assertEqual(c.execute("PRAGMA journal_mode").fetchone()[0], "wal")
+            self.assertEqual(c.execute("PRAGMA synchronous").fetchone()[0], 1,
+                             "connection reverted to FULL: every commit fsyncs")

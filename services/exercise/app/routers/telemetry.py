@@ -65,9 +65,15 @@ async def ingest(p: PositionIn):
         # reporting.
         if df is not None:
             ac["df"] = df
+        # V2-5: record what the direction finder was showing, not just where
+        # the aircraft was. Without it the debrief can score the bearings the
+        # crew reported but never compare them with what the needle did.
+        df_json = json.dumps(df) if df is not None else None
         await db_call(lambda: _exec(
-            "INSERT INTO positions VALUES (?,?,?,?,?,?,?)",
-            (hub.sortie["id"], p.callsign, now, p.lat, p.lon, p.alt_ft, p.hdg_true)))
+            "INSERT INTO positions (sortie_id, callsign, t, lat, lon, alt_ft,"
+            " hdg_true, df_json) VALUES (?,?,?,?,?,?,?,?)",
+            (hub.sortie["id"], p.callsign, now, p.lat, p.lon, p.alt_ft,
+             p.hdg_true, df_json)))
 
     hub.aircraft[p.callsign] = ac
     return {"ok": True, "df": df}
