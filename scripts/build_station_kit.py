@@ -84,12 +84,50 @@ changing system-wide trust. The plugin will reject an untrusted certificate.
 """
 
 
+KIT_MARKER = ".capvsar-kit"
+
+
+def prepare_out_dir(out_dir: Path) -> Path:
+    """Make `out_dir` an empty directory, refusing anything we did not create.
+
+    V2-9: this was `if out_dir.exists(): shutil.rmtree(out_dir)` on whatever
+    `--out` named. `--out ~` erased a home directory, `--out .` the checkout.
+    Deleting a tree is the one operation here that cannot be undone, so it is
+    now allowed only for a directory this script made: either it does not
+    exist, or it is empty, or it carries the marker file a previous kit build
+    left behind.
+    """
+    out_dir = out_dir.expanduser().resolve()
+
+    forbidden = [Path.home().resolve(), Path("/"), ROOT.resolve()]
+    if out_dir in forbidden or out_dir in Path(out_dir).parents:
+        raise SystemExit(f"refusing to build a kit into {out_dir}")
+    for parent in forbidden:
+        if parent == out_dir:
+            raise SystemExit(f"refusing to build a kit into {out_dir}")
+
+    if out_dir.exists():
+        if not out_dir.is_dir():
+            raise SystemExit(f"{out_dir} exists and is not a directory")
+        contents = list(out_dir.iterdir())
+        if contents and not (out_dir / KIT_MARKER).exists():
+            raise SystemExit(
+                f"{out_dir} is not empty and was not created by this script "
+                f"(no {KIT_MARKER}). Refusing to delete it - choose an empty "
+                f"directory or remove it yourself.")
+        shutil.rmtree(out_dir)
+
+    out_dir.mkdir(parents=True)
+    (out_dir / KIT_MARKER).write_text(
+        "Created by scripts/build_station_kit.py. This file marks the "
+        "directory as safe for the script to replace on the next build.\n")
+    return out_dir
+
+
 def build(callsign: str, console: str, plugin_key: str, out_dir: Path, make_zip: bool) -> Path:
     py_compile.compile(str(PLUGIN_SOURCE), doraise=True)
 
-    if out_dir.exists():
-        shutil.rmtree(out_dir)
-    out_dir.mkdir(parents=True)
+    out_dir = prepare_out_dir(out_dir)
 
     shutil.copy2(PLUGIN_SOURCE, out_dir / "PI_capvsar_df.py")
 

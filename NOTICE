@@ -57,6 +57,18 @@ Equipment documentation (Becker, RHOTHETA, Technisonic, Garmin)
     licensed for redistribution, and this repository is the wrong place to
     mirror one.
 
+    Correction, 2026-09-13 (B1): this paragraph was not true when it was
+    written. .gitignore listed the manuals from 65f2c54 onward, but the files
+    had been committed before that and were never removed from the index, so
+    about 25 MB of Becker, RHOTHETA, Technisonic and Garmin PDFs were tracked
+    at HEAD while this file said they were not. They have now been removed
+    from the index and remain on disk, ignored, exactly as intended.
+
+    They are still present in the repository's HISTORY. Removing them from
+    every commit means rewriting it (git filter-repo) and re-cloning on all
+    three machines; that is decision D-4 and has not been done. Until it is,
+    this repository must not be shared outside the project.
+
 Civil Air Patrol
     "Civil Air Patrol", "CAP" and the CAP seal and wing emblem belong to the
     Civil Air Patrol. This is a member-built training project; it is not an
