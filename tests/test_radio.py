@@ -1,6 +1,8 @@
 """PTT, channel isolation and browser bridge contract regressions."""
 import asyncio
 import os
+import shutil
+import subprocess
 import tempfile
 import time
 from pathlib import Path
@@ -120,8 +122,13 @@ def test_authenticated_session_callsign_overrides_the_claimed_one(sockets, monke
 
 
 def test_no_session_falls_back_to_the_claimed_callsign(sockets):
-    """RBAC not configured for this exercise (the common case today) must not
-    break the radio - the client-supplied callsign is trusted as before."""
+    """With NO role tokens configured at all, the console is in its documented
+    local mode and the radio stays usable without a login.
+
+    FE-4 narrowed this: the fallback used to apply whenever a session happened
+    to be absent, including on a console with roles configured, which is what
+    let a stranger join as "MISSION BASE". It now applies only when `base` is
+    unconfigured - the same condition access.enforce() fails open on."""
     client, clients = sockets
     with join(client) as sock:
         sock.send_json({'action': 'join', 'callsign': 'TEST BASE', 'channel': 'primary'})
@@ -523,3 +530,157 @@ def test_efj_mon_artwork_has_an_executable_hit_region():
     assert _run_monitor_js("controlHeadMonitorHit('efj5300')") == [
         'Monitor / open squelch', 489, 32, 94, 50, 'mon']
     assert _run_monitor_js("controlHeadMonitorHit('apx4500')") is None
+
+
+# --------------------------------------------------------------- FE-4 / FE-6
+
+def _configured(monkeypatch):
+    """A console with roles configured, and a throwaway auth database."""
+    db = tempfile.NamedTemporaryFile(suffix='.db', delete=False)
+    db.close()
+    monkeypatch.setenv('CAPVSAR_DB', db.name)
+    monkeypatch.setenv('CAPVSAR_TOKEN_BASE', 'base-token')
+    monkeypatch.setenv('CAPVSAR_TOKEN_INSTRUCTOR', 'instructor-token')
+    access.init_auth_db()
+    return db.name
+
+
+def test_join_without_a_session_is_refused_when_roles_are_configured(sockets, monkeypatch):
+    """FE-4: the voice net has to be gated wherever the console is.
+
+    "MISSION BASE" is the join form's own default value, and since X-9 keys a
+    radio by callsign, a stranger typing it attached to the real MRO's Mumble
+    client - heard their net and raced their PTT acks. Before this change the
+    socket below was accepted and took the claimed callsign.
+    """
+    client, clients = sockets
+    db = _configured(monkeypatch)
+    try:
+        with client.websocket_connect('/api/radio/stream') as sock:
+            sock.send_json({'action': 'join', 'callsign': 'MISSION BASE',
+                            'channel': 'primary'})
+            reply = sock.receive_json()
+            assert reply['type'] == 'error'
+            assert 'log in first' in reply['message'].lower()
+        assert not radio.SESSIONS, 'a refused join still opened a Mumble client'
+    finally:
+        os.unlink(db)
+
+
+def test_join_with_a_session_uses_the_session_callsign(sockets, monkeypatch):
+    client, clients = sockets
+    db = _configured(monkeypatch)
+    try:
+        sess = access.create_session('X7QM-2FBX', 'base', 'Mission Radio Operator 1',
+                                     callsign='MRO 1')
+        with client.websocket_connect(
+                '/api/radio/stream',
+                cookies={access.SESSION_COOKIE: sess}) as sock:
+            sock.send_json({'action': 'join', 'callsign': 'MISSION BASE',
+                            'channel': 'primary'})
+            assert sock.receive_json()['type'] == 'tuned'
+            assert [r.callsign for r in radio.SESSIONS] == ['MRO 1']
+    finally:
+        os.unlink(db)
+
+
+def test_ics_is_not_a_public_control(sockets, monkeypatch):
+    """FE-6: anyone on the LAN could mute every observer station mid-search.
+
+    POST {"split_com": true} and every callsign containing MO/OBSERVER stopped
+    hearing the mission net, with nothing to say why.
+    """
+    client, _ = sockets
+    db = _configured(monkeypatch)
+    try:
+        before = client.get('/api/radio/ics').json()
+        r = client.post('/api/radio/ics', json={'split_com': True})
+        assert r.status_code == 403, 'ICS accepted an unauthenticated caller'
+        assert client.get('/api/radio/ics').json() == before
+
+        ok = client.post('/api/radio/ics', json={'split_com': True},
+                         headers={'X-CAPVSAR-Token': 'base-token'})
+        assert ok.status_code == 200
+        assert ok.json()['split_com'] is True
+    finally:
+        radio.ICS_STATE.update({'mode': 'ALL', 'split_com': False,
+                                'pilot_isolated': False,
+                                'copilot_isolated': False,
+                                'crew_isolated': False})
+        os.unlink(db)
+
+
+def test_ics_is_refused_when_no_roles_are_configured_unless_the_console_is_deliberately_open(sockets, monkeypatch):
+    """X-11 (deny by default) replaced FE-6's "documented local mode stays open":
+    no roles configured now means refused, and an open console is a deliberate
+    CAPVSAR_DEV_OPEN choice."""
+    client, _ = sockets
+    try:
+        assert client.post('/api/radio/ics', json={'mode': 'PILOT'}).status_code == 503
+        monkeypatch.setenv('CAPVSAR_DEV_OPEN', '1')
+        assert client.post('/api/radio/ics', json={'mode': 'PILOT'}).status_code == 200
+    finally:
+        radio.ICS_STATE.update({'mode': 'ALL', 'split_com': False,
+                                'pilot_isolated': False,
+                                'copilot_isolated': False,
+                                'crew_isolated': False})
+
+
+def test_only_unrecoverable_server_errors_stop_the_radio_reconnecting():
+    """FE-5: a Mumble restart must not leave every browser radio dark.
+
+    The client used to call disconnect() on any {"type":"error"}, which clears
+    wantOnline, so F-4's auto-rejoin never fired. F-4 therefore only covered a
+    socket that died silently; the commonest real failure - the voice server
+    bouncing - arrives as an error frame and killed the radio for the rest of
+    the exercise.
+
+    This drives the real classifier out of mission-radio.js rather than
+    asserting on its source text.
+    """
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('node is not installed; JS classifier not exercised')
+
+    harness = r'''
+      const fs = require('fs');
+      const src = fs.readFileSync(process.argv[1], 'utf8');
+      // Pull out the classifier and its table, which are self-contained.
+      const table = src.match(/const FATAL_ERRORS = \[[\s\S]*?\];/);
+      const fn = src.match(/function isFatalError\(message\) \{[\s\S]*?\n\}/);
+      if (!table || !fn) { console.log('MISSING'); process.exit(0); }
+      eval(table[0] + '\n' + fn[0]);
+      const fatal = [
+        'Incorrect exercise access code.',
+        'Log in first: open /login and use your participant code, then reconnect the radio.',
+        'All browser radio connections are occupied.',
+        'Mission voice is not configured on this server.',
+      ];
+      const retry = [
+        'Mission voice connection lost. Reconnect to listen.',
+        'Voice connection unavailable. Check the mission server and selected net, then reconnect.',
+        'Audio connection is delayed. Release PTT and try again.',
+        'The voice server did not confirm the selected net.',
+      ];
+      const bad = [];
+      fatal.forEach(m => { if (!isFatalError(m)) bad.push('should be fatal: ' + m); });
+      retry.forEach(m => { if (isFatalError(m)) bad.push('should retry: ' + m); });
+      console.log(bad.length ? 'FAIL ' + bad.join(' | ') : 'OK');
+    '''
+    out = subprocess.run([node, '-e', harness, str(RADIO_JS)],
+                         capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr
+    result = out.stdout.strip()
+    assert result != 'MISSING', 'isFatalError/FATAL_ERRORS not found in mission-radio.js'
+    assert result == 'OK', result
+
+
+def test_the_error_branch_routes_through_the_classifier():
+    """The handler must consult isFatalError rather than always disconnecting."""
+    src = RADIO_JS.read_text()
+    assert "message.type==='error'" in src
+    branch = src.split("message.type==='error'", 1)[1][:120]
+    assert 'handleServerError' in branch, (
+        'the error branch does not go through handleServerError: ' + branch)
+    assert 'connectionLost' in src.split('function handleServerError', 1)[1][:600], (
+        'handleServerError never schedules a reconnect')

@@ -18,7 +18,7 @@ import time
 import uuid
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
 
 from .roles import base_or_instructor
 from . import access
@@ -338,6 +338,9 @@ class MumbleRadio:
         elif action == 'ping':
             self.enqueue({"type": "pong"})
         elif action == 'ics':
+            # Reachable only through a joined socket, and since FE-4 a join
+            # requires an authenticated session whenever roles are configured,
+            # so this shares the REST route's gate rather than needing its own.
             mode = str(data.get('mode', ICS_STATE['mode'])).upper()
             if mode in ('ALL', 'PILOT', 'COPILOT', 'CREW'):
                 ICS_STATE['mode'] = mode
@@ -451,12 +454,29 @@ async def stream(sock: WebSocket):
         # O-5: an authenticated RBAC session's callsign always overrides
         # whatever the client claims, so a base-role student can't type
         # "MISSION BASE" or "INSTRUCTOR" and impersonate another station on
-        # the net. No session - RBAC not configured for this exercise - falls
-        # back to the client-supplied name, matching access.py's fail-open
-        # design elsewhere: this stays usable with no login system engaged.
+        # the net.
+        #
+        # FE-4: that was only half of it. The override applied when a session
+        # happened to exist, and nothing required one - so on a console with
+        # tokens configured, a socket with no cookie at all kept its claimed
+        # callsign. "MISSION BASE" is the join form's own default value, and
+        # since X-9 keys a radio by callsign, a stranger typing it attached to
+        # the real MRO's Mumble client: heard their net, and raced their PTT
+        # acks. The exercise console is gated; its voice net has to be too.
+        #
+        # The fail-open path is kept deliberately and narrowly: when *no* role
+        # tokens are configured at all the console is in its documented local
+        # mode (access.enforce does the same), and requiring a login there
+        # would make the radio unusable on a laptop with an empty .env.
         session = access.get_session_from_request(sock)
         if session and session.get('callsign'):
             name = session['callsign']
+        elif 'base' not in access.unconfigured():
+            await sock.send_json({
+                "type": "error",
+                "message": "Log in first: open /login and use your participant "
+                           "code, then reconnect the radio."})
+            return
         # X-9: a second face for an operator already on the net attaches to
         # the radio they are already using. It costs no extra Mumble session,
         # and the desk stays one station on the net instead of appearing twice.

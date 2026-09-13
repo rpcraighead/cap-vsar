@@ -454,6 +454,38 @@ function soundDisconnectAlarm() {
 function cancelReconnect() {
   clearTimeout(state.reconnectTimer); state.reconnectTimer=null;
 }
+// FE-5: a server-sent error used to call disconnect(), which clears
+// wantOnline, so the radio never came back. F-4's auto-rejoin therefore only
+// covered a socket that died silently (a Wi-Fi blip, a console restart) - the
+// commonest real failure, a Mumble container restart, arrives as an `error`
+// frame and put every browser radio in the exercise permanently dark until
+// each operator noticed and re-joined by hand.
+//
+// Only a few errors are worth giving up on: the ones that will fail again
+// identically until a human changes something. Everything else - the voice
+// server bouncing, a watchdog fault, congestion - is exactly what a retry is
+// for. Matched on substrings because these strings are the server's own
+// (radio.py), and are the operator-facing text as well.
+const FATAL_ERRORS = ['access code', 'log in first', 'occupied',
+                      'not configured', 'callsign of'];
+
+function isFatalError(message) {
+  const m = (message||'').toLowerCase();
+  return FATAL_ERRORS.some(f => m.includes(f));
+}
+
+function handleServerError(message) {
+  const text = message || 'Voice connection unavailable.';
+  if(isFatalError(text)) {
+    disconnect();               // needs a human; stop trying
+    notice(text);
+    return;
+  }
+  // wantOnline stays set, so this takes the same path as a socket that died
+  // on its own: release PTT, drop the connection, back off, retry.
+  connectionLost(text);
+}
+
 function scheduleReconnect(message) {
   if(!state.wantOnline||state.reconnectTimer) return;
   const delay=Math.min(30000,1000*2**Math.min(state.reconnectAttempt,5));
@@ -683,8 +715,8 @@ function receive(data,receiver='main') {
     if(receiver==='airband')airband.rxLogTimer=timer;else state.rxLogTimer=timer;
   } else if(message.type==='pong') radioState.lastPong=Date.now();
   else if(message.type==='error'){
-    if(failureScope(receiver)==='airband')airbandLost(message.message||'Airband radio unavailable.');
-    else{disconnect();notice(message.message||'Voice connection unavailable.');}
+    if(failureScope(receiver)!=='airband')handleServerError(message.message);  // FE-5: only errors a human must fix stop the radio
+    else airbandLost(message.message||'Airband radio unavailable.');
   }
 }
 
