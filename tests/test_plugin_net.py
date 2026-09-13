@@ -9,6 +9,12 @@ active=1 with the beacon at 0,0 and the DF was deaf for the whole exercise.
 These tests cover the truth channel and every way it can be refused, driving
 the real fetch_scenario() against faked HTTP responses.
 
+Note the drain_log() calls: since EN-5 the network thread queues its log
+lines rather than calling xp.log() directly, because XPPython3's API is
+main-thread-only. The flight loop drains that queue every tick; a test that
+wants to assert on xp.LOG has to do the same, which also exercises the real
+queue-then-drain path rather than only the call that fills it.
+
     python3 tests/test_plugin_net.py
 """
 import importlib.util
@@ -110,6 +116,7 @@ class TruthChannel(unittest.TestCase):
         install_response(status=status)
         self.assertIsNone(self.engine.fetch_scenario(),
                           f"HTTP {status} must not look like a scenario")
+        self.engine.drain_log()
         self.assertTrue(any(expect_log in m for m in xp.LOG),
                         f"HTTP {status} logged {xp.LOG!r}, expected {expect_log!r}")
 
@@ -126,6 +133,7 @@ class TruthChannel(unittest.TestCase):
         install_response(status=503)
         for _ in range(5):
             self.engine.fetch_scenario()
+        self.engine.drain_log()
         self.assertEqual(len(xp.LOG), 1, f"logged {len(xp.LOG)} times: {xp.LOG!r}")
 
     def test_recovery_is_logged(self):
@@ -133,6 +141,7 @@ class TruthChannel(unittest.TestCase):
         self.engine.fetch_scenario()
         install_response(TRUTH_BODY)
         self.engine.fetch_scenario()
+        self.engine.drain_log()
         self.assertTrue(any("truth channel open" in m for m in xp.LOG), xp.LOG)
 
 

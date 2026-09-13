@@ -310,6 +310,26 @@ AIRFRAME_PROFILES = {
 }
 
 
+def as_int(value, default=0):
+    """Coerce a JSON scenario/effect value to an int.
+
+    The int counterpart of as_float, and needed in the same places for the same
+    reason (V2-8). `cap/df/error_code` read `int(effects["error_code"])` inside
+    a dataref accessor; the console's own model types that field `int | None`,
+    so a scenario saved with it null made the accessor raise, XPPython3 returned
+    0, and 0 is E0 NO RECEIVER - the Becker showed a hard receiver fault
+    because a field was empty. The nullable `cs` fields did the same thing one
+    level up, where the exception is caught and logged four times a second
+    while every dataref stays frozen at its last value.
+    """
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def as_float(value, default=0.0):
     """Coerce a JSON scenario value to a float.
 
@@ -488,7 +508,10 @@ def circular_mean(degrees):
     sx = sum(math.cos(math.radians(d)) for d in degrees)
     if sx == 0.0 and sy == 0.0:
         return degrees[-1]
-    return math.degrees(math.atan2(sy, sx)) % 360.0
+    # `% 360.0` on a small negative float returns 360.0 rather than 0.0, and
+    # the faceplates render that as <360>. Fold it back (EN-10).
+    mean = math.degrees(math.atan2(sy, sx)) % 360.0
+    return 0.0 if mean >= 359.9995 else mean
 
 
 def on_cs_grid(hz):
@@ -591,7 +614,15 @@ class PythonInterface:
         self.held = None                        # (t, rel, true)
         self.scan_hold_hz = None
 
-        # scenario, replaced wholesale by the network thread
+        # EN-5: XPPython3's API is main-thread-only, but the network thread had
+        # two paths into xp.log() (truth_note, and now the poll-failure note).
+        # Messages go on this queue instead and the flight loop drains it.
+        self.log_queue = collections.deque(maxlen=64)
+        self.last_poll_complaint = 0.0
+
+        # scenario, replaced wholesale by the network thread - see
+        # poll_scenario_once, which rebinds this attribute rather than
+        # mutating the dict in place (EN-4)
         self.scn = {"active": 0, "lat": 0.0, "lon": 0.0, "elev_ft": 0.0,
                     "band": 121.5, "power": 1.0, "effects": {}}
         self.started = time.time()
@@ -652,7 +683,8 @@ class PythonInterface:
         i("cap/df/rx_open", lambda: self.rx_open)
         f("cap/df/band", lambda: self.published_band())
         f("cap/df/spread", lambda: self.spread)
-        i("cap/df/error_code", lambda: int(self.scn.get("effects", {}).get("error_code", ERR_NONE)))
+        i("cap/df/error_code",
+          lambda: as_int(self.scn.get("effects", {}).get("error_code"), ERR_NONE))
         # Writable like the other three scenario refs, which is what
         # DATAREF_CONTRACT.md has always promised: with no console reachable,
         # setting lat/lon/elev and then active=1 is the whole offline test
@@ -660,7 +692,7 @@ class PythonInterface:
         # still wins - the next poll overwrites whatever was set here. (P-10)
         self.accessors.append(xp.registerDataAccessor(
             "cap/scenario/active", xp.Type_Int, 1,
-            readInt=lambda r: int(self.scn.get("active", 0)),
+            readInt=lambda r: as_int(self.scn.get("active"), 0),
             writeInt=lambda r, v: self.scn.__setitem__("active", 1 if int(v) else 0)))
 
         i("cap/df/cs_sync", lambda: self.cs_sync)
@@ -676,13 +708,15 @@ class PythonInterface:
         # Readable as well as writable so the instructor console and DataRefTool
         # can see what the crew has actually set.
 
-        def in_int(name, attr, clamp=None):
-            def write(refCon, v, a=attr, c=clamp):
+        def in_int(name, attr, clamp=None, on_write=None):
+            def write(refCon, v, a=attr, c=clamp, hook=on_write):
                 v = int(v)
                 if c:
                     v = max(c[0], min(c[1], v))
                 setattr(self, a, v)
                 self.panel_seen = True
+                if hook:
+                    hook(v)
             self.accessors.append(xp.registerDataAccessor(
                 name, xp.Type_Int, 1,
                 readInt=lambda r, a=attr: int(getattr(self, a)),
@@ -704,7 +738,12 @@ class PythonInterface:
         in_int("cap/df/active_freq_hz", "active_freq_hz", (0, 2_000_000_000))
         in_int("cap/df/head_type", "head_type", (HEAD_517, HEAD_RT600))
         in_int("cap/df/mode", "mode", (MODE_EMERGENCY, MODE_TRAINING))
-        in_int("cap/df/scan_enable", "scan_enable", (0, 1))
+        # EN-11: turning scan off must drop whatever frequency scan was holding.
+        # It survived a 1->0->1 cycle, so re-enabling scan resumed on a stale
+        # frequency the crew had since tuned away from, and the set stayed deaf
+        # until something else squelched it.
+        in_int("cap/df/scan_enable", "scan_enable", (0, 1),
+               on_write=lambda v: setattr(self, "scan_hold_hz", None) if not v else None)
         in_int("cap/df/mounting", "mounting", (MOUNT_TOP, MOUNT_BOTTOM))
         in_int("cap/df/rx_span_hz", "rx_span_hz", (0, 10_000_000))
         in_int("cap/df/scan_alt1_hz", "scan_alt1_hz", (0, 2_000_000_000))
@@ -871,7 +910,7 @@ class PythonInterface:
         hz = s.get("beacon_freq_hz")
         if hz:
             return float(hz)
-        band = float(s.get("band", 121.5))
+        band = as_float(s.get("band"), 121.5)
         if band > 400:
             return 406_025_000.0
         if band > 200:
@@ -923,7 +962,7 @@ class PythonInterface:
     def published_band(self):
         """cap/df/band in MHz - what the head is on, not what the console picked."""
         if not self.panel_seen:
-            return float(self.scn.get("band", 121.5))
+            return as_float(self.scn.get("band"), 121.5)
         return self.effective_freq_hz() / 1e6
 
     def squelch_threshold(self):
@@ -944,7 +983,35 @@ class PythonInterface:
         return time.time() - self.cs_decoded_at
 
     # ------------------------------------------------------------ main loop
+    def log(self, message):
+        """Queue a line for the flight loop to log on the main thread (EN-5).
+
+        Safe to call from the network thread; `deque.append` is atomic under
+        the GIL and the deque is bounded, so a console flapping cannot grow it.
+
+        The queue is created on demand rather than relied on from __init__:
+        X-Plane owns this object's lifecycle, and the network-thread tests
+        build the engine with __new__ to drive fetch_scenario without a
+        simulator. Logging must never be the thing that raises.
+        """
+        q = getattr(self, "log_queue", None)
+        if q is None:
+            q = self.log_queue = collections.deque(maxlen=64)
+        q.append(message)
+
+    def drain_log(self):
+        q = getattr(self, "log_queue", None)
+        while q:
+            try:
+                xp.log("CAP V-SAR: " + q.popleft())
+            except IndexError:
+                return
+
     def flight_loop(self, sinceLast, elapsed, counter, refCon):
+        try:
+            self.drain_log()
+        except Exception:
+            pass
         try:
             self.compute()
         except Exception as e:
@@ -1164,18 +1231,18 @@ class PythonInterface:
             # the obstruction does, and wanders as the geometry changes.
             brg = (brg + self.multipath_error_deg(
                 clearance_ft, lat, lon, now,
-                float(eff.get("multipath_offset_deg", 40.0)))) % 360.0
+                as_float(eff.get("multipath_offset_deg"), 40.0))) % 360.0
 
         rel = (brg - hdg) % 360.0
 
         # Antenna offset: the installation has a real misalignment and the crew
         # dials in a correction. They cancel when the correction is right.
-        installed_offset = float(eff.get("antenna_offset_deg", 0.0))
+        installed_offset = as_float(eff.get("antenna_offset_deg"), 0.0)
         rel = (rel + installed_offset - (self.offset_deg if self.panel_seen else 0.0)) % 360.0
 
         # Mounting: a top-mounted antenna set to BOTTOM (or the reverse) puts
         # the bearing out on the wrong side. Cheap trap, entirely realistic.
-        if self.panel_seen and self.mounting != int(eff.get("mounting", MOUNT_TOP)):
+        if self.panel_seen and self.mounting != as_int(eff.get("mounting"), MOUNT_TOP):
             rel = (-rel) % 360.0
 
         # One un-averaged sample. Scatter grows as the signal falls, and it is
@@ -1267,22 +1334,22 @@ class PythonInterface:
 
         self.cs_sync = 2 if cs.get("selftest") else 1
 
-        proto = int(cs.get("protocol", 2))      # 2 = STANDARD
+        proto = as_int(cs.get("protocol"), 2)   # 2 = STANDARD
         if self.panel_seen and self.mode == MODE_TRAINING and proto <= 3:
             proto += 4                          # the TEST variant, as the panels render it
         self.cs_protocol = proto
 
         ident = cs.get("hex15") or synth_hex15(s["lat"], s["lon"])
         self.cs_hex15 = str(ident).upper()[:15].encode("ascii", "replace")
-        self.cs_country = int(cs.get("country", 366))   # 366 = United States
+        self.cs_country = as_int(cs.get("country"), 366)  # 366 = United States
 
         has_pos = cs.get("has_position")
         if has_pos is None:
             has_pos = bool(s.get("effects", {}).get("beacon_has_gps", False))
         self.cs_has_position = 1 if has_pos else 0
         if self.cs_has_position:
-            self.cs_lat = float(cs.get("lat", s["lat"]))
-            self.cs_lon = float(cs.get("lon", s["lon"]))
+            self.cs_lat = as_float(cs.get("lat"), as_float(s.get("lat")))
+            self.cs_lon = as_float(cs.get("lon"), as_float(s.get("lon")))
         else:
             self.cs_lat = self.cs_lon = 0.0
 
@@ -1295,7 +1362,9 @@ class PythonInterface:
         """
         if getattr(self, "_truth_state", None) != state:
             self._truth_state = state
-            xp.log("CAP V-SAR: " + message)
+            # Queued, not logged directly: this runs on the network thread and
+            # XPPython3's API is main-thread-only (EN-5).
+            self.log(message)
 
     def fetch_scenario(self):
         """The running sortie, with beacon truth, from the console.
@@ -1352,14 +1421,30 @@ class PythonInterface:
             self.stop.wait(NET_TICK_S)
 
     def poll_scenario_once(self):
-        """One scenario fetch. A console that is down is not an error here."""
+        """One scenario fetch. A console that is down is not an error here.
+
+        EN-4: this used to mutate `self.scn` in place - `update()`, then item
+        assignment - while the flight loop read `s["lat"]`, `s["lon"]` and
+        `s["elev_ft"]` as three separate subscripts on the same dict. A swap
+        landing between two of them gave one tick an old latitude with a new
+        longitude: a beacon somewhere in between, which then entered the
+        two-second averaging window and dragged the needle for up to six
+        seconds. The docstring on `scn` claimed the scenario was "replaced
+        wholesale" and it was not.
+
+        Every path here now builds a complete dict and rebinds `self.scn` once.
+        A rebind is atomic against the flight loop, which takes its own local
+        reference at the top of the tick, so a tick sees exactly one scenario -
+        the old one or the new one, never half of each.
+        """
         try:
             st = self.fetch_scenario()
+            nxt = dict(self.scn)
             if st is None:
                 # Console is up but will not give us the beacon. Silence is
                 # the honest state: a DF homing on a stale or null position
                 # teaches the crew something false.
-                self.scn["active"] = 0
+                nxt["active"] = 0
             else:
                 sc = st.get("scenario") or {}
                 so = st.get("sortie") or {}
@@ -1367,27 +1452,43 @@ class PythonInterface:
                 if (running and sc.get("beacon_lat") is not None
                         and sc.get("beacon_lon") is not None):
                     freq_hz = as_float(sc.get("beacon_freq_hz"), 0.0)
-                    self.scn.update({"active": 1,
-                                     "lat": as_float(sc["beacon_lat"]),
-                                     "lon": as_float(sc["beacon_lon"]),
-                                     "elev_ft": as_float(sc.get("beacon_elev_ft")),
-                                     "band": as_float(sc.get("band"), 121.5),
-                                     "beacon_freq_hz": freq_hz or None,
-                                     "power": as_float(sc.get("power"), 1.0),
-                                     "cs": sc.get("cs") or {},
-                                     "effects": sc.get("effects") or {}})
+                    nxt.update({"active": 1,
+                                "lat": as_float(sc["beacon_lat"]),
+                                "lon": as_float(sc["beacon_lon"]),
+                                "elev_ft": as_float(sc.get("beacon_elev_ft")),
+                                "band": as_float(sc.get("band"), 121.5),
+                                "beacon_freq_hz": freq_hz or None,
+                                "power": as_float(sc.get("power"), 1.0),
+                                "cs": sc.get("cs") or {},
+                                "effects": sc.get("effects") or {}})
                 elif running:
                     # Sortie running but no beacon in the payload: the
                     # scenario is incomplete. Effects still apply, but
                     # there is nothing to home on.
                     self.truth_note("no-beacon",
                                     "sortie running with no beacon position")
-                    self.scn["active"] = 0
-                    self.scn["effects"] = sc.get("effects") or self.scn["effects"]
+                    nxt["active"] = 0
+                    nxt["effects"] = sc.get("effects") or nxt.get("effects") or {}
                 else:
-                    self.scn["active"] = 0
-        except Exception:
-            pass                          # console offline is not an error
+                    nxt["active"] = 0
+            self.scn = nxt                # single atomic rebind
+        except Exception as e:
+            # Console offline is not an error and stays quiet. A console that
+            # answers with something we cannot parse is a different thing: it
+            # leaves the DF homing on the previous beacon, which nobody would
+            # otherwise notice, so say so once and then rarely (EN-12).
+            self.note_poll_failure(e)
+
+    def note_poll_failure(self, exc):
+        """Log a malformed/unusable scenario response, rate-limited."""
+        if isinstance(exc, (urllib.error.URLError, OSError, TimeoutError)):
+            return                        # unreachable console: expected, silent
+        now = time.time()
+        if now - getattr(self, "last_poll_complaint", 0.0) < 60.0:
+            return
+        self.last_poll_complaint = now
+        self.log("scenario poll failed (%s: %s) - still using the previous "
+                 "scenario" % (type(exc).__name__, exc))
 
     def report_position_once(self):
         """One position report to the console."""
