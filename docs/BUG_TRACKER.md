@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 101 items, 20 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 101 items, 18 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -76,8 +76,8 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [AI-7](#ai-7) | P0 | critical | AI Pilot web deck binds 0.0.0.0:8088 with no auth and permissive CORS | infra | C17 | M | — | open |
 | [L-15](#l-15) | P0 | critical | Flight planner is an unauthenticated confused deputy holding instructor credentials | planner | C17 | M | X-11 | open |
 | [O-1](#o-1) | P0 | critical | Repo has no working git history | infra | C1 | S | — | fixed |
-| [X-10](#x-10) | P0 | critical | Literal codes ADMIN and INSTRUCTOR mint an instructor session without the token | console-api | C17 | S | — | open |
-| [X-11](#x-11) | P0 | critical | enforce() fails open and /api/auth/me reports instructor to anonymous callers | console-api | C17 | S | — | open |
+| [X-10](#x-10) | P0 | critical | Literal codes ADMIN and INSTRUCTOR mint an instructor session without the token | console-api | C17 | S | — | fixed |
+| [X-11](#x-11) | P0 | critical | enforce() fails open and /api/auth/me reports instructor to anonymous callers | console-api | C17 | S | — | fixed |
 | [X-12](#x-12) | P1 | high | Session cookie lacks Secure, session id is returned to JavaScript, and a GET creates the session | console-api | C17 | S | O-8 | open |
 | [X-13](#x-13) | P1 | high | Roster codes are guessable, sessions are stored unhashed, and roster regeneration does not revoke them | console-api | C17 | M | — | open |
 | [X-14](#x-14) | P1 | high | POST /api/radio/ics mutates shared radio state with no authorization | console-api | C17 | S | X-11 | open |
@@ -235,23 +235,23 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Literal codes ADMIN and INSTRUCTOR mint an instructor session without the token**
 
-`P0` · `critical` · `bug` · Exercise console (backend) · cluster C17 (Identity, single sign-on & service front door) · effort S · wave 0 · **open**
+`P0` · `critical` · `bug` · Exercise console (backend) · cluster C17 (Identity, single sign-on & service front door) · effort S · wave 0 · **fixed**
 
 - **Files:** `services/exercise/app/access.py:211-215`, `services/exercise/app/routers/auth.py:36-54`, `services/exercise/app/routers/auth.py:82-97`
 - **Problem:** authenticate_code() treats the literal strings ADMIN and INSTRUCTOR as valid participant codes whenever CAPVSAR_TOKEN_INSTRUCTOR is set in the environment. It checks only that the token EXISTS; it never compares the caller's input against it. GET /join/ADMIN is therefore a plain unauthenticated URL that mints an Exercise Director session, sets the cookie and redirects to /. Because instructor satisfies every other role in SATISFIED_BY, this grants sortie control, scenario deletion, effects injection and truth reveal. It defeats X-1: that fix gates beacon_lat/lon behind 'a presented instructor token', but an instructor SESSION is obtainable without presenting one, so any LAN or WireGuard participant can read the beacon before reveal. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35.
-- **Fix:** Remove the shortcut branch entirely. An instructor session must require the configured token or a rostered instructor credential. Add a regression test asserting that /join/ADMIN, /join/INSTRUCTOR and POST /api/auth/login with those codes all return 401 while CAPVSAR_TOKEN_INSTRUCTOR is set.
-- **Done when:** GET /join/ADMIN and /join/INSTRUCTOR return 401/redirect-to-error with an instructor token configured; no session row is created; the truth-leak regression in tests/test_console.py still passes.
+- **Fix:** Remove the shortcut branch entirely. An instructor session must require the configured token or a rostered instructor credential. Add a regression test asserting that /join/ADMIN, /join/INSTRUCTOR and POST /api/auth/login with those codes all return 401 while CAPVSAR_TOKEN_INSTRUCTOR is set. Fixed 2026-09-13 (commit 944f093). The ADMIN/INSTRUCTOR shortcut is removed from authenticate_code(); an instructor authenticates with a roster credential or the configured token like every other role.
+- **Done when:** GET /join/ADMIN and /join/INSTRUCTOR return 401/redirect-to-error with an instructor token configured; no session row is created; the truth-leak regression in tests/test_console.py still passes. Verified by reproducing the attack against the fixed console: /join/ADMIN, /join/INSTRUCTOR and the case variant /join/admin are all refused with no session cookie set, and POST /api/auth/login with those codes returns 401. Covered by BackdoorCodeTests in tests/test_setup_auth.py, including the specific path from /join/ADMIN to beacon truth.
 
 ### X-11
 
 **enforce() fails open and /api/auth/me reports instructor to anonymous callers**
 
-`P0` · `critical` · `bug` · Exercise console (backend) · cluster C17 (Identity, single sign-on & service front door) · effort S · wave 0 · **open**
+`P0` · `critical` · `bug` · Exercise console (backend) · cluster C17 (Identity, single sign-on & service front door) · effort S · wave 0 · **fixed**
 
 - **Files:** `services/exercise/app/access.py:361-379`, `services/exercise/app/routers/auth.py:57-68`, `services/exercise/app/main.py:107-112`, `.env.example:26-28`
 - **Problem:** access.enforce() returns (allowing the call) when no matching env token is configured and no session is active - an explicit 'open for local dev' branch. Every gated mutating endpoint therefore accepts anonymous requests in that state. .env.example ships all three CAPVSAR_TOKEN_* values blank, so the default deployment is unauthenticated; main.py logs a warning naming the open roles but starts anyway. Compounding it, GET /api/auth/me actively reports {authenticated: true, role: instructor} to any anonymous caller in the same state, so the UI renders full instructor controls for a stranger. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35.
-- **Fix:** Deny by default. enforce() must raise when it cannot positively identify a satisfying session or token. Gate the dev convenience behind an explicit opt-in flag (e.g. CAPVSAR_DEV_OPEN=1) that is refused when a production marker is set, and fail startup rather than warn when required identity configuration is missing. /api/auth/me must return authenticated:false when there is no session.
-- **Done when:** With all CAPVSAR_TOKEN_* unset and no dev flag, the app refuses to start; with the dev flag, a startup banner states it. Anonymous POST to a gated route returns 403. /api/auth/me returns authenticated:false with no session.
+- **Fix:** Deny by default. enforce() must raise when it cannot positively identify a satisfying session or token. Gate the dev convenience behind an explicit opt-in flag (e.g. CAPVSAR_DEV_OPEN=1) that is refused when a production marker is set, and fail startup rather than warn when required identity configuration is missing. /api/auth/me must return authenticated:false when there is no session. Fixed 2026-09-13 (commit 944f093). enforce() now denies when no credential is configured instead of returning. Opening the console is deliberate via CAPVSAR_DEV_OPEN, refused when CAPVSAR_ENV is production. /api/auth/me no longer claims an instructor identity for anonymous callers.
+- **Done when:** With all CAPVSAR_TOKEN_* unset and no dev flag, the app refuses to start; with the dev flag, a startup banner states it. Anonymous POST to a gated route returns 403. /api/auth/me returns authenticated:false with no session. Verified: anonymous POST /api/scenarios returns 403 with tokens configured and 503 with none; /api/auth/me reports authenticated false. Covered by DenyByDefaultTests, including that CAPVSAR_DEV_OPEN is honoured only outside production. Two suites that had been passing on the fail-open were corrected rather than relaxed. 140 tests and 23 subtests pass.
 
 ### X-12
 
