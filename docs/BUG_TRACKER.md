@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 93 items, 12 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 101 items, 20 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -10,20 +10,20 @@ IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split ou
 
 | | critical | high | medium | low | total |
 |---|---|---|---|---|---|
-| by severity | 8 | 27 | 38 | 20 | 93 |
+| by severity | 12 | 31 | 38 | 20 | 101 |
 
 | P0 | P1 | P2 | P3 |
 |---|---|---|---|
-| 11 | 27 | 38 | 17 |
+| 15 | 31 | 38 | 17 |
 
 | Component | Items |
 |---|---|
 | Air Manager instruments | 19 |
-| Deployment / infrastructure | 16 |
-| Flight planner | 15 |
+| Deployment / infrastructure | 18 |
+| Exercise console (backend) | 17 |
+| Flight planner | 16 |
 | Exercise console (frontend) | 12 |
 | X-Plane plugin / engine | 12 |
-| Exercise console (backend) | 12 |
 | Docs / record | 7 |
 
 ## Priority definitions
@@ -37,8 +37,8 @@ IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split ou
 
 _Wave dates track the illustrative calendar in docs/USE_CASE_SAREX_REHEARSAL.md (T-14/T-7/T-2 before a 17 Oct 2026 SAREX). Re-anchor to the real exercise date._
 
-- **Wave 0** (1 items) — Now — make the work safe to do at all.
-- **Wave 1** (10 items) — Before session 1 (base stand-up). Nothing flies; base, planner and comms must work.
+- **Wave 0** (8 items) — Now — make the work safe to do at all.
+- **Wave 1** (11 items) — Before session 1 (base stand-up). Nothing flies; base, planner and comms must work.
 - **Wave 2** (20 items) — Before session 2 (full mission, three aircraft, injected effects).
 - **Wave 3** (41 items) — Before session 3 (dress rehearsal) and the live SAREX.
 - **Wave 4** (21 items) — After the SAREX — architecture, tooling, CalTopo phase 2.
@@ -65,6 +65,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | C14 | Contract & documentation truth | D-1, D-2, D-3, D-4, D-5, P-10, I-9b | docs only, safe in parallel |
 | C15 | Service boundaries (architecture) | AI-1, AI-2, AI-3, AI-5, AI-6, AI-4, C15-1, P-11, C15-2 | unassigned — after C2 and C7 settle |
 | C16 | Aircraft package fidelity | A-1 | Claude — actively correcting the CAP 487 C182 model; visual and flight-model acceptance remain open |
+| C17 | Identity, single sign-on & service front door | AI-7, L-15, X-10, X-11, X-12, X-13, X-14, O-8 | Gemini - console and deck auth; Codex - planner deputy (L-15) |
 
 ## Board
 
@@ -72,7 +73,14 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 | ID | Pri | Sev | Title | Component | Cluster | Effort | Depends on | Status |
 |---|---|---|---|---|---|---|---|---|
+| [AI-7](#ai-7) | P0 | critical | AI Pilot web deck binds 0.0.0.0:8088 with no auth and permissive CORS | infra | C17 | M | — | open |
+| [L-15](#l-15) | P0 | critical | Flight planner is an unauthenticated confused deputy holding instructor credentials | planner | C17 | M | X-11 | open |
 | [O-1](#o-1) | P0 | critical | Repo has no working git history | infra | C1 | S | — | fixed |
+| [X-10](#x-10) | P0 | critical | Literal codes ADMIN and INSTRUCTOR mint an instructor session without the token | console-api | C17 | S | — | open |
+| [X-11](#x-11) | P0 | critical | enforce() fails open and /api/auth/me reports instructor to anonymous callers | console-api | C17 | S | — | open |
+| [X-12](#x-12) | P1 | high | Session cookie lacks Secure, session id is returned to JavaScript, and a GET creates the session | console-api | C17 | S | O-8 | open |
+| [X-13](#x-13) | P1 | high | Roster codes are guessable, sessions are stored unhashed, and roster regeneration does not revoke them | console-api | C17 | M | — | open |
+| [X-14](#x-14) | P1 | high | POST /api/radio/ics mutates shared radio state with no authorization | console-api | C17 | S | X-11 | open |
 
 ### Wave 1 — Before session 1 (base stand-up). Nothing flies; base, planner and comms must work.
 
@@ -87,6 +95,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [X-2](#x-2) | P0 | critical | No authentication or role separation on any console endpoint | console-api | C2 | L | — | fixed |
 | [F-5](#f-5) | P0 | high | Radio console setup path (verified working) | infra | C5 | S | O-3 | resolved |
 | [L-1](#l-1) | P0 | high | X-Plane .fms export is malformed | planner | C10 | M | — | fixed |
+| [O-8](#o-8) | P1 | high | No single front door: Caddy fronts one backend and is bypassable on the LAN | infra | C17 | M | X-11, X-12 | open |
 | [O-2a](#o-2a) | P1 | medium | Participant CONNECT.md cited by the as-built does not exist | docs | C4 | S | O-2 | resolved |
 
 ### Wave 2 — Before session 2 (full mission, three aircraft, injected effects).
@@ -188,6 +197,29 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 ## Detail
 
+### AI-7
+
+**AI Pilot web deck binds 0.0.0.0:8088 with no auth and permissive CORS**
+
+`P0` · `critical` · `bug` · Deployment / infrastructure · cluster C17 (Identity, single sign-on & service front door) · effort M · wave 0 · **open**
+
+- **Files:** `services/ai_pilot/static/board.html:558-566`, `services/ai_pilot/web_server.py:156-199`, `services/ai_pilot/web_server.py:388-389`, `services/ai_pilot/web_server.py:406`, `services/ai_pilot/web_server.py:58-68`, `services/ai_pilot/web_server.py:65`, `services/ai_pilot/web_server.py:70-87`, `services/ai_pilot/web_server.py:90-96`
+- **Problem:** web_server.py binds 0.0.0.0:8088 by default with no authentication on any route, and returns Access-Control-Allow-Origin: * on every JSON response with a matching permissive do_OPTIONS. Any website loaded in any browser on the network can therefore read and drive it cross-origin. The mutating endpoints are consequential: POST /api/board/raw overwrites docs/BOARD.md wholesale, /api/board/task and /api/board/toggle rewrite the agent dispatch queue that Claude, Codex and Gemini execute from, /api/chat drives the LLM agent, and /api/fdr/start|stop|analyze control the flight data recorder. This is an ENGINEERING surface, not a participant one, and it is a different trust domain from the exercise console: it should not be placed behind the participant portal. It is also not containerized and not in docker-compose, so deploy-time hardening does not reach it. maneuver_server.py on 127.0.0.1:8089 is bound to loopback, which is its only real control; it has an Origin and content-type check plus a lease gate, but no identity. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35. SEPARATELY OBSERVED 2026-09-13: the same two response paths send no cache headers at all and reply HTTP/1.0 - _send_json() (web_server.py:58-68) and _send_file() (web_server.py:70-87) set no Cache-Control, ETag or Last-Modified. With nothing telling it otherwise a browser may serve /api/board from cache heuristically, so the board UI can show stale data and the Refresh Board button appears to do nothing. This was reproduced against a live board tab where the disk, the API and the served page all agreed at 9 tasks. The failure is silent in both directions because fetchBoard() (static/board.html:558-566) swallows a failed fetch into console.error and returns, leaving the last-rendered board on screen with no indication it has stopped updating - the UI cannot distinguish 'nothing changed' from 'I am showing you a cached or failed answer'.
+- **Fix:** Bind 127.0.0.1 by default and require an explicit flag to expose it. Replace ACAO:* with an exact allowlist. Require a locally configured credential on all mutating routes, especially /api/board/raw. Keep the deck on the management/WireGuard path rather than the participant front door. Note access.py cannot be reused as-is: it is FastAPI-coupled and reads the exercise SQLite database, while this is a stdlib http.server. ALSO IN SCOPE (same functions, one edit): send Cache-Control: no-store on every /api/* response from _send_json(), and appropriate caching headers from _send_file(); and give the board UI a visible staleness indicator - surface a failed or stale fetch in the page (last-updated timestamp plus an explicit error state) rather than only console.error.
+- **Done when:** Default start binds loopback only; a cross-origin page cannot read /api/board; POST /api/board/raw without the credential returns 403; BOARD.md is unchanged after an unauthenticated attempt. Additionally: curl -D- /api/board shows Cache-Control: no-store; a board tab left open reflects a task added by another client within one poll interval without a manual reload; and with the server stopped, the page visibly indicates it is not updating instead of silently showing the last good render.
+
+### L-15
+
+**Flight planner is an unauthenticated confused deputy holding instructor credentials**
+
+`P0` · `critical` · `bug` · Flight planner · cluster C17 (Identity, single sign-on & service front door) · effort M · wave 0 · **open**
+
+- **Files:** `services/flightplanner/app.py:1098-1113`, `services/flightplanner/app.py:1138-1143`, `services/flightplanner/app.py:1298`, `services/flightplanner/app.py:1993`
+- **Problem:** The planner holds CAPVSAR_TOKEN_INSTRUCTOR and CAPVSAR_TOKEN_BASE in its own environment and attaches them to server-side POSTs into the exercise console via _console_headers(). It has no sessions, no login and no import of access.py; only 2 of its 21 routes check anything, and that check accepts either a matching token OR merely an Origin header whose netloc equals the request host, which a non-browser client sets freely. An unauthenticated caller who can reach the planner can therefore create scenarios and broadcast messages to every console with INSTRUCTOR privilege. The fallback at app.py:1141 makes it worse: a missing _BASE token silently falls back to the _INSTRUCTOR token, so a misconfiguration escalates rather than fails. This is an architectural property, not a dev shortcut - putting single sign-on in front of the planner does not fix it, because the privilege comes from a server-held credential rather than from the caller. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35.
+- **Fix:** Propagate the CALLER's identity to the console instead of presenting a server-held credential: accept the participant session on the planner, and either forward it or exchange it for a short-lived scoped token bound to that user, exercise and operation. Remove the _BASE to _INSTRUCTOR fallback so a missing token fails closed. Authenticate the planner's own mutating routes.
+- **Done when:** An unauthenticated planner request cannot cause any console write. A caller holding only aircrew rights cannot create a scenario. Removing CAPVSAR_TOKEN_BASE produces an error, never an instructor-privileged call.
+- **Depends on:** X-11
+
 ### O-1
 
 **Repo has no working git history**
@@ -198,6 +230,63 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Problem:** Codex published a v0.1 baseline to Gitea and GitHub on 2026-09-08 with ignore rules covering credentials, runtime state and build output. But this working tree still has no `.git/` and `git` is not installed on this machine, so agents editing here still cannot diff, revert or see what another tool changed — which is the actual failure mode the finding was about.
 - **Fix:** This directory is now a real checkout: git init in place, origin set to ssh://git@192.0.2.121:2222/ron/capvsar.git (git.rpc-cyberflight.com does not resolve from this host - use the IP), local main tracking origin/main. Everything that had accumulated in the working tree since v0.1 (RBAC/setup wizard, O-2, radio/DF work, docs, tests) was captured as one commit on top of v0.1 without checking out or discarding anything already on disk, then pushed. .env.example, missing on disk with no explanation, was reconstructed from the env vars the code actually reads and committed separately. Pushed to Gitea only - not mirrored to GitHub here, since this repo's IP-redaction convention (if any, cf. flight-planner-n499cp-v2 scripts/redact_ips.py) was not established before pushing somewhere public.
 - **Done when:** git log and git status work in /home/ron/Projects/cap-vsar (this directory), confirmed. origin/main on Gitea matches local main (pushed c517617). GitHub mirroring is a separate, deliberately deferred decision.
+
+### X-10
+
+**Literal codes ADMIN and INSTRUCTOR mint an instructor session without the token**
+
+`P0` · `critical` · `bug` · Exercise console (backend) · cluster C17 (Identity, single sign-on & service front door) · effort S · wave 0 · **open**
+
+- **Files:** `services/exercise/app/access.py:211-215`, `services/exercise/app/routers/auth.py:36-54`, `services/exercise/app/routers/auth.py:82-97`
+- **Problem:** authenticate_code() treats the literal strings ADMIN and INSTRUCTOR as valid participant codes whenever CAPVSAR_TOKEN_INSTRUCTOR is set in the environment. It checks only that the token EXISTS; it never compares the caller's input against it. GET /join/ADMIN is therefore a plain unauthenticated URL that mints an Exercise Director session, sets the cookie and redirects to /. Because instructor satisfies every other role in SATISFIED_BY, this grants sortie control, scenario deletion, effects injection and truth reveal. It defeats X-1: that fix gates beacon_lat/lon behind 'a presented instructor token', but an instructor SESSION is obtainable without presenting one, so any LAN or WireGuard participant can read the beacon before reveal. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35.
+- **Fix:** Remove the shortcut branch entirely. An instructor session must require the configured token or a rostered instructor credential. Add a regression test asserting that /join/ADMIN, /join/INSTRUCTOR and POST /api/auth/login with those codes all return 401 while CAPVSAR_TOKEN_INSTRUCTOR is set.
+- **Done when:** GET /join/ADMIN and /join/INSTRUCTOR return 401/redirect-to-error with an instructor token configured; no session row is created; the truth-leak regression in tests/test_console.py still passes.
+
+### X-11
+
+**enforce() fails open and /api/auth/me reports instructor to anonymous callers**
+
+`P0` · `critical` · `bug` · Exercise console (backend) · cluster C17 (Identity, single sign-on & service front door) · effort S · wave 0 · **open**
+
+- **Files:** `services/exercise/app/access.py:361-379`, `services/exercise/app/routers/auth.py:57-68`, `services/exercise/app/main.py:107-112`, `.env.example:26-28`
+- **Problem:** access.enforce() returns (allowing the call) when no matching env token is configured and no session is active - an explicit 'open for local dev' branch. Every gated mutating endpoint therefore accepts anonymous requests in that state. .env.example ships all three CAPVSAR_TOKEN_* values blank, so the default deployment is unauthenticated; main.py logs a warning naming the open roles but starts anyway. Compounding it, GET /api/auth/me actively reports {authenticated: true, role: instructor} to any anonymous caller in the same state, so the UI renders full instructor controls for a stranger. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35.
+- **Fix:** Deny by default. enforce() must raise when it cannot positively identify a satisfying session or token. Gate the dev convenience behind an explicit opt-in flag (e.g. CAPVSAR_DEV_OPEN=1) that is refused when a production marker is set, and fail startup rather than warn when required identity configuration is missing. /api/auth/me must return authenticated:false when there is no session.
+- **Done when:** With all CAPVSAR_TOKEN_* unset and no dev flag, the app refuses to start; with the dev flag, a startup banner states it. Anonymous POST to a gated route returns 403. /api/auth/me returns authenticated:false with no session.
+
+### X-12
+
+**Session cookie lacks Secure, session id is returned to JavaScript, and a GET creates the session**
+
+`P1` · `high` · `bug` · Exercise console (backend) · cluster C17 (Identity, single sign-on & service front door) · effort S · wave 0 · **open**
+
+- **Files:** `services/exercise/app/routers/auth.py:42-54`, `services/exercise/app/routers/auth.py:82-97`, `services/exercise/app/access.py:159-165`
+- **Problem:** Three separate weaknesses in one flow. (1) The capvsar_session cookie is set httponly/samesite=lax but WITHOUT secure=True, and because exercise :8700 stays published in plaintext alongside Caddy (see O-8) the cookie crosses the wire in the clear on the default path. (2) POST /api/auth/login also returns session_id in the JSON body, handing JavaScript a bearer secret that httponly was meant to withhold. (3) GET /join/{code} is a state-changing request that creates a session and sets a cookie - no POST confirmation and no CSRF protection, and the code sits in the URL path where it lands in browser history and proxy logs. access.py additionally accepts the session id as a ?session= query parameter. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35.
+- **Fix:** Set secure=True on the session cookie once TLS is the only path (sequence with O-8). Stop returning session_id in the login response body. Make /join/{code} render a confirmation page and require a CSRF-protected POST to consume the code. Remove ?session= and ?token= query-parameter acceptance for hosted deployment.
+- **Done when:** Login response body carries no session id; the cookie has Secure; GET /join/{code} creates no session row until the POST; query-parameter auth is rejected.
+- **Depends on:** O-8
+
+### X-13
+
+**Roster codes are guessable, sessions are stored unhashed, and roster regeneration does not revoke them**
+
+`P1` · `high` · `bug` · Exercise console (backend) · cluster C17 (Identity, single sign-on & service front door) · effort M · wave 0 · **open**
+
+- **Files:** `services/exercise/app/access.py:284-358`, `services/exercise/app/access.py:176-202`
+- **Problem:** save_exercise_setup() generates participant codes that are sequential and derived from public callsigns - INSTR-1, PLT-423, OBS-423, SCN-423, MRO-1, UDF-1 - so anyone who knows the aircraft callsign can guess the aircrew and instructor codes, and codes are matched case-insensitively. A per-row random token column is generated and stored but never read by any code path, so the one unguessable credential in the schema is dead. Separately, session ids are stored in the sessions table in plaintext rather than hashed, expired rows are filtered on read but never deleted so the table grows without bound, and save_exercise_setup() does DELETE FROM roster without cascading to sessions - regenerating a roster invalidates every code while leaving the sessions minted from them valid for their full 24 hours. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35.
+- **Fix:** Make the stored per-row token the actual credential and make codes non-guessable, or require the token alongside the code. Hash session ids at rest. Delete expired sessions on a schedule. Cascade roster regeneration and membership removal to session revocation, and re-validate role on each request rather than trusting the role copied into the session.
+- **Done when:** Regenerating a roster terminates sessions derived from the old roster within the target window; expired rows are pruned; no plaintext session id is recoverable from the database.
+
+### X-14
+
+**POST /api/radio/ics mutates shared radio state with no authorization**
+
+`P1` · `high` · `bug` · Exercise console (backend) · cluster C17 (Identity, single sign-on & service front door) · effort S · wave 0 · **open**
+
+- **Files:** `services/exercise/app/radio.py:85`
+- **Problem:** POST /api/radio/ics changes shared ICS and channel state for the whole exercise and carries no access.enforce() call and no session check. Any participant, or any host that can reach :8700, can rewrite the net structure mid-exercise. Neighbouring radio reads (/api/radio/config, /api/radio/rx) are likewise ungated, and the /ws and /api/radio/stream sockets authenticate with a same-origin header check that is skipped entirely when Origin is absent, which is the normal case for a non-browser client. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35.
+- **Fix:** Gate POST /api/radio/ics behind base_or_instructor. Establish identity - not just origin - on /ws and /api/radio/stream, and recheck membership periodically during an open socket so revocation propagates.
+- **Done when:** Anonymous POST /api/radio/ics returns 403; a non-browser client with no Origin header is rejected from /ws rather than admitted.
+- **Depends on:** X-11
 
 ### F-1
 
@@ -300,6 +389,18 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Problem:** The v1100 waypoint line is `type ident airway|DRCT altitude lat lon`; the code emits `11 SS01 5500.0 lat lon`, dropping DRCT so the altitude is parsed as the airway. Type 11 means a named fix in the navdata, but SS01/DATUM do not exist. CYCLE 2401 is hardcoded. The test asserts the broken format, locking it in.
 - **Fix:** Emit type 28 with a +lat_lon ident and the DRCT column for user waypoints; derive CYCLE from the date; fix the test to assert the real format.
 - **Done when:** Load an exported pattern in X-Plane 12 and fly the first two legs from the G1000 flight plan page.
+
+### O-8
+
+**No single front door: Caddy fronts one backend and is bypassable on the LAN**
+
+`P1` · `high` · `task` · Deployment / infrastructure · cluster C17 (Identity, single sign-on & service front door) · effort M · wave 1 · **open**
+
+- **Files:** `services/exercise/Caddyfile:9-12`, `docker-compose.yml:67`, `docker-compose.yml:105`, `docker-compose.yml:146`, `scripts/firewall.sh:10-14`, `infra/ROUTER.md:24-29`
+- **Problem:** The Caddy container is a single-purpose proxy - reverse_proxy exercise:8700, with tls internal and site names hardcoded to ms01, ms01.local and 192.0.2.151 - existing to give tablets a trusted secure context for microphone access. flightplanner has no TLS front at all and is not in the Caddyfile. Because exercise :8700 and flightplanner :8090 remain published as plaintext HTTP on the LAN, the TLS front is bypassable and the non-Secure session cookie and any header or query-parameter token cross the wire in the clear on the default path. firewall.sh notes that Docker's iptables rules precede ufw's, so ufw does not filter published container ports and the router forward list is the real boundary. There is consequently no one place a user can log in once and reach the console, the mission base view and the planner. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35.
+- **Fix:** Make Caddy the single front door: route all participant services under one hostname, stop publishing 8700 and 8090 on the host, and serve a landing page listing what is available to the caller's role. Keep the AI Pilot deck (AI-7) OUT of this front door - different trust domain. This is the lab-hosted Phase 1; docs/LAB_HOSTED_DEPLOYMENT_PLAN.md is authoritative for topology and supersedes the cloud sections of the identity plan for the pilot.
+- **Done when:** Only 443 (and 80 for certificate validation) is reachable for participant traffic; direct requests to 8700 and 8090 from another host are refused; one login reaches console, base view and planner.
+- **Depends on:** X-11, X-12
 
 ### O-2a
 
