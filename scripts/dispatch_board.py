@@ -166,17 +166,32 @@ def main() -> int:
         log_path = LOG_DIR / f"{stamp}_task{t['id']}_{slug}.log"
         print(f"[{t['id']}] {t['agent']} -> {log_path.relative_to(REPO)}")
 
+        # Tee rather than capture. Capturing the whole run and writing it at
+        # the end left the log header-only for as long as the agent worked, so
+        # a job in progress and a job that died looked identical from outside -
+        # the same "silence reads as progress" failure this script exists to
+        # stop reporting. Lines land in the log as they are produced, so
+        # `tail -f` on it shows a live run.
+        chunks: list[str] = []
         with open(log_path, "w", encoding="utf-8") as log:
             log.write(f"# dispatched {dt.datetime.now().isoformat()}\n")
             log.write(f"# agent: {t['agent']}\n# task: {t['task']}\n")
             log.write(f"# command: {cmd}\n\n")
             log.flush()
-            proc = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True,
-                                  stdin=subprocess.DEVNULL,
-                                  env={**os.environ, "TERM": "dumb"})
-            output = (proc.stdout or "") + (proc.stderr or "")
-            log.write(output)
+            proc = subprocess.Popen(cmd, cwd=REPO, text=True,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT,
+                                    stdin=subprocess.DEVNULL,
+                                    bufsize=1,
+                                    env={**os.environ, "TERM": "dumb"})
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                chunks.append(line)
+                log.write(line)
+                log.flush()
+            proc.wait()
 
+        output = "".join(chunks)
         rc, problem = proc.returncode, did_nothing(output)
 
         # Exit code alone is not a completion signal. An agent that was denied

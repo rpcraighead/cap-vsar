@@ -1,8 +1,9 @@
 # Use case: rehearsing a SAREX before flying it
 
-**Status: use-case description. It is written against the system as it
-exists on 2026-09-08; the four gaps that stand between this narrative and
-running it exactly as written are listed at the end.**
+**Status: use-case description. Written against the system as it existed on
+2026-09-08; gap list refreshed 2026-09-13. Three of the four original gaps
+are now closed — see the end of this document for what remains, and
+`docs/bugs/tracker.json` for the authoritative status of any item.**
 
 A Search and Rescue Exercise (SAREX) is Civil Air Patrol's structured
 training event: a mission base under an Incident Commander tasks aircrews
@@ -151,17 +152,32 @@ multipath, wing blanking), the four instruments and the MO panel, the
 pattern generator and `.fms` export, the Mumble net and the base radio
 console, bearing logging, and the debrief scoring.
 
-Four items from the 2026-09-08 review stand between this narrative and
-running it exactly as written (IDs refer to
-[`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md)):
+Four items from the 2026-09-08 review stood between this narrative and running
+it exactly as written. **Three are now fixed** (IDs refer to
+[`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md); status from
+`docs/bugs/tracker.json`, checked 2026-09-13):
 
-1. **Three aircraft need per-station identity** (O-2): the plugin hardcodes
-   the console address and callsign `CAP-1`.
-2. **The hidden beacon has to stay hidden, and the plugin has to receive
-   it** (X-1, P-2): today both are broken.
-3. **The `.fms` export must load in X-Plane 12** (L-1): the format is
-   currently malformed.
+1. ~~**Three aircraft need per-station identity** (O-2)~~ — **fixed.** The
+   plugin reads `CONSOLE`, `CALLSIGN` and `PLUGIN_KEY` from a
+   `capvsar_station.ini` beside wherever it is deployed, and
+   `scripts/build_station_kit.py` generates a per-station kit.
+2. ~~**The hidden beacon has to stay hidden, and the plugin has to receive
+   it** (X-1, P-2)~~ — **fixed.** One `public_scenario()` serializer strips
+   beacon position unless truth is explicitly allowed, and the plugin has its
+   own keyed route that fails closed when no plugin token is configured.
+3. ~~**The `.fms` export must load in X-Plane 12** (L-1)~~ — **fixed.**
 4. **Mid-flight retasking and assignment maps** are phase 2
    ([`CALTOPO_PHASE2_PLAN.md`](CALTOPO_PHASE2_PLAN.md)); today the AOBD's
    assignment view is the base map with pushed patterns, and cuts are
-   plotted by hand.
+   plotted by hand. **Still open**, and it is the one thing in Session 2's
+   narrative — the IC retasking Sortie A onto a second grid — that cannot be
+   run as written.
+
+Three further gaps have appeared since, none of which existed when this was
+written. `F-8`: no pairwise bearing intersection or confidence area is
+computed, so the AOBD's cut plotting in Session 2 is manual. `F-10`: base
+cannot monitor the airband SAR net alongside the mission net. And cluster
+`C17` holds the access-control work — `X-10` and `X-11` are fixed, but until
+`X-12` to `X-14`, `L-15` and `AI-7` close, the per-seat boundaries this
+narrative assumes are not all enforced. Per-seat permissions are written up
+in `CAP_V-SAR_Seat_User_Stories.docx`, which is derived from this document.

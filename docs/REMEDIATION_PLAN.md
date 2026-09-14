@@ -1,10 +1,39 @@
 # Remediation plan
 
-Companion to [`BUG_TRACKER.md`](BUG_TRACKER.md) (67 items, generated from
-`docs/bugs/tracker.json`) and the analysis it came from,
+Companion to [`BUG_TRACKER.md`](BUG_TRACKER.md), generated from
+`docs/bugs/tracker.json`, and the analysis it came from,
 [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md).
 
-**Status: plan, not work. Nothing in the tracker is fixed yet.**
+> **Status as of 2026-09-13: mostly done, and this file is the plan, not the
+> record.** `docs/bugs/tracker.json` is the source of truth for what is fixed.
+> It now holds **101 items, 18 open** — the original 67 plus items found while
+> working, including the eight identity and access findings in cluster C17.
+>
+> This document froze on 2026-09-08 and said "nothing in the tracker is fixed
+> yet", which stopped being true almost immediately. The wave structure and its
+> reasoning below are still the plan of record and worth reading; the item
+> counts and the "nothing is fixed" framing are not. Where the two disagree,
+> the tracker wins.
+>
+> | Wave | Closed | Still open |
+> |---|---|---|
+> | 0 — make the work safe | 3 / 8 | `X-12`, `X-13`, `X-14`, `L-15`, `AI-7` (all C17) |
+> | 1 — session 1 can run | 10 / 11 | `O-8` |
+> | 2 — session 2, full mission | 19 / 20 | `O-7b` |
+> | 3 — dress rehearsal and live day | 33 / 41 | `A-1`, `AI-2`, `AI-4`, `D-5`, `F-8`, `F-10`, `F-11`, `L-7a` |
+> | 4 — after the SAREX | 18 / 21 | `F-12`, `F-13`, `L-10` |
+>
+> **The critical path in §2 below is closed.** `O-1` (git), `X-1`/`P-2` (the
+> truth serializer and the plugin's keyed route), `X-2` (RBAC), `O-2` (station
+> identity), `P-1` (the terrain ray) and `L-2` (the authed planner push) are all
+> fixed. Wave 0 reopened later, on 2026-09-13, because the identity audit found
+> access-control defects the original review had not: `X-10` and `X-11` are now
+> fixed, and the five above are not.
+>
+> Two caveats the table cannot carry. `A-1`'s flight-model corrections are
+> verified statically only — correct values confirmed by dataref after reload,
+> none verified in flight. And `D-5` gates any public push: manufacturer artwork
+> is still in git history, which `git rm --cached` did not rewrite.
 
 ## 1. How this is ordered
 
@@ -49,12 +78,36 @@ passes its test, because every later wave assumes it.
 
 ### Wave 0 — make the work safe (now, ½ day)
 
-`O-1`. Codex is mid-flight on this: `.gitignore` landed at 17:22 today and
-covers the artifacts the review flagged. Remaining: finish the Gitea/GitHub
-push and **install `git` on this machine** so every agent can diff before it
-edits. Right now no agent can see what another changed.
+`O-1` is **done**: git works, history is in the tree, and every agent can diff
+before it edits.
 
-**Exit test:** `git log` shows history in this tree; `git status` is clean.
+Wave 0 then **reopened on 2026-09-13**, which is worth recording because of why.
+The original review read the console's access control as present but
+unconfigured (`X-2`, closed by the RBAC system). An identity audit run against
+the working tree found that it was not merely unconfigured — it was bypassable.
+`X-10` accepted the literal codes `ADMIN` and `INSTRUCTOR` as participant codes
+whenever an instructor token existed, without ever comparing the caller's input
+to it, so `GET /join/ADMIN` returned an Exercise Director session to anyone who
+could reach the console; and because instructor satisfies every other role, that
+also defeated `X-1`, the truth gate the whole teaching mechanism rests on.
+`X-11` was the matching fail-open: a missing token opened an endpoint instead of
+closing it, and `.env.example` shipped every token blank.
+
+Both are fixed. The lesson for the rest of this plan is that "a control exists"
+and "a control holds" are different claims, and only the second is worth an exit
+test.
+
+Still open in wave 0, all cluster C17: `X-12` (session cookie without `Secure`,
+session id returned to JavaScript, a `GET` that creates a session), `X-13`
+(guessable roster codes, unhashed sessions, no revocation on roster
+regeneration), `X-14` (`POST /api/radio/ics` ungated), `L-15` (the planner
+performs console writes with a server-held instructor credential), and `AI-7`
+(the AI Pilot deck on `0.0.0.0:8088` with no auth and wildcard CORS).
+
+**Exit test:** `git log` shows history in this tree and `git status` is clean —
+both hold. For the C17 items: no unauthenticated caller can obtain a privileged
+session, cause a console write, or read beacon truth before reveal, demonstrated
+by running the attack rather than by reading the code.
 
 ### Wave 1 — session 1 can run (10 items, ~4 days)
 
