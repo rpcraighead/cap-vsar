@@ -35,6 +35,12 @@ mkdir -p services/flightplanner/data/charts     # cached chart tiles
 echo "==> pulling images"
 docker compose pull --quiet
 
+echo "==> building source services"
+# exercise and flightplanner are local build contexts. `compose up` recreates
+# them when configuration changes but does not rebuild after a source-only
+# update, which can leave ms01 running an older application under a new proxy.
+docker compose build exercise flightplanner
+
 echo "==> starting stack"
 docker compose up -d
 
