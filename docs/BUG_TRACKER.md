@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 101 items, 18 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 101 items, 17 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -74,7 +74,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | ID | Pri | Sev | Title | Component | Cluster | Effort | Depends on | Status |
 |---|---|---|---|---|---|---|---|---|
 | [AI-7](#ai-7) | P0 | critical | AI Pilot web deck binds 0.0.0.0:8088 with no auth and permissive CORS | infra | C17 | M | — | open |
-| [L-15](#l-15) | P0 | critical | Flight planner is an unauthenticated confused deputy holding instructor credentials | planner | C17 | M | X-11 | open |
+| [L-15](#l-15) | P0 | critical | Flight planner is an unauthenticated confused deputy holding instructor credentials | planner | C17 | M | X-11 | fixed |
 | [O-1](#o-1) | P0 | critical | Repo has no working git history | infra | C1 | S | — | fixed |
 | [X-10](#x-10) | P0 | critical | Literal codes ADMIN and INSTRUCTOR mint an instructor session without the token | console-api | C17 | S | — | fixed |
 | [X-11](#x-11) | P0 | critical | enforce() fails open and /api/auth/me reports instructor to anonymous callers | console-api | C17 | S | — | fixed |
@@ -212,12 +212,12 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Flight planner is an unauthenticated confused deputy holding instructor credentials**
 
-`P0` · `critical` · `bug` · Flight planner · cluster C17 (Identity, single sign-on & service front door) · effort M · wave 0 · **open**
+`P0` · `critical` · `bug` · Flight planner · cluster C17 (Identity, single sign-on & service front door) · effort M · wave 0 · **fixed**
 
 - **Files:** `services/flightplanner/app.py:1098-1113`, `services/flightplanner/app.py:1138-1143`, `services/flightplanner/app.py:1298`, `services/flightplanner/app.py:1993`
 - **Problem:** The planner holds CAPVSAR_TOKEN_INSTRUCTOR and CAPVSAR_TOKEN_BASE in its own environment and attaches them to server-side POSTs into the exercise console via _console_headers(). It has no sessions, no login and no import of access.py; only 2 of its 21 routes check anything, and that check accepts either a matching token OR merely an Origin header whose netloc equals the request host, which a non-browser client sets freely. An unauthenticated caller who can reach the planner can therefore create scenarios and broadcast messages to every console with INSTRUCTOR privilege. The fallback at app.py:1141 makes it worse: a missing _BASE token silently falls back to the _INSTRUCTOR token, so a misconfiguration escalates rather than fails. This is an architectural property, not a dev shortcut - putting single sign-on in front of the planner does not fix it, because the privilege comes from a server-held credential rather than from the caller. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35.
-- **Fix:** Propagate the CALLER's identity to the console instead of presenting a server-held credential: accept the participant session on the planner, and either forward it or exchange it for a short-lived scoped token bound to that user, exercise and operation. Remove the _BASE to _INSTRUCTOR fallback so a missing token fails closed. Authenticate the planner's own mutating routes.
-- **Done when:** An unauthenticated planner request cannot cause any console write. A caller holding only aircrew rights cannot create a scenario. Removing CAPVSAR_TOKEN_BASE produces an error, never an instructor-privileged call.
+- **Fix:** Propagate the CALLER's identity to the console instead of presenting a server-held credential: accept the participant session on the planner, and either forward it or exchange it for a short-lived scoped token bound to that user, exercise and operation. Remove the _BASE to _INSTRUCTOR fallback so a missing token fails closed. Authenticate the planner's own mutating routes. Fixed 2026-09-13 (commit 0705780, Codex job A). _console_headers(role) is deleted; no CAPVSAR_TOKEN reference remains anywhere in the planner, so the server holds no credential it could lend. Requests forward the caller's own X-CAPVSAR-Token, Authorization or capvsar_session and verify it against the console's /api/auth/me before any write. Origin is treated as a CSRF check rather than proof of identity.
+- **Done when:** An unauthenticated planner request cannot cause any console write. A caller holding only aircrew rights cannot create a scenario. Removing CAPVSAR_TOKEN_BASE produces an error, never an instructor-privileged call. Verified: 88 tests and 17 subtests pass in the planner suite, and grep finds no CAPVSAR_TOKEN in services/flightplanner/app.py. The export test was strengthened rather than adapted - it still sets CAPVSAR_TOKEN_INSTRUCTOR and _BASE to distinct values and asserts the caller's token reaches both console writes, proving the environment tokens are ignored. CONSEQUENCE: /api/sar/export-vsar creates a scenario, which the console gates at instructor, so an AOBD holding only aircrew rights can no longer perform the pattern push the SAREX narrative describes. The console would always have refused it; the borrowed credential hid that. This is open question 2 in the seat user stories and needs a decision.
 - **Depends on:** X-11
 
 ### O-1
