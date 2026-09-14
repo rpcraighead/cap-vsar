@@ -408,18 +408,26 @@
         <div class="badge-cap">CAP V-SAR</div>
         <div class="aircraft-title">
           <span class="tailnum">AGENT COORDINATION BOARD</span>
-          <span class="type">docs/BOARD.md</span>
+          <span class="type">ENGINEERING ONLY • docs/BOARD.md</span>
           <span class="engine">Claude • Codex • Antigravity</span>
         </div>
       </div>
 
       <div class="status-group">
-        <div class="indicator-badge" id="sync-badge">
-          <span class="dot"></span> <span id="sync-text">SYNCED WITH DISK</span>
+        <div class="indicator-badge" id="sync-badge" role="status" aria-live="polite">
+          <span class="dot" style="background: currentColor;"></span> <span id="sync-text">NOT YET UPDATED</span>
         </div>
+        <span id="last-updated">Last updated: never</span>
         <button class="btn-primary" id="btn-refresh">🔄 Refresh Board</button>
       </div>
     </header>
+
+    <div class="dispatch-creator">
+      <label for="engineering-token">Engineering credential (required for writes; kept only in this page):</label>
+      <input type="password" id="engineering-token" autocomplete="off" spellcheck="false"
+             placeholder="CAPVSAR_AI_PILOT_TOKEN" aria-describedby="write-error">
+      <div id="write-error" role="alert" style="color: var(--accent-red);"></div>
+    </div>
 
     <!-- Main Board Grid -->
     <main class="board-grid">
@@ -555,15 +563,64 @@
       });
     });
 
+    let boardFetchPending = false;
+
     async function fetchBoard() {
+      if (boardFetchPending) return;
+      boardFetchPending = true;
+      const badge = document.getElementById('sync-badge');
+      const status = document.getElementById('sync-text');
       try {
-        const resp = await fetch('/api/board');
-        if (!resp.ok) return;
-        boardData = await resp.json();
-        renderBoard(boardData);
+        const resp = await fetch('/api/board', { cache: 'no-store', signal: AbortSignal.timeout(10000) });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        if (!Array.isArray(data.tasks) || !Array.isArray(data.locks) || typeof data.raw !== 'string') {
+          throw new Error('Invalid board response');
+        }
+        renderBoard(data);
+        boardData = data;
+        status.textContent = 'UPDATED FROM DISK';
+        badge.style.color = 'var(--accent-green)';
+        document.getElementById('last-updated').textContent = `Last updated: ${new Date().toLocaleString()}`;
       } catch (err) {
-        console.error('Failed to fetch board:', err);
+        status.textContent = `UPDATE FAILED — displayed data may be stale (${err.message})`;
+        badge.style.color = 'var(--accent-red)';
+      } finally {
+        boardFetchPending = false;
       }
+    }
+
+    async function mutate(url, options) {
+      const error = document.getElementById('write-error');
+      error.textContent = '';
+      try {
+        const token = document.getElementById('engineering-token').value.trim();
+        if (!token) throw new Error('Enter the locally configured engineering credential to make changes.');
+        const resp = await fetch(url, {
+          ...options,
+          headers: { ...options.headers, Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+          signal: AbortSignal.timeout(15000),
+        });
+        if (!resp.ok) {
+          const detail = await resp.json().catch(() => ({}));
+          throw new Error(detail.error || `HTTP ${resp.status}`);
+        }
+        return resp;
+      } catch (err) {
+        error.textContent = `Write failed: ${err.message}`;
+        return null;
+      }
+    }
+
+    function escapeHTML(value) {
+      return String(value).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      })[c]);
+    }
+
+    function encodePrompt(value) {
+      return encodeURIComponent(value).replace(/'/g, '%27');
     }
 
     function renderBoard(data) {
@@ -576,10 +633,10 @@
           <div class="task-card ${t.completed ? 'done' : ''}">
             <input type="checkbox" class="task-checkbox" ${t.completed ? 'checked' : ''} onchange="toggleTask(${idx}, this.checked)">
             <div class="task-content">
-              <span class="task-agent-tag">@${t.agent}</span>
-              <div class="task-desc">${t.task}</div>
+              <span class="task-agent-tag">@${escapeHTML(t.agent)}</span>
+              <div class="task-desc">${escapeHTML(t.task)}</div>
             </div>
-            <button class="btn-copy-prompt" onclick="copyPrompt('${t.agent}', '${encodeURIComponent(t.task)}')">📋 Copy Prompt</button>
+            <button class="btn-copy-prompt" onclick="copyPrompt('${encodePrompt(t.agent)}', '${encodePrompt(t.task)}')">📋 Copy Prompt</button>
           </div>
         `).join('');
       }
@@ -593,13 +650,13 @@
         return `
           <div class="agent-card ${cls}">
             <div class="agent-head">
-              <span class="agent-name">${l.agent}</span>
-              <span class="agent-status-badge ${isActive ? 'status-active' : 'status-idle'}">${l.status}</span>
+              <span class="agent-name">${escapeHTML(l.agent)}</span>
+              <span class="agent-status-badge ${isActive ? 'status-active' : 'status-idle'}">${escapeHTML(l.status)}</span>
             </div>
             <div class="lane-label">FOCUS:</div>
-            <div class="lane-val">${l.focus}</div>
+            <div class="lane-val">${escapeHTML(l.focus)}</div>
             <div class="lane-label">LOCKED PATHS:</div>
-            <div class="locked-files">${l.paths}</div>
+            <div class="locked-files">${escapeHTML(l.paths)}</div>
           </div>
         `;
       }).join('');
@@ -607,13 +664,13 @@
       // 3. Render Contracts
       const elContracts = document.getElementById('contracts-list');
       elContracts.innerHTML = (data.contracts || []).map(c => `
-        <div class="bullet-item">${c}</div>
+        <div class="bullet-item">${escapeHTML(c)}</div>
       `).join('');
 
       // 4. Render Handoffs
       const elHandoffs = document.getElementById('handoffs-list');
       elHandoffs.innerHTML = (data.handoffs || []).map(h => `
-        <div class="bullet-item" style="border-left-color: var(--accent-green)">${h}</div>
+        <div class="bullet-item" style="border-left-color: var(--accent-green)">${escapeHTML(h)}</div>
       `).join('');
 
       // 5. Raw Editor
@@ -621,11 +678,12 @@
     }
 
     async function toggleTask(taskIndex, completed) {
-      await fetch('/api/board/toggle', {
+      const resp = await mutate('/api/board/toggle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ index: taskIndex, completed }),
       });
+      if (!resp) return;
       fetchBoard();
     }
 
@@ -633,17 +691,19 @@
       const input = document.getElementById('task-input');
       const text = input.value.trim();
       if (!text) return;
-      input.value = '';
 
-      await fetch('/api/board/task', {
+      const resp = await mutate('/api/board/task', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ agent: currentAgent, task: text }),
       });
+      if (!resp) return;
+      input.value = '';
       fetchBoard();
     }
 
-    function copyPrompt(agent, encodedTask) {
+    function copyPrompt(encodedAgent, encodedTask) {
+      const agent = decodeURIComponent(encodedAgent);
       const task = decodeURIComponent(encodedTask);
       const promptText = `Check docs/BOARD.md and execute the active task assigned to you: ${task}`;
       navigator.clipboard.writeText(promptText).then(() => {
@@ -660,11 +720,12 @@
 
     document.getElementById('btn-save-raw').addEventListener('click', async () => {
       const rawText = document.getElementById('raw-editor').value;
-      await fetch('/api/board/raw', {
+      const resp = await mutate('/api/board/raw', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ markdown: rawText }),
       });
+      if (!resp) return;
       alert('docs/BOARD.md updated successfully on disk!');
       fetchBoard();
     });
@@ -720,11 +781,12 @@
 
     async function startFDR() {
       try {
-        const resp = await fetch('/api/fdr/start', {
+        const resp = await mutate('/api/fdr/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ session_name: 'sortie' }),
         });
+        if (!resp) return;
         const data = await resp.json();
         pollFDRStatus();
       } catch (err) {
@@ -734,11 +796,12 @@
 
     async function stopFDR() {
       try {
-        const resp = await fetch('/api/fdr/stop', {
+        const resp = await mutate('/api/fdr/stop', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({}),
         });
+        if (!resp) return;
         const data = await resp.json();
         pollFDRStatus();
         if (data.report) {
@@ -751,11 +814,12 @@
 
     async function analyzeLiveFDR() {
       try {
-        const resp = await fetch('/api/fdr/analyze', {
+        const resp = await mutate('/api/fdr/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({}),
         });
+        if (!resp) return;
         const data = await resp.json();
         if (data.report) {
           renderDiagnostics(data.report);

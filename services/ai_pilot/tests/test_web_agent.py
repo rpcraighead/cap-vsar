@@ -80,6 +80,12 @@ class TestWebServerAPIs(unittest.TestCase):
 
         # Bind to port 0 for ephemeral testing port
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), AIPilotRequestHandler)
+        # AI-7: writes need an engineering credential. run_web_server sets these
+        # on the server; a test that constructs the server directly has to supply
+        # them too, or every mutating route answers 503 "writes disabled".
+        cls.token = "test-engineering-token"
+        cls.server.mutation_token = cls.token
+        cls.server.allowed_origins = ()
         cls.port = cls.server.server_address[1]
         cls.base_url = f"http://127.0.0.1:{cls.port}"
 
@@ -97,12 +103,22 @@ class TestWebServerAPIs(unittest.TestCase):
         with urllib.request.urlopen(req, timeout=3.0) as resp:
             return resp.status, resp.read()
 
-    def _post_json(self, path: str, payload: dict):
+    def _post_json(self, path: str, payload: dict, *, token: str | None = ...):
+        """POST as an authorised engineer by default.
+
+        Pass token=None to send no credential, or a wrong value, to exercise the
+        AI-7 refusal path.
+        """
         data = json.dumps(payload).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        if token is ...:
+            token = self.token
+        if token is not None:
+            headers["Authorization"] = f"Bearer {token}"
         req = urllib.request.Request(
             f"{self.base_url}{path}",
             data=data,
-            headers={"Content-Type": "application/json"},
+            headers=headers,
         )
         try:
             with urllib.request.urlopen(req, timeout=3.0) as resp:
@@ -228,3 +244,70 @@ class TestWebServerAPIs(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WriteCredentialTests(unittest.TestCase):
+    """AI-7: the deck's mutating routes must refuse an unauthenticated caller.
+
+    web_server.py bound 0.0.0.0:8088 with no authentication and wildcard CORS,
+    so any page in any browser on the network could drive it cross-origin -
+    including POST /api/board/raw, which overwrites docs/BOARD.md wholesale.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.client = XPlaneUDPClient(mock=True)
+        cls.controller = FlightController(cls.client)
+        cls.agent = LightweightAgent(cls.controller)
+        AIPilotRequestHandler.client = cls.client
+        AIPilotRequestHandler.controller = cls.controller
+        AIPilotRequestHandler.agent = cls.agent
+        cls.server = ThreadingHTTPServer(("127.0.0.1", 0), AIPilotRequestHandler)
+        cls.token = "test-engineering-token"
+        cls.server.mutation_token = cls.token
+        cls.server.allowed_origins = ()
+        cls.base_url = f"http://127.0.0.1:{cls.server.server_address[1]}"
+        cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
+        cls.thread.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.client.stop()
+        cls.server.shutdown()
+        cls.server.server_close()
+
+    def _post(self, path, payload, token=None):
+        req = urllib.request.Request(
+            f"{self.base_url}{path}", data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json",
+                     **({"Authorization": f"Bearer {token}"} if token else {})})
+        try:
+            with urllib.request.urlopen(req, timeout=3.0) as resp:
+                return resp.status
+        except HTTPError as e:
+            return e.code
+
+    def test_board_raw_overwrite_needs_a_credential(self):
+        """The endpoint that can rewrite the agent dispatch queue."""
+        from services.ai_pilot.board_manager import get_board_path
+        before = get_board_path().read_text(encoding="utf-8")
+        self.assertEqual(self._post("/api/board/raw", {"markdown": "# wiped"}), 401)
+        self.assertEqual(get_board_path().read_text(encoding="utf-8"), before,
+                         "an unauthenticated caller rewrote docs/BOARD.md")
+
+    def test_mutating_routes_reject_missing_and_wrong_credentials(self):
+        for path, payload in (("/api/board/task", {"agent": "X", "task": "y"}),
+                              ("/api/board/toggle", {"index": 0, "completed": True}),
+                              ("/api/chat", {"message": "hello"})):
+            for label, token in (("no credential", None), ("wrong credential", "nope")):
+                with self.subTest(path=path, credential=label):
+                    self.assertEqual(self._post(path, payload, token), 401)
+
+    def test_api_responses_are_not_cacheable(self):
+        """The stale-board symptom: no cache headers at all on /api/*."""
+        with urllib.request.urlopen(f"{self.base_url}/api/board", timeout=3.0) as r:
+            self.assertEqual(r.headers.get("Cache-Control"), "no-store")
+
+    def test_no_wildcard_cors(self):
+        with urllib.request.urlopen(f"{self.base_url}/api/board", timeout=3.0) as r:
+            self.assertNotEqual(r.headers.get("Access-Control-Allow-Origin"), "*")

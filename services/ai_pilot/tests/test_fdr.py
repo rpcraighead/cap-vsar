@@ -252,6 +252,12 @@ class TestFDRWebServerEndpoints(unittest.TestCase):
         AIPilotRequestHandler.diag_engine = cls.diag_engine
 
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), AIPilotRequestHandler)
+        # AI-7: /api/fdr/start|stop|analyze are mutating routes and now need the
+        # engineering credential run_web_server configures. A test that builds
+        # the server directly must supply it, or they answer 503.
+        cls.token = "test-engineering-token"
+        cls.server.mutation_token = cls.token
+        cls.server.allowed_origins = ()
         cls.port = cls.server.server_address[1]
         cls.base_url = f"http://127.0.0.1:{cls.port}"
 
@@ -277,7 +283,8 @@ class TestFDRWebServerEndpoints(unittest.TestCase):
         req = urllib.request.Request(
             f"{self.base_url}{path}",
             data=data,
-            headers={"Content-Type": "application/json"},
+            headers={"Content-Type": "application/json",
+                     "Authorization": f"Bearer {self.token}"},
         )
         with urllib.request.urlopen(req, timeout=3.0) as resp:
             return resp.status, json.loads(resp.read().decode("utf-8"))

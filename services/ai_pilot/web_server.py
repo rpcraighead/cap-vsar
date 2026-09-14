@@ -4,11 +4,19 @@ Legacy observation-only Web Deck for AI Pilot
 The original mutation endpoints are retired.  This compatibility server may
 display telemetry, checklist references, status, and advisory chat, but the
 validated airborne maneuver deck is the only supported controller.
+
+Engineering surface only: never mount this deck on the participant front door.
+Set CAPVSAR_AI_PILOT_TOKEN locally to enable writes (Authorization: Bearer).
+The default listener is loopback; --expose explicitly permits a network bind.
+Repeat --allow-origin for each trusted browser origin, including the deck origin
+when exposed. Origins must be exact http(s) origins, without trailing slashes.
 """
 
 from __future__ import annotations
 
 import argparse
+import hmac
+import ipaddress
 import json
 import logging
 import mimetypes
@@ -55,15 +63,40 @@ class AIPilotRequestHandler(BaseHTTPRequestHandler):
             return
         logger.info("%s - - [%s] %s", self.client_address[0], self.log_date_time_string(), format % args)
 
+    def end_headers(self) -> None:
+        # Centralized so API errors, preflights and file responses cannot be cached.
+        if urlparse(self.path).path.startswith("/api/"):
+            self.send_header("Cache-Control", "no-store")
+        self.send_header("Vary", "Origin")
+        origin = self.headers.get("Origin")
+        if origin and origin in getattr(self.server, "allowed_origins", ()):
+            self.send_header("Access-Control-Allow-Origin", origin)
+        super().end_headers()
+
+    def _origin_allowed(self) -> bool:
+        origin = self.headers.get("Origin")
+        return origin is None or origin in getattr(self.server, "allowed_origins", ())
+
+    def _authorize_mutation(self) -> bool:
+        if not self._origin_allowed():
+            self._send_json({"error": "Origin not allowed"}, status=403)
+            return False
+        token = getattr(self.server, "mutation_token", "")
+        if not token:
+            self._send_json({"error": "Writes disabled: configure CAPVSAR_AI_PILOT_TOKEN locally"}, status=503)
+            return False
+        supplied = self.headers.get("Authorization", "")
+        if not hmac.compare_digest(supplied.encode("utf-8"), ("Bearer " + token).encode("utf-8")):
+            self._send_json({"error": "Valid engineering bearer credential required"}, status=401)
+            return False
+        return True
+
     def _send_json(self, data: Any, status: int = 200) -> None:
-        """Send JSON response with CORS headers."""
+        """Send JSON; common response policy is applied by end_headers."""
         body = json.dumps(data).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
         self.wfile.write(body)
 
@@ -88,15 +121,28 @@ class AIPilotRequestHandler(BaseHTTPRequestHandler):
             self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR, f"Error reading file: {e}")
 
     def do_OPTIONS(self) -> None:
-        """Handle CORS pre-flight."""
+        """Only preflight explicitly trusted origins and supported headers/methods."""
+        requested_headers = {
+            value.strip().lower()
+            for value in self.headers.get("Access-Control-Request-Headers", "").split(",")
+            if value.strip()
+        }
+        if (not self._origin_allowed()
+                or self.headers.get("Access-Control-Request-Method", "GET") not in {"GET", "POST"}
+                or not requested_headers <= {"authorization", "content-type"}):
+            self._send_json({"error": "Preflight not allowed"}, status=403)
+            return
         self.send_response(HTTPStatus.NO_CONTENT)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST")
+        self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+        self.send_header("Content-Length", "0")
         self.end_headers()
 
     def do_GET(self) -> None:
         """Handle GET requests."""
+        if not self._origin_allowed():
+            self._send_json({"error": "Origin not allowed"}, status=403)
+            return
         url = urlparse(self.path)
         path = url.path
 
@@ -140,6 +186,8 @@ class AIPilotRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         """Handle POST requests."""
+        if not self._authorize_mutation():
+            return
         url = urlparse(self.path)
         path = url.path
 
@@ -385,13 +433,29 @@ class AIPilotRequestHandler(BaseHTTPRequestHandler):
 
 
 def run_web_server(
-    host: str = "0.0.0.0",
+    host: str = "127.0.0.1",
     port: int = 8088,
     live: bool = False,
     xp_host: str = "127.0.0.1",
     xp_port: int = 49000,
+    expose: bool = False,
+    allowed_origins: Optional[list[str]] = None,
 ) -> None:
-    """Start AI Pilot web server."""
+    """Start the engineering-only deck; writes fail closed without a local token."""
+    try:
+        loopback = ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        loopback = host == "localhost"
+    if not loopback and not expose:
+        raise ValueError("Non-loopback binding requires --expose")
+    origins = set(allowed_origins or ())
+    for origin in origins:
+        parsed = urlparse(origin)
+        if (parsed.scheme not in {"http", "https"} or not parsed.hostname
+                or parsed.username is not None or parsed.password is not None
+                or parsed.path or parsed.query or parsed.fragment or "*" in origin
+                or origin != f"{parsed.scheme}://{parsed.netloc}"):
+            raise ValueError(f"Expected an exact HTTP(S) origin: {origin!r}")
     client = XPlaneUDPClient(host=xp_host, port=xp_port, mock=not live)
     controller = FlightController(client)
     agent = LightweightAgent(controller)
@@ -405,6 +469,13 @@ def run_web_server(
     AIPilotRequestHandler.diag_engine = diag_engine
 
     server = ThreadingHTTPServer((host, port), AIPilotRequestHandler)
+    server.mutation_token = os.environ.get("CAPVSAR_AI_PILOT_TOKEN", "").strip()
+    server.allowed_origins = origins | {
+        f"http://127.0.0.1:{server.server_port}",
+        f"http://localhost:{server.server_port}",
+    }
+    logger.info("  ENGINEERING ONLY; never publish on the participant front door")
+    logger.info("  WRITES: %s", "credential required" if server.mutation_token else "DISABLED (no local token)")
     logger.info("================================================================================")
     logger.info("  LEGACY AI PILOT OBSERVATION DECK: http://%s:%d", "127.0.0.1" if host == "0.0.0.0" else host, port)
     logger.info("  SIMULATOR LINK: %s", "LIVE READ-ONLY X-Plane 12" if live else "MOCK (Offline Mode)")
@@ -423,7 +494,9 @@ def run_web_server(
 
 def main():
     parser = argparse.ArgumentParser(description="Legacy read-only AI Pilot Web Server")
-    parser.add_argument("--host", default="0.0.0.0", help="HTTP host (default: 0.0.0.0)")
+    parser.add_argument("--host", default=None, help="Bind address (default: 127.0.0.1, or 0.0.0.0 with --expose)")
+    parser.add_argument("--expose", action="store_true", help="Explicitly expose the engineering deck to the network")
+    parser.add_argument("--allow-origin", action="append", default=[], help="Exact trusted browser origin; repeat as needed")
     parser.add_argument("--port", type=int, default=8088, help="HTTP port (default: 8088)")
     parser.add_argument("--live", action="store_true", help="Read telemetry from live X-Plane 12")
     parser.add_argument("--xp-host", default="127.0.0.1", help="X-Plane UDP host")
@@ -431,7 +504,9 @@ def main():
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-    run_web_server(host=args.host, port=args.port, live=args.live, xp_host=args.xp_host, xp_port=args.xp_port)
+    run_web_server(host=args.host or ("0.0.0.0" if args.expose else "127.0.0.1"),
+                   port=args.port, live=args.live, xp_host=args.xp_host, xp_port=args.xp_port,
+                   expose=args.expose, allowed_origins=args.allow_origin)
 
 
 if __name__ == "__main__":
