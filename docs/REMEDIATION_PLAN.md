@@ -4,9 +4,9 @@ Companion to [`BUG_TRACKER.md`](BUG_TRACKER.md), generated from
 `docs/bugs/tracker.json`, and the analysis it came from,
 [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md).
 
-> **Status as of 2026-09-13: mostly done, and this file is the plan, not the
+> **Status as of 2026-09-14: mostly done, and this file is the plan, not the
 > record.** `docs/bugs/tracker.json` is the source of truth for what is fixed.
-> It now holds **101 items, 18 open** — the original 67 plus items found while
+> It now holds **101 items, 12 open** — the original 67 plus items found while
 > working, including the eight identity and access findings in cluster C17.
 >
 > This document froze on 2026-09-08 and said "nothing in the tracker is fixed
@@ -17,8 +17,8 @@ Companion to [`BUG_TRACKER.md`](BUG_TRACKER.md), generated from
 >
 > | Wave | Closed | Still open |
 > |---|---|---|
-> | 0 — make the work safe | 3 / 8 | `X-12`, `X-13`, `X-14`, `L-15`, `AI-7` (all C17) |
-> | 1 — session 1 can run | 10 / 11 | `O-8` |
+> | 0 — make the work safe | 8 / 8 | — |
+> | 1 — session 1 can run | 11 / 11 | — |
 > | 2 — session 2, full mission | 19 / 20 | `O-7b` |
 > | 3 — dress rehearsal and live day | 33 / 41 | `A-1`, `AI-2`, `AI-4`, `D-5`, `F-8`, `F-10`, `F-11`, `L-7a` |
 > | 4 — after the SAREX | 18 / 21 | `F-12`, `F-13`, `L-10` |
@@ -28,7 +28,7 @@ Companion to [`BUG_TRACKER.md`](BUG_TRACKER.md), generated from
 > identity), `P-1` (the terrain ray) and `L-2` (the authed planner push) are all
 > fixed. Wave 0 reopened later, on 2026-09-13, because the identity audit found
 > access-control defects the original review had not: `X-10` and `X-11` are now
-> fixed, and the five above are not.
+> fixed, and the five later findings are now fixed as well.
 >
 > Two caveats the table cannot carry. `A-1`'s flight-model corrections are
 > verified statically only — correct values confirmed by dataref after reload,

@@ -32,6 +32,11 @@ mkdir -p services/flightplanner/data/charts     # cached chart tiles
 [ -e services/flightplanner/data/aviation_data.db ] \
   || : > services/flightplanner/data/aviation_data.db
 
+# The exercise image runs as uid/gid 1000. Older deployments created the
+# SQLite file as root, so a newly rebuilt non-root image could read it but
+# crash on the first schema migration. Repair only this service's data mount.
+sudo chown -R 1000:1000 services/exercise/data
+
 echo "==> pulling images"
 docker compose pull --quiet
 

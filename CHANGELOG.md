@@ -3,6 +3,30 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-14 — O-8 single HTTPS participant front door deployed
+
+Deployed commits `472d3bb` and `655b905` to ms01. Caddy now serves the
+role-aware participant portal, exercise console, mission-base views, radio and
+the flight planner from `https://192.0.2.151/`; the planner is mounted at
+`/planner/`. Host mappings for exercise 8700 and planner 8090 were removed.
+Port 80 serves only the public local CA certificate and redirects every other
+path to HTTPS. The AI Pilot engineering deck remains outside this front door.
+
+The planner now honors `X-Forwarded-Prefix` for its templates, static assets,
+API requests and local chart URLs. One roster login was exercised across the
+portal, `/base` and `/planner/` from another workstation. Direct connections to
+8700 and 8090 were refused. The installed X-Plane station config now uses the
+HTTPS endpoint and a generated plugin credential; its desktop launchers use a
+CAP V-SAR process-local CA bundle, leaving system-wide trust unchanged.
+
+The cutover exposed two deployment defects and fixed both: `deploy.sh` now
+rebuilds the locally built exercise/planner images before restart and repairs
+ownership of the non-root exercise service's SQLite bind mount. A consistent
+database backup was written before migration. Final ms01 preflight reported all
+checks passing. Automated verification: 93 planner tests plus 17 subtests, 38
+setup/auth tests plus 6 subtests, and 21 radio tests; Caddy and Compose configs
+also validated on ms01.
+
 ## 2026-09-11 — recurring project mirror to fastnfs
 
 Installed and enabled the workstation user service `project-fastnfs.service` and
