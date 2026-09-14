@@ -16,6 +16,8 @@ Authentication modes:
 """
 from __future__ import annotations
 
+import hashlib
+import secrets
 import hmac
 import json
 import os
@@ -97,21 +99,47 @@ def init_auth_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_roster_code ON roster(code);
         CREATE INDEX IF NOT EXISTS idx_sessions_id ON sessions(session_id);
         """)
+        # Existing databases have no FK: triggers also cover direct roster deletion.
+        c.executescript("""
+        CREATE TRIGGER IF NOT EXISTS revoke_roster_sessions AFTER DELETE ON roster
+        BEGIN DELETE FROM sessions WHERE code=OLD.code; END;
+        CREATE TRIGGER IF NOT EXISTS revoke_changed_roster_sessions AFTER UPDATE OF code ON roster
+        BEGIN DELETE FROM sessions WHERE code=OLD.code; END;
+        """)
+        # Revoke pre-hardening plaintext sessions, and reclaim expired rows.
+        c.execute("DELETE FROM sessions WHERE session_id NOT LIKE 'sha256:%' OR expires IS NULL OR expires<=?", (time.time(),))
+        # Upgrade previously distributed guessable badges once. Reissue these badges.
+        for row in c.execute("SELECT id, code, token FROM roster").fetchall():
+            token = row["token"] or ""
+            if len(token) != 32 or not row["code"].endswith("-" + token):
+                token = secrets.token_hex(16).upper()
+                c.execute("UPDATE roster SET code=?, token=? WHERE id=?",
+                          (row["code"] + "-" + token, token, row["id"]))
         # If roster is completely empty, seed standard starter codes
         count = c.execute("SELECT COUNT(*) FROM roster").fetchone()[0]
         if count == 0:
             now = time.time()
             starter = [
-                ("r-instr", "INSTR-1", "instructor", "Exercise Director / Evaluator", "INSTRUCTOR", "", "Instructor", uuid.uuid4().hex[:12], "/", now),
-                ("r-mro1", "MRO-1", "base", "Mission Radio Operator 1", "BASE MRO 1", "", "MRO 1", uuid.uuid4().hex[:12], "/base", now),
-                ("r-plt423", "PLT-423", "aircrew", "CAP 423 SAR Mission Pilot", "CAP 423", "ac-1", "Pilot", uuid.uuid4().hex[:12], "/base", now),
-                ("r-obs423", "OBS-423", "aircrew", "CAP 423 Mission Observer (TDFM/DF)", "CAP 423", "ac-1", "Observer", uuid.uuid4().hex[:12], "/base", now),
-                ("r-udf1", "UDF-1", "ground_team", "Ground Team / UDF 1 Leader", "UDF 1", "", "Ground Team 1", uuid.uuid4().hex[:12], "/radio", now),
+                ("r-instr", "INSTR-1", "instructor", "Exercise Director / Evaluator", "INSTRUCTOR", "", "Instructor", secrets.token_hex(16).upper(), "/", now),
+                ("r-mro1", "MRO-1", "base", "Mission Radio Operator 1", "BASE MRO 1", "", "MRO 1", secrets.token_hex(16).upper(), "/base", now),
+                ("r-plt423", "PLT-423", "aircrew", "CAP 423 SAR Mission Pilot", "CAP 423", "ac-1", "Pilot", secrets.token_hex(16).upper(), "/base", now),
+                ("r-obs423", "OBS-423", "aircrew", "CAP 423 Mission Observer (TDFM/DF)", "CAP 423", "ac-1", "Observer", secrets.token_hex(16).upper(), "/base", now),
+                ("r-udf1", "UDF-1", "ground_team", "Ground Team / UDF 1 Leader", "UDF 1", "", "Ground Team 1", secrets.token_hex(16).upper(), "/radio", now),
             ]
+            starter = [_credential_row(row) for row in starter]
             c.executemany(
                 "INSERT OR IGNORE INTO roster (id, code, role, title, callsign, aircraft_id, assigned_name, token, target_url, created) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", starter
             )
+
+
+def _credential_row(row: tuple) -> tuple:
+    """The public badge label alone is never a credential; require its random token."""
+    return (row[0], row[1] + "-" + row[7], *row[2:])
+
+
+def _session_hash(session_id: str) -> str:
+    return "sha256:" + hashlib.sha256(session_id.encode()).hexdigest()
 
 
 def token_for(role: str) -> str:
@@ -152,7 +180,7 @@ def _matches(supplied: str, accepted: list[str]) -> bool:
 
 
 def get_session_from_request(request: Request) -> dict | None:
-    """Resolve an active session from cookies, Bearer header, or query param."""
+    """Resolve an active session from cookies or the Bearer header."""
     # 1. Check legacy token matching configured instructor/base/plugin
     legacy_token = presented(request)
     if legacy_token:
@@ -175,8 +203,6 @@ def get_session_from_request(request: Request) -> dict | None:
         auth_hdr = request.headers.get("Authorization", "").strip()
         if auth_hdr.startswith("Bearer "):
             sess_id = auth_hdr[7:].strip()
-    if not sess_id:
-        sess_id = request.query_params.get("session", "").strip()
 
     if not sess_id:
         return None
@@ -185,12 +211,14 @@ def get_session_from_request(request: Request) -> dict | None:
     now = time.time()
     with auth_db() as c:
         row = c.execute(
-            "SELECT session_id, code, role, title, callsign, aircraft_id, target_url, expires "
+            "SELECT code, role, title, callsign, aircraft_id, target_url, expires "
             "FROM sessions WHERE session_id=? AND expires>?",
-            (sess_id, now)
+            (_session_hash(sess_id), now)
         ).fetchone()
         if row:
-            return dict(row)
+            identity = dict(row)
+            identity["code"] = identity["code"].rsplit("-", 1)[0]
+            return identity
     return None
 
 
@@ -198,14 +226,14 @@ def create_session(code: str, role: str, title: str, callsign: str = "",
                    aircraft_id: str = "", target_url: str = "") -> str:
     """Create a persistent session token lasting 24 hours."""
     init_auth_db()
-    sess_id = uuid.uuid4().hex
+    sess_id = secrets.token_urlsafe(32)
     now = time.time()
     expires = now + 86400.0  # 24 hours
     with auth_db() as c:
         c.execute(
             "INSERT INTO sessions (session_id, code, role, title, callsign, aircraft_id, target_url, created, expires) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (sess_id, code, role, title, callsign, aircraft_id, target_url, now, expires)
+            (_session_hash(sess_id), code, role, title, callsign, aircraft_id, target_url, now, expires)
         )
     return sess_id
 
@@ -213,7 +241,7 @@ def create_session(code: str, role: str, title: str, callsign: str = "",
 def delete_session(sess_id: str) -> None:
     init_auth_db()
     with auth_db() as c:
-        c.execute("DELETE FROM sessions WHERE session_id=?", (sess_id,))
+        c.execute("DELETE FROM sessions WHERE session_id=?", (_session_hash(sess_id),))
 
 
 def authenticate_code(code: str) -> tuple[dict, str] | None:
@@ -233,6 +261,7 @@ def authenticate_code(code: str) -> tuple[dict, str] | None:
     # credential, or the configured token via the X-CAPVSAR-Token header.
 
     with auth_db() as c:
+        c.execute("BEGIN IMMEDIATE")
         row = c.execute(
             "SELECT id, code, role, title, callsign, aircraft_id, assigned_name, target_url "
             "FROM roster WHERE UPPER(code)=?",
@@ -241,16 +270,15 @@ def authenticate_code(code: str) -> tuple[dict, str] | None:
         if not row:
             return None
         d = dict(row)
+        sess_id = secrets.token_urlsafe(32)
         c.execute("UPDATE roster SET last_login=? WHERE id=?", (now, d["id"]))
+        c.execute(
+            "INSERT INTO sessions (session_id, code, role, title, callsign, aircraft_id, target_url, created, expires) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (_session_hash(sess_id), d["code"], d["role"], d["title"],
+             d["callsign"], d["aircraft_id"], d["target_url"], now, now + 86400))
 
-    sess_id = create_session(
-        code=d["code"],
-        role=d["role"],
-        title=d["title"],
-        callsign=d.get("callsign") or "",
-        aircraft_id=d.get("aircraft_id") or "",
-        target_url=d.get("target_url") or "/"
-    )
+    d["code"] = d["code"].rsplit("-", 1)[0]
     return (d, sess_id)
 
 
@@ -315,7 +343,8 @@ def save_exercise_setup(name: str, num_aircraft: int, aircraft_list: list[dict],
             "VALUES (?, ?, ?, ?, 1, ?)",
             (setup_id, name, num_aircraft, config_json, now)
         )
-        # Clear previous dynamic roster
+        # Regeneration also revokes sessions minted by internal callers.
+        c.execute("DELETE FROM sessions")
         c.execute("DELETE FROM roster")
 
         new_roster = []
@@ -323,7 +352,7 @@ def save_exercise_setup(name: str, num_aircraft: int, aircraft_list: list[dict],
         new_roster.append((
             f"r-instr-{uuid.uuid4().hex[:6]}", "INSTR-1", "instructor",
             "Exercise Director / Evaluator", "INSTRUCTOR", "", "Instructor",
-            uuid.uuid4().hex[:12], "/", now
+            secrets.token_hex(16).upper(), "/", now
         ))
 
         # 2. Aircraft crews
@@ -339,19 +368,19 @@ def save_exercise_setup(name: str, num_aircraft: int, aircraft_list: list[dict],
                 new_roster.append((
                     f"r-plt-{uuid.uuid4().hex[:6]}", f"PLT-{num_suffix}", "aircrew",
                     f"{callsign} ({tail}) SAR Mission Pilot", callsign, ac_id, "Mission Pilot",
-                    uuid.uuid4().hex[:12], "/base", now
+                    secrets.token_hex(16).upper(), "/base", now
                 ))
             if "observer" in crew_roles:
                 new_roster.append((
                     f"r-obs-{uuid.uuid4().hex[:6]}", f"OBS-{num_suffix}", "aircrew",
                     f"{callsign} ({tail}) Mission Observer [{df_model}]", callsign, ac_id, "Mission Observer",
-                    uuid.uuid4().hex[:12], "/base", now
+                    secrets.token_hex(16).upper(), "/base", now
                 ))
             if "scanner" in crew_roles:
                 new_roster.append((
                     f"r-scn-{uuid.uuid4().hex[:6]}", f"SCN-{num_suffix}", "aircrew",
                     f"{callsign} ({tail}) Mission Scanner", callsign, ac_id, "Mission Scanner",
-                    uuid.uuid4().hex[:12], "/base", now
+                    secrets.token_hex(16).upper(), "/base", now
                 ))
 
         # 3. Ground Staff & MROs
@@ -365,9 +394,10 @@ def save_exercise_setup(name: str, num_aircraft: int, aircraft_list: list[dict],
             new_roster.append((
                 f"r-staff-{uuid.uuid4().hex[:6]}", code, s_role,
                 s_title, s_callsign, "", s_title,
-                uuid.uuid4().hex[:12], target, now
+                secrets.token_hex(16).upper(), target, now
             ))
 
+        new_roster = [_credential_row(row) for row in new_roster]
         c.executemany(
             "INSERT INTO roster (id, code, role, title, callsign, aircraft_id, assigned_name, token, target_url, created) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", new_roster

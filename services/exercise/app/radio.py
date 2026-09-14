@@ -20,6 +20,7 @@ from urllib.parse import urlsplit
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from .roles import base_or_instructor
 from . import access
 from .mumble_channels import browser_nets
 
@@ -82,7 +83,7 @@ def ics_status():
     return dict(ICS_STATE)
 
 
-@router.post('/api/radio/ics')
+@router.post('/api/radio/ics', dependencies=[base_or_instructor])
 def update_ics(payload: dict):
     mode = str(payload.get('mode', ICS_STATE['mode'])).upper()
     if mode in ('ALL', 'PILOT', 'COPILOT', 'CREW'):

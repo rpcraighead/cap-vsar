@@ -5,6 +5,13 @@ Split out of main.py under C15-1.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
+import html
+import secrets
+import re
+from urllib.parse import parse_qs, quote
+
 import json
 import time
 import uuid
@@ -18,7 +25,7 @@ from ..roles import (base_or_instructor, instructor_only, plugin_only,
 from ..settings import log
 from ..store import _exec, _fetchone, db, db_call, row_to_scenario
 
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from ..models import LoginPayload, SetupPayload
 from ..settings import STATIC
@@ -30,7 +37,13 @@ router = APIRouter()
 
 @router.get("/login")
 def login_page():
-    return FileResponse(STATIC / "login.html")
+    # Adapt the legacy static template while keeping credential handling here.
+    page = (STATIC / "login.html").read_text()
+    page = page.replace('maxlength="12"', 'maxlength="128"').replace(
+        'placeholder="e.g. OBS-423"', 'placeholder="Full code from your badge"')
+    page = re.sub(r'    <div class="login-shortcuts-section">.*?(?=    <div class="login-footer-notice">)',
+                  '', page, flags=re.S)
+    return HTMLResponse(page, headers={"Cache-Control": "no-store"})
 
 
 @router.post("/api/auth/login")
@@ -43,12 +56,12 @@ def api_login(payload: LoginPayload, response: Response):
         key=access.SESSION_COOKIE,
         value=sess_id,
         httponly=True,
+        secure=True,
         max_age=86400,
         samesite="lax"
     )
     return {
         "ok": True,
-        "session_id": sess_id,
         "user": user,
         "target_url": user.get("target_url") or "/"
     }
@@ -74,7 +87,7 @@ def api_auth_me(request: Request):
                 "callsign": "DEV",
             }
         return {"authenticated": False}
-    return {"authenticated": True, **sess}
+    return {"authenticated": True, **{k: v for k, v in sess.items() if k != "session_id"}}
 
 
 @router.post("/api/auth/logout")
@@ -82,25 +95,53 @@ def api_logout(request: Request, response: Response):
     sess_id = request.cookies.get(access.SESSION_COOKIE)
     if sess_id:
         access.delete_session(sess_id)
-    response.delete_cookie(key=access.SESSION_COOKIE)
+    response.delete_cookie(key=access.SESSION_COOKIE, secure=True, httponly=True, samesite="lax")
     return {"ok": True}
+
+
+JOIN_CSRF_COOKIE = "__Host-capvsar_join"
 
 
 @router.get("/join/{code}")
 def join_by_code(code: str):
+    # Validate without minting a session or updating last_login.
+    if not any(hmac.compare_digest(code.strip().upper().encode(), row["code"].encode())
+               for row in access.get_roster()):
+        return RedirectResponse("/login?error=invalid_code", status_code=302)
+    nonce = secrets.token_urlsafe(32)
+    csrf = hashlib.sha256((nonce + ":" + code).encode()).hexdigest()
+    action = html.escape("/join/" + quote(code, safe=""), quote=True)
+    resp = HTMLResponse(
+        '<!doctype html><html><head><title>Confirm sign in</title></head><body>'
+        '<h1>Sign in with this participant badge?</h1>'
+        f'<form method="post" action="{action}">'
+        f'<input type="hidden" name="csrf" value="{csrf}">'
+        '<button type="submit">Confirm sign in</button></form></body></html>',
+        headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer",
+                 "Content-Security-Policy": "default-src 'none'; form-action 'self'; frame-ancestors 'none'"})
+    resp.set_cookie(JOIN_CSRF_COOKIE, nonce, secure=True, httponly=True,
+                    samesite="strict", max_age=600, path="/")
+    return resp
+
+
+@router.post("/join/{code}")
+async def confirm_join(code: str, request: Request):
+    nonce = request.cookies.get(JOIN_CSRF_COOKIE, "")
+    if request.headers.get("content-type", "").split(";")[0] != "application/x-www-form-urlencoded":
+        raise HTTPException(403, "Invalid sign-in confirmation")
+    fields = parse_qs((await request.body()).decode("utf-8", errors="replace"))
+    csrf = fields.get("csrf", [""])[0]
+    expected = hashlib.sha256((nonce + ":" + code).encode()).hexdigest()
+    if not nonce or not hmac.compare_digest(csrf.encode(), expected.encode()):
+        raise HTTPException(403, "Invalid sign-in confirmation")
     res = access.authenticate_code(code)
     if not res:
-        return RedirectResponse(f"/login?error=invalid_code&code={code}", status_code=302)
+        return RedirectResponse("/login?error=invalid_code", status_code=303)
     user, sess_id = res
-    target = user.get("target_url") or "/"
-    resp = RedirectResponse(target, status_code=302)
-    resp.set_cookie(
-        key=access.SESSION_COOKIE,
-        value=sess_id,
-        httponly=True,
-        max_age=86400,
-        samesite="lax"
-    )
+    resp = RedirectResponse(user.get("target_url") or "/", status_code=303)
+    resp.set_cookie(access.SESSION_COOKIE, sess_id, secure=True, httponly=True,
+                    max_age=86400, samesite="lax")
+    resp.delete_cookie(JOIN_CSRF_COOKIE, secure=True, httponly=True, samesite="strict")
     return resp
 
 

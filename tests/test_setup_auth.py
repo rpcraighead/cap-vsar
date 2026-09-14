@@ -60,7 +60,22 @@ def build_app(db_path=None, *, auth_token=None, dev_open=False, **tokens):
     main = importlib.import_module("app.main")
     main.init_db()
     headers = {"X-CAPVSAR-Token": auth_token} if auth_token else None
-    return main, TestClient(main.app, headers=headers), db_path
+    return main, TestClient(main.app, headers=headers, base_url="https://testserver"), db_path
+
+
+def credential(label):
+    from app import access
+    return next(row["code"] for row in access.get_roster()
+                if row["code"].rsplit("-", 1)[0] == label)
+
+
+def confirm_badge(client, label):
+    url = "/join/" + credential(label)
+    page = client.get(url)
+    assert page.status_code == 200
+    assert "capvsar_session" not in page.cookies
+    csrf = re.search(r'name="csrf" value="([^"]+)"', page.text).group(1)
+    return client.post(url, data={"csrf": csrf}, follow_redirects=False)
 
 
 class SetupPersistenceTests(unittest.TestCase):
@@ -85,7 +100,7 @@ class SetupPersistenceTests(unittest.TestCase):
         self.assertTrue(len(data["config"]["aircraft"]) >= 1)
         # Default database seeds 5 standard roster participants (INSTR-1, PLT-423, OBS-423, MRO-1, UDF-1)
         self.assertEqual(len(data["roster"]), 5)
-        codes = [entry["code"] for entry in data["roster"]]
+        codes = [entry["code"].rsplit("-", 1)[0] for entry in data["roster"]]
         self.assertIn("INSTR-1", codes)
         self.assertIn("OBS-423", codes)
 
@@ -129,7 +144,7 @@ class SetupPersistenceTests(unittest.TestCase):
         r2 = self.client.get("/api/setup")
         self.assertEqual(r2.status_code, 200)
         data2 = r2.json()
-        codes = {entry["code"]: entry for entry in data2["roster"]}
+        codes = {entry["code"].rsplit("-", 1)[0]: entry for entry in data2["roster"]}
         self.assertIn("INSTR-1", codes)
         self.assertEqual(codes["INSTR-1"]["role"], "instructor")
         self.assertIn("PLT-423", codes)
@@ -196,17 +211,19 @@ class AuthenticationAndSessionTests(unittest.TestCase):
         self.assertIn("Invalid participant access code", r.json()["detail"])
 
     def test_login_valid_code_sets_cookie_and_returns_session(self):
-        r = self.client.post("/api/auth/login", json={"code": "OBS-423"})
+        r = self.client.post("/api/auth/login", json={"code": credential("OBS-423")})
         self.assertEqual(r.status_code, 200)
         data = r.json()
         self.assertTrue(data["ok"])
         self.assertEqual(data["user"]["role"], "aircrew")
         self.assertEqual(data["user"]["callsign"], "CAP 423")
-        self.assertIn("session_id", data)
+        self.assertNotIn("session_id", data)
+        self.assertIn("Secure", r.headers["set-cookie"])
+        self.assertIn("HttpOnly", r.headers["set-cookie"])
         self.assertIn("capvsar_session", r.cookies)
 
     def test_auth_me_with_session_cookie(self):
-        login_res = self.client.post("/api/auth/login", json={"code": "INSTR-1"})
+        login_res = self.client.post("/api/auth/login", json={"code": credential("INSTR-1")})
         self.assertEqual(login_res.status_code, 200)
 
         # TestClient automatically maintains cookies across calls
@@ -218,11 +235,11 @@ class AuthenticationAndSessionTests(unittest.TestCase):
         self.assertIn("Exercise Director", data["title"])
 
     def test_auth_me_with_bearer_token(self):
-        login_res = self.client.post("/api/auth/login", json={"code": "MRO-1"})
-        sess_id = login_res.json()["session_id"]
+        login_res = self.client.post("/api/auth/login", json={"code": credential("MRO-1")})
+        sess_id = login_res.cookies["capvsar_session"]
 
         # Create fresh client without cookies
-        c2 = TestClient(self.main.app)
+        c2 = TestClient(self.main.app, base_url="https://testserver")
         r = c2.get("/api/auth/me", headers={"Authorization": f"Bearer {sess_id}"})
         self.assertEqual(r.status_code, 200)
         self.assertTrue(r.json()["authenticated"])
@@ -231,7 +248,7 @@ class AuthenticationAndSessionTests(unittest.TestCase):
     def test_logout_clears_session(self):
         # Configure instructor token so unauthenticated requests report False
         os.environ["CAPVSAR_TOKEN_INSTRUCTOR"] = "test-instr"
-        self.client.post("/api/auth/login", json={"code": "INSTR-1"})
+        self.client.post("/api/auth/login", json={"code": credential("INSTR-1")})
         self.assertTrue(self.client.get("/api/auth/me").json()["authenticated"])
 
         logout_res = self.client.post("/api/auth/logout")
@@ -273,8 +290,8 @@ class JoinRouteTests(unittest.TestCase):
         self.assertIn("/login?error=invalid_code", r.headers["location"])
 
     def test_join_instructor_code_sets_cookie_and_redirects(self):
-        r = self.client.get("/join/INSTR-1", follow_redirects=False)
-        self.assertEqual(r.status_code, 302)
+        r = confirm_badge(self.client, "INSTR-1")
+        self.assertEqual(r.status_code, 303)
         self.assertEqual(r.headers["location"], "/")
         self.assertIn("capvsar_session", r.cookies)
 
@@ -283,14 +300,14 @@ class JoinRouteTests(unittest.TestCase):
         self.assertEqual(r_me.json()["role"], "instructor")
 
     def test_join_aircrew_code_redirects_to_base(self):
-        r = self.client.get("/join/PLT-423", follow_redirects=False)
-        self.assertEqual(r.status_code, 302)
+        r = confirm_badge(self.client, "PLT-423")
+        self.assertEqual(r.status_code, 303)
         self.assertEqual(r.headers["location"], "/base")
         self.assertIn("capvsar_session", r.cookies)
 
     def test_join_base_code_redirects_to_base(self):
-        r = self.client.get("/join/MRO-1", follow_redirects=False)
-        self.assertEqual(r.status_code, 302)
+        r = confirm_badge(self.client, "MRO-1")
+        self.assertEqual(r.status_code, 303)
         self.assertEqual(r.headers["location"], "/base")
         self.assertIn("capvsar_session", r.cookies)
 
@@ -326,34 +343,34 @@ class RBACRouteEnforcementTests(unittest.TestCase):
             os.unlink(self.db)
 
     def test_anonymous_browser_on_instructor_console_redirects_to_login(self):
-        c = TestClient(self.main.app)
+        c = TestClient(self.main.app, base_url="https://testserver")
         r = c.get("/", follow_redirects=False)
         self.assertEqual(r.status_code, 302)
         self.assertEqual(r.headers["location"], "/login?next=/")
 
     def test_anonymous_browser_on_setup_redirects_to_login(self):
-        c = TestClient(self.main.app)
+        c = TestClient(self.main.app, base_url="https://testserver")
         r = c.get("/setup", follow_redirects=False)
         self.assertEqual(r.status_code, 302)
         self.assertEqual(r.headers["location"], "/login?next=/setup")
 
     def test_aircrew_cannot_access_setup(self):
-        c = TestClient(self.main.app)
-        c.post("/api/auth/login", json={"code": "PLT-423"})
+        c = TestClient(self.main.app, base_url="https://testserver")
+        c.post("/api/auth/login", json={"code": credential("PLT-423")})
         r = c.get("/setup", follow_redirects=False)
         self.assertEqual(r.status_code, 302)
         self.assertIn("/login?error=instructor_required", r.headers["location"])
 
     def test_aircrew_cannot_access_console(self):
-        c = TestClient(self.main.app)
-        c.post("/api/auth/login", json={"code": "PLT-423"})
+        c = TestClient(self.main.app, base_url="https://testserver")
+        c.post("/api/auth/login", json={"code": credential("PLT-423")})
         r = c.get("/", follow_redirects=False)
         self.assertEqual(r.status_code, 302)
         self.assertIn("/login?error=instructor_required", r.headers["location"])
 
     def test_instructor_session_can_access_setup_and_console(self):
-        c = TestClient(self.main.app)
-        c.post("/api/auth/login", json={"code": "INSTR-1"})
+        c = TestClient(self.main.app, base_url="https://testserver")
+        c.post("/api/auth/login", json={"code": credential("INSTR-1")})
         r_setup = c.get("/setup")
         self.assertEqual(r_setup.status_code, 200)
         self.assertIn("Exercise & Fleet Setup", r_setup.text)
@@ -363,21 +380,21 @@ class RBACRouteEnforcementTests(unittest.TestCase):
         self.assertIn("Exercise Console", r_console.text)
 
     def test_base_session_can_access_base_view(self):
-        c = TestClient(self.main.app)
-        c.post("/api/auth/login", json={"code": "MRO-1"})
+        c = TestClient(self.main.app, base_url="https://testserver")
+        c.post("/api/auth/login", json={"code": credential("MRO-1")})
         r_base = c.get("/base")
         self.assertEqual(r_base.status_code, 200)
         self.assertIn("Mission Base", r_base.text)
 
     def test_aircrew_session_can_access_base_view(self):
-        c = TestClient(self.main.app)
-        c.post("/api/auth/login", json={"code": "PLT-423"})
+        c = TestClient(self.main.app, base_url="https://testserver")
+        c.post("/api/auth/login", json={"code": credential("PLT-423")})
         r_base = c.get("/base")
         self.assertEqual(r_base.status_code, 200)
 
     def test_aircrew_session_cannot_mutate_scenarios_or_sorties(self):
-        c = TestClient(self.main.app)
-        c.post("/api/auth/login", json={"code": "PLT-423"})
+        c = TestClient(self.main.app, base_url="https://testserver")
+        c.post("/api/auth/login", json={"code": credential("PLT-423")})
 
         r_scen = c.post("/api/scenarios", json={"name": "hacked", "beacon_lat": 33.0, "beacon_lon": -117.0})
         self.assertEqual(r_scen.status_code, 403)
@@ -389,12 +406,12 @@ class RBACRouteEnforcementTests(unittest.TestCase):
         self.assertEqual(r_reveal.status_code, 403)
 
     def test_base_session_can_post_messages_and_bearings(self):
-        c_base = TestClient(self.main.app)
-        c_base.post("/api/auth/login", json={"code": "MRO-1"})
+        c_base = TestClient(self.main.app, base_url="https://testserver")
+        c_base.post("/api/auth/login", json={"code": credential("MRO-1")})
 
         # First create scenario and sortie via instructor
-        c_instr = TestClient(self.main.app)
-        c_instr.post("/api/auth/login", json={"code": "INSTR-1"})
+        c_instr = TestClient(self.main.app, base_url="https://testserver")
+        c_instr.post("/api/auth/login", json={"code": credential("INSTR-1")})
         sc_res = c_instr.post("/api/scenarios", json={
             "name": "Ops Test", "beacon_lat": 33.1, "beacon_lon": -117.1,
             "beacon_elev_ft": 1000.0, "band": "121.5", "power": 1.0
@@ -546,3 +563,110 @@ class DenyByDefaultTests(unittest.TestCase):
             os.environ.pop("CAPVSAR_DEV_OPEN", None)
             if os.path.exists(db):
                 os.unlink(db)
+
+
+class HardenedCredentialTests(unittest.TestCase):
+    def setUp(self):
+        self.main, self.client, self.db = build_app()
+        from app import access
+        self.access = access
+
+    def tearDown(self):
+        os.unlink(self.db)
+
+    def test_public_labels_are_not_credentials(self):
+        for row in self.access.get_roster():
+            label, token = row['code'].rsplit('-', 1)
+            self.assertEqual(token, row['token'])
+            self.assertRegex(token, r'^[0-9A-F]{32}$')
+            self.assertIsNone(self.access.authenticate_code(label))
+            self.assertIsNone(self.access.authenticate_code(label + '-' + '0' * 32))
+            self.assertIsNotNone(self.access.authenticate_code(row['code'].lower()))
+
+    def test_join_get_is_read_only_and_post_requires_bound_csrf(self):
+        url = '/join/' + credential('INSTR-1')
+        page = self.client.get(url)
+        self.assertEqual(page.status_code, 200)
+        self.assertNotIn('capvsar_session', page.cookies)
+        self.assertEqual(page.headers['cache-control'], 'no-store')
+        with self.access.auth_db() as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM sessions').fetchone()[0], 0)
+            self.assertIsNone(db.execute('SELECT last_login FROM roster LIMIT 1').fetchone()[0])
+        csrf = re.search(r'name="csrf" value="([^"]+)"', page.text).group(1)
+        for data in ({}, {'csrf': 'bad'}):
+            self.assertEqual(self.client.post(url, data=data).status_code, 403)
+        other = TestClient(self.main.app, base_url='https://testserver')
+        self.assertEqual(other.post(url, data={'csrf': csrf}).status_code, 403)
+        self.assertEqual(self.client.post('/join/' + credential('MRO-1'), data={'csrf': csrf}).status_code, 403)
+        good = self.client.post(url, data={'csrf': csrf}, follow_redirects=False)
+        self.assertEqual(good.status_code, 303)
+        self.assertIn('Secure', good.headers['set-cookie'])
+        self.assertEqual(self.client.post(url, data={'csrf': csrf}).status_code, 403)
+
+    def test_session_hash_expiry_query_rejection_and_logout(self):
+        login = self.client.post('/api/auth/login', json={'code': credential('MRO-1')})
+        secret = login.cookies['capvsar_session']
+        self.assertNotIn(secret, login.text)
+        self.assertNotIn(secret, self.client.get('/api/auth/me').text)
+        with self.access.auth_db() as db:
+            stored = db.execute('SELECT session_id FROM sessions').fetchone()[0]
+        self.assertEqual(stored, self.access._session_hash(secret))
+        other = TestClient(self.main.app, base_url='https://testserver')
+        self.assertFalse(other.get('/api/auth/me', params={'session': secret}).json()['authenticated'])
+        self.assertTrue(other.get('/api/auth/me', headers={'Authorization': 'Bearer ' + secret}).json()['authenticated'])
+        self.client.post('/api/auth/logout')
+        self.assertFalse(other.get('/api/auth/me', headers={'Authorization': 'Bearer ' + secret}).json()['authenticated'])
+        _, secret = self.access.authenticate_code(credential('MRO-1'))
+        with self.access.auth_db() as db:
+            db.execute('UPDATE sessions SET expires=0')
+        self.assertFalse(other.get('/api/auth/me', headers={'Authorization': 'Bearer ' + secret}).json()['authenticated'])
+        with self.access.auth_db() as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM sessions').fetchone()[0], 0)
+
+    def test_roster_regeneration_revokes_old_sessions_and_codes(self):
+        old_code = credential('INSTR-1')
+        self.client.post('/api/auth/login', json={'code': old_code})
+        self.access.save_exercise_setup('Replacement', 0, [], [])
+        self.assertFalse(self.client.get('/api/auth/me').json()['authenticated'])
+        self.assertIsNone(self.access.authenticate_code(old_code))
+        self.assertNotEqual(credential('INSTR-1'), old_code)
+
+    def test_direct_roster_deletion_revokes_sessions(self):
+        code = credential('MRO-1')
+        self.client.post('/api/auth/login', json={'code': code})
+        with self.access.auth_db() as db:
+            db.execute('DELETE FROM roster WHERE code=?', (code,))
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM sessions').fetchone()[0], 0)
+        self.assertFalse(self.client.get('/api/auth/me').json()['authenticated'])
+
+    def test_existing_database_migration_revokes_plaintext_sessions(self):
+        with self.access.auth_db() as db:
+            db.execute("UPDATE roster SET code='INSTR-1', token='old' WHERE role='instructor'")
+            db.execute("INSERT INTO sessions(session_id, code, role, title, expires) VALUES ('old-secret', 'INSTR-1', 'instructor', 'Old', 9999999999)")
+        self.access.init_auth_db()
+        self.assertIsNone(self.access.authenticate_code('INSTR-1'))
+        code = credential('INSTR-1')
+        self.access.init_auth_db()
+        self.assertEqual(credential('INSTR-1'), code)
+        with self.access.auth_db() as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM sessions').fetchone()[0], 0)
+
+    def test_radio_ics_requires_base_or_instructor(self):
+        original = self.client.get('/api/radio/ics').json()
+        for label in (None, 'PLT-423', 'UDF-1'):
+            client = TestClient(self.main.app, base_url='https://testserver')
+            if label:
+                client.post('/api/auth/login', json={'code': credential(label)})
+            self.assertIn(client.post('/api/radio/ics', json={'mode': 'PILOT'}).status_code, (403, 503))
+            self.assertEqual(client.get('/api/radio/ics').json(), original)
+        for label in ('MRO-1', 'INSTR-1'):
+            client = TestClient(self.main.app, base_url='https://testserver')
+            client.post('/api/auth/login', json={'code': credential(label)})
+            result = client.post('/api/radio/ics', json={'mode': 'CREW'})
+            self.assertEqual(result.status_code, 200)
+            self.assertEqual(result.json()['mode'], 'CREW')
+
+    def test_login_page_accepts_full_badge_and_removes_public_shortcuts(self):
+        page = self.client.get('/login').text
+        self.assertIn('maxlength="128"', page)
+        self.assertNotIn('data-code="INSTR-1"', page)
