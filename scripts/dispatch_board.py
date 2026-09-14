@@ -55,7 +55,11 @@ def build_command(agent: str, prompt: str) -> list[str]:
     if "codex" in name:
         if not CODEX.is_file():
             raise SystemExit(f"codex binary not found at {CODEX}")
-        return [str(CODEX), "exec", "--cd", str(REPO), prompt]
+        # workspace-write, not danger-full-access: the agent may edit this
+        # repo and nothing outside it. Stated explicitly rather than inherited
+        # from config, so the blast radius is visible here.
+        return [str(CODEX), "exec", "--cd", str(REPO),
+                "--sandbox", "workspace-write", prompt]
 
     if "gemini" in name or "antigravity" in name:
         if not AGY.is_file():
