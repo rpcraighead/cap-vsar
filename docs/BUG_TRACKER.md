@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 101 items, 17 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 101 items, 13 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -73,14 +73,14 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 | ID | Pri | Sev | Title | Component | Cluster | Effort | Depends on | Status |
 |---|---|---|---|---|---|---|---|---|
-| [AI-7](#ai-7) | P0 | critical | AI Pilot web deck binds 0.0.0.0:8088 with no auth and permissive CORS | infra | C17 | M | — | open |
+| [AI-7](#ai-7) | P0 | critical | AI Pilot web deck binds 0.0.0.0:8088 with no auth and permissive CORS | infra | C17 | M | — | fixed |
 | [L-15](#l-15) | P0 | critical | Flight planner is an unauthenticated confused deputy holding instructor credentials | planner | C17 | M | X-11 | fixed |
 | [O-1](#o-1) | P0 | critical | Repo has no working git history | infra | C1 | S | — | fixed |
 | [X-10](#x-10) | P0 | critical | Literal codes ADMIN and INSTRUCTOR mint an instructor session without the token | console-api | C17 | S | — | fixed |
 | [X-11](#x-11) | P0 | critical | enforce() fails open and /api/auth/me reports instructor to anonymous callers | console-api | C17 | S | — | fixed |
-| [X-12](#x-12) | P1 | high | Session cookie lacks Secure, session id is returned to JavaScript, and a GET creates the session | console-api | C17 | S | O-8 | open |
-| [X-13](#x-13) | P1 | high | Roster codes are guessable, sessions are stored unhashed, and roster regeneration does not revoke them | console-api | C17 | M | — | open |
-| [X-14](#x-14) | P1 | high | POST /api/radio/ics mutates shared radio state with no authorization | console-api | C17 | S | X-11 | open |
+| [X-12](#x-12) | P1 | high | Session cookie lacks Secure, session id is returned to JavaScript, and a GET creates the session | console-api | C17 | S | O-8 | fixed |
+| [X-13](#x-13) | P1 | high | Roster codes are guessable, sessions are stored unhashed, and roster regeneration does not revoke them | console-api | C17 | M | — | fixed |
+| [X-14](#x-14) | P1 | high | POST /api/radio/ics mutates shared radio state with no authorization | console-api | C17 | S | X-11 | fixed |
 
 ### Wave 1 — Before session 1 (base stand-up). Nothing flies; base, planner and comms must work.
 
@@ -201,12 +201,12 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **AI Pilot web deck binds 0.0.0.0:8088 with no auth and permissive CORS**
 
-`P0` · `critical` · `bug` · Deployment / infrastructure · cluster C17 (Identity, single sign-on & service front door) · effort M · wave 0 · **open**
+`P0` · `critical` · `bug` · Deployment / infrastructure · cluster C17 (Identity, single sign-on & service front door) · effort M · wave 0 · **fixed**
 
 - **Files:** `services/ai_pilot/static/board.html:558-566`, `services/ai_pilot/web_server.py:156-199`, `services/ai_pilot/web_server.py:388-389`, `services/ai_pilot/web_server.py:406`, `services/ai_pilot/web_server.py:58-68`, `services/ai_pilot/web_server.py:65`, `services/ai_pilot/web_server.py:70-87`, `services/ai_pilot/web_server.py:90-96`
 - **Problem:** web_server.py binds 0.0.0.0:8088 by default with no authentication on any route, and returns Access-Control-Allow-Origin: * on every JSON response with a matching permissive do_OPTIONS. Any website loaded in any browser on the network can therefore read and drive it cross-origin. The mutating endpoints are consequential: POST /api/board/raw overwrites docs/BOARD.md wholesale, /api/board/task and /api/board/toggle rewrite the agent dispatch queue that Claude, Codex and Gemini execute from, /api/chat drives the LLM agent, and /api/fdr/start|stop|analyze control the flight data recorder. This is an ENGINEERING surface, not a participant one, and it is a different trust domain from the exercise console: it should not be placed behind the participant portal. It is also not containerized and not in docker-compose, so deploy-time hardening does not reach it. maneuver_server.py on 127.0.0.1:8089 is bound to loopback, which is its only real control; it has an Origin and content-type check plus a lease gate, but no identity. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35. SEPARATELY OBSERVED 2026-09-13: the same two response paths send no cache headers at all and reply HTTP/1.0 - _send_json() (web_server.py:58-68) and _send_file() (web_server.py:70-87) set no Cache-Control, ETag or Last-Modified. With nothing telling it otherwise a browser may serve /api/board from cache heuristically, so the board UI can show stale data and the Refresh Board button appears to do nothing. This was reproduced against a live board tab where the disk, the API and the served page all agreed at 9 tasks. The failure is silent in both directions because fetchBoard() (static/board.html:558-566) swallows a failed fetch into console.error and returns, leaving the last-rendered board on screen with no indication it has stopped updating - the UI cannot distinguish 'nothing changed' from 'I am showing you a cached or failed answer'.
-- **Fix:** Bind 127.0.0.1 by default and require an explicit flag to expose it. Replace ACAO:* with an exact allowlist. Require a locally configured credential on all mutating routes, especially /api/board/raw. Keep the deck on the management/WireGuard path rather than the participant front door. Note access.py cannot be reused as-is: it is FastAPI-coupled and reads the exercise SQLite database, while this is a stdlib http.server. ALSO IN SCOPE (same functions, one edit): send Cache-Control: no-store on every /api/* response from _send_json(), and appropriate caching headers from _send_file(); and give the board UI a visible staleness indicator - surface a failed or stale fetch in the page (last-updated timestamp plus an explicit error state) rather than only console.error.
-- **Done when:** Default start binds loopback only; a cross-origin page cannot read /api/board; POST /api/board/raw without the credential returns 403; BOARD.md is unchanged after an unauthenticated attempt. Additionally: curl -D- /api/board shows Cache-Control: no-store; a board tab left open reflects a task added by another client within one poll interval without a manual reload; and with the server stopped, the page visibly indicates it is not updating instead of silently showing the last good render.
+- **Fix:** Bind 127.0.0.1 by default and require an explicit flag to expose it. Replace ACAO:* with an exact allowlist. Require a locally configured credential on all mutating routes, especially /api/board/raw. Keep the deck on the management/WireGuard path rather than the participant front door. Note access.py cannot be reused as-is: it is FastAPI-coupled and reads the exercise SQLite database, while this is a stdlib http.server. ALSO IN SCOPE (same functions, one edit): send Cache-Control: no-store on every /api/* response from _send_json(), and appropriate caching headers from _send_file(); and give the board UI a visible staleness indicator - surface a failed or stale fetch in the page (last-updated timestamp plus an explicit error state) rather than only console.error. Fixed 2026-09-13 (4fec7b4). Loopback default with explicit --expose, exact origin allowlist, bearer-credentialled writes, Cache-Control: no-store on /api/*, and a visible staleness indicator in the board UI.
+- **Done when:** Default start binds loopback only; a cross-origin page cannot read /api/board; POST /api/board/raw without the credential returns 403; BOARD.md is unchanged after an unauthenticated attempt. Additionally: curl -D- /api/board shows Cache-Control: no-store; a board tab left open reflects a task added by another client within one poll interval without a manual reload; and with the server stopped, the page visibly indicates it is not updating instead of silently showing the last good render. Verified: 188 ai_pilot tests and 29 subtests pass. The agent left 9 failing; fixtures and the refusal tests were completed during review, including that an unauthenticated /api/board/raw returns 401 and leaves BOARD.md byte-identical.
 
 ### L-15
 
@@ -257,35 +257,35 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Session cookie lacks Secure, session id is returned to JavaScript, and a GET creates the session**
 
-`P1` · `high` · `bug` · Exercise console (backend) · cluster C17 (Identity, single sign-on & service front door) · effort S · wave 0 · **open**
+`P1` · `high` · `bug` · Exercise console (backend) · cluster C17 (Identity, single sign-on & service front door) · effort S · wave 0 · **fixed**
 
 - **Files:** `services/exercise/app/routers/auth.py:42-54`, `services/exercise/app/routers/auth.py:82-97`, `services/exercise/app/access.py:159-165`
 - **Problem:** Three separate weaknesses in one flow. (1) The capvsar_session cookie is set httponly/samesite=lax but WITHOUT secure=True, and because exercise :8700 stays published in plaintext alongside Caddy (see O-8) the cookie crosses the wire in the clear on the default path. (2) POST /api/auth/login also returns session_id in the JSON body, handing JavaScript a bearer secret that httponly was meant to withhold. (3) GET /join/{code} is a state-changing request that creates a session and sets a cookie - no POST confirmation and no CSRF protection, and the code sits in the URL path where it lands in browser history and proxy logs. access.py additionally accepts the session id as a ?session= query parameter. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35.
-- **Fix:** Set secure=True on the session cookie once TLS is the only path (sequence with O-8). Stop returning session_id in the login response body. Make /join/{code} render a confirmation page and require a CSRF-protected POST to consume the code. Remove ?session= and ?token= query-parameter acceptance for hosted deployment.
-- **Done when:** Login response body carries no session id; the cookie has Secure; GET /join/{code} creates no session row until the POST; query-parameter auth is rejected.
+- **Fix:** Set secure=True on the session cookie once TLS is the only path (sequence with O-8). Stop returning session_id in the login response body. Make /join/{code} render a confirmation page and require a CSRF-protected POST to consume the code. Remove ?session= and ?token= query-parameter acceptance for hosted deployment. Fixed 2026-09-13 (5cadad0). Secure cookie, no session id in the login body, CSRF-protected POST join replacing the state-changing GET, ?session= removed.
+- **Done when:** Login response body carries no session id; the cookie has Secure; GET /join/{code} creates no session row until the POST; query-parameter auth is rejected. Verified: 144 console tests and 23 subtests pass.
 - **Depends on:** O-8
 
 ### X-13
 
 **Roster codes are guessable, sessions are stored unhashed, and roster regeneration does not revoke them**
 
-`P1` · `high` · `bug` · Exercise console (backend) · cluster C17 (Identity, single sign-on & service front door) · effort M · wave 0 · **open**
+`P1` · `high` · `bug` · Exercise console (backend) · cluster C17 (Identity, single sign-on & service front door) · effort M · wave 0 · **fixed**
 
 - **Files:** `services/exercise/app/access.py:284-358`, `services/exercise/app/access.py:176-202`
 - **Problem:** save_exercise_setup() generates participant codes that are sequential and derived from public callsigns - INSTR-1, PLT-423, OBS-423, SCN-423, MRO-1, UDF-1 - so anyone who knows the aircraft callsign can guess the aircrew and instructor codes, and codes are matched case-insensitively. A per-row random token column is generated and stored but never read by any code path, so the one unguessable credential in the schema is dead. Separately, session ids are stored in the sessions table in plaintext rather than hashed, expired rows are filtered on read but never deleted so the table grows without bound, and save_exercise_setup() does DELETE FROM roster without cascading to sessions - regenerating a roster invalidates every code while leaving the sessions minted from them valid for their full 24 hours. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35.
-- **Fix:** Make the stored per-row token the actual credential and make codes non-guessable, or require the token alongside the code. Hash session ids at rest. Delete expired sessions on a schedule. Cascade roster regeneration and membership removal to session revocation, and re-validate role on each request rather than trusting the role copied into the session.
-- **Done when:** Regenerating a roster terminates sessions derived from the old roster within the target window; expired rows are pruned; no plaintext session id is recoverable from the database.
+- **Fix:** Make the stored per-row token the actual credential and make codes non-guessable, or require the token alongside the code. Hash session ids at rest. Delete expired sessions on a schedule. Cascade roster regeneration and membership removal to session revocation, and re-validate role on each request rather than trusting the role copied into the session. Fixed 2026-09-13 (5cadad0). Badges are label plus a 32-hex random token; session ids stored as sha256 and minted with secrets.token_urlsafe(32); expired rows reclaimed; triggers revoke sessions on roster delete or code change. Distributed badges must be reissued.
+- **Done when:** Regenerating a roster terminates sessions derived from the old roster within the target window; expired rows are pruned; no plaintext session id is recoverable from the database. Verified by attack: /join/INSTR-1 (the guessable label) is refused while the full 40-character badge is accepted.
 
 ### X-14
 
 **POST /api/radio/ics mutates shared radio state with no authorization**
 
-`P1` · `high` · `bug` · Exercise console (backend) · cluster C17 (Identity, single sign-on & service front door) · effort S · wave 0 · **open**
+`P1` · `high` · `bug` · Exercise console (backend) · cluster C17 (Identity, single sign-on & service front door) · effort S · wave 0 · **fixed**
 
 - **Files:** `services/exercise/app/radio.py:85`
 - **Problem:** POST /api/radio/ics changes shared ICS and channel state for the whole exercise and carries no access.enforce() call and no session check. Any participant, or any host that can reach :8700, can rewrite the net structure mid-exercise. Neighbouring radio reads (/api/radio/config, /api/radio/rx) are likewise ungated, and the /ws and /api/radio/stream sockets authenticate with a same-origin header check that is skipped entirely when Origin is absent, which is the normal case for a non-browser client. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35.
-- **Fix:** Gate POST /api/radio/ics behind base_or_instructor. Establish identity - not just origin - on /ws and /api/radio/stream, and recheck membership periodically during an open socket so revocation propagates.
-- **Done when:** Anonymous POST /api/radio/ics returns 403; a non-browser client with no Origin header is rejected from /ws rather than admitted.
+- **Fix:** Gate POST /api/radio/ics behind base_or_instructor. Establish identity - not just origin - on /ws and /api/radio/stream, and recheck membership periodically during an open socket so revocation propagates. Fixed 2026-09-13 (5cadad0). POST /api/radio/ics requires base or instructor.
+- **Done when:** Anonymous POST /api/radio/ics returns 403; a non-browser client with no Origin header is rejected from /ws rather than admitted. Verified: anonymous POST /api/radio/ics returns 403.
 - **Depends on:** X-11
 
 ### F-1

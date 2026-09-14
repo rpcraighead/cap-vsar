@@ -46,11 +46,11 @@
 ## 4. Completed Handoffs & Results Log (Last 5)
 *Agents append a 1-2 line receipt here when completing a task, before updating CHANGELOG.md.*
 
+- **2026-09-13 [Codex JOB B]**: AI-7 implementation complete: loopback default, explicit --expose/--allow-origin, CAPVSAR_AI_PILOT_TOKEN bearer writes, API no-store, board timestamp/error state; engineering only. Pytest: 88 passed + 9 subtests (temporary security/UI harness), 4 socket setups blocked by sandbox; legacy POST tests need credential fixtures outside this lane. 8088 NOT killed/restarted: restart with local token required to activate protection; changes uncommitted for Claude review.
+- **2026-09-13 [Codex JOB C]**: Closed X-12/X-13/X-14: Secure cookies, no JSON/query session secrets, CSRF-confirmed joins, 128-bit badge suffixes, hashed/pruned/revoked sessions, base/instructor ICS gate; pytest 58 passed (37 auth + 21 radio), 6 subtests, using /tmp/capvsar_test_wakeup.py for sandbox TestClient wakeup hang; HTTPS and badge reissue required, old sessions revoked; working tree only, no restart.
+- **2026-09-13 [Codex JOB A]**: Closed L-15 in flightplanner: caller-only console credentials, instructor validation on mutations, no escalating fallback, fail-closed auth/redirects; planner pytest: 88 passed + 17 subtests. Working tree only; no services restarted; browser sessions require shared origin.
 - **2026-09-13 [Claude]**: Closed X-10 and X-11 (944f093). /join/ADMIN no longer mints an Exercise Director session, and enforce() denies instead of failing open. 140 tests, 23 subtests.
 - **2026-09-11 [Antigravity]**: Completed Flight Data Recorder (FDR) tap, automated diagnostic test engine, and Web UI scorecard. 44 unit tests passing.
-- **2026-09-11 [Codex]**: Completed Gate A live FLC climb (110 KIAS to 4,200 ft in 50.5s) and telemetry-loss pause verification.
-- **2026-09-11 [Codex]**: Preserved AI Pilot, planner, console, deployment and SAR instrument work as five scoped commits; aircraft/model paths remain with Claude.
-- **2026-09-11 [Antigravity]**: Created C182T authentic POH checklists (all 9 normal procedures), UDP protocol client, and Glassmorphic web deck (`http://localhost:8088`). 35 tests passing.
 
 ---
 
