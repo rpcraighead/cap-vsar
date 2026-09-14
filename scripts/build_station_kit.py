@@ -13,7 +13,7 @@ next to their own X-Plane and Air Manager installs.
 
 Usage:
   python3 scripts/build_station_kit.py --callsign CAP-2 \\
-      --console http://192.0.2.151:8700 [--plugin-key KEY] [--zip]
+      --console https://192.0.2.151 [--plugin-key KEY] [--zip]
 
 What's in the kit:
   PI_capvsar_df.py       tracked plugin source, byte-identical across stations
@@ -41,7 +41,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PLUGIN_SOURCE = ROOT / "xplane" / "PI_capvsar_df.py"
 INSTRUMENTS_SOURCE = ROOT / "instruments"
-DEFAULT_CONSOLE = "http://192.0.2.151:8700"
+DEFAULT_CONSOLE = "https://192.0.2.151"
 
 KIT_README = """\
 # CAP V-SAR station kit — {callsign}
@@ -76,8 +76,11 @@ peer if you're off the lab LAN.
 
 ## 4. Aircraft package and CA certificate
 
-Not bundled — see the top of `scripts/build_station_kit.py` in the repo
-for why, and who to ask instead.
+Not bundled — see the top of `scripts/build_station_kit.py` in the repo for
+why, and who to ask instead. Install ms01's CA certificate in the operating
+system trust store before starting X-Plane. On Linux, the repository's
+`scripts/launch_xplane_cap_vsar.sh` supplies a process-local CA bundle without
+changing system-wide trust. The plugin will reject an untrusted certificate.
 """
 
 

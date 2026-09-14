@@ -1,5 +1,10 @@
 
 
+// O-8: every application URL stays under the prefix supplied by the trusted
+// front door. The empty prefix preserves direct local test/development use.
+const plannerBase = document.documentElement.dataset.plannerBase || '';
+const plannerUrl = path => `${plannerBase}${path.startsWith('/') ? path : `/${path}`}`;
+
 // ── State ──────────────────────────────────────────────────────
 let map = null;
 let routeLayer = null;
@@ -18,7 +23,7 @@ let customReserve = 45;
 // ── Init ───────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        const res = await fetch('/api/tile-sources');
+        const res = await fetch(plannerUrl('/api/tile-sources'));
         tileSources = await res.json();
     } catch {
         tileSources = {
@@ -60,7 +65,7 @@ function showDisclaimer() {
 async function loadSampleRoute() {
     for (let i = 0; i < 30; i++) {
         try {
-            const res  = await fetch('/api/update-status');
+            const res  = await fetch(plannerUrl('/api/update-status'));
             const data = await res.json();
             if (data.airports > 0) break;
         } catch {}
@@ -104,7 +109,7 @@ function initMap() {
         const { lat, lng } = e.latlng;
         let html;
         try {
-            const res = await fetch(`/api/nearest-airport?lat=${lat}&lon=${lng}&radius_nm=20`);
+            const res = await fetch(plannerUrl(`/api/nearest-airport?lat=${lat}&lon=${lng}&radius_nm=20`));
             const data = await res.json();
             if (data.found && data.nearest.length > 0) {
                 const rows = data.nearest.slice(0, 4).map(a => {
@@ -370,7 +375,7 @@ function setCustomOption(selectId, displayText, numericValue) {
 // ── Database status ────────────────────────────────────────────
 async function checkDbStatus() {
     try {
-        const res  = await fetch('/api/update-status');
+        const res  = await fetch(plannerUrl('/api/update-status'));
         const data = await res.json();
         const dot  = document.getElementById('db-dot');
         const lbl  = document.getElementById('db-label');
@@ -393,7 +398,7 @@ async function checkDbStatus() {
 }
 
 document.getElementById('btn-update-db').addEventListener('click', async () => {
-    await fetch('/api/update-database', {
+    await fetch(plannerUrl('/api/update-database'), {
         method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'
     });
     openModal('modal-db');
@@ -412,7 +417,7 @@ function snapScore(r) {
 }
 async function snapCandidates(lat, lon, n = 3) {
     try {
-        const res  = await fetch(`/api/nearest-airport?lat=${lat}&lon=${lon}&radius_nm=25`);
+        const res  = await fetch(plannerUrl(`/api/nearest-airport?lat=${lat}&lon=${lon}&radius_nm=25`));
         const data = await res.json();
         if (!data.found || !data.nearest.length) return [];
         const sorted = [...data.nearest].sort((a, b) => snapScore(a) - snapScore(b));
@@ -495,7 +500,7 @@ async function calculateRoute(alertOnError = true) {
     const reserveMinutes = resVal === 'custom' ? customReserve  : parseInt(resVal);
 
     try {
-        const res  = await fetch('/api/calculate-route', {
+        const res  = await fetch(plannerUrl('/api/calculate-route'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ departure, destination, waypoints, cruise_altitude: cruiseAlt, rpm, manifold_pressure: Number(document.getElementById('mp-select').value), reserve_minutes: reserveMinutes })
@@ -664,7 +669,7 @@ function drawRouteOnMap() {
 
 // ── Weather ────────────────────────────────────────────────────
 async function fetchWeatherBriefing(departure, destination, waypoints) {
-    const res = await fetch('/api/weather-briefing', {
+    const res = await fetch(plannerUrl('/api/weather-briefing'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ departure, destination, waypoints })
@@ -721,7 +726,7 @@ async function fetchAirportDetails() {
     let html = '';
     for (const icao of airports) {
         try {
-            const res  = await fetch(`/api/airport-detail/${icao}`);
+            const res  = await fetch(plannerUrl(`/api/airport-detail/${icao}`));
             const data = await res.json();
             if (!data.success) continue;
             const apt    = data.airport;
@@ -754,7 +759,7 @@ async function fetchAirportDetails() {
 // ── Terrain profile ────────────────────────────────────────────
 async function fetchTerrainProfile() {
     if (!currentRoute?.route_points) return;
-    const res  = await fetch('/api/terrain-profile', {
+    const res  = await fetch(plannerUrl('/api/terrain-profile'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -900,7 +905,7 @@ window.addEventListener('resize', () => { if (terrainData) drawTerrainProfile();
 // ── Performance ────────────────────────────────────────────────
 document.getElementById('calc-takeoff').addEventListener('click', async () => {
     try {
-        const res = await fetch('/api/performance/takeoff', {
+        const res = await fetch(plannerUrl('/api/performance/takeoff'), {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 weight:            document.getElementById('to-weight').value,
@@ -918,7 +923,7 @@ document.getElementById('calc-takeoff').addEventListener('click', async () => {
 
 document.getElementById('calc-landing').addEventListener('click', async () => {
     try {
-        const res = await fetch('/api/performance/landing', {
+        const res = await fetch(plannerUrl('/api/performance/landing'), {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 pressure_altitude: document.getElementById('land-altitude').value,
@@ -936,7 +941,7 @@ document.getElementById('calc-landing').addEventListener('click', async () => {
 // ── Weight & Balance ───────────────────────────────────────────
 document.getElementById('calc-wb').addEventListener('click', async () => {
     try {
-        const res = await fetch('/api/weight-balance', {
+        const res = await fetch(plannerUrl('/api/weight-balance'), {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 empty_weight:            document.getElementById('wb-empty-weight').value,
@@ -1054,7 +1059,7 @@ async function generateSarPattern() {
     const statusEl = document.getElementById('sar-status-msg');
     if (statusEl) statusEl.textContent = 'Generating pattern...';
 
-    const res = await fetch('/api/sar/generate-pattern', {
+    const res = await fetch(plannerUrl('/api/sar/generate-pattern'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -1162,7 +1167,7 @@ document.getElementById('sar-btn-fms').addEventListener('click', async () => {
         const dest = currentTokens[currentTokens.length - 1] || 'KSEE';
         const alt = parseInt(document.getElementById('alt-select').value) || 6500;
 
-        const res = await fetch('/api/sar/export-fms', {
+        const res = await fetch(plannerUrl('/api/sar/export-fms'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1205,7 +1210,7 @@ document.getElementById('sar-btn-vsar').addEventListener('click', async () => {
         const statusEl = document.getElementById('sar-status-msg');
         if (statusEl) statusEl.textContent = 'Pushing to V-SAR console on ms01...';
 
-        const res = await fetch('/api/sar/export-vsar', {
+        const res = await fetch(plannerUrl('/api/sar/export-vsar'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

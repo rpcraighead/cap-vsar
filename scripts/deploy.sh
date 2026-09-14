@@ -84,7 +84,10 @@ echo "==> status"
 docker compose ps
 echo
 echo "Mumble: $(hostname -I | awk '{print $1}'):64738   (server password in .env)"
+echo "CAP V-SAR: https://$(hostname -I | awk '{print $1}')/"
+echo "Planner:   https://$(hostname -I | awk '{print $1}')/planner/"
 echo
 echo "NOTE: not reachable from the internet until the router forwards 64738"
 echo "      TCP+UDP to this host - see infra/ROUTER.md."
 echo "      WireGuard runs on the ROUTER (wgserver), not on this host."
+echo "      Exercise :8700 and planner :8090 are private container ports."

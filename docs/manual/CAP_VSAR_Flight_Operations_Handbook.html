@@ -209,7 +209,7 @@
     <div class="meta-row"><span class="meta-label">Revision:</span> 1.3 (Training Progression: SAREX Rehearsal)</div>
     <div class="meta-row"><span class="meta-label">Target Airframe:</span> Cessna 182T NAV III / G1000</div>
     <div class="meta-row"><span class="meta-label">Simulator Target:</span> X-Plane 12 & Air Manager 4.2+</div>
-    <div class="meta-row"><span class="meta-label">Exercise Host:</span> ms01:8700 (Composite Stack)</div>
+    <div class="meta-row"><span class="meta-label">Participant Portal:</span> https://ms01/ (Composite Stack)</div>
     <div class="meta-row"><span class="meta-label">Date:</span> September 2026</div>
   </div>
 </div>
@@ -231,8 +231,8 @@ a true crew-resource-management (CRM) environment partitioned across distinct fu
 <ul>
   <li><b>Flight Deck / Simulator (X-Plane 12):</b> Runs aircraft aerodynamics and the custom <code>PI_capvsar_df.py</code> Python plugin, probing real terrain for line-of-sight propagation, cone of confusion, and 406 MHz burst cadences.</li>
   <li><b>Mission Observer (MO) Station:</b> Runs on a dedicated secondary monitor or laptop via Air Manager / Air Player, presenting the G1000 MFD, GMA 1347 Audio Panel, Direction Finder head, and Technisonic TDFM-136B radio.</li>
-  <li><b>Mission Planning Module (Flight Planner):</b> Runs as a containerized service on <code>ms01:8090</code>, generating geodetic search patterns and pushing flight plans to the simulator and exercise server.</li>
-  <li><b>Exercise Control & Mission Base (Web Console):</b> Hosted on <code>ms01:8700</code>, providing real-time radar positions, scenario fault injection, message logging, and debrief track analysis.</li>
+  <li><b>Mission Planning Module (Flight Planner):</b> Runs at <code>https://ms01/planner/</code>, generating geodetic search patterns and pushing flight plans to the simulator and exercise server.</li>
+  <li><b>Exercise Control & Mission Base (Web Console):</b> Hosted behind the shared <code>https://ms01/</code> portal, providing real-time radar positions, scenario fault injection, message logging, and debrief track analysis.</li>
 </ul>
 
 <div class="callout callout-note">
@@ -245,7 +245,7 @@ a true crew-resource-management (CRM) environment partitioned across distinct fu
 <h1>2. Flight Planning & Search Pattern Module</h1>
 <p>
 Pre-flight mission planning and in-flight search pattern execution are powered by the <b>Flight Planner</b>
-(deployed on <code>ms01:8090</code>). The planner combines FAA sectional raster charts with real-time performance
+(deployed at <code>https://ms01/planner/</code>). The planner combines FAA sectional raster charts with real-time performance
 polar calculations for the Cessna 182T / 172S NAV III.
 </p>
 
@@ -381,7 +381,7 @@ between the legacy Becker 517 and the modern fleet-standard RHOTHETA RT-600:
 <div class="page-break"></div>
 <h1>4. Instructor & Exercise Control Console</h1>
 <p>
-The Instructor Console (hosted on <code>http://ms01:8700/</code>) gives training officers comprehensive control
+The Instructor Console (hosted at <code>https://ms01/instructor</code>) gives training officers comprehensive control
 over simulated flight exercises, real-time aircraft tracking, and dynamic environmental failure injection.
 </p>
 
@@ -420,7 +420,7 @@ To build realistic electronic search skills, instructors can toggle discrete rad
 
 <h2>5.1 Mission Base Operator View</h2>
 <p>
-The Mission Base console (<code>http://ms01:8700/base</code>) represents the situational map for the Mission Radio
+The Mission Base console (<code>https://ms01/base</code>) represents the situational map for the Mission Radio
 Operator (MRO) and Air Operations Branch Director (AOBD). In accordance with CAP training standards,
 <b>beacon truth is hidden</b> on this view.
 </p>
@@ -438,7 +438,7 @@ box and direct ground search teams.
 
 <h2>5.2 Post-Flight Debrief Replay</h2>
 <p>
-After the sortie is terminated, the instructor and aircrew open the <b>Debrief Console</b> (<code>http://ms01:8700/debrief</code>).
+After the sortie is terminated, the instructor and aircrew open the <b>Debrief Console</b> (<code>https://ms01/debrief</code>).
 The debrief engine replays the recorded flight second-by-second against the unmasked beacon truth:
 </p>
 
@@ -455,7 +455,7 @@ The debrief engine replays the recorded flight second-by-second against the unma
 
 <h2>5.3 Mission Radio Operator (MRO) Base Station Radio Console</h2>
 <p>
-De-coupled from the situational radar map, the <b>Base Radio Console</b> (<code>http://ms01:8700/radio</code>) provides
+De-coupled from the situational radar map, the <b>Base Radio Console</b> (<code>https://ms01/radio</code>) provides
 a standalone, touch- and mouse-operable communications station for Mission Radio Operators using tablets (e.g. iPad)
 or laptops. The current console provides two selectable VHF-FM control-head presentations over one authenticated Mumble mission-net session:
 </p>
@@ -729,7 +729,7 @@ The full narrative, including the current system limitations that apply to a thr
   </tr>
   <tr>
     <td>1. MRO Console URL</td>
-    <td>Open <code>http://ms01:8700/radio</code> on tablet or dispatch laptop</td>
+    <td>Open <code>https://ms01/radio</code> on tablet or dispatch laptop</td>
   </tr>
   <tr>
     <td>2. Radio Mode Selection</td>

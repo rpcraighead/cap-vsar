@@ -15,6 +15,7 @@ import threading
 import time
 from urllib.parse import urlsplit
 from werkzeug.http import dump_cookie
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 try:
     from pygeomag import GeoMag
@@ -23,6 +24,12 @@ except Exception:
     _geomag = None  # headings fall back to true (mag_var = 0)
 
 app = Flask(__name__)
+# O-8: the planner is reachable only through the compose-network Caddy proxy.
+# Trust exactly that one hop so Flask sees the external HTTPS origin and the
+# /planner prefix which Caddy stripped before forwarding the request.
+app.wsgi_app = ProxyFix(
+    app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1
+)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -1218,10 +1225,11 @@ def get_tile_sources():
     /tiles/ means the map works at a base with no route out, for any area that
     has been cached.
     """
+    prefix = request.script_root.rstrip('/')
     return jsonify({
-        'vfr': '/tiles/vfr/{z}/{x}/{y}.png',
-        'ifr_low': '/tiles/ifr_low/{z}/{x}/{y}.png',
-        'ifr_high': '/tiles/ifr_high/{z}/{x}/{y}.png',
+        'vfr': f'{prefix}/tiles/vfr/{{z}}/{{x}}/{{y}}.png',
+        'ifr_low': f'{prefix}/tiles/ifr_low/{{z}}/{{x}}/{{y}}.png',
+        'ifr_high': f'{prefix}/tiles/ifr_high/{{z}}/{{x}}/{{y}}.png',
         'offline': tiles_offline(),
     })
 

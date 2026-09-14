@@ -61,6 +61,10 @@ Verify from off-network (phone on cellular), pointing a Mumble client at
 Everything except Mumble rides the existing router tunnel. Add one peer per
 person, in the 10.0.0.10+ range to stay clear of the existing peers.
 
+Participant web traffic uses only `https://192.0.2.151/` on TCP 443 over the
+LAN or tunnel. Caddy routes `/planner/` to the planner and all other paths to
+the exercise service. Ports 8700 and 8090 are not published on the host.
+
 Easiest path is the GL.iNet UI: **VPN -> WireGuard Server -> Add Client**,
 which generates the keypair and shows a QR code for the phone app.
 

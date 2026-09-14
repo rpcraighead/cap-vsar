@@ -8,7 +8,8 @@ script installs that XPPython3 plugin at
 X-Plane 12/Resources/plugins/PythonPlugins/PI_capvsar_df.py
 ```
 
-It also acts as the sim bridge, polling the exercise console on ms01:8700 from a
+It also acts as the sim bridge, polling the exercise console through the shared
+`https://192.0.2.151` front door from a
 background thread. The faceplates in `instruments/` are bound to what it
 publishes, verified by reading the plugin source.
 
@@ -336,5 +337,4 @@ The Technisonic TDFM-136B airborne FM transceiver (`instruments/cap-fm-tdfm-136b
 | `cap_fm_guard_rx` | BOOL | false | Voice Agent / Mumble Bridge | TDFM-136B | Guard receiver carrier/squelch open. Drives lower squelch LED. Gated by radio power. |
 | `cap_fm_audio_selected` | BOOL | false | GMA 1347 | TDFM-136B, Headset Audio | COM3 audio monitor enabled. When false, observer headset is muted for FM, but squelch LEDs still illuminate on receive. |
 | `cap_fm_mic_selected` | BOOL | false | GMA 1347 | TDFM-136B | COM3 MIC transmitter selected. Interlocks TDFM transmission (PTT will not key unless true). |
-
 

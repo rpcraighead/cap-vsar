@@ -56,7 +56,7 @@ def config():
             "maxTransmitSeconds": MAX_TX_SECONDS,
             "accessCodeRequired": bool(os.getenv('CAPVSAR_RADIO_ACCESS_CODE')),
             "configured": bool(os.getenv('CAPVSAR_MUMBLE_HOST')),
-            "securePort": int(os.getenv('CAPVSAR_RADIO_HTTPS_PORT', '8743'))}
+            "securePort": int(os.getenv('CAPVSAR_RADIO_HTTPS_PORT', '443'))}
 
 
 @router.get('/api/radio/rx')

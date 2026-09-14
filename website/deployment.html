@@ -334,7 +334,7 @@ pytest tests/test_engine.py tests/test_faceplate.py tests/test_panel.py -v</code
             <pre><code># Generate standalone installer zip for Aircraft 2 (CAP-2)
 python3 scripts/build_station_kit.py \
   --callsign "CAP-2" \
-  --console "http://192.0.2.151:8700" \
+  --console "https://192.0.2.151" \
   --zip
 
 # Generates: dist/capvsar_station_CAP-2.zip containing:
@@ -468,4 +468,3 @@ python3 scripts/build_station_kit.py \
   <script src="js/main.js"></script>
 </body>
 </html>
-

@@ -26,12 +26,13 @@ documentation they were built from.
 
 | Web Application / Service | URL / Port | What it is |
 |---|---|---|
-| **Mission Base Headset Radio** | `https://192.0.2.151:8743/radio` | APX 4500 / EFJohnson 5300 instrument faces, live Mumble voice, touch or spacebar PTT; [headset and HTTPS setup](docs/mission-base-radio/README.md) |
-| Legacy MRO Text Console | `ms01:8700/radio-legacy` | Previous APX 6500 / Icom training console, typed messages, sidetones and Form 110 log |
-| Instructor Console | `ms01:8700/` | Exercise scenario management, map-pin beacon placement, propagation fault injection |
-| Mission Base Console | `ms01:8700/base` | Situational awareness map (hidden beacon truth), bearing logging & intersection cuts |
-| Debrief Console | `ms01:8700/debrief` | Recorded flight replay against truth, CPA, track efficiency, bearing error scoring |
-| Flight Planner | `ms01:8090/` | Pre-flight navigation log, geodetic CAP search patterns (SS, CS, PS), FMS export |
+| **Participant Home** | `https://192.0.2.151/` | One role-aware, authenticated front door for the participant applications |
+| **Mission Base Headset Radio** | `https://192.0.2.151/radio` | APX 4500 / EFJohnson 5300 instrument faces, live Mumble voice, touch or spacebar PTT; [headset and HTTPS setup](docs/mission-base-radio/README.md) |
+| Legacy MRO Text Console | `https://192.0.2.151/radio-legacy` | Previous APX 6500 / Icom training console, typed messages, sidetones and Form 110 log |
+| Instructor Console | `https://192.0.2.151/instructor` | Exercise scenario management, map-pin beacon placement, propagation fault injection |
+| Mission Base Console | `https://192.0.2.151/base` | Situational awareness map (hidden beacon truth), bearing logging & intersection cuts |
+| Debrief Console | `https://192.0.2.151/debrief` | Recorded flight replay against truth, CPA, track efficiency, bearing error scoring |
+| Flight Planner | `https://192.0.2.151/planner/` | Pre-flight navigation log, geodetic CAP search patterns (SS, CS, PS), FMS export |
 
 
 ## Architecture
@@ -47,7 +48,7 @@ X-Plane 12
         radio horizon, terrain and airframe line-of-sight,
         wing blanking, cone of confusion, 406 burst cadence,
         bearing averaging, C/S decode;
-        also the sim bridge to ms01:8700
+        also the sim bridge through https://192.0.2.151
         │
         ├── cap/df/*  datarefs ──────────► Becker 517 faceplate
         │   ◄── panel inputs ─────────────  RHOTHETA RT-600 faceplate
@@ -102,6 +103,7 @@ python3 tests/test_faceplate.py     # artwork, resources, geometry and AM loadin
 python3 scripts/luacheck.py instruments/*/logic.lua instruments/*/lib/*.lua
 python3 scripts/deploy_xplane_plugin.py       # install the tested engine into X-Plane
 python3 scripts/deploy_df_instruments.py      # install all four instruments into Air Manager
+scripts/launch_xplane_cap_vsar.sh             # Linux: launch with the local ms01 CA
 ```
 
 `tests/test_faceplate.py` is the half of the instrument layer that can be

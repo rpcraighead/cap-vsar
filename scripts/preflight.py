@@ -23,7 +23,9 @@ and again if anything about the stack changes mid-day.
 from __future__ import annotations
 
 import argparse
+import socket
 import sqlite3
+import ssl
 import sys
 import urllib.error
 import urllib.request
@@ -44,14 +46,46 @@ def check(name: str, ok: bool, detail: str = "", fix: str = "") -> None:
             print(f"        fix: {fix}")
 
 
-def check_console_health(host: str) -> None:
-    url = f"http://{host}:8700/api/health"
+def _front_door_context() -> ssl.SSLContext:
+    cert = ROOT / "services" / "exercise" / "radio-public" / "mission-base-ca.crt"
+    return ssl.create_default_context(cafile=str(cert))
+
+
+def check_front_door(host: str) -> None:
     try:
-        with urllib.request.urlopen(url, timeout=5) as resp:
-            check("exercise console /api/health", resp.status == 200, f"HTTP {resp.status}")
+        context = _front_door_context()
+    except (OSError, ssl.SSLError) as exc:
+        check("HTTPS front door CA", False, str(exc), fix="scripts/deploy.sh")
+        return
+    url = f"https://{host}/api/health"
+    try:
+        with urllib.request.urlopen(url, timeout=5, context=context) as resp:
+            check("HTTPS front door /api/health", resp.status == 200, f"HTTP {resp.status}")
     except (urllib.error.URLError, OSError) as exc:
-        check("exercise console /api/health", False, str(exc),
-              fix="docker compose ps exercise; docker compose logs exercise")
+        check("HTTPS front door /api/health", False, str(exc),
+              fix="docker compose ps radio-https exercise; docker compose logs radio-https")
+
+    planner_url = f"https://{host}/planner/api/tile-sources"
+    try:
+        with urllib.request.urlopen(planner_url, timeout=5, context=context) as resp:
+            body = resp.read()
+            check("planner mounted at /planner", resp.status == 200 and b"/planner/tiles/" in body,
+                  f"HTTP {resp.status}")
+    except (urllib.error.URLError, OSError) as exc:
+        check("planner mounted at /planner", False, str(exc),
+              fix="docker compose ps radio-https flightplanner; docker compose logs flightplanner")
+
+
+def check_backends_private(host: str) -> None:
+    for port, name in ((8700, "exercise"), (8090, "planner")):
+        try:
+            with socket.create_connection((host, port), timeout=1):
+                open_to_host = True
+        except OSError:
+            open_to_host = False
+        check(f"{name} backend port {port} is private", not open_to_host,
+              "connection refused" if not open_to_host else "TCP connection accepted",
+              fix="remove the service's ports mapping from docker-compose.yml and redeploy")
 
 
 def check_mumble_channels(db_path: Path) -> None:
@@ -124,12 +158,14 @@ def check_ca_cert() -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--host", default="127.0.0.1", help="exercise console host (default: 127.0.0.1)")
+    parser.add_argument("--host", default="192.0.2.151",
+                        help="participant front-door host (default: 192.0.2.151)")
     parser.add_argument("--mumble-db", type=Path, default=ROOT / "mumble" / "data" / "mumble-server.sqlite")
     args = parser.parse_args()
 
     print("== CAP V-SAR preflight ==")
-    check_console_health(args.host)
+    check_front_door(args.host)
+    check_backends_private(args.host)
     check_mumble_channels(args.mumble_db)
     check_tile_reachability()
     check_ca_cert()

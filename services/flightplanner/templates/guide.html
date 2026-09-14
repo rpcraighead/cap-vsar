@@ -69,10 +69,10 @@
   <header>
     <div class="brand">CAP 487 <span>Flight Planner</span></div>
     <nav>
-      <a href="/guide">User Guide</a>
-      <a href="/guide/quickstart">Quick Start</a>
-      <a class="dl" href="/docs/{{ download }}">⬇ Download (.md)</a>
-      <a class="app" href="/">← Back to app</a>
+      <a href="{{ url_for('guide') }}">User Guide</a>
+      <a href="{{ url_for('guide', slug='quickstart') }}">Quick Start</a>
+      <a class="dl" href="{{ url_for('docs_download', filename=download) }}">⬇ Download (.md)</a>
+      <a class="app" href="{{ url_for('index') }}">← Back to app</a>
     </nav>
   </header>
   <main>

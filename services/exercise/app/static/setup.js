@@ -308,7 +308,7 @@
         rosterCount.textContent = `${roster.length} Participants`;
 
         const host = window.location.hostname;
-        // Construct mobile friendly port: if accessing over standard Caddy port 8743 or current port
+        // Construct the mobile-friendly URL on the single Caddy HTTPS origin.
         const port = window.location.port ? `:${window.location.port}` : "";
         const protocol = window.location.protocol;
 
@@ -387,4 +387,3 @@
 
     window.addEventListener("DOMContentLoaded", init);
 })();
-

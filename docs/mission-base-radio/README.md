@@ -1,18 +1,20 @@
 # Mission base headset radio
 
-The web radio at `https://192.0.2.151:8743/radio` connects tablet and computer
+The web radio at `https://192.0.2.151/radio` connects tablet and computer
 operators to the existing CAP V-SAR Mumble mission nets. Select an APX 4500 or
 EFJohnson 5300 face, pair a headset in the device settings, enter a callsign,
 choose a net, and join. Hold the touch button or spacebar to speak; release to
 listen. Both skins use the same single active radio connection.
 
 First-time setup is at
-`http://192.0.2.151:8700/static/radio-help.html`.
+`https://192.0.2.151/static/radio-help.html`.
 Install the server's public CA certificate from
-`http://192.0.2.151:8700/radio-ca.crt`, then open the HTTPS radio page. The
-certificate is generated locally by Caddy; each device must explicitly trust
-it. Its private key stays in Caddy's Docker data volume. No browser security
-flags or certificate-warning bypass are part of the operator setup.
+`http://192.0.2.151/radio-ca.crt`, then open the HTTPS radio page. This public
+certificate is the only plaintext response; every other HTTP path redirects to
+HTTPS. The certificate is generated locally by Caddy; each device must
+explicitly trust it. Its private key stays in Caddy's Docker data volume. No
+browser security flags or certificate-warning bypass are part of the operator
+setup.
 
 Bluetooth pairing and audio routing use the operating system. The app offers
 microphone selection, output selection where `AudioContext.setSinkId` is
@@ -57,7 +59,7 @@ The older APX6500/Icom typed-message and Form 110 console remains at
 ```text
 Bluetooth / wired headset
   ↕ browser getUserMedia + AudioWorklet (48 kHz mono)
-trusted HTTPS / WSS :8743
+trusted HTTPS / WSS :443
   ↕ Caddy reverse proxy
 FastAPI exercise service :8700 /api/radio/stream
   ↕ one pymumble client per connected browser (TCP-tunneled Opus)
@@ -94,7 +96,8 @@ Passwords remain on the server; optional exercise access codes are checked there
 
 Compose adds the voice settings to `exercise` and a `radio-https` Caddy service.
 Existing exercise data stays in the original bind-mounted database directory.
-The proxy uses port 8743; no router forwarding is needed or configured.
+The proxy uses standard HTTPS port 443 and is also the front door for the
+exercise console and planner. No router forwarding is needed or configured.
 
 | Variable | Default / use |
 |---|---|
@@ -104,7 +107,7 @@ The proxy uses port 8743; no router forwarding is needed or configured.
 | `CAPVSAR_MUMBLE_CHANNEL_PREFIX` | Optional parent channel path |
 | `CAPVSAR_RADIO_ACCESS_CODE` | Optional shared browser exercise code |
 | `CAPVSAR_RADIO_MAX_SESSIONS` | `16` per exercise process |
-| `CAPVSAR_RADIO_HTTPS_PORT` | `8743`, used for the browser's secure-page link |
+| `CAPVSAR_RADIO_HTTPS_PORT` | `443`, used for the browser's secure-page link |
 
 Channel mapping is in `app/radio.py`: PRIMARY → `Mission Net PRIMARY`, ALTERNATE
 → `Mission Net ALTERNATE`, MISSION BASE → `Mission Base`, BRIEFING → `Briefing Room`.

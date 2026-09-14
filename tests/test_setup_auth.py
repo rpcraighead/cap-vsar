@@ -342,7 +342,7 @@ class RBACRouteEnforcementTests(unittest.TestCase):
         if os.path.exists(self.db):
             os.unlink(self.db)
 
-    def test_anonymous_browser_on_instructor_console_redirects_to_login(self):
+    def test_anonymous_browser_on_portal_redirects_to_login(self):
         c = TestClient(self.main.app, base_url="https://testserver")
         r = c.get("/", follow_redirects=False)
         self.assertEqual(r.status_code, 302)
@@ -364,20 +364,35 @@ class RBACRouteEnforcementTests(unittest.TestCase):
     def test_aircrew_cannot_access_console(self):
         c = TestClient(self.main.app, base_url="https://testserver")
         c.post("/api/auth/login", json={"code": credential("PLT-423")})
-        r = c.get("/", follow_redirects=False)
+        r = c.get("/instructor", follow_redirects=False)
         self.assertEqual(r.status_code, 302)
         self.assertIn("/login?error=instructor_required", r.headers["location"])
 
-    def test_instructor_session_can_access_setup_and_console(self):
+    def test_instructor_session_can_access_portal_setup_and_console(self):
         c = TestClient(self.main.app, base_url="https://testserver")
         c.post("/api/auth/login", json={"code": credential("INSTR-1")})
         r_setup = c.get("/setup")
         self.assertEqual(r_setup.status_code, 200)
         self.assertIn("Exercise & Fleet Setup", r_setup.text)
 
-        r_console = c.get("/")
+        r_portal = c.get("/")
+        self.assertEqual(r_portal.status_code, 200)
+        self.assertIn('href="/planner/"', r_portal.text)
+        self.assertIn('href="/instructor"', r_portal.text)
+
+        r_console = c.get("/instructor")
         self.assertEqual(r_console.status_code, 200)
         self.assertIn("Exercise Console", r_console.text)
+
+    def test_aircrew_portal_lists_only_role_appropriate_stations(self):
+        c = TestClient(self.main.app, base_url="https://testserver")
+        c.post("/api/auth/login", json={"code": credential("PLT-423")})
+        r = c.get("/")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('href="/planner/"', r.text)
+        self.assertIn('href="/base"', r.text)
+        self.assertNotIn('href="/instructor"', r.text)
+        self.assertNotIn('href="/setup"', r.text)
 
     def test_base_session_can_access_base_view(self):
         c = TestClient(self.main.app, base_url="https://testserver")

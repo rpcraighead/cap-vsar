@@ -66,7 +66,7 @@ The route and nav log recompute automatically after every edit.
 2. Select the pattern type: **Expanding Square**, **Creeping Line**, or **Parallel Track**.
 3. Pick a datum on the map or type coordinates, adjust track spacing and legs.
 4. Click **Generate Pattern** to preview the search grid.
-5. Use **Apply to Route** to update your nav log, **Export .FMS** for X-Plane 12, or **Push to V-SAR** to send the sortie to the exercise console (`ms01:8700`).
+5. Use **Apply to Route** to update your nav log, **Export .FMS** for X-Plane 12, or **Push to V-SAR** to send the sortie to the exercise console on the shared `https://ms01/` origin.
 
 ---
 

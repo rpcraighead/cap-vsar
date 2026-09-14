@@ -62,9 +62,9 @@ services:
     build: ./services/exercise
     container_name: capvsar-exercise
     restart: unless-stopped
-    # LAN and WireGuard only - deliberately not published to the internet.
-    ports:
-      - "8700:8700"
+    # O-8: backend-only. Caddy is the sole participant-facing listener.
+    expose:
+      - "8700"
     volumes:
       - ./services/exercise/data:/data
       - ./services/exercise/radio-public:/radio-public:ro
@@ -74,7 +74,7 @@ services:
       CAPVSAR_MUMBLE_HOST: mumble
       CAPVSAR_MUMBLE_PASSWORD: ${MUMBLE_SERVER_PASSWORD}
       CAPVSAR_RADIO_ACCESS_CODE: ${CAPVSAR_RADIO_ACCESS_CODE:-}
-      CAPVSAR_RADIO_HTTPS_PORT: "8743"
+      CAPVSAR_RADIO_HTTPS_PORT: "443"
       # Role tokens. Unset means that role's endpoints accept anyone who can
       # reach the console, and the service says so loudly at startup - set all
       # three in .env before an exercise. The plugin key is also what unlocks
@@ -91,8 +91,10 @@ services:
       retries: 3
       start_period: 15s
 
-  # Browser microphones require a trusted secure context on tablets/other PCs.
-  # LAN/WireGuard only, like the exercise service; no router port forwarding.
+  # Single HTTPS front door for every participant browser and the plugin API.
+  # Browser microphones require this trusted secure context. LAN/WireGuard only;
+  # no router port forwarding. The historical service name is retained so the
+  # deployed Caddy data volume and deploy tooling do not churn during cutover.
   radio-https:
     # O-5: pinned to what was already running and tested on ms01
     # (caddy:2 resolved 2026-09-09), not "latest" silently drifting under it.
@@ -102,7 +104,8 @@ services:
     depends_on:
       - exercise
     ports:
-      - "8743:443"
+      - "80:80"
+      - "443:443"
     volumes:
       - ./services/exercise/Caddyfile:/etc/caddy/Caddyfile:ro
       - radio_caddy_data:/data
@@ -134,16 +137,16 @@ services:
   # Composited here (rather than its standalone Cloud Run deployment) so it
   # reaches the exercise console over the compose network as "exercise:8700"
   # instead of a LAN IP or a public URL a caller could redirect - see the
-  # security note on sar_export_vsar() in app.py. LAN only, same as exercise;
-  # not forwarded by the router.
+  # security note on sar_export_vsar() in app.py. It is reachable externally
+  # only through Caddy at /planner/.
   flightplanner:
     build: ./services/flightplanner
     container_name: capvsar-flightplanner
     restart: unless-stopped
     depends_on:
       - exercise
-    ports:
-      - "8090:8080"
+    expose:
+      - "8080"
     volumes:
       # L-12: mount the DIRECTORY, not the database file. SQLite writes its
       # journal and WAL next to the database; with a file mount those siblings
@@ -158,8 +161,6 @@ services:
       PORT: "8080"
       DATABASE_PATH: /app/data/aviation_data.db
       VSAR_CONSOLE_URL: http://exercise:8700
-      CAPVSAR_TOKEN_INSTRUCTOR: ${CAPVSAR_TOKEN_INSTRUCTOR:-}
-      CAPVSAR_TOKEN_BASE: ${CAPVSAR_TOKEN_BASE:-}
     healthcheck:
       test: ["CMD", "python", "-c",
              "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8080/')"]

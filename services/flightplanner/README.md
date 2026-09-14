@@ -22,7 +22,7 @@ Flight planning application for CAP 487 (Cessna 182T NAV III, POH sample baselin
 - **Backend:** Python / Flask
 - **Frontend:** Vanilla JavaScript, Leaflet.js, HTML5 Canvas
 - **Data:** SQLite (OurAirports data), FAA d-TPP diagrams, USGS elevation API, aviationweather.gov
-- **Hosting:** Docker container in the CAP V-SAR lab stack (`docker-compose.yml`, published on host port 8090). It was originally a Google Cloud Run service; that is no longer how it runs, and the exercise console it pushes scenarios to is on the LAN.
+- **Hosting:** Docker container in the CAP V-SAR lab stack (`docker-compose.yml`), mounted by Caddy at `https://192.0.2.151/planner/`. Port 8080 is private to the Compose network. It was originally a Google Cloud Run service; that is no longer how it runs.
 
 ## Running Locally
 
@@ -42,9 +42,10 @@ console and the Mumble server:
 docker compose up -d flightplanner
 ```
 
-It listens on 8080 in the container and is published on host port 8090.
-`docker-compose.yml` is a single-host stack and is reachable from the internet
-only if the ports in `infra/ROUTER.md` are forwarded.
+It listens on 8080 in the container and is reachable by participants only
+through the shared Caddy HTTPS front door at `/planner/`. The exercise console
+and planner therefore receive the same host-only session cookie. Neither 8080
+nor the historical host port 8090 is published.
 
 The earlier Google Cloud Run deployment is retired. It is kept in mind only
 because the cost work in `docs/CLOUD_RUN_COST_ESTIMATE.md` still informs the

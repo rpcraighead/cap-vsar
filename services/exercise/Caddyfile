@@ -1,13 +1,39 @@
 {
-    auto_https disable_redirects
-    # IP-address clients omit SNI; Docker's local IP differs from the LAN IP.
-    default_sni 192.0.2.151
-    admin off
+	auto_https disable_redirects
+	# IP-address clients omit SNI; Docker's local IP differs from the LAN IP.
+	default_sni 192.0.2.151
+	admin off
 }
 
-# Local mission-network HTTPS. Add another local DNS name here if required.
+# The only plaintext response is the public CA needed to bootstrap a new
+# participant device. All application paths move to HTTPS before cookies or
+# credentials can be sent.
+http://ms01, http://ms01.local, http://192.0.2.151 {
+	handle /radio-ca.crt {
+		reverse_proxy exercise:8700
+	}
+	handle {
+		redir https://{host}{uri} 308
+	}
+}
+
+# O-8: this is the only participant-facing web listener. The exercise console,
+# browser radio, plugin API and flight planner all share this origin, so the
+# host-only session cookie works everywhere and no credential crosses plaintext.
+# The planner prefix is stripped before proxying; X-Forwarded-Prefix tells Flask
+# to generate /planner/... URLs in responses and templates.
 ms01, ms01.local, 192.0.2.151 {
-    tls internal
-    encode zstd gzip
-    reverse_proxy exercise:8700
+	tls internal
+	encode zstd gzip
+
+	redir /planner /planner/ 308
+	handle_path /planner/* {
+		reverse_proxy flightplanner:8080 {
+			header_up X-Forwarded-Prefix /planner
+		}
+	}
+
+	handle {
+		reverse_proxy exercise:8700
+	}
 }

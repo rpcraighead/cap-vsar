@@ -9,9 +9,10 @@
 #
 #   IMPORTANT CAVEAT: Docker publishes container ports by inserting its own
 #   iptables rules ahead of ufw's, so ufw does NOT filter published container
-#   ports (Mumble 64738, WireGuard 51820). What actually controls public
+#   ports (Mumble 64738 and the web front door on 80/443). What actually controls public
 #   exposure is the router forward list in infra/ROUTER.md. This ruleset
-#   protects the HOST services - SSH, NFS, Ollama, and anything on 8080.
+#   protects the HOST services - SSH, NFS and Ollama. The exercise and planner
+#   backends have no host port mappings; Caddy is their only network entry.
 set -euo pipefail
 
 echo "==> allowing LAN (preserves NFS, Ollama, SSH for lab hosts)"

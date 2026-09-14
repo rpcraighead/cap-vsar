@@ -340,7 +340,7 @@ Clicking **Apply to Route** integrates the generated search waypoints (`SS01`, `
 
 - **Export X-Plane 12 `.fms`:**
   Downloads a standard FMS format file (version 1100) compatible with X-Plane 11 and 12 G1000 / FMS navigation systems. Save directly to your simulator's `Output/FMS plans/` folder.
-- **Push to V-SAR Console (`ms01:8700`):**
+- **Push to V-SAR Console (shared `https://ms01/` origin):**
   Transmits the planned search sortie directly into the CAP V-SAR training environment over LAN (`VSAR_CONSOLE_URL`).
   - Automatically creates the scenario in the exercise database with the datum, alert radius, and sortie notes.
   - If an active sortie is currently running, broadcasts an automated mission notification message to Mission Base and connected observer consoles.

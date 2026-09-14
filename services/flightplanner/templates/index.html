@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-planner-base="{{ request.script_root }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -93,7 +93,7 @@
       <button class="toolbar-btn" id="btn-perf">Perf</button>
       <button class="toolbar-btn" id="btn-wb">W&amp;B</button>
       <button class="toolbar-btn" id="btn-ref">Ref</button>
-      <a class="toolbar-btn" id="btn-guide" href="/guide" target="_blank" title="User guide & quick start">Guide</a>
+      <a class="toolbar-btn" id="btn-guide" href="{{ url_for('guide') }}" target="_blank" title="User guide & quick start">Guide</a>
       <button class="toolbar-btn" id="btn-update-db">DB ↻</button>
     </div>
   </header>

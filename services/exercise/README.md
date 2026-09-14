@@ -4,14 +4,18 @@ Instructor-facing web app that runs a sortie: pick a scenario, watch aircraft
 on a live map, toggle signal effects mid-flight, log the bearings the crew
 reports, and reveal beacon truth for the debrief.
 
-Two views on one backend:
+Participant applications share one HTTPS origin. Sign in at the home page and
+open the views listed for your assigned role:
 
 | View | URL | Audience |
 |---|---|---|
-| Instructor console | `http://192.0.2.151:8700/` | Runs the scenario: effects, reveal, control |
-| Mission base | `http://192.0.2.151:8700/base` | IC / AOBD / MRO: alert, board, bearings, tasking |
+| Participant home | `https://192.0.2.151/` | Role-aware application launcher |
+| Instructor console | `https://192.0.2.151/instructor` | Runs the scenario: effects, reveal, control |
+| Mission base | `https://192.0.2.151/base` | IC / AOBD / MRO: alert, board, bearings, tasking |
+| Flight planner | `https://192.0.2.151/planner/` | Routes, performance, loading, and SAR patterns |
 
-LAN and WireGuard only. Not forwarded at the router, and it should stay that way.
+LAN and WireGuard only. Caddy on port 443 is the sole participant listener;
+the exercise backend on 8700 is private to the Compose network.
 
 ## The two views differ on purpose
 
@@ -95,7 +99,7 @@ the answer out of it. The truth lives only in the database on the server.
 
 ```bash
 cd /srv/capvsar/services/exercise
-python3 mock_bridge.py --url http://192.0.2.151:8700 --callsign CAP-1 --alt 5500
+python3 mock_bridge.py --url https://192.0.2.151 --callsign CAP-1 --alt 5500
 ```
 
 Flies a box pattern from KCRQ and prints the DF result each report. Start a
