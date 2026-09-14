@@ -60,13 +60,38 @@ def build_command(agent: str, prompt: str) -> list[str]:
     if "gemini" in name or "antigravity" in name:
         if not AGY.is_file():
             raise SystemExit(f"agy binary not found at {AGY}")
-        return [str(AGY), "--print", "--add-dir", str(REPO),
-                "--print-timeout", "45m", prompt]
+        # agy uses Go-style flags: --print takes its value attached. Passing
+        # it bare lets it swallow the next flag as the prompt.
+        return [str(AGY), "--add-dir", str(REPO),
+                "--print-timeout", "45m", f"--print={prompt}"]
 
     raise SystemExit(
         f"No CLI mapping for agent {agent!r}. Claude tasks are handled in the "
         f"Claude Code session itself, not dispatched from here."
     )
+
+
+# Phrases that mean the agent started, was refused, and exited without working.
+# Headless runs hit these because a tool permission prompt has nobody to answer
+# it, and the process still exits 0.
+DID_NOTHING_MARKERS = (
+    "no output produced",
+    "cannot prompt for",
+    "was auto-denied",
+    "dangerously-skip-permissions",
+    "permission denied by",
+)
+
+
+def did_nothing(output: str) -> str:
+    """Return a reason string if the output shows the agent was blocked."""
+    low = output.lower()
+    for marker in DID_NOTHING_MARKERS:
+        if marker in low:
+            return f"agent was blocked ({marker!r} in output)"
+    if not output.strip():
+        return "agent produced no output at all"
+    return ""
 
 
 def warn_if_tree_dirty() -> None:
@@ -142,13 +167,25 @@ def main() -> int:
             log.write(f"# agent: {t['agent']}\n# task: {t['task']}\n")
             log.write(f"# command: {cmd}\n\n")
             log.flush()
-            rc = subprocess.call(cmd, cwd=REPO, stdout=log,
-                                 stderr=subprocess.STDOUT,
-                                 stdin=subprocess.DEVNULL,
-                                 env={**os.environ, "TERM": "dumb"})
+            proc = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True,
+                                  stdin=subprocess.DEVNULL,
+                                  env={**os.environ, "TERM": "dumb"})
+            output = (proc.stdout or "") + (proc.stderr or "")
+            log.write(output)
 
-        print(f"     rc={rc}" + ("" if rc == 0 else "  FAILED - see the log"))
-        failures += (rc != 0)
+        rc, problem = proc.returncode, did_nothing(output)
+
+        # Exit code alone is not a completion signal. An agent that was denied
+        # every tool call in headless mode exits 0 having done nothing, which
+        # is the one outcome that must not read as success.
+        if problem:
+            print(f"     NO WORK DONE (rc={rc}): {problem}")
+            failures += 1
+        elif rc != 0:
+            print(f"     FAILED rc={rc} - see the log")
+            failures += 1
+        else:
+            print(f"     rc=0 - check the log and `git status` for actual changes")
 
     if args.execute:
         print("\nAgents post their own receipt in board section 4. "
