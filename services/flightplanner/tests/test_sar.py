@@ -371,18 +371,21 @@ class TestAviationDatabaseUpdateLock(unittest.TestCase):
 class TestPlannerSecurity(unittest.TestCase):
     def setUp(self):
         self.enterContext(patch.object(flight_app, 'jsonify', side_effect=lambda value: value))
+        self.enterContext(patch.object(flight_app.requests, 'get', return_value=types.SimpleNamespace(
+            status_code=200, json=lambda: {'authenticated': True, 'role': 'instructor'})))
         if hasattr(flight_app, '_vsar_export_attempts'):
             flight_app._vsar_export_attempts.clear()
 
     @staticmethod
     def request(payload=None, *, origin='http://localhost', is_json=True,
-                token=None, remote_addr='127.0.0.1'):
+                token='caller-key', remote_addr='127.0.0.1'):
         headers = {}
         if origin is not None:
             headers['Origin'] = origin
         if token is not None:
             headers['X-CAPVSAR-Token'] = token
         return types.SimpleNamespace(
+            cookies={},
             json=payload,
             is_json=is_json,
             headers=headers,
@@ -437,7 +440,7 @@ class TestPlannerSecurity(unittest.TestCase):
                 self.assertIn(field, body['error'])
                 post.assert_not_called()
 
-    def test_export_sends_the_two_console_role_tokens(self):
+    def test_export_forwards_caller_token_to_both_console_writes(self):
         req = self.request(self.export_payload())
         with patch.dict(os.environ, {
                 'CAPVSAR_TOKEN_INSTRUCTOR': 'instructor-key',
@@ -447,9 +450,9 @@ class TestPlannerSecurity(unittest.TestCase):
             body = flight_app.sar_export_vsar()
         self.assertTrue(body['success'])
         self.assertEqual(post.call_args_list[0].kwargs['headers'],
-                         {'X-CAPVSAR-Token': 'instructor-key'})
+                         {'X-CAPVSAR-Token': 'caller-key'})
         self.assertEqual(post.call_args_list[1].kwargs['headers'],
-                         {'X-CAPVSAR-Token': 'base-key'})
+                         {'X-CAPVSAR-Token': 'caller-key'})
 
     def test_export_reports_an_instructor_token_rejection(self):
         req = self.request(self.export_payload())
@@ -457,8 +460,8 @@ class TestPlannerSecurity(unittest.TestCase):
                 patch.object(flight_app, 'request', req), patch.object(
                     flight_app.requests, 'post', return_value=self.response(403, 'forbidden')):
             body, status = flight_app.sar_export_vsar()
-        self.assertEqual(status, 502)
-        self.assertIn('instructor token', body['error'])
+        self.assertEqual(status, 403)
+        self.assertIn('denied scenario creation', body['error'])
 
     def test_export_is_rate_limited_per_client(self):
         req = self.request(self.export_payload(), remote_addr='192.0.2.10')

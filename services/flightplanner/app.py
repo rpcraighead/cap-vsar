@@ -2,7 +2,6 @@ from flask import Flask, render_template, request, jsonify, send_from_directory,
 from collections import deque
 from datetime import datetime, timedelta, timezone
 import fcntl
-import hmac
 import json
 import hashlib
 import math
@@ -15,6 +14,7 @@ from io import StringIO
 import threading
 import time
 from urllib.parse import urlsplit
+from werkzeug.http import dump_cookie
 
 try:
     from pygeomag import GeoMag
@@ -1095,22 +1095,51 @@ def calc_landing(alt, temp, hw=0):
     return {'ground_roll': int(gr*wf), 'total_over_50ft': int(tot*wf)}
 
 
-def _same_origin_or_instructor_token():
-    supplied = (request.headers.get('X-CAPVSAR-Token') or '').strip()
-    expected = os.environ.get('CAPVSAR_TOKEN_INSTRUCTOR', '').strip()
-    if expected and supplied and hmac.compare_digest(supplied, expected):
-        return True
-    origin = request.headers.get('Origin')
-    return bool(origin and urlsplit(origin).netloc == urlsplit(request.host_url).netloc)
+def _console_headers():
+    """Forward only the caller's console identity; never borrow service tokens."""
+    headers = {}
+    for name in ('X-CAPVSAR-Token', 'Authorization'):
+        value = request.headers.get(name, '').strip()
+        if value:
+            headers[name] = value
+    session = request.cookies.get('capvsar_session')
+    if session:
+        headers['Cookie'] = dump_cookie('capvsar_session', session, path=None)
+    return headers
 
 
 def _request_security_error(require_json=False):
     if require_json and not request.is_json:
         return jsonify({'success': False,
                         'error': 'This endpoint requires a JSON request body'}), 415
-    if not _same_origin_or_instructor_token():
+    # Origin is a CSRF check, never proof of identity. Cookie authentication
+    # requires it; explicit credentials also cannot override a hostile Origin.
+    origin = request.headers.get('Origin')
+    expected = urlsplit(request.host_url)
+    supplied = urlsplit(origin or '')
+    same_origin = (supplied.scheme, supplied.netloc) == (expected.scheme, expected.netloc)
+    if (origin and not same_origin) or (request.cookies.get('capvsar_session') and not same_origin):
         return jsonify({'success': False,
-                        'error': 'A same-origin request or valid instructor token is required'}), 403
+                        'error': 'A same-origin request is required'}), 403
+    headers = _console_headers()
+    if not headers:
+        return jsonify({'success': False, 'error': 'Console authentication required'}), 401
+    try:
+        reply = requests.get(f'{VSAR_CONSOLE_URL}/api/auth/me', headers=headers,
+                             timeout=5, allow_redirects=False)
+        if reply.status_code in (401, 403):
+            return jsonify({'success': False, 'error': 'Console authentication rejected'}), reply.status_code
+        if reply.status_code != 200:
+            raise ValueError('Unexpected authentication response')
+        identity = reply.json()
+        if not isinstance(identity, dict):
+            raise ValueError('Invalid authentication response')
+    except (requests.RequestException, ValueError):
+        return jsonify({'success': False, 'error': 'Console authentication unavailable'}), 503
+    if identity.get('authenticated') is not True:
+        return jsonify({'success': False, 'error': 'Console authentication required'}), 401
+    if identity.get('role') != 'instructor':
+        return jsonify({'success': False, 'error': 'Instructor access required'}), 403
     return None
 
 
@@ -1135,12 +1164,6 @@ def _allow_vsar_export(client):
         attempts.append(now)
         return True
 
-
-def _console_headers(role):
-    token = os.environ.get(f'CAPVSAR_TOKEN_{role.upper()}', '').strip()
-    if role == 'base' and not token:
-        token = os.environ.get('CAPVSAR_TOKEN_INSTRUCTOR', '').strip()
-    return {'X-CAPVSAR-Token': token} if token else {}
 
 # Flask Routes
 @app.route('/')
@@ -1984,7 +2007,7 @@ def offset_beacon(lat, lon, seed_text):
 @app.route('/api/sar/export-vsar', methods=['POST'])
 def sar_export_vsar():
     # SECURITY: the console URL is never taken from the request body. This is
-    # an unauthenticated public endpoint that writes into the CAP V-SAR
+    # an authenticated endpoint that writes into the CAP V-SAR
     # exercise console's state (creates a scenario, broadcasts a message);
     # accepting a caller-supplied target here was an open SSRF - any client
     # could redirect the server-side POST at an arbitrary URL. VSAR_CONSOLE_URL
@@ -2056,25 +2079,22 @@ def sar_export_vsar():
     
     try:
         r_scen = requests.post(f"{vsar_url}/api/scenarios", json=scenario_payload,
-                               timeout=5, headers=_console_headers('instructor'))
-        if r_scen.status_code == 403:
+                               timeout=5, headers=_console_headers(), allow_redirects=False)
+        if r_scen.status_code in (401, 403):
             return jsonify({
                 'success': False,
-                'error': ('V-SAR console refused the instructor token. Set the same '
-                          'CAPVSAR_TOKEN_INSTRUCTOR value on the planner and console.')
-            }), 502
+                'error': 'V-SAR console denied scenario creation for this caller'
+            }), r_scen.status_code
         scen_ok = r_scen.status_code in (200, 201)
         r_msg = requests.post(f"{vsar_url}/api/messages", json=message_payload,
-                              timeout=5, headers=_console_headers('base'))
-        if r_msg.status_code == 403:
+                              timeout=5, headers=_console_headers(), allow_redirects=False)
+        if r_msg.status_code in (401, 403):
             return jsonify({
                 'success': scen_ok,
                 'scenario_created': scen_ok,
                 'message_sent': False,
-                'error': ('V-SAR console refused the base token. Set matching '
-                          'CAPVSAR_TOKEN_BASE values, or provide the instructor token '
-                          'to the planner as the base-role fallback.')
-            }), 502
+                'error': 'V-SAR console denied message broadcast for this caller'
+            }), r_msg.status_code
         msg_ok = r_msg.status_code in (200, 201)
 
         # L-9: the console accepts /api/messages whether or not a sortie is
@@ -2087,7 +2107,7 @@ def sar_export_vsar():
         sortie_running = None
         try:
             r_state = requests.get(f"{vsar_url}/api/state", timeout=4,
-                                   headers=_console_headers('base'))
+                                   headers=_console_headers(), allow_redirects=False)
             if r_state.status_code == 200:
                 sortie = (r_state.json() or {}).get('sortie') or {}
                 sortie_running = bool(sortie) and not sortie.get('stopped')

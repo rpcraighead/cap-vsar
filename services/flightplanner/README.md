@@ -67,3 +67,23 @@ Cruise uses altitude, RPM and manifold pressure, with standard temperature
 and recommended lean mixture. See the [user guide](docs/USER_GUIDE.md#cap-487-poh-baseline-and-sources)
 for sources, imported ranges, endurance conditions and the unverified simulator
 CG-datum mapping. The N499CP 172S profile has been removed from this exercise planner.
+
+### Console authentication (L-15)
+
+`POST /api/update-database` and `POST /api/sar/export-vsar` require an
+instructor identity verified by the configured console's `/api/auth/me`.
+They fail closed if authentication is missing, expired, rejected, or unavailable.
+The planner forwards the caller's `capvsar_session` cookie, `Authorization`
+header, and/or `X-CAPVSAR-Token` header to that console only. It never reads
+`CAPVSAR_TOKEN_INSTRUCTOR` or `CAPVSAR_TOKEN_BASE` from its environment.
+Console writes independently enforce the caller's permissions; authentication
+and write requests do not follow redirects.
+
+Browser deployments must expose the planner and console under the same origin
+so the console session cookie reaches the planner. Cookie-authenticated writes
+require a matching Origin (scheme and authority) and JSON. Non-browser clients
+can present their own Bearer session or console token without Origin. Origin
+alone never authenticates a caller. Database refresh and scenario export require
+instructor access; calculation and download endpoints remain available without
+sign-in. A console denial during export returns 401/403 and preserves any
+partial-success information rather than substituting a more privileged token.
