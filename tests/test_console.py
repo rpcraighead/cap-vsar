@@ -51,6 +51,18 @@ def build_app(db_path=None, **tokens):
         os.environ.pop(f"CAPVSAR_TOKEN_{role}", None)
     for role, value in tokens.items():
         os.environ[f"CAPVSAR_TOKEN_{role.upper()}"] = value
+
+    # Most tests here are about sorties, effects and retention rather than
+    # access control, and they called mutating endpoints with no tokens at all.
+    # That worked because enforce() used to fail open. X-11 closed that, so the
+    # assumption is now stated instead of inherited: a console built with no
+    # tokens is explicitly an open dev console. A test that configures any
+    # token gets the strict path, which is what the RBAC and truth-containment
+    # tests below rely on.
+    os.environ.pop("CAPVSAR_DEV_OPEN", None)
+    if not tokens:
+        os.environ["CAPVSAR_DEV_OPEN"] = "1"
+
     if db_path is None:
         tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
         tmp.close()
@@ -271,16 +283,16 @@ class PluginTruthChannel(unittest.TestCase):
     def test_open_when_no_key_configured_is_impossible(self):
         main, client, db = build_app()
         try:
-            run_sortie(main, client)
+            run_sortie(main, client, headers={"X-CAPVSAR-Token": INSTRUCTOR})
             r = client.get("/api/plugin/scenario")
             self.assertEqual(r.status_code, 503)
         finally:
             os.unlink(db)
 
     def test_key_serves_truth_before_reveal(self):
-        main, client, db = build_app(plugin=PLUGIN)
+        main, client, db = build_app(plugin=PLUGIN, instructor=INSTRUCTOR)
         try:
-            run_sortie(main, client)
+            run_sortie(main, client, headers={"X-CAPVSAR-Token": INSTRUCTOR})
             self.assertEqual(client.get("/api/plugin/scenario").status_code, 403)
             self.assertEqual(client.get("/api/plugin/scenario",
                                         headers={"X-CAPVSAR-Token": "wrong"}).status_code, 403)
@@ -303,9 +315,9 @@ class PluginTruthChannel(unittest.TestCase):
         rather than failing here — which is exactly how P-2 went unnoticed.
         Keep in step with PI_capvsar_df.py's net_worker().
         """
-        main, client, db = build_app(plugin=PLUGIN)
+        main, client, db = build_app(plugin=PLUGIN, instructor=INSTRUCTOR)
         try:
-            run_sortie(main, client)
+            run_sortie(main, client, headers={"X-CAPVSAR-Token": INSTRUCTOR})
             body = client.get("/api/plugin/scenario",
                               headers={"X-CAPVSAR-Token": PLUGIN}).json()
             self.assertIn("sortie", body)
@@ -319,9 +331,9 @@ class PluginTruthChannel(unittest.TestCase):
 
     def test_query_parameter_also_accepted(self):
         """The plugin can pass the key in the URL where a header is awkward."""
-        main, client, db = build_app(plugin=PLUGIN)
+        main, client, db = build_app(plugin=PLUGIN, instructor=INSTRUCTOR)
         try:
-            run_sortie(main, client)
+            run_sortie(main, client, headers={"X-CAPVSAR-Token": INSTRUCTOR})
             r = client.get(f"/api/plugin/scenario?token={PLUGIN}")
             self.assertEqual(r.status_code, 200)
         finally:

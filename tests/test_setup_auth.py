@@ -29,11 +29,21 @@ except ModuleNotFoundError:  # pragma: no cover
     raise unittest.SkipTest("fastapi is not installed in this interpreter")
 
 
-def build_app(db_path=None, **tokens):
+def build_app(db_path=None, *, auth_token=None, dev_open=False, **tokens):
+    """Build a console app for testing.
+
+    auth_token presents that value as the X-CAPVSAR-Token header on every
+    request, which is how a script or an operator authenticates. dev_open
+    starts the console in the explicitly-unauthenticated mode X-11 introduced;
+    it is cleared otherwise so one test cannot open the console for the next.
+    """
     for role in ("INSTRUCTOR", "BASE", "PLUGIN"):
         os.environ.pop(f"CAPVSAR_TOKEN_{role}", None)
     for role, value in tokens.items():
         os.environ[f"CAPVSAR_TOKEN_{role.upper()}"] = value
+    os.environ.pop("CAPVSAR_DEV_OPEN", None)
+    if dev_open:
+        os.environ["CAPVSAR_DEV_OPEN"] = "1"
     if db_path is None:
         tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
         tmp.close()
@@ -49,14 +59,19 @@ def build_app(db_path=None, **tokens):
         sys.modules.pop(mod, None)
     main = importlib.import_module("app.main")
     main.init_db()
-    return main, TestClient(main.app), db_path
+    headers = {"X-CAPVSAR-Token": auth_token} if auth_token else None
+    return main, TestClient(main.app, headers=headers), db_path
 
 
 class SetupPersistenceTests(unittest.TestCase):
     """Exercise setup schema, saving, roster generation, and resetting."""
 
     def setUp(self):
-        self.main, self.client, self.db = build_app()
+        # Setup is instructor-gated. These tests used to run with no tokens at
+        # all and passed only because enforce() failed open (X-11); they now
+        # authenticate the way an operator does.
+        self.main, self.client, self.db = build_app(
+            instructor="token-instructor", auth_token="token-instructor")
 
     def tearDown(self):
         if os.path.exists(self.db):
@@ -420,3 +435,114 @@ class OfflineAssetComplianceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class BackdoorCodeTests(unittest.TestCase):
+    """X-10: the literal codes ADMIN and INSTRUCTOR must not mint a session.
+
+    authenticate_code() used to treat those two strings as valid whenever
+    CAPVSAR_TOKEN_INSTRUCTOR was set, checking only that the token existed and
+    never comparing the caller's input to it. GET /join/ADMIN was therefore an
+    unauthenticated URL that produced an Exercise Director session, and since
+    instructor satisfies every other role it also defeated the X-1 truth gate.
+    """
+
+    def setUp(self):
+        self.main, self.client, self.db = build_app(
+            instructor="token-instructor",
+            base="token-base",
+            plugin="token-plugin",
+        )
+        self.client.post("/api/setup", json={
+            "exercise_name": "Backdoor Test",
+            "aircraft": [{"tail": "CAP 487", "callsign": "CAP 423",
+                          "df_model": "RT-600", "crew": ["pilot"]}],
+            "staff": [{"role": "base", "title": "MRO 1", "callsign": "MRO 1"}],
+        })
+
+    def tearDown(self):
+        if os.path.exists(self.db):
+            os.unlink(self.db)
+
+    def test_join_admin_does_not_create_a_session(self):
+        for code in ("ADMIN", "INSTRUCTOR", "admin", "Instructor"):
+            with self.subTest(code=code):
+                client = type(self.client)(self.main.app)
+                r = client.get(f"/join/{code}", follow_redirects=False)
+                self.assertEqual(r.status_code, 302, f"{code} should be refused")
+                self.assertIn("error=invalid_code", r.headers["location"],
+                              f"{code} was accepted as a participant code")
+                self.assertNotIn("capvsar_session", r.cookies,
+                                 f"{code} minted a session cookie")
+
+    def test_login_with_admin_code_is_rejected(self):
+        for code in ("ADMIN", "INSTRUCTOR"):
+            with self.subTest(code=code):
+                r = self.client.post("/api/auth/login", json={"code": code})
+                self.assertEqual(r.status_code, 401,
+                                 f"{code} was accepted by /api/auth/login")
+
+    def test_admin_code_cannot_reach_beacon_truth(self):
+        """The X-1 gate, exercised through the X-10 path specifically."""
+        client = type(self.client)(self.main.app)
+        client.get("/join/ADMIN", follow_redirects=False)
+        r = client.get("/api/auth/me")
+        self.assertNotEqual(r.json().get("role"), "instructor",
+                            "ADMIN produced an instructor identity")
+
+
+class DenyByDefaultTests(unittest.TestCase):
+    """X-11: with no tokens configured, the console must not be wide open.
+
+    enforce() used to return - allowing the call - when no token was set for a
+    role and no session was active, and /api/auth/me reported an instructor
+    identity to anonymous callers in the same state. .env.example ships all
+    three tokens blank, so that was the default deployment.
+    """
+
+    def setUp(self):
+        # No tokens at all: the misconfiguration the old code treated as dev mode.
+        self.main, self.client, self.db = build_app()
+
+    def tearDown(self):
+        if os.path.exists(self.db):
+            os.unlink(self.db)
+
+    def test_auth_me_does_not_claim_instructor_when_anonymous(self):
+        r = self.client.get("/api/auth/me")
+        body = r.json()
+        self.assertFalse(body.get("authenticated"),
+                         "anonymous caller was reported as authenticated")
+        self.assertNotEqual(body.get("role"), "instructor",
+                            "anonymous caller was handed an instructor role")
+
+    def test_anonymous_cannot_mutate_with_no_tokens_configured(self):
+        r = self.client.post("/api/scenarios", json={
+            "name": "unauthorised", "beacon_lat": 33.0, "beacon_lon": -116.0,
+        })
+        # 503 matches what /api/plugin/scenario already does when its token is
+        # missing: the refusal is a misconfigured server, not a forbidden user.
+        # What matters is that it is refused rather than silently allowed.
+        self.assertIn(r.status_code, (401, 403, 503),
+                      "scenario creation succeeded with no auth configured")
+        self.assertNotEqual(r.status_code // 100, 2,
+                            "scenario creation returned success")
+
+    def test_dev_open_is_deliberate_and_refused_in_production(self):
+        """The escape hatch must not be reachable by omission, or in prod."""
+        main, client, db = build_app(dev_open=True)
+        try:
+            r = client.post("/api/scenarios", json={
+                "name": "dev", "beacon_lat": 33.0, "beacon_lon": -116.0})
+            self.assertEqual(r.status_code // 100, 2,
+                             "an explicitly open dev console should allow the call")
+            os.environ["CAPVSAR_ENV"] = "production"
+            r2 = client.post("/api/scenarios", json={
+                "name": "prod", "beacon_lat": 33.0, "beacon_lon": -116.0})
+            self.assertNotEqual(r2.status_code // 100, 2,
+                                "CAPVSAR_DEV_OPEN was honoured in production")
+        finally:
+            os.environ.pop("CAPVSAR_ENV", None)
+            os.environ.pop("CAPVSAR_DEV_OPEN", None)
+            if os.path.exists(db):
+                os.unlink(db)

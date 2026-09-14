@@ -58,11 +58,18 @@ def api_login(payload: LoginPayload, response: Response):
 def api_auth_me(request: Request):
     sess = access.get_session_from_request(request)
     if not sess:
-        if not access.token_for("instructor") and not access.token_for("base"):
+        # X-11: this used to report an authenticated instructor identity to any
+        # anonymous caller whenever no instructor/base token was configured, so
+        # the UI rendered full Exercise Director controls for a stranger and
+        # the console asserted an identity nobody had proved. The dev console
+        # is still reachable, but it now says plainly that it is unauthenticated
+        # and it only does so when the operator asked for an open console.
+        if access.dev_open():
             return {
-                "authenticated": True,
+                "authenticated": False,
+                "dev_open": True,
                 "role": "instructor",
-                "title": "Exercise Director (Dev)",
+                "title": "Exercise Director (unauthenticated dev console)",
                 "code": "DEV",
                 "callsign": "DEV",
             }

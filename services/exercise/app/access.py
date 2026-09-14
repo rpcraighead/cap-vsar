@@ -123,6 +123,20 @@ def unconfigured() -> list[str]:
     return [r for r in ("instructor", "base", "plugin") if not token_for(r)]
 
 
+def dev_open() -> bool:
+    """True when the operator has explicitly asked for an unauthenticated console.
+
+    X-11: a missing token used to mean "open", so forgetting to configure one
+    silently disabled access control. Opening the console is now a deliberate
+    act with its own variable, and it is refused outright once the deployment
+    marks itself as production, so the flag cannot travel from a laptop into
+    an exercise by way of a copied .env.
+    """
+    if os.environ.get("CAPVSAR_ENV", "").strip().lower() in ("prod", "production"):
+        return False
+    return os.environ.get("CAPVSAR_DEV_OPEN", "").strip() in ("1", "true", "yes", "on")
+
+
 def presented(request: Request) -> str:
     return (request.headers.get(TOKEN_HEADER)
             or request.query_params.get("token")
@@ -208,11 +222,15 @@ def authenticate_code(code: str) -> tuple[dict, str] | None:
     clean_code = code.strip().upper()
     now = time.time()
 
-    # Instructor shortcut via configured environment token
-    instr_token = token_for("instructor")
-    if clean_code in ("ADMIN", "INSTRUCTOR") and instr_token:
-        sess_id = create_session(clean_code, "instructor", "Exercise Director", "INSTRUCTOR", "", "/")
-        return ({"code": clean_code, "role": "instructor", "title": "Exercise Director", "callsign": "INSTRUCTOR", "target_url": "/"}, sess_id)
+    # X-10: there was an instructor shortcut here. It accepted the literal
+    # codes ADMIN and INSTRUCTOR whenever CAPVSAR_TOKEN_INSTRUCTOR was set,
+    # testing only that the token existed and never comparing it to what the
+    # caller supplied, so GET /join/ADMIN minted an Exercise Director session
+    # for anyone who could reach the console. Since instructor satisfies every
+    # other role, that also defeated X-1: truth is gated on a presented
+    # instructor token, but the session was obtainable without presenting one.
+    # An instructor now authenticates the same way as everyone else - a roster
+    # credential, or the configured token via the X-CAPVSAR-Token header.
 
     with auth_db() as c:
         row = c.execute(
@@ -370,8 +388,19 @@ def enforce(role: str, request: Request) -> None:
     # Check legacy token
     accepted = [t for t in (token_for(r) for r in SATISFIED_BY[role]) if t]
     if not accepted:
-        # If no tokens are configured and no session is active, open for local dev
-        return
+        # X-11: this used to return, allowing the call. With .env.example
+        # shipping every token blank that made the default deployment
+        # unauthenticated, and the failure was silent - a missing token opened
+        # an endpoint rather than closing it. Deny unless the operator has
+        # explicitly asked for an open console on this machine.
+        if dev_open():
+            return
+        raise HTTPException(
+            503, f"This console has no {role} credential configured, so the "
+                 f"action cannot be authorised. Set CAPVSAR_TOKEN_"
+                 f"{role.upper()} (or log in with a roster code). For a local "
+                 f"development console with no authentication, set "
+                 f"CAPVSAR_DEV_OPEN=1 deliberately.")
     supplied = presented(request)
     if not supplied or not _matches(supplied, accepted):
         raise HTTPException(
