@@ -1,4 +1,16 @@
+# Pinned deliberately (L-10). requests 2.31.0 shipped CVE-2024-35195 (a session
+# that verified a cert once would skip verification for later requests) and
+# CVE-2024-47081 (.netrc credential leak to the wrong host); both are fixed by
+# 2.32.4. gunicorn and Werkzeug were unpinned, so the image rebuilt to whatever
+# was current that day - gunicorn 22.0.0 fixed CVE-2024-1135 (request smuggling
+# via malformed Transfer-Encoding) and Werkzeug 3.0.6 fixed CVE-2024-49767
+# (resource exhaustion on multipart uploads).
+#
+# Werkzeug is held at 3.0.x because Flask 3.0.0 does not support Werkzeug 3.1.
+# Bump both together or not at all.
 Flask==3.0.0
-requests==2.31.0
+Werkzeug==3.0.6
+requests==2.32.5
 pygeomag==1.1.0
 Markdown==3.10.2
+gunicorn==23.0.0
