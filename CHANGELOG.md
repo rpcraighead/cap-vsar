@@ -3,6 +3,36 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-15 — AI-8 taxi authority and return-to-start foundation
+
+The intended AI Mission Pilot sortie now explicitly ends where it began: taxi
+out, takeoff, mission, landing, then taxi back to the recorded starting point.
+Added `services/ai_pilot/taxi.py`, a pure policy coordinator around routes an AI
+or planner may propose. It does not move the aircraft and does not revive the
+retired direct-write mission controller.
+
+The deterministic layer applies the ground rules that cannot be left to model
+judgment: towered movement needs ATC authority; every runway crossing is explicit,
+specific and consumed once; taxi clearance does not authorize entry onto the
+departure runway; uncertainty stops and requests progressive taxi; and return
+taxi begins only after the aircraft is wholly clear of the landing runway. A
+return route is rejected unless it terminates at the session's recorded start.
+The source basis is FAA AIM 4-3-18, 4-3-21 and 2-3-5 plus 14 CFR 91.129(i).
+
+The first ten tests were written first and failed at collection because the taxi
+module did not exist. The departure-authority-source and line-up-and-wait tests
+then failed against successive implementations until ATC/crew-source enforcement
+and a separate in-position hold were added. Command: `PYTHONPATH=. python3 -m
+pytest services/ai_pilot/tests/test_taxi.py -q` — 12
+passed. Full service command: `PYTHONPATH=. python3 -m pytest
+services/ai_pilot/tests -q` — 200 passed and
+29 subtests passed.
+
+**Not verified:** no ArduPlane/MAVLink or X-Plane actuator is connected; no
+airport surface graph or live clearance source is implemented; taxi, takeoff,
+landing, control handoff, and return-to-start have not been exercised in SITL or
+the simulator. AI-8 remains open for that work.
+
 ## 2026-09-15 — F-12 per-radio MON / open squelch
 
 The EFJohnson control head's labelled MON key now has a hit region matching its

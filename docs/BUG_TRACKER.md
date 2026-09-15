@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 101 items, 5 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 102 items, 6 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -10,16 +10,16 @@ IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split ou
 
 | | critical | high | medium | low | total |
 |---|---|---|---|---|---|
-| by severity | 12 | 31 | 38 | 20 | 101 |
+| by severity | 12 | 32 | 38 | 20 | 102 |
 
 | P0 | P1 | P2 | P3 |
 |---|---|---|---|
-| 15 | 31 | 38 | 17 |
+| 15 | 32 | 38 | 17 |
 
 | Component | Items |
 |---|---|
+| Deployment / infrastructure | 19 |
 | Air Manager instruments | 19 |
-| Deployment / infrastructure | 18 |
 | Exercise console (backend) | 17 |
 | Flight planner | 16 |
 | Exercise console (frontend) | 12 |
@@ -40,7 +40,7 @@ _Wave dates track the illustrative calendar in docs/USE_CASE_SAREX_REHEARSAL.md 
 - **Wave 0** (8 items) — Now — make the work safe to do at all.
 - **Wave 1** (11 items) — Before session 1 (base stand-up). Nothing flies; base, planner and comms must work.
 - **Wave 2** (20 items) — Before session 2 (full mission, three aircraft, injected effects).
-- **Wave 3** (41 items) — Before session 3 (dress rehearsal) and the live SAREX.
+- **Wave 3** (42 items) — Before session 3 (dress rehearsal) and the live SAREX.
 - **Wave 4** (21 items) — After the SAREX — architecture, tooling, CalTopo phase 2.
 
 ## Clusters
@@ -63,7 +63,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | C12 | Instrument runtime | I-1, I-2, O-7b, I-10, I-3, I-4, I-5, I-6, I-11, I-14, I-12, I-13, I-15, I-17 | Gemini — instruments/** outright, including the DF heads |
 | C13 | Instrument tooling & shared libs | I-8, I-9a, I-7, I-9c | Gemini — instrument tooling; I-9a Lua harness is its first task |
 | C14 | Contract & documentation truth | D-1, D-2, D-3, D-4, D-5, P-10, I-9b | docs only, safe in parallel |
-| C15 | Service boundaries (architecture) | AI-1, AI-2, AI-3, AI-5, AI-6, AI-4, C15-1, P-11, C15-2 | unassigned — after C2 and C7 settle |
+| C15 | Service boundaries (architecture) | AI-1, AI-2, AI-3, AI-5, AI-6, AI-8, AI-4, C15-1, P-11, C15-2 | unassigned — after C2 and C7 settle |
 | C16 | Aircraft package fidelity | A-1 | Claude — actively correcting the CAP 487 C182 model; visual and flight-model acceptance remain open |
 | C17 | Identity, single sign-on & service front door | AI-7, L-15, X-10, X-11, X-12, X-13, X-14, O-8 | Gemini - console and deck auth; Codex - planner deputy (L-15) |
 
@@ -133,6 +133,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [AI-3](#ai-3) | P1 | high | Live RREF comma header discarded by AI pilot receiver | infra | C15 | S | — | fixed |
 | [AI-5](#ai-5) | P1 | high | Live altitude selection does not establish commanded climb | infra | C15 | M | — | fixed |
 | [AI-6](#ai-6) | P1 | high | Controller shutdown pause request does not pause live X-Plane | infra | C15 | M | — | fixed |
+| [AI-8](#ai-8) | P1 | high | Complete full-sortie ArduPlane and FAA-grounded taxi control | infra | C15 | L | AI-1 | open |
 | [O-5](#o-5) | P1 | high | Mumble server has no per-role ACLs and images float | infra | C5 | M | X-2, O-4 | fixed |
 | [O-7a](#o-7a) | P1 | high | Air Manager seat count for three MO stations unconfirmed | infra | C5 | S | — | resolved |
 | [AI-4](#ai-4) | P2 | medium | Installed exercise aircraft predates CAP 487 identity and has prop lever load error | infra | C15 | M | — | open |
@@ -704,6 +705,18 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Problem:** Clean SIGINT shutdown while owning control called set_paused(True), but subsequent live sim/time/paused readback was 0. Current implementation writes sim/time/paused; pause delivery/effect is unverified and failed this trial. User was instructed to pause locally.
 - **Fix:** Installed DataRefs.txt confirms sim/time/paused is read-only. Replaced writes with Commands.txt pause_on/pause_off explicit commands and added regression coverage. Live pause readback verification pending.
 - **Done when:** Live shutdown pause verified with sim/time/paused=1 and user visual confirmation. Live telemetry-loss fault also sent pause_on at 1.900 s after relay drop began, revoked lease and produced pause=1. Autopilot modes were preserved during the fault. After telemetry restoration, old lease returned HTTP 400.
+
+### AI-8
+
+**Complete full-sortie ArduPlane and FAA-grounded taxi control**
+
+`P1` · `high` · `task` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort L · wave 3 · **open**
+
+- **Files:** `services/ai_pilot/taxi.py`, `services/ai_pilot/tests/test_taxi.py`, `services/ai_pilot/README.md`
+- **Problem:** The intended AI Mission Pilot must taxi out, take off, fly the mission, land, and taxi back to its recorded starting point. ArduPlane is the planned full-flight backend for aircraft without an accepted onboard autopilot, but no SITL/MAVLink adapter, airport-surface graph, taxi actuator, clearance state, or end-to-end control handoff exists. The retired scripted controller writes X-Plane directly and cannot be revived because it can manufacture takeoff authority and bypass the serialized maneuver gate.
+- **Fix:** Foundation added 2026-09-15: taxi.py is a pure deterministic coordinator around AI/planner-proposed routes. It records the starting point; requires the return route to end there; keeps taxi, runway-crossing, line-up-and-wait and takeoff authority distinct; validates ATC versus crew authority source; consumes crossing authority one runway at a time; fails closed to a progressive-taxi request on uncertainty; and requires the aircraft to be wholly runway-clear before return taxi. The first ten offline tests failed before the module existed; two more failed against successive implementations until departure-authority-source enforcement and a separate lined-up hold state were added. All twelve now pass. FAA basis: AIM 4-3-18, 4-3-21 and 2-3-5 plus 14 CFR 91.129(i). Still required: sourced airport surface data, ATC/crew clearance input, runway/hold-line position monitoring, bounded steering/throttle/brake commands, ArduPlane SITL and MAVLink adapter, one-owner handoff among GFC 700/ArduPlane/direct flight-test control, taxi-out/takeoff/mission/landing/taxi-back state integration, and live X-Plane acceptance.
+- **Done when:** A representative towered-airport sortie starts from a named parking position, follows only the cleared taxi route, stops at every unauthorized hold line, never treats taxi instructions as runway-entry authority, completes ArduPlane takeoff/mission/autoland with exclusive control ownership, exits and becomes wholly runway-clear, receives a distinct return taxi clearance, and stops at the recorded starting position. Repeat at an untowered airport with recorded crew traffic checks. Inject stale telemetry, ambiguous routing, loss of clearance state, and an attempted second controller; every case stops safely without guessing. Static policy tests, MAVLink packet-intent tests, SITL trials, and supervised X-Plane 12 acceptance all pass.
+- **Depends on:** AI-1
 
 ### O-5
 

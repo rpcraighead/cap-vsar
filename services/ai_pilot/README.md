@@ -96,6 +96,32 @@ tracking, pause and disconnect still require simulator acceptance testing. No
 ArduPlane, autonomous pattern tracking, speed control, ATC, takeoff or landing is
 claimed for this implementation.
 
+## Full-sortie intent and taxi policy foundation (2026-09-15)
+
+The intended AI Mission Pilot is not limited to the current airborne maneuver
+deck. It is expected eventually to taxi out, take off, fly the assigned mission,
+land, and taxi back to the position where the session began. Aircraft with an
+accepted onboard autopilot may use it for airborne phases; ArduPlane is the
+planned navigation and stabilization backend when the aircraft lacks one. The
+direct surface-control backend below remains the flight-test instrument for
+airframe characterization and deliberate envelope work.
+
+`taxi.TaxiCoordinator` is the first implementation slice. It records the starting
+point and will accept a return route only when that route terminates at the same
+point. An AI or planner may propose the route, but deterministic policy owns
+movement authority: towered movement requires ATC authorization, every runway
+crossing is specific and single-use, taxi clearance does not imply departure-
+runway entry, route uncertainty produces a stop and progressive-taxi request,
+and post-landing taxi cannot begin until the aircraft is reported wholly clear
+of the runway.
+
+Those rules follow FAA AIM 4-3-18, 4-3-21 and 2-3-5 plus 14 CFR 91.129(i). They
+are simulation policy, not approval for real-aircraft use. The coordinator emits
+abstract directives only. It is not connected to X-Plane or MAVLink, and it
+cannot move the aircraft. Tracker item AI-8 owns the remaining airport-surface
+graph, clearance/ATC state, ArduPlane adapter, steering/throttle/brake actuation,
+exclusive handoff, and live acceptance work.
+
 ## Direct surface-control backend (2026-09-11)
 
 `direct_backend.XPlaneDirectBackend` flies CAP 487 on the **primary flight

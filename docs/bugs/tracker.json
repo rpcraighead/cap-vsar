@@ -2170,6 +2170,29 @@
       "depends_on": []
     },
     {
+      "id": "AI-8",
+      "title": "Complete full-sortie ArduPlane and FAA-grounded taxi control",
+      "type": "task",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 3,
+      "effort": "L",
+      "component": "infra",
+      "cluster": "C15",
+      "status": "open",
+      "files": [
+        "services/ai_pilot/taxi.py",
+        "services/ai_pilot/tests/test_taxi.py",
+        "services/ai_pilot/README.md"
+      ],
+      "problem": "The intended AI Mission Pilot must taxi out, take off, fly the mission, land, and taxi back to its recorded starting point. ArduPlane is the planned full-flight backend for aircraft without an accepted onboard autopilot, but no SITL/MAVLink adapter, airport-surface graph, taxi actuator, clearance state, or end-to-end control handoff exists. The retired scripted controller writes X-Plane directly and cannot be revived because it can manufacture takeoff authority and bypass the serialized maneuver gate.",
+      "fix": "Foundation added 2026-09-15: taxi.py is a pure deterministic coordinator around AI/planner-proposed routes. It records the starting point; requires the return route to end there; keeps taxi, runway-crossing, line-up-and-wait and takeoff authority distinct; validates ATC versus crew authority source; consumes crossing authority one runway at a time; fails closed to a progressive-taxi request on uncertainty; and requires the aircraft to be wholly runway-clear before return taxi. The first ten offline tests failed before the module existed; two more failed against successive implementations until departure-authority-source enforcement and a separate lined-up hold state were added. All twelve now pass. FAA basis: AIM 4-3-18, 4-3-21 and 2-3-5 plus 14 CFR 91.129(i). Still required: sourced airport surface data, ATC/crew clearance input, runway/hold-line position monitoring, bounded steering/throttle/brake commands, ArduPlane SITL and MAVLink adapter, one-owner handoff among GFC 700/ArduPlane/direct flight-test control, taxi-out/takeoff/mission/landing/taxi-back state integration, and live X-Plane acceptance.",
+      "verify": "A representative towered-airport sortie starts from a named parking position, follows only the cleared taxi route, stops at every unauthorized hold line, never treats taxi instructions as runway-entry authority, completes ArduPlane takeoff/mission/autoland with exclusive control ownership, exits and becomes wholly runway-clear, receives a distinct return taxi clearance, and stops at the recorded starting position. Repeat at an untowered airport with recorded crew traffic checks. Inject stale telemetry, ambiguous routing, loss of clearance state, and an attempted second controller; every case stops safely without guessing. Static policy tests, MAVLink packet-intent tests, SITL trials, and supervised X-Plane 12 acceptance all pass.",
+      "depends_on": [
+        "AI-1"
+      ]
+    },
+    {
       "id": "O-8",
       "title": "No single front door: Caddy fronts one backend and is bypassable on the LAN",
       "type": "task",
