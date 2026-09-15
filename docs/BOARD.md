@@ -53,6 +53,7 @@
 ## 4. Completed Handoffs & Results Log (Last 5)
 *Agents append a 1-2 line receipt here when completing a task, before updating CHANGELOG.md.*
 
+- **2026-09-15 [Codex F-12]**: EFJ MON now has an exact faceplate hit region and opens only that receiver squelch; per-radio state leaves airband unchanged. Three Node tests failed pre-fix; required suite 104 passed + 17 subtests. Not live-Mumble/headset verified; 0.012 RMS is a training threshold, not hardware calibration.
 - **2026-09-15 [Codex F-11]**: Ported per-radio sidetones: tactical P25 chirp/tail and airband AM click/squelch burst. The latched receiver owns its gain and timer; speech waits 115/15 ms for grant tone. Both Node tests failed pre-fix; required suite 101 passed + 17 subtests. Not live-Mumble/headset verified.
 - **2026-09-15 [Claude]**: Merged to main (94a5a47): F-8, F-10, D-5, A-1 stage 3, L-10, plus four defects the pre-merge review caught in the console work. D-6 decided: F-13 closes won't-fix, net names stay generic. Tracker/CHANGELOG for F-13 deferred - Codex is live in the tree on the F-8 follow-ups.
 - **2026-09-15 [Codex F-8 review follow-ups]**: Callsign refresh now preserves the operator interaction and marks a disappeared aircraft stale; the console cut uses the newest 3 LOBs per aircraft while retaining the full log. Both executable Node tests failed pre-fix; required suite now 99 passed + 17 subtests. Not live-browser verified.
