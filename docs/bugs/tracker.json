@@ -1703,14 +1703,14 @@
       "effort": "L",
       "component": "console-ui",
       "cluster": "C9",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "services/exercise/app/static/mission-radio.js",
         "services/exercise/app/radio.py"
       ],
       "problem": "Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. The MRO must watch the VHF-FM tactical net and the VHF-AM aeronautical SAR frequency at the same time; the console joins one Mumble channel at a time. The retired /radio-legacy console had a second airband station (Icom IC-A120) and the rewrite dropped it, so the base can no longer hear aircraft calling on the air-to-ground frequency while working the tactical net.",
-      "fix": "A second simultaneous receive channel on the console, with independent volume and its own log identity. Note the 16-session cap in X-9 - two channels per operator doubles the session count.",
-      "verify": "One operator hears both nets at once and can key the correct one.",
+      "fix": "Fixed 2026-09-15. The console opens independently keyed tactical and airband WebSockets/Mumble radios for each operator, mixes both through separate Web Audio gain nodes, provides an independent airband channel/volume/status panel, and lets the operator select which radio the shared PTT keys. Received and transmitted Form 110 entries use the selected radio's net identity. X-9 sharing remains within each physical radio; the operator/receiver pair is the server key. The existing 16-session cap therefore supports at most 8 fully equipped dual-radio operators. Behavioral tests proved the second Mumble client, selected-net audio routing, cap accounting, log identity, and independent gain calculation. The local page was rendered and visually inspected in Chrome with no console errors.",
+      "verify": "Tests were written first and all four failed on the pre-fix tree. `PYTHONPATH=. ~/.cache/capvsar/capvsar-planner-venv/bin/python3 -m pytest tests/test_console.py tests/test_radio.py tests/test_geodesy.py -q` passes 94 tests and 17 subtests. Not verified: simultaneous audible traffic against the live Mumble server, and deployment.",
       "depends_on": []
     },
     {
@@ -1766,8 +1766,8 @@
         "services/exercise/app/radio.py:29-34"
       ],
       "problem": "Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. Channels read PRIMARY / ALTERNATE / MISSION BASE / BRIEFING. Real heads show zone and channel tags from the fleet plan, and reading them correctly is part of the operator's job. Related to I-11 - the airborne and ground plans should agree.",
-      "fix": "Adopt the same channel naming as I-11 so cockpit and base refer to a channel identically. Verify names against CAPR 100-1 rather than inventing them.",
-      "verify": "A channel briefed by name is identifiable on both the aircraft radio and the base console.",
+      "fix": "UNKNOWN / stopped 2026-09-15. CAPR 100-1 paragraphs 1.9 and 6.13 confirm that channelization is governed by the National Programming Plan and that the actual codeplugs are distributed through the restricted Communications section of eServices. The public regulation does not list TAC 1, TAC 2, CC 1 or CC 2, and neither the vault nor the repo contains an approved exercise channel card mapping the four Mumble nets to those designators. I-11 contains plausible labels but explicitly says its frequencies are placeholders. No console label was changed because the task contract forbids inventing a mapping. Supply the approved exercise/wing channel card or an authoritative four-net mapping before resuming.",
+      "verify": "Not verified: no authoritative mapping exists in the available sources, so the item remains open and no implementation or test was attempted.",
       "depends_on": []
     },
     {

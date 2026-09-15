@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 101 items, 11 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 101 items, 10 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -164,7 +164,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [X-6](#x-6) | P2 | medium | Untyped request bodies mutate scenario definitions | console-api | C7 | M | — | fixed |
 | [X-8](#x-8) | P2 | medium | Console operational hygiene: retention, logging, health, shutdown, root | console-api | C7 | M | — | fixed |
 | [X-9](#x-9) | P2 | medium | One Mumble client per browser socket, 16 max | console-api | C9 | M | — | fixed |
-| [F-10](#f-10) | P2 | low | Mission base cannot monitor the airband SAR net | console-ui | C9 | L | — | open |
+| [F-10](#f-10) | P2 | low | Mission base cannot monitor the airband SAR net | console-ui | C9 | L | — | fixed |
 | [I-11](#i-11) | P2 | low | TDFM memory table is 6 generic channels, not a CAP fleet plan | instruments | C12 | M | — | fixed |
 | [I-14](#i-14) | P2 | low | GMA 1347 ICS isolation and Split COM are lamp-only | instruments | C12 | L | — | fixed |
 | [F-11](#f-11) | P3 | low | No operational sidetone on the new radio console | console-ui | C9 | S | — | open |
@@ -1057,12 +1057,12 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Mission base cannot monitor the airband SAR net**
 
-`P2` · `low` · `bug` · Exercise console (frontend) · cluster C9 (Radio console hardening) · effort L · wave 3 · **open**
+`P2` · `low` · `bug` · Exercise console (frontend) · cluster C9 (Radio console hardening) · effort L · wave 3 · **fixed**
 
 - **Files:** `services/exercise/app/static/mission-radio.js`, `services/exercise/app/radio.py`
 - **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. The MRO must watch the VHF-FM tactical net and the VHF-AM aeronautical SAR frequency at the same time; the console joins one Mumble channel at a time. The retired /radio-legacy console had a second airband station (Icom IC-A120) and the rewrite dropped it, so the base can no longer hear aircraft calling on the air-to-ground frequency while working the tactical net.
-- **Fix:** A second simultaneous receive channel on the console, with independent volume and its own log identity. Note the 16-session cap in X-9 - two channels per operator doubles the session count.
-- **Done when:** One operator hears both nets at once and can key the correct one.
+- **Fix:** Fixed 2026-09-15. The console opens independently keyed tactical and airband WebSockets/Mumble radios for each operator, mixes both through separate Web Audio gain nodes, provides an independent airband channel/volume/status panel, and lets the operator select which radio the shared PTT keys. Received and transmitted Form 110 entries use the selected radio's net identity. X-9 sharing remains within each physical radio; the operator/receiver pair is the server key. The existing 16-session cap therefore supports at most 8 fully equipped dual-radio operators. Behavioral tests proved the second Mumble client, selected-net audio routing, cap accounting, log identity, and independent gain calculation. The local page was rendered and visually inspected in Chrome with no console errors.
+- **Done when:** Tests were written first and all four failed on the pre-fix tree. `PYTHONPATH=. ~/.cache/capvsar/capvsar-planner-venv/bin/python3 -m pytest tests/test_console.py tests/test_radio.py tests/test_geodesy.py -q` passes 94 tests and 17 subtests. Not verified: simultaneous audible traffic against the live Mumble server, and deployment.
 
 ### I-11
 
@@ -1184,8 +1184,8 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 - **Files:** `services/exercise/app/radio.py:29-34`
 - **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. Channels read PRIMARY / ALTERNATE / MISSION BASE / BRIEFING. Real heads show zone and channel tags from the fleet plan, and reading them correctly is part of the operator's job. Related to I-11 - the airborne and ground plans should agree.
-- **Fix:** Adopt the same channel naming as I-11 so cockpit and base refer to a channel identically. Verify names against CAPR 100-1 rather than inventing them.
-- **Done when:** A channel briefed by name is identifiable on both the aircraft radio and the base console.
+- **Fix:** UNKNOWN / stopped 2026-09-15. CAPR 100-1 paragraphs 1.9 and 6.13 confirm that channelization is governed by the National Programming Plan and that the actual codeplugs are distributed through the restricted Communications section of eServices. The public regulation does not list TAC 1, TAC 2, CC 1 or CC 2, and neither the vault nor the repo contains an approved exercise channel card mapping the four Mumble nets to those designators. I-11 contains plausible labels but explicitly says its frequencies are placeholders. No console label was changed because the task contract forbids inventing a mapping. Supply the approved exercise/wing channel card or an authoritative four-net mapping before resuming.
+- **Done when:** Not verified: no authoritative mapping exists in the available sources, so the item remains open and no implementation or test was attempted.
 
 ### I-12
 

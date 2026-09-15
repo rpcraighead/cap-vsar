@@ -3,6 +3,43 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-15 — F-13 stopped: channel mapping is not sourced
+
+F-13 remains open. CAPR 100-1 §§1.9 and 6.13 say the National Programming
+Plan governs channelization and that its codeplugs are distributed through the
+restricted Communications area in eServices. The public regulation does not
+list the proposed TAC 1/TAC 2/CC 1/CC 2 mapping, and neither the project nor the
+vault contains an approved exercise channel card mapping those designators to
+the four Mumble nets. I-11 supplies plausible labels but explicitly calls its
+frequencies placeholders. Per the lane's stop rule, no console name was guessed.
+
+**Not verified:** no implementation or test was attempted. Resume only with an
+approved exercise/wing channel card or an authoritative four-net mapping.
+
+## 2026-09-15 — F-10 simultaneous tactical and airband radios
+
+Mission Radio now opens two independent Mumble radios for each operator. The
+new airband panel has its own channel, receive status, playback worklet and
+volume gain, while a clear PTT selector routes microphone audio only to the
+chosen tactical or airband radio. Incoming and outgoing CAPF-110 entries carry
+the selected radio's net identity so simultaneous traffic remains attributable.
+Extra browser faces still share each physical radio under X-9, but the two
+physical radios intentionally consume two sessions. The unchanged 16-session
+cap therefore supports at most **8 dual-radio operators**.
+
+Four behavioral tests were written first and verified red on the pre-fix tree:
+the second receiver shared the first Mumble client, session accounting allowed
+a ninth dual-radio operator, receive announcements lacked a radio/net identity,
+and no independently executable browser mix existed. Command run:
+`PYTHONPATH=. ~/.cache/capvsar/capvsar-planner-venv/bin/python3 -m pytest
+tests/test_console.py tests/test_radio.py tests/test_geodesy.py -q` — 94 passed,
+17 subtests passed. The local `/radio` page was also rendered and visually
+inspected in Chrome; both channel/volume controls and the PTT selector were
+present and the browser console had no errors.
+
+**Not verified:** simultaneous audible traffic against the live Mumble server,
+or deployment to ms01.
+
 ## 2026-09-15 — F-8 Mission Base bearing intersections
 
 Mission Base now computes forward great-circle intersections between logged

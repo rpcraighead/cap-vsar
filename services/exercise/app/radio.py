@@ -1,4 +1,4 @@
-"""Browser PCM <-> Mumble bridge. One isolated, momentary-PTT radio per socket.
+"""Browser PCM <-> Mumble bridge. Isolated, momentary-PTT radios per operator.
 
 48 kHz mono signed little-endian PCM, 20 ms frames. Mumble handles Opus.
 No audio is stored. Blocking Mumble commands run outside FastAPI's event loop.
@@ -36,24 +36,30 @@ LEASE_SECONDS = 1.5
 CHANNELS = browser_nets()
 SESSIONS: set = set()
 
-# X-9: one Mumble client per BROWSER SOCKET meant an operator with two radio
-# faces open burned two of the server's sixteen sessions and, worse, appeared
-# on the net as two separate users - so a station could be called and answered
-# by what looked like two different people at the same desk. A radio is one
-# radio: the connection is keyed by operator, and extra faces attach to the
-# client that is already there.
+# X-9: extra browser faces for the same physical radio share one Mumble client.
+# F-10 deliberately gives each operator two physical radios (tactical and
+# airband), and therefore two pymumble threads/sessions. The server cap remains
+# 16: a fully equipped dual-radio desk reduces the hard maximum to 8 operators.
 OPERATORS: dict = {}
 
 
 def operator_key(callsign: str) -> str:
     return ' '.join(callsign.upper().split())
+
+
+def radio_key(callsign: str, receiver: str) -> tuple[str, str]:
+    return operator_key(callsign), receiver
+
+
 CHANNEL_ACTIVITY: dict[str, float] = {}
 
 
 @router.get('/api/radio/config')
 def config():
+    max_sessions = int(os.getenv('CAPVSAR_RADIO_MAX_SESSIONS', '16'))
     return {"channels": CHANNELS, "sampleRate": RATE, "frameSamples": 960,
             "maxTransmitSeconds": MAX_TX_SECONDS,
+            "maxDualRadioOperators": max_sessions // 2,
             "accessCodeRequired": bool(os.getenv('CAPVSAR_RADIO_ACCESS_CODE')),
             "configured": bool(os.getenv('CAPVSAR_MUMBLE_HOST')),
             "securePort": int(os.getenv('CAPVSAR_RADIO_HTTPS_PORT', '443'))}
@@ -122,8 +128,11 @@ class TransmitGate:
 
 
 class MumbleRadio:
-    def __init__(self, sock, callsign):
+    def __init__(self, sock, callsign, receiver='main'):
         self.callsign = callsign
+        self.receiver_kind = receiver
+        self.log_identity = (f'{callsign} / TACTICAL' if receiver == 'main'
+                             else f'{callsign} / AIRBAND')
         self.client = None
         self.loop = asyncio.get_running_loop()
         # X-9: every attached face gets its own outbound queue. One slow tablet
@@ -154,7 +163,9 @@ class MumbleRadio:
         """
         return {"type": "tuned", "channel": self.channel_key,
                 "epoch": self.epoch, "callsign": self.callsign,
-                "name": self.channel_name or self.channel_key}
+                "name": self.channel_name or self.channel_key,
+                "receiver": self.receiver_kind,
+                "logIdentity": self.log_identity}
 
     def queue_for(self, sock):
         """The outbound queue of one attached face."""
@@ -230,7 +241,8 @@ class MumbleRadio:
         if self.channel_key:
             CHANNEL_ACTIVITY[self.channel_key] = now
         if now-self.rx_announced.get(session, 0) > .3:
-            self.enqueue({"type": "rx", "speaker": name, "session": session})
+            self.enqueue({"type": "rx", "speaker": name, "session": session,
+                          "receiver": self.receiver_kind, "net": self.channel_name})
             self.rx_announced[session] = now
         self.enqueue(struct.pack('<II', epoch, session) + pcm)
 
@@ -238,7 +250,7 @@ class MumbleRadio:
         import pymumble_py3
         from pymumble_py3.constants import PYMUMBLE_CLBK_CONNECTED, PYMUMBLE_CLBK_DISCONNECTED, PYMUMBLE_CLBK_SOUNDRECEIVED
         host = os.environ['CAPVSAR_MUMBLE_HOST']
-        username = f'{self.callsign} [web-{uuid.uuid4().hex[:6]}]'
+        username = f'{self.log_identity} [web-{uuid.uuid4().hex[:6]}]'
         self.client = pymumble_py3.Mumble(
             host, username, port=int(os.getenv('CAPVSAR_MUMBLE_PORT', '64738')),
             password=os.getenv('CAPVSAR_MUMBLE_PASSWORD', ''), reconnect=False)
@@ -433,6 +445,9 @@ async def stream(sock: WebSocket):
         if not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9 ._-]{2,32}', name.strip()):
             raise ValueError('Use a callsign of 2–32 letters, numbers, spaces, dots or dashes.')
         name = name.strip()
+        receiver = hello.get('receiver', 'main')
+        if receiver not in ('main', 'airband'):
+            raise ValueError('Unknown radio receiver.')
         # O-5: an authenticated RBAC session's callsign always overrides
         # whatever the client claims, so a base-role student can't type
         # "MISSION BASE" or "INSTRUCTOR" and impersonate another station on
@@ -445,7 +460,7 @@ async def stream(sock: WebSocket):
         # X-9: a second face for an operator already on the net attaches to
         # the radio they are already using. It costs no extra Mumble session,
         # and the desk stays one station on the net instead of appearing twice.
-        key = operator_key(name)
+        key = radio_key(name, receiver)
         existing = OPERATORS.get(key)
         if existing is not None and not existing.closed and not existing.failed:
             radio, shared = existing, True
@@ -456,7 +471,7 @@ async def stream(sock: WebSocket):
         else:
             if len(SESSIONS) >= int(os.getenv('CAPVSAR_RADIO_MAX_SESSIONS', '16')):
                 raise ValueError('All browser radio connections are occupied.')
-            radio, shared = MumbleRadio(sock, name), False
+            radio, shared = MumbleRadio(sock, name, receiver=receiver), False
             SESSIONS.add(radio)
             OPERATORS[key] = radio
             await radio.connect(hello.get('channel', 'primary'))
@@ -500,7 +515,8 @@ async def stream(sock: WebSocket):
                         await radio.close()
                     finally:
                         SESSIONS.discard(radio)
-                        if OPERATORS.get(operator_key(radio.callsign)) is radio:
-                            OPERATORS.pop(operator_key(radio.callsign), None)
+                        key = radio_key(radio.callsign, radio.receiver_kind)
+                        if OPERATORS.get(key) is radio:
+                            OPERATORS.pop(key, None)
             with contextlib.suppress(Exception):
                 await asyncio.wait_for(sock.close(), 1)
