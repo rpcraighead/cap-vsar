@@ -34,6 +34,12 @@ REQUIRED_FILE_SHA256 = {
     "Models/Liveries/Default.png": "ef329278ea11a23b03da789f4338b0e4316fff1d63335be3b0c45a8b96fcd783",
     "Models/Lights.png": "753c7905ac38eda3a8203ece494aae6be706c5d8b950f7a5da0812a97c38a208",
     "Models/PropBlur.png": "b213b013fb4237842bcbc949f3f1998c947f466af6f2da62150848eff666bc72",
+    # The editable source of Models/c182s.ac - 88 objects matching it 1:1, and
+    # the file any exterior geometry correction actually edits. It was the one
+    # unpinned asset in an otherwise checksum-verified pipeline.
+    "dev/C182S.blend": "3bfe0720204a35c145d5247b2bcfd5aac1785257e2b98be48bbb8e62a9a7ae58",
+    # The donor's cockpit/interior model. Pinned for provenance; it holds no
+    # airframe geometry and is not the source for exterior work.
     "dev/C182T.blend": "64ceac4b3643a96c2af41b9983f5eedbad32778da108f53556288d3fe740bca3",
 }
 
