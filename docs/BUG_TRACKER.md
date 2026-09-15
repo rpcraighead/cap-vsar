@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 101 items, 13 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 101 items, 11 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -143,7 +143,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [D-5](#d-5) | P2 | medium | Manufacturer artwork is still redistributed, as figure extracts and in git history | docs | C14 | M | D-4 | open |
 | [F-6](#f-6) | P2 | medium | Unescaped server strings in four views (HTML injection) | console-ui | C8 | S | — | fixed |
 | [F-7](#f-7) | P2 | medium | Legacy console: precedence bug and autoplay-blocked audio | console-ui | C9 | S | — | fixed |
-| [F-8](#f-8) | P2 | medium | No bearing intersection maths despite the README | console-ui | C8 | M | — | open |
+| [F-8](#f-8) | P2 | medium | No bearing intersection maths despite the README | console-ui | C8 | M | — | fixed |
 | [F-9](#f-9) | P2 | medium | New radio console has no Form 110 log | console-ui | C9 | M | — | fixed |
 | [I-3](#i-3) | P2 | medium | Becker tone suppression bleeds across bands | instruments | C12 | S | — | fixed |
 | [I-4](#i-4) | P2 | medium | Stored 406 frame falls through to live data | instruments | C12 | S | — | fixed |
@@ -398,8 +398,8 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 - **Files:** `services/exercise/Caddyfile:9-12`, `docker-compose.yml:67`, `docker-compose.yml:105`, `docker-compose.yml:146`, `scripts/firewall.sh:10-14`, `infra/ROUTER.md:24-29`
 - **Problem:** The Caddy container is a single-purpose proxy - reverse_proxy exercise:8700, with tls internal and site names hardcoded to ms01, ms01.local and 192.0.2.151 - existing to give tablets a trusted secure context for microphone access. flightplanner has no TLS front at all and is not in the Caddyfile. Because exercise :8700 and flightplanner :8090 remain published as plaintext HTTP on the LAN, the TLS front is bypassable and the non-Secure session cookie and any header or query-parameter token cross the wire in the clear on the default path. firewall.sh notes that Docker's iptables rules precede ufw's, so ufw does not filter published container ports and the router forward list is the real boundary. There is consequently no one place a user can log in once and reach the console, the mission base view and the planner. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35. INVESTIGATED 2026-09-13: path-mounting the planner behind one hostname is NOT viable without changing the planner first, which is what the identity plan warned about when it said to use a separate subdomain if the planner's URL construction makes path mounting brittle. Measured: services/flightplanner/static/js/app.js issues 13 absolute fetches rooted at / (lines 21, 63, 373, 396, 498, 667, 757, 903, 921, 939, 1057, 1165, 1208 - /api/tile-sources, /api/calculate-route, /api/sar/export-vsar and the rest), and templates/index.html and guide.html carry absolute hrefs (href="/", href="/guide", href="/guide/quickstart"). Mounted under /planner/ every one of those would resolve against the console instead. The exercise console has no such problem.
-- **Fix:** Fixed 2026-09-14 (472d3bb, 655b905). Caddy is the sole participant front door on 443, with port 80 limited to the public CA bootstrap and HTTPS redirects. Exercise 8700 and planner 8090 are no longer published. The planner is prefix-safe at `/planner/` through `ProxyFix`, generated template URLs, local tile URLs and prefixed frontend requests. The authenticated root portal lists applications by role. The AI Pilot engineering deck remains separate. `deploy.sh` now rebuilds local source images and repairs the exercise SQLite bind-mount ownership before restart. X-Plane uses a per-process CA bundle and an HTTPS station config rather than broad system trust.
-- **Done when:** Live on ms01 2026-09-14: cross-machine HTTPS health, CA bootstrap, redirect, roster login, portal, base, planner and prefixed tile-source checks all returned the expected 200/302/308 responses; direct connections to 8700 and 8090 were refused. `scripts/preflight.py` reported ALL PASS for front door, private backends, Mumble channels/ACL, chart source and CA publication. The installed station credential reached `/api/plugin/scenario` over verified HTTPS with the process-local CA bundle. Automated: 93 planner tests + 17 subtests, 38 setup/auth tests + 6 subtests, and 21 radio tests passed; Caddy and Compose configs validated on ms01.
+- **Fix:** Fixed 2026-09-14 (472d3bb, 655b905). Caddy is the sole participant front door on 443, with port 80 limited to the public CA bootstrap and HTTPS redirects. Exercise 8700 and planner 8090 are no longer published. The planner is prefix-safe at /planner/ through ProxyFix, generated template URLs, local tile URLs and prefixed frontend requests. The authenticated root portal lists applications by role. The AI Pilot engineering deck remains separate. deploy.sh now rebuilds local source images and repairs the exercise SQLite bind-mount ownership before restart. X-Plane uses a per-process CA bundle and an HTTPS station config rather than broad system trust.
+- **Done when:** Live on ms01 2026-09-14: cross-machine HTTPS health, CA bootstrap, redirect, roster login, portal, base, planner and prefixed tile-source checks all returned the expected 200/302/308 responses; direct connections to 8700 and 8090 were refused. scripts/preflight.py reported ALL PASS for front door, private backends, Mumble channels/ACL, chart source and CA publication. The installed station credential reached /api/plugin/scenario over verified HTTPS with the process-local CA bundle. Automated: 93 planner tests + 17 subtests, 38 setup/auth tests + 6 subtests, and 21 radio tests passed; Caddy and Compose configs validated on ms01.
 - **Depends on:** X-11, X-12
 
 ### O-2a
@@ -822,12 +822,12 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **No bearing intersection maths despite the README**
 
-`P2` · `medium` · `bug` · Exercise console (frontend) · cluster C8 (Base view & debrief) · effort M · wave 3 · **open**
+`P2` · `medium` · `bug` · Exercise console (frontend) · cluster C8 (Base view & debrief) · effort M · wave 3 · **fixed**
 
-- **Files:** `services/exercise/app/static/base.js:99-102`, `README.md`
+- **Files:** `services/exercise/app/geo.py`, `services/exercise/app/static/base.js`, `tests/test_geodesy.py`, `README.md`
 - **Problem:** Bearings are drawn as flat-earth 40 NM rays (fine at that scale) but nothing computes intersections or a confidence area, although the README advertises 'bearing logging & intersection cuts'. Base staff must eyeball the crossing. Bearing entry also requires typing the callsign rather than picking a reporting aircraft.
-- **Fix:** Compute pairwise intersections and a simple confidence polygon; add a callsign dropdown.
-- **Done when:** Three bearings produce a plotted cut area matching a hand plot.
+- **Fix:** Fixed 2026-09-15. app/geo.py now owns forward great-circle ray intersection and confidence-polygon construction with a 40 NM search cap; the browser derives the same implementation behind a parity test. Mission Base draws the spherical rays, pairwise cuts and a filled confidence area, and replaces free-text bearing callsign entry with a selector populated from reporting aircraft.
+- **Done when:** Tests were added first and failed on the pre-fix tree for the missing shared cut, polygon and browser functions. The written-down three-bearing hand plot crosses at (0.0000, 0.0000), (0.0000, 0.0161) and (-0.0192, 0.0000); Python and the browser's executed JavaScript both reproduce the triangle within 0.0002 degree. Required command: 90 passed, 17 subtests. Not verified: visual plotting in a live browser or the deployed console.
 
 ### F-9
 
