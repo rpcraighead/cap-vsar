@@ -3,6 +3,62 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-15 — L-10, D-5 and A-1 stage 3; and a review that changed the outcome
+
+Three tracker items closed or advanced alongside the console lane, plus the
+review that caught four defects in it before they merged.
+
+**L-10 — planner hygiene (fixed).** `requests` 2.31.0 carried CVE-2024-35195 and
+CVE-2024-47081; pinned to 2.32.5. `gunicorn` and `Werkzeug` were unpinned
+entirely, so the image rebuilt to whatever shipped that day; both pinned past
+their advisories, with Werkzeug held at 3.0.x because Flask 3.0.0 does not
+support 3.1. The container ran as root and now does not. The compose
+healthcheck hit `/`, which renders a template and proves nothing about the
+aviation database — `/api/health` opens it read-only and fails closed at 503
+when it is missing, while an empty database reports `populated: false` and stays
+healthy so first boot is not permanently unhealthy. A `data_source` table
+records what the data actually is: OurAirports, with fetch time and row counts,
+rather than a planner implying an FAA cycle it does not have. `_winds_cache`
+grew without limit because its key carries an hour stamp; bounded at 512.
+
+**D-5 — third-party artwork (advanced, still open).** Nine page extracts
+untracked, the reference document rebuilt against our own redrawn faceplates,
+and — the part that mattered — both tracked artifacts regenerated, because
+fixing only the generator would have left the shipped document unchanged. The
+`.docx` fell 3,391,958 → 1,374,133 bytes and the `.pdf` 1,885,160 → 728,782;
+the old PDF's 1653×2339 images at 285 DPI, which are A4 page scans, are gone.
+The station panel preview no longer composites the stock Sim Innovations MFD
+tile out of an Air Manager installation, and as a side effect now renders on a
+machine with no Air Manager at all.
+
+Found while doing it: **D-4 had never actually landed on main.** The nine vendor
+manuals were still tracked, while `.gitignore` listed them — which does nothing
+for files git already tracks. The untracking exists only on the unmerged
+`fix/claude-console-2026-09-13`. Closed here under the standing D-4 decision. A
+test caught this, not a person; `tests/test_release_boundary.py` now enforces
+the whole boundary. D-5 stays open: no history rewrite, so its own verify
+criterion is unmet until the scrub agreed in D-4 happens before sharing.
+
+**A-1 stage 3 — propeller (advanced, still open).** 79.255 → 78.9998 in, inside
+the TCDS 77.5–79.0 band. A global scale fault was ruled out first: the errors
+run −4.64 to +2.16 percent with differing signs, so the regions are
+independently wrong and a whole-model scale would be the wrong fix. Corrections
+are parametric and version-controlled rather than baked into a mesh, since the
+donor is GPL and stays outside this repository, and the same module is applied
+by both the converter and the measurement harness so that what is measured is
+what is emitted; `--raw` still reproduces the stage-2 baseline. The hub and axis
+are fixed points of the transform, so no animation pivot moved.
+
+**The review.** Reviewing F-8 and F-10 before merge found five defects. The
+algorithmic work was sound — the great-circle intersection maths, the X-9
+session keying, and stopping on F-13 rather than inventing CAP nomenclature.
+Every defect was one shape: console-wide state read where per-instance state was
+required. An airband socket error tore down the tactical net; the transmit gate
+suppressed the other radio's traffic and its log entries; nothing kept the two
+radios on distinct nets, which re-created the symptom X-9 closed. Three are
+fixed; two in `base.js` are queued, because they need a policy decision rather
+than a patch. That failure shape is now named in the lane's own prompt.
+
 ## 2026-09-15 — F-13 stopped: channel mapping is not sourced
 
 F-13 remains open. CAPR 100-1 §§1.9 and 6.13 say the National Programming
