@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 101 items, 7 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 101 items, 5 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -155,7 +155,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [L-5](#l-5) | P2 | medium | Search patterns leave uncovered ground and truncate silently | planner | C10 | M | — | fixed |
 | [L-6](#l-6) | P2 | medium | Performance tables extrapolate silently and ignore tailwind | planner | C10 | M | — | fixed |
 | [L-7](#l-7) | P2 | medium | Flight planner plans a different aircraft than the exercise flies | planner | C10 | M | — | fixed |
-| [L-7a](#l-7a) | P2 | medium | Align simulator loading baseline with selected 182T POH sample | infra | C10 | M | L-7 | open |
+| [L-7a](#l-7a) | P2 | medium | Align simulator loading baseline with selected 182T POH sample | infra | C10 | M | L-7 | resolved |
 | [L-8](#l-8) | P2 | medium | Planner has no offline map path | planner | C6 | M | F-1 | fixed |
 | [L-9](#l-9) | P2 | medium | API returns HTML 500s and misreports push status | planner | C10 | M | — | fixed |
 | [P-6](#p-6) | P2 | medium | 121.5 beacons produce a COSPAS-SARSAT decode | plugin | C3 | S | — | fixed |
@@ -180,7 +180,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [P-11](#p-11) | P2 | medium | Server fallback propagation diverges from the plugin | console-api | C15 | M | — | fixed |
 | [C15-2](#c15-2) | P3 | low | Consolidate five geodesy implementations | console-api | C15 | M | — | fixed |
 | [F-12](#f-12) | P3 | low | APX/EFJ control-head keys are artwork only | console-ui | C9 | M | — | fixed |
-| [F-13](#f-13) | P3 | low | Net names are generic, not CAP nomenclature | console-ui | C9 | S | — | open |
+| [F-13](#f-13) | P3 | low | Net names are generic, not CAP nomenclature | console-ui | C9 | S | — | resolved |
 | [I-12](#i-12) | P3 | low | TDFM Guard is not an independent receiver | instruments | C12 | M | — | fixed |
 | [I-13](#i-13) | P3 | low | TDFM scan is a cosmetic flag | instruments | C12 | S | — | fixed |
 | [I-15](#i-15) | P3 | low | GMA 1347 clearance recorder records nothing | instruments | C12 | M | — | fixed |
@@ -955,12 +955,12 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Align simulator loading baseline with selected 182T POH sample**
 
-`P2` · `medium` · `bug` · Deployment / infrastructure · cluster C10 (Flight planner correctness) · effort M · wave 3 · **open**
+`P2` · `medium` · `bug` · Deployment / infrastructure · cluster C10 (Flight planner correctness) · effort M · wave 3 · **resolved**
 
 - **Files:** `scripts/build_c182t_package.py`
 - **Problem:** The user selected Cessna 182T POH sample values for the planner (1924 lb empty, moment/1000 70.9). The builder still specifies 1970 lb and inherits an X-Plane CG without a verified mapping to the POH firewall datum. Planner and installed simulator loading results therefore cannot yet be assumed to match.
-- **Fix:** Reconcile the builder and simulator loading/CG datum with the selected POH sample baseline, then rebuild/reload and verify in X-Plane. Keep simulation assumptions explicit.
-- **Done when:** At identical fuel/payload, the simulator and planner agree on baseline mass and datum-referenced CG.
+- **Fix:** Reconciled 2026-09-15. Two defects, not one. (1) The builder specified 1,970 lb empty (POH 1.3 standard empty, rounded) while the planner used 1,924 lb (POH Figure 6-3 sample aircraft) - a 46 lb disagreement in every takeoff weight, CG and performance number for identical loading, with the crew reading both. The builder now carries the selected sample baseline. (2) The EMPTY CG was never patched at all: the builder moved _cgZ_fwd/_cgZ_aft to the C182T envelope but left _cgZ at the stock C172SP's 2.900095 (Laminar sets _cgZ to _cgZ_fwd on both stock aircraft checked). It happened to land within 0.15 in of correct - luck, not derivation. _cgZ is now 2.888 ft, derived from the sample's 70.9 moment/1000 via the same %MAC mapping the limits use: arm = 70,900/1,924 = 36.850 in, %MAC = (36.850-25.98)/58.8 = 18.483%, z = 1.994 + 0.18483*4.837. The datum mapping L-7a called unverified already existed and is sound - verified here by reproducing both documented anchors (FS 33.0 -> 2.5715, FS 46.0 -> 3.6409).
+- **Done when:** tests/test_loading_baseline.py, 8 tests, 5 verified failing pre-fix: planner and builder agree on empty weight, empty CG and max weight; the CG is derived rather than inherited (guards the literal 2.900095); the empty CG sits inside the certificated envelope; the forward limit is the most forward scheduled point; and the planner comment no longer claims the builder disagrees. OUTSTANDING: the X-Plane half of the original verify - loading CAP 487 at identical fuel and payload in the sim and confirming it agrees with the planner - has not been run. Marked resolved rather than fixed on that basis.
 - **Depends on:** L-7
 
 ### L-8
@@ -1180,11 +1180,11 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Net names are generic, not CAP nomenclature**
 
-`P3` · `low` · `bug` · Exercise console (frontend) · cluster C9 (Radio console hardening) · effort S · wave 4 · **open**
+`P3` · `low` · `bug` · Exercise console (frontend) · cluster C9 (Radio console hardening) · effort S · wave 4 · **resolved**
 
 - **Files:** `services/exercise/app/radio.py:29-34`
 - **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. Channels read PRIMARY / ALTERNATE / MISSION BASE / BRIEFING. Real heads show zone and channel tags from the fleet plan, and reading them correctly is part of the operator's job. Related to I-11 - the airborne and ground plans should agree.
-- **Fix:** UNKNOWN / stopped 2026-09-15. CAPR 100-1 paragraphs 1.9 and 6.13 confirm that channelization is governed by the National Programming Plan and that the actual codeplugs are distributed through the restricted Communications section of eServices. The public regulation does not list TAC 1, TAC 2, CC 1 or CC 2, and neither the vault nor the repo contains an approved exercise channel card mapping the four Mumble nets to those designators. I-11 contains plausible labels but explicitly says its frequencies are placeholders. No console label was changed because the task contract forbids inventing a mapping. Supply the approved exercise/wing channel card or an authoritative four-net mapping before resuming.
+- **Fix:** WON'T FIX by decision D-6 (2026-09-15), recorded in vault DECISIONS-cap-vsar-2026-09-12.md. The base console's net names stay generic. CAPR 100-1 puts channel names and codeplugs in the restricted NPP and no approved four-net mapping exists in the repo or vault; Codex stopped rather than inventing plausible CAP nomenclature, which was correct. Two reasons the generic names are preferred rather than merely tolerated: a simulator channel name that could be MISTAKEN for a real comms plan risks negative transfer to aircrew, and this repository is bound for a public mirror, which makes restricted channel data a D-5 release-gate question rather than an F-13 one. Follow-up for Ron before that mirror: I-11 already shipped CAP fleet-plan names in instruments/cap-fm-tdfm-136b/logic.lua - check their sourcing.
 - **Done when:** Not verified: no authoritative mapping exists in the available sources, so the item remains open and no implementation or test was attempted.
 
 ### I-12

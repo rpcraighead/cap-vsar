@@ -77,9 +77,28 @@ class WeightAndPowerplantTests(unittest.TestCase):
     """Values already carried by the builder, pinned so they cannot regress."""
 
     def test_weights_match_the_poh(self):
-        # POH 1.3: standard empty 1,968 lb, max takeoff 3,100 lb. The builder
-        # uses 1,970 lb for empty, within the POH's own rounding.
-        self.assertAlmostEqual(patched_value("_m_empty"), 1970.0, places=3)
+        """L-7a changed which POH figure this is, deliberately.
+
+        The POH carries two empty weights and they are different quantities:
+        section 1.3's STANDARD empty weight, 1,968 lb, is the aircraft as built
+        with standard equipment; Figure 6-3's SAMPLE aircraft, 1,924 lb with a
+        moment/1000 of 70.9, is the worked loading example. This assertion used
+        to hold 1,970 lb - section 1.3 rounded - while the flight planner used
+        the sample.
+
+        Ron selected the sample as the shared planning baseline (L-7a). Which
+        of the two is used matters less than that both sides use the SAME one:
+        a 46 lb disagreement moved every takeoff weight, CG and performance
+        number between the planner and the simulator for identical loading, and
+        the crew reads both. tests/test_loading_baseline.py is what now holds
+        them together; this test records which figure was chosen and why.
+
+        Worth knowing if this is ever revisited: the sample aircraft is 44 lb
+        LIGHTER than standard empty, while a CAP airframe carrying DF gear and
+        mission radios would realistically be heavier than standard. The sample
+        is a shared reference point, not a weighing of CAP 487.
+        """
+        self.assertAlmostEqual(patched_value("_m_empty"), 1924.0, places=3)
         self.assertAlmostEqual(patched_value("_m_max"), 3100.0, places=3)
 
     def test_vne_and_vno_match_the_tcds_airspeed_limits(self):

@@ -71,6 +71,52 @@ tests/test_console.py tests/test_radio.py tests/test_geodesy.py -q` — 99 passe
 **Not verified:** the stale option and non-collapsing open selector were not
 exercised against a live 1 Hz state feed in a deployed browser.
 
+## 2026-09-15 — L-7a: one loading baseline; F-13 closed by decision D-6
+
+**L-7a — the planner and the simulator now share a baseline.** Two defects, and
+the second was not in the tracker.
+
+The first was the one L-7a describes: the builder specified 1,970 lb empty while
+the planner used 1,924 lb. Those are two different POH figures, not a typo —
+section 1.3's *standard* empty weight, rounded, versus Figure 6-3's *sample
+aircraft*. Ron selected the sample as the shared planning baseline, so the
+builder now carries it. Which figure is used matters less than that both sides
+use the same one: 46 lb moved every takeoff weight, CG and performance number
+for identical loading, and the crew reads both numbers.
+
+The second was found while checking the first. **The empty CG was never patched
+at all.** The builder moves `_cgZ_fwd` and `_cgZ_aft` to the C182T envelope but
+left `_cgZ` at the stock C172SP's 2.900095 — Laminar sets `_cgZ` to `_cgZ_fwd`
+on both stock aircraft checked. It happened to land within 0.15 in of the right
+answer, which is luck rather than derivation, and luck does not survive the next
+envelope change. `_cgZ` is now 2.888 ft, derived from the sample's 70.9
+moment/1000 through the same %MAC mapping the limits already use.
+
+L-7a's premise that the CG datum mapping was unverified turned out to be stale:
+the mapping exists, placed by %MAC because no consulted source locates the
+firewall in X-Plane's frame, and it is sound — it reproduces both of its own
+documented anchors (FS 33.0 → 2.5715 ft, FS 46.0 → 3.6409 ft).
+
+`tests/test_loading_baseline.py` holds the two sides together, reading the
+planner's `AIRCRAFT_DATABASE` with `ast` rather than importing it — importing
+`services/flightplanner/app.py` shadows the exercise service's `app` *package*
+on `sys.path` and breaks two unrelated test modules when pytest collects the
+directory in one process. Found that the hard way.
+
+Marked **resolved rather than fixed**: the X-Plane half of the original verify —
+loading CAP 487 at identical fuel and payload in the sim and confirming it agrees
+with the planner — has not been run.
+
+**F-13 — closed as won't-fix by decision D-6.** The base console's net names stay
+generic. CAPR 100-1 puts channel names and codeplugs in the restricted NPP and no
+approved mapping exists here; Codex stopped rather than inventing plausible CAP
+nomenclature, which was the right call. Generic names are *preferred* rather than
+merely tolerated: a simulator channel name that could be mistaken for a real
+comms plan risks negative transfer to aircrew, and a repository bound for a
+public mirror makes restricted channel data a D-5 release-gate question. Full
+reasoning in the vault's decisions file. One follow-up for before that mirror:
+I-11 already shipped CAP fleet-plan names in the TDFM memory table.
+
 ## 2026-09-15 — L-10, D-5 and A-1 stage 3; and a review that changed the outcome
 
 Three tracker items closed or advanced alongside the console lane, plus the

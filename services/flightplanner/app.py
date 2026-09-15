@@ -123,8 +123,15 @@ OURAIRPORTS_URLS = {
 # Cessna 182T NAV III GFC 700, 182TIMBUS-01, revision 1 (20 Dec 2007).
 # https://www.aeroelectric.com/Reference_Docs/Cessna/cessna-poh/C182T_2007_NavIII-G1000%2BGFC700_POH-PIM_fromCessna.pdf
 # The user selected the POH SAMPLE aircraft as the simulation planning baseline.
-# Its empty weight/moment are not a measurement of CAP 487. The builder still
-# uses 1970 lb; use 1924 lb in the sim to match this sample loading calculation.
+# Its empty weight/moment are not a measurement of CAP 487 - they are a shared,
+# sourced baseline, which only works if BOTH sides use the same one.
+#
+# L-7a, 2026-09-15: they did not. The builder specified 1,970 lb while this used
+# 1,924 lb, so planner and simulator disagreed by 46 lb on every takeoff weight,
+# CG and performance number for the same loading - and the crew reads both. The
+# builder now carries 1,924 lb and an empty CG derived from the 70.9 moment
+# rather than inherited from the stock C172S. tests/test_loading_baseline.py
+# fails if the two drift apart again; change them together or not at all.
 AIRCRAFT_DATABASE = {
     'CAP 487': {
         'name': 'CAP 487 - Cessna 182T NAV III (POH sample baseline)',
