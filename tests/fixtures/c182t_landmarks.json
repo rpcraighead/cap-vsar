@@ -124,6 +124,20 @@
       ]
     }
   },
+  "corrections_applied": [
+    {
+      "closes": "propeller_diameter",
+      "id": "prop_diameter_to_tcds",
+      "objects": [
+        "Blade1",
+        "Blade2",
+        "Blade3",
+        "FastProp"
+      ],
+      "scale": 0.99678,
+      "vertices": 436
+    }
+  ],
   "donor_archive_sha256": "d81628fff8489af41d312c0e0bc14e1de2ac10a50d6c0c75f937441f81343fbe",
   "donor_commit": "1359d63393c7fc9145953b081d151d93627e791a",
   "known_unconverted": [
@@ -293,6 +307,6 @@
     0.04171709307826831,
     0.9991293894544403
   ],
-  "prop_radius_m": 1.0065381075262296,
+  "prop_radius_m": 1.003297054819995,
   "schema_version": 1
 }

@@ -12,6 +12,7 @@ import json
 import math
 import shutil
 import shlex
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
@@ -610,6 +611,10 @@ def build_flightgear_objects(donor: Path, target_aircraft: Path) -> dict[str, ob
     objects_dir.mkdir(parents=True, exist_ok=True)
     root = AC3DParser((donor / "Models/c182s.ac").read_text(errors="strict")).parse()
     objects = [obj for obj in flatten(root) if obj.kind == "poly" and obj.surfaces]
+    # A-1 stage 3. The same corrections the measurement harness applies, so the
+    # emitted aircraft is the geometry that was accepted, not the raw donor.
+    import c182t_corrections
+    corrections_applied = c182t_corrections.apply_corrections(objects, sys.modules[__name__])
 
     prop_names = {"Blade1", "Blade2", "Blade3", "chrome_spinner"}
     excluded_default = prop_names | {
