@@ -3,6 +3,66 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-15 — Red team of the AI pilot: 13 findings, executable, tracked as AI-9…AI-19
+
+An adversarial review of `services/ai_pilot`, the two yoke-writing scripts, the
+README, the on-disk skill file, and the tracker's account of them — triggered by
+`d7a2563` (taxi authority) and scoped to the subsystem it joins. Full report:
+vault `Projects/cap-vsar/REDTEAM-ai-pilot-2026-09-15.md`.
+
+**Verdict: do not describe this subsystem as fail-closed yet.** The lease-and-
+sequence gate is well built and the taxi policy module is honest about what it
+is. Three promises the documentation and the decision record make are not
+properties of the code:
+
+- **D-3's "human always wins the yoke" is not implemented** (AI-12). The direct
+  backend writes the yoke datarefs at 10 Hz with no override flag, no joystick
+  observation and no takeover hook; a hand on the yoke races the loop. Its own
+  fault path neutralizes but never pauses — and `fly_card_h0.py`, the script
+  flown five times, drives it with **no gate, no lease, no lock and no pause**
+  (AI-13), contradicting the README's "applies exactly as to the autopilot
+  backend".
+- **Pause-on-telemetry-loss lives entirely in a daemon thread** (AI-14). After
+  a fault the gate re-arms on the next `acquire()`; D-3 says it must refuse
+  until restart.
+- **The recorder documents flights that did not happen** (AI-11, P0). In
+  `--live` mode the web deck never subscribes a single dataref, so the FDR
+  writes zeros stamped with the wall clock and the debrief engine grades them
+  as a DF coverage failure. This is V2-7 from the 2026-09-12 review, which —
+  with V2-6, the 49005 port collision (AI-10) — **never reached the tracker**;
+  batch S-0 never ran.
+
+Also: the UDP receiver accepts telemetry from any sender, `0.0.0.0` bound,
+source address discarded — a forged RREF from 127.0.0.2 was accepted (AI-9);
+any local process can seize or drop the aircraft with no credential, on a host
+running three coding agents (AI-15); the taxi coordinator lets `mark_airborne()`
+launder an unauthorized departure from hold-short, and a clarification hold
+plus an outbound route skips return-to-start (AI-16); a `SKILL.md` in a
+`skills/` path still tells a model it may act as Pilot-in-Command with four
+retired mutation tools (AI-17); no SIGTERM handling (AI-18); the advisory
+chat's no-action guard is a word list with no output filter (AI-19).
+
+**Every finding is executable.** `services/ai_pilot/tests/test_redteam.py`
+asserts the promised behaviour under `xfail(strict=True)`: it fails today, the
+suite stays green, and a fix flips it into a permanent regression guard. It
+already happened once — RT-10 (the untracked V2 findings) XPASSed the moment
+the tracker entries landed, and its marker came off in the same commit. Claims
+that were checked and held are plain passing tests under `TestCleared`, so the
+"no finding" verdicts are executable too: the `--live` refusal precedes any
+client, mutation routes really return `GONE` (an earlier grep for the literal
+410 in this review was the reviewer's error), `fly_direct_backend.py` really
+goes through the gate, no legacy writer is reachable from the web deck.
+
+Codex's taxi work was the best-behaved piece reviewed: pure, deterministic,
+sourced, and honest about not being connected to anything. Process note:
+`d7a2563` was committed directly to local `main` rather than left in the
+working tree per the lane rule; it and this commit are unpushed pending Ron.
+
+Suite: 200 → 209 passed (9 new), 26 xfailed, 0 failed. Nothing in
+`services/ai_pilot` was modified; the only repo-side change beyond the test
+file is the tracker ingestion, because an untracked finding is how V2-6 and
+V2-7 survived to today.
+
 ## 2026-09-15 — AI-8 taxi authority and return-to-start foundation
 
 The intended AI Mission Pilot sortie now explicitly ends where it began: taxi

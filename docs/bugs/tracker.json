@@ -2218,6 +2218,234 @@
         "X-11",
         "X-12"
       ]
+    },
+    {
+      "id": "AI-9",
+      "title": "UDP receiver accepts telemetry from any sender (red team RT-1)",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 3,
+      "effort": "M",
+      "component": "infra",
+      "cluster": "C15",
+      "status": "open",
+      "files": [
+        "services/ai_pilot/xplane_udp.py:_listen_loop",
+        "services/ai_pilot/xplane_udp.py:_init_socket"
+      ],
+      "problem": "_listen_loop does `data, _addr = recvfrom()` and never compares _addr with self.host; the socket is bound to 0.0.0.0. Any host on the LAN can inject RREF replies - subscription ids are small sequential integers - and so can keep a stale aircraft looking fresh and in-envelope (defeating pause-on-telemetry-loss) or feed the direct backend false attitude to steer against. Reproduced with a forged packet from 127.0.0.2.",
+      "fix": "Drop datagrams whose source address is not the configured X-Plane host; bind the receive socket to the interface facing X-Plane (127.0.0.1 when local) rather than 0.0.0.0.",
+      "verify": "services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt1_forged_telemetry_from_another_host_is_ignored and the test must pass; it then guards the fix.",
+      "depends_on": []
+    },
+    {
+      "id": "AI-10",
+      "title": "Controller and live deck silently share UDP receive port 49005 (V2-6, red team RT-2)",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 3,
+      "effort": "M",
+      "component": "infra",
+      "cluster": "C15",
+      "status": "open",
+      "files": [
+        "services/ai_pilot/xplane_udp.py:_init_socket",
+        "services/ai_pilot/maneuver_server.py",
+        "services/ai_pilot/web_server.py"
+      ],
+      "problem": "SO_REUSEADDR lets a second XPlaneUDPClient bind the same port; the dynamic-port fallback only runs if bind raises, which REUSEADDR prevents. maneuver_server and `web_server --live` both take the default 49005, so X-Plane's replies reach one of them and the other starves: for the controller that is Stale telemetry -> lease revoked -> sim/operation/pause_on in flight. This is V2-6 from the 2026-09-12 review, never ingested (see AI-9..AI-19 provenance).",
+      "fix": "Remove SO_REUSEADDR; let bind fail and fall back to a dynamic port as the code already intends; give web_server its own default port; the instance lock (AI-13) closes the rest.",
+      "verify": "services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt2_a_second_client_on_the_same_port_falls_back_or_refuses and the test must pass; it then guards the fix.",
+      "depends_on": []
+    },
+    {
+      "id": "AI-11",
+      "title": "FDR records defaults as data and the live deck never subscribes a dataref (V2-7, red team RT-3)",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P0",
+      "wave": 3,
+      "effort": "M",
+      "component": "infra",
+      "cluster": "C15",
+      "status": "open",
+      "files": [
+        "services/ai_pilot/fdr.py:sample_current_frame",
+        "services/ai_pilot/xplane_udp.py:get_dref",
+        "services/ai_pilot/web_server.py:run_web_server",
+        "services/ai_pilot/diagnostics.py:evaluate_frames"
+      ],
+      "problem": "Three defects that compound. (1) get_dref returns a never-invalidated cache with 0.0 defaults, so a dead link records lat 0, lon 0, 0 KIAS, DF power on, 121.500 selected, and stamps sim_time_s with the WALL CLOCK (default=time.time()). (2) run_web_server constructs the client, controller, agent and recorder and none of them ever calls subscribe_dref; in --live mode only legacy DATA packets (indices 3/20, off by default in X-Plane) populate anything, so heading, attitude, AGL, VVI, engine and every cap/df/* dataref are defaults forever. (3) The diagnostic engine then grades the recording as a DF coverage FAIL rather than a dead link, and its duration clamps to 0.0 if a real sim time ever follows a wall-clock frame. The README's 'read telemetry from live X-Plane 12' is speed and position at best, and only if the operator configures a Data Output the README never mentions. HANDOFF-claude-fixes-2026-09-13 called V2-7 'a debrief graded on fabricated telemetry'; that is exactly what this produces.",
+      "fix": "Subscribe every dataref the deck displays and the FDR records; carry per-dataref receive timestamps and record NaN/None past a staleness window; make sim_time_s NaN rather than wall clock; have the engine emit a 'telemetry link not established' finding and refuse to grade when position/DF validity never arrived.",
+      "verify": "services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt3a..test_rt3d and the test must pass; it then guards the fix.",
+      "depends_on": []
+    },
+    {
+      "id": "AI-12",
+      "title": "Direct backend: no human-input arbitration, and its own fault path never pauses (D-3, red team RT-4)",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 3,
+      "effort": "M",
+      "component": "infra",
+      "cluster": "C15",
+      "status": "open",
+      "files": [
+        "services/ai_pilot/direct_backend.py:_run",
+        "services/ai_pilot/direct_backend.py:_step",
+        "services/ai_pilot/direct_backend.py:CONTROL_DREFS"
+      ],
+      "problem": "Decision D-3 says 'Yoke: human always wins.' The backend writes yoke_pitch/roll/heading_ratio at 10 Hz with no sim/operation/override flag, never subscribes sim/joystick/*, and _step has no takeover hook, so a hand on the physical yoke races the loop frame by frame instead of winning; the only takeover is a software release(). Separately, _run's fault path calls _neutralize() and breaks but never pause() - the docstring on _envelope_fault says 'second line of defence: do not rely on the gate noticing first', but the second line stops at centred controls with 0.45 throttle and nobody flying. With the gate present the gate pauses; without it (AI-13) nothing does.",
+      "fix": "Decide the arbitration model (X-Plane override + joystick delta detection, or explicit deadman) and implement it; make the loop's fault path pause when it is the last line of defence.",
+      "verify": "services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt4a and test_rt4b and the test must pass; it then guards the fix.",
+      "depends_on": []
+    },
+    {
+      "id": "AI-13",
+      "title": "fly_card_h0.py flies the yoke with no gate, no lease, no lock and no pause (red team RT-5)",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 3,
+      "effort": "M",
+      "component": "infra",
+      "cluster": "C15",
+      "status": "open",
+      "files": [
+        "scripts/fly_card_h0.py",
+        "scripts/fly_direct_backend.py",
+        "services/ai_pilot/maneuver_server.py"
+      ],
+      "problem": "The README states the direct backend gets 'the control lease, the strictly-increasing sequence, the exercise envelope and capture detection ... exactly as they do to the autopilot backend'. True for fly_direct_backend.py; false for fly_card_h0.py, which constructs XPlaneDirectBackend directly (lines 81-84), never imports ManeuverGate, never calls pause(), and is the script that has been flown five times. Neither yoke-writing script takes /tmp/cap-vsar-maneuver-controller.lock, so 'do not run it at the same time as maneuver_server' is advice: two writers on the same surfaces is reachable.",
+      "fix": "Route the H0 card through ManeuverGate (acquire/submit/tick) like fly_direct_backend.py; have every X-Plane writer take the same flock; pause on fault.",
+      "verify": "services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt5a, test_rt5b, test_rt5c and the test must pass; it then guards the fix.",
+      "depends_on": []
+    },
+    {
+      "id": "AI-14",
+      "title": "ManeuverGate has no liveness coupling to its monitor (D-3, red team RT-6)",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "M",
+      "component": "infra",
+      "cluster": "C15",
+      "status": "open",
+      "files": [
+        "services/ai_pilot/maneuvers.py:ManeuverGate.acquire",
+        "services/ai_pilot/maneuver_server.py:monitor"
+      ],
+      "problem": "D-3: 'monitor death revokes the lease, pauses the sim, refuses new acquire() until restart.' The first two happen; the third does not - after _fault the gate re-arms on the next acquire() with no requirement that anything is ticking. maneuver_server's monitor thread returns on an exception and nothing tells the gate, after which acquire+submit still write to X-Plane and no tick() will ever notice stale or out-of-envelope telemetry. The pause-on-telemetry-loss promise lives entirely in a daemon thread.",
+      "fix": "Give the gate a heartbeat: refuse acquire/submit and self-fault when tick() has not run within max_age_seconds; latch a 'poisoned' state after a fault that only process restart clears.",
+      "verify": "services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt6a and test_rt6b and the test must pass; it then guards the fix.",
+      "depends_on": []
+    },
+    {
+      "id": "AI-15",
+      "title": "Any local process can acquire or revoke aircraft control with no credential (red team RT-7)",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "M",
+      "component": "infra",
+      "cluster": "C15",
+      "status": "open",
+      "files": [
+        "services/ai_pilot/maneuver_server.py:Handler.do_POST"
+      ],
+      "problem": "/api/acquire and /api/takeover ignore their JSON body; the only checks are Content-Type and a same-origin test that non-browser clients never trigger. The README calls the deck 'loopback-only' as if that were a boundary. On the workstation, loopback includes Codex, Gemini and Claude Code running with shell access - any of them can seize or drop the aircraft. test_maneuvers proves the bare POST succeeds and treats it as correct.",
+      "fix": "Require the same locally configured bearer credential the web deck already uses (CAPVSAR_AI_PILOT_TOKEN) on acquire, takeover and maneuver.",
+      "verify": "services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt7_seizing_or_revoking_control_needs_a_credential and the test must pass; it then guards the fix.",
+      "depends_on": []
+    },
+    {
+      "id": "AI-16",
+      "title": "Taxi coordinator launders an unauthorized departure and lets a clarification hold skip return-to-start (red team RT-8)",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "S",
+      "component": "infra",
+      "cluster": "C15",
+      "status": "open",
+      "files": [
+        "services/ai_pilot/taxi.py:mark_airborne",
+        "services/ai_pilot/taxi.py:load_route"
+      ],
+      "problem": "mark_airborne() has no phase check: from HOLDING_SHORT_DEPARTURE with no takeoff authority it succeeds silently and the machine proceeds as a normal flight - the one component whose stated job is that this never happens silently (test_taxi.py itself calls it from PARKED). load_route accepts an OUTBOUND route from HOLDING_FOR_CLARIFICATION regardless of whether the aircraft was mid-RETURN, so reporting uncertainty during the return taxi and loading an outbound route skips the 'sortie ends where it began' rule, which is only enforced on routes that declare themselves RETURN. Scope note, not a defect: the crossing rule trusts the route's own surface labels; a crossing labelled TAXIWAY needs no clearance until AI-8's surface graph exists.",
+      "fix": "mark_airborne must raise or record a violation unless phase is CLEARED_FOR_TAKEOFF; carry a 'return owed' flag from landing until RETURNED_TO_START and refuse OUTBOUND routes while it is set.",
+      "verify": "services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt8a and test_rt8b and the test must pass; it then guards the fix.",
+      "depends_on": [
+        "AI-8"
+      ]
+    },
+    {
+      "id": "AI-17",
+      "title": "Stale skill file asserts PIC authority and four retired mutation tools; README count stale (red team RT-9, RT-12)",
+      "type": "docs",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "S",
+      "component": "infra",
+      "cluster": "C15",
+      "status": "open",
+      "files": [
+        "services/ai_pilot/skills/xplane-pilot/SKILL.md",
+        "services/ai_pilot/agent_bridge.py:export_hermes_skill",
+        "services/ai_pilot/README.md"
+      ],
+      "problem": "The file on disk in a skills/ directory - the path Hermes, Codex, Gemini and Claude Code all discover - tells a model it may 'act as Pilot-in-Command' with execute_checklist, command_flight_phase, set_autopilot and spawn_on_runway, all of which are in RETIRED_MUTATION_TOOLS. export_hermes_skill() writes the correct observation-only text but nothing installs it. Whether Hermes on cainfra02 loads this copy is UNRESOLVED (unreachable from the reviewing host); coding agents working in this tree read it regardless. Also: the README's direct-backend section says '150 across the service'; the suite collects 200 and Codex's own CHANGELOG entry says 200.",
+      "fix": "Replace SKILL.md with the export_hermes_skill() text (or delete it and generate at install); fix the count.",
+      "verify": "services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt9 and test_rt12 and the test must pass; it then guards the fix.",
+      "depends_on": []
+    },
+    {
+      "id": "AI-18",
+      "title": "SIGTERM skips every shutdown safeguard (red team RT-11)",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 3,
+      "effort": "S",
+      "component": "infra",
+      "cluster": "C15",
+      "status": "open",
+      "files": [
+        "services/ai_pilot/maneuver_server.py",
+        "services/ai_pilot/direct_backend.py",
+        "scripts/fly_direct_backend.py",
+        "scripts/fly_card_h0.py"
+      ],
+      "problem": "No signal handler anywhere in the control path. maneuver_server pauses on exit only via finally after KeyboardInterrupt; fly_direct_backend releases only in finally. SIGTERM - what systemd, a supervisor or a tidy-up script sends - runs neither, leaving the autopilot engaged on the last targets or the throttle at whatever the loop last wrote.",
+      "fix": "Install a SIGTERM handler that raises KeyboardInterrupt (or calls the same shutdown path) in every writer.",
+      "verify": "services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt11_a_termination_signal_reaches_the_shutdown_path and the test must pass; it then guards the fix.",
+      "depends_on": []
+    },
+    {
+      "id": "AI-19",
+      "title": "Advisory chat's no-action guard is a keyword list with no output filter (red team RT-13)",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 3,
+      "effort": "S",
+      "component": "infra",
+      "cluster": "C15",
+      "status": "open",
+      "files": [
+        "services/ai_pilot/lightweight_agent.py:handle_user_command"
+      ],
+      "problem": "A fixed tuple of words gates the canned refusal; 'bank left', 'push the nose over', 'add power', 'pull up', 'select FLC', 'set 4500' all reach gemma4:12b, whose 'never claim to move controls' is a prompt instruction. There is no control path, so this is a trust finding: an operator can be told 'Roger, turning left' by an advisor that cannot turn, and the README says replies 'are instructed never to claim aircraft action' as though instructed meant enforced.",
+      "fix": "Filter LLM output for action claims (or prefix every LLM reply with the no-action banner); broaden the intent gate beyond a word list.",
+      "verify": "services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt13_control_language_never_produces_an_action_claim and the test must pass; it then guards the fix.",
+      "depends_on": []
     }
   ]
 }

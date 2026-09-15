@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 102 items, 6 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 113 items, 17 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -10,15 +10,15 @@ IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split ou
 
 | | critical | high | medium | low | total |
 |---|---|---|---|---|---|
-| by severity | 12 | 32 | 38 | 20 | 102 |
+| by severity | 12 | 37 | 42 | 22 | 113 |
 
 | P0 | P1 | P2 | P3 |
 |---|---|---|---|
-| 15 | 32 | 38 | 17 |
+| 16 | 36 | 42 | 19 |
 
 | Component | Items |
 |---|---|
-| Deployment / infrastructure | 19 |
+| Deployment / infrastructure | 30 |
 | Air Manager instruments | 19 |
 | Exercise console (backend) | 17 |
 | Flight planner | 16 |
@@ -40,7 +40,7 @@ _Wave dates track the illustrative calendar in docs/USE_CASE_SAREX_REHEARSAL.md 
 - **Wave 0** (8 items) — Now — make the work safe to do at all.
 - **Wave 1** (11 items) — Before session 1 (base stand-up). Nothing flies; base, planner and comms must work.
 - **Wave 2** (20 items) — Before session 2 (full mission, three aircraft, injected effects).
-- **Wave 3** (42 items) — Before session 3 (dress rehearsal) and the live SAREX.
+- **Wave 3** (53 items) — Before session 3 (dress rehearsal) and the live SAREX.
 - **Wave 4** (21 items) — After the SAREX — architecture, tooling, CalTopo phase 2.
 
 ## Clusters
@@ -63,7 +63,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | C12 | Instrument runtime | I-1, I-2, O-7b, I-10, I-3, I-4, I-5, I-6, I-11, I-14, I-12, I-13, I-15, I-17 | Gemini — instruments/** outright, including the DF heads |
 | C13 | Instrument tooling & shared libs | I-8, I-9a, I-7, I-9c | Gemini — instrument tooling; I-9a Lua harness is its first task |
 | C14 | Contract & documentation truth | D-1, D-2, D-3, D-4, D-5, P-10, I-9b | docs only, safe in parallel |
-| C15 | Service boundaries (architecture) | AI-1, AI-2, AI-3, AI-5, AI-6, AI-8, AI-4, C15-1, P-11, C15-2 | unassigned — after C2 and C7 settle |
+| C15 | Service boundaries (architecture) | AI-11, AI-1, AI-10, AI-12, AI-13, AI-2, AI-3, AI-5, AI-6, AI-8, AI-9, AI-14, AI-15, AI-16, AI-17, AI-4, AI-18, AI-19, C15-1, P-11, C15-2 | unassigned — after C2 and C7 settle |
 | C16 | Aircraft package fidelity | A-1 | Claude — actively correcting the CAP 487 C182 model; visual and flight-model acceptance remain open |
 | C17 | Identity, single sign-on & service front door | AI-7, L-15, X-10, X-11, X-12, X-13, X-14, O-8 | Gemini - console and deck auth; Codex - planner deputy (L-15) |
 
@@ -128,14 +128,23 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | ID | Pri | Sev | Title | Component | Cluster | Effort | Depends on | Status |
 |---|---|---|---|---|---|---|---|---|
 | [A-1](#a-1) | P0 | high | CAP 487 retains the stock C172S airframe geometry and exterior | infra | C16 | L | — | open |
+| [AI-11](#ai-11) | P0 | high | FDR records defaults as data and the live deck never subscribes a dataref (V2-7, red team RT-3) | infra | C15 | M | — | open |
 | [AI-1](#ai-1) | P1 | high | Legacy AI pilot entrypoints bypass maneuver validation | infra | C15 | M | — | fixed |
+| [AI-10](#ai-10) | P1 | high | Controller and live deck silently share UDP receive port 49005 (V2-6, red team RT-2) | infra | C15 | M | — | open |
+| [AI-12](#ai-12) | P1 | high | Direct backend: no human-input arbitration, and its own fault path never pauses (D-3, red team RT-4) | infra | C15 | M | — | open |
+| [AI-13](#ai-13) | P1 | high | fly_card_h0.py flies the yoke with no gate, no lease, no lock and no pause (red team RT-5) | infra | C15 | M | — | open |
 | [AI-2](#ai-2) | P1 | high | Complete live CAP 487 maneuver-controller acceptance | infra | C15 | M | AI-1 | open |
 | [AI-3](#ai-3) | P1 | high | Live RREF comma header discarded by AI pilot receiver | infra | C15 | S | — | fixed |
 | [AI-5](#ai-5) | P1 | high | Live altitude selection does not establish commanded climb | infra | C15 | M | — | fixed |
 | [AI-6](#ai-6) | P1 | high | Controller shutdown pause request does not pause live X-Plane | infra | C15 | M | — | fixed |
 | [AI-8](#ai-8) | P1 | high | Complete full-sortie ArduPlane and FAA-grounded taxi control | infra | C15 | L | AI-1 | open |
+| [AI-9](#ai-9) | P1 | high | UDP receiver accepts telemetry from any sender (red team RT-1) | infra | C15 | M | — | open |
 | [O-5](#o-5) | P1 | high | Mumble server has no per-role ACLs and images float | infra | C5 | M | X-2, O-4 | fixed |
 | [O-7a](#o-7a) | P1 | high | Air Manager seat count for three MO stations unconfirmed | infra | C5 | S | — | resolved |
+| [AI-14](#ai-14) | P2 | medium | ManeuverGate has no liveness coupling to its monitor (D-3, red team RT-6) | infra | C15 | M | — | open |
+| [AI-15](#ai-15) | P2 | medium | Any local process can acquire or revoke aircraft control with no credential (red team RT-7) | infra | C15 | M | — | open |
+| [AI-16](#ai-16) | P2 | medium | Taxi coordinator launders an unauthorized departure and lets a clarification hold skip return-to-start (red team RT-8) | infra | C15 | S | AI-8 | open |
+| [AI-17](#ai-17) | P2 | medium | Stale skill file asserts PIC authority and four retired mutation tools; README count stale (red team RT-9, RT-12) | infra | C15 | S | — | open |
 | [AI-4](#ai-4) | P2 | medium | Installed exercise aircraft predates CAP 487 identity and has prop lever load error | infra | C15 | M | — | open |
 | [D-1](#d-1) | P2 | medium | CHANGELOG entries contradict the code they describe | docs | C14 | S | — | fixed |
 | [D-2](#d-2) | P2 | medium | README and website contradict the code | docs | C14 | M | — | fixed |
@@ -168,6 +177,8 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [F-10](#f-10) | P2 | low | Mission base cannot monitor the airband SAR net | console-ui | C9 | L | — | fixed |
 | [I-11](#i-11) | P2 | low | TDFM memory table is 6 generic channels, not a CAP fleet plan | instruments | C12 | M | — | fixed |
 | [I-14](#i-14) | P2 | low | GMA 1347 ICS isolation and Split COM are lamp-only | instruments | C12 | L | — | fixed |
+| [AI-18](#ai-18) | P3 | low | SIGTERM skips every shutdown safeguard (red team RT-11) | infra | C15 | S | — | open |
+| [AI-19](#ai-19) | P3 | low | Advisory chat's no-action guard is a keyword list with no output filter (red team RT-13) | infra | C15 | S | — | open |
 | [F-11](#f-11) | P3 | low | No operational sidetone on the new radio console | console-ui | C9 | S | — | fixed |
 
 ### Wave 4 — After the SAREX — architecture, tooling, CalTopo phase 2.
@@ -650,6 +661,17 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Fix:** Local prototype implemented 2026-09-11. The builder now requires the pinned HHS81/c182s donor at commit 1359d63393c7fc9145953b081d151d93627e791a, converts its shared C182S/T exterior from AC3D to OBJ8 without Blender, and replaces the stock C172 fuselage, wing, gear, propeller, glass, light and broken-part attachment slots. It generates a CAP 487 texture, animates the primary control surfaces and three-blade propeller from X-Plane datarefs, and embeds the donor GPL text, provenance manifest and local-prototype notice in the generated aircraft. Donor and generated assets remain outside the Apache git tree. The installed package was rebuilt after preserving the prior aircraft beside it as Cessna 182T NAV III.pre-flightgear-20260911-20260911. The public-release alternatives and GPL source/notice gate are recorded in docs/FLIGHTGEAR_C182_GPL_PLAN.md. A-1 remains open because the Plane Maker aerodynamic geometry is still inherited from the C172 and the exterior has not yet passed an X-Plane visual and dimensional acceptance. STAGE 3 STARTED 2026-09-15 (0d6da2a): propeller diameter corrected 79.255 -> 78.9998 in, inside the TCDS 77.5-79.0 band. Checked for a global scale fault first and ruled it out - errors run -4.64 to +2.16 percent with differing signs, so the regions are independently wrong. Corrections are parametric and version-controlled (scripts/c182t_corrections.json) rather than baked into a mesh, because the donor is GPL and stays outside the repo, and the same module is applied by both the converter and the harness so what is measured is what is emitted; --raw still reproduces the stage-2 baseline. The hub and axis are fixed points of the transform, so no animation pivot moved. STAYS OPEN: main_wheel_track (-4.64%) and horizontal_tail_span (+2.16%) untouched, and neither X-Plane visual acceptance nor Plane Maker calibration attempted.
 - **Done when:** Completed: the pinned archive SHA-256 matched d81628fff8489af41d312c0e0bc14e1de2ac10a50d6c0c75f937441f81343fbe; a clean staging and installed build applied 40/40 ACF patches and generated 26,867 structurally valid OBJ8 triangles; all ten stock exterior/crash attachment slots point to the new C182 objects or an intentional blank; the installed main OBJ SHA-256 matches staging; converter and donor-integrity tests pass (5/5); console/radio regression suites pass (90 tests and 17 subtests). Orthographic projections confirm the axes and silhouette. The donor-native overall bounds are about 8.50 m long, 10.91 m span and 3.22 m high, so it is an approximate visual donor rather than the authoritative 8.84 m by 10.97 m by 2.84 m dimensional acceptance master. Outstanding: load it in X-Plane and inspect exterior/cockpit/night views, animation and alignment; resolve the donor dimension differences against a C182T three-view; calibrate Plane Maker body, wing, tail, gear, mass, CG and aerodynamics against the selected POH; and complete the production license route before any redistribution. Stage 1 of the dimensional correction (measurement master) completed 2026-09-11: targets sourced from the FAA-approved 182T NAV III GFC 700 POH (182TPHBUS-00/-01), TCDS 3A13 Rev 66 and Cessna's Dec 2015 Rev C Specification and Description, recorded with page and SHA-256 in docs/C182T_DIMENSION_MASTER.md and scripts/c182t_dimension_master.json. The POH fixes normal ground attitude (nose strut approximately 2 in, wings level), the datum (lower front face of firewall, so the cockpit anchor is FS 0), and the endpoints: length runs spinner apex to rudder trailing edge and the 36 ft 0 in span includes wingtip strobes. Nine items including wing root, hinge-line, tail and individual gear stations are unpublished and are recorded as unknown rather than invented. Preliminary donor deltas under these endpoint rules: span -0.37%, length -3.83%, wheel base -3.64%, track -4.64%, height +8.58%, propeller 79.17 in against a 77.5-79.0 in certificated band; no uniform or per-axis scale reconciles these. The donor's nose wheel contact sits 131 mm below its main-wheel plane, so its height and propeller ground clearance are provisional until the mesh is re-posed. Still outstanding: the stage-2 measurement harness, the regional geometry correction, X-Plane visual acceptance, Plane Maker calibration and the production license route. X-Plane 12 visual acceptance run 2026-09-11: the exterior FAILS. The sim was first found rendering a stale pre-rebuild load (X-Plane loaded the aircraft at 09:50:47, the rebuild wrote at 09:56:11), which mimics the stock 172SP exactly; acceptance runs must issue sim/operation/reload_aircraft first. After reload: cabin reads see-through to the Laminar interior, CAP 487 registration renders mirrored, and a magenta patch appears at the firewall. Ruled out with data: texture alpha (flightgear_c182t.png is 100% opaque), inverted winding (closed convex objects measure 100% outward; a flipped model would read 0%), and interior protrusion (skin half-width 0.635 m vs Laminar cockpit 0.560 m, floor clears seats by 65 mm). Defect found and guarded: bucket selection keys on texture name, so all 37 untextured donor objects of 88 were dropped silently - 28 correctly (ground-service clutter and duplicate LODs) but by accident, and 9 as real gaps (Strobe, NavLight.L/R, NavlightTransp, BeaconOff, and the four Windscreen interior/side parts). Strobe and BeaconOff matter dimensionally: published span is defined with strobes installed and published height is measured to the fin tip. convert_flightgear_c182.py now classifies every donor object via DELIBERATELY_EXCLUDED/KNOWN_UNCONVERTED and assert_all_objects_classified raises on anything uncovered; the guard is a pure function testable without the donor cache (suite now 9 donor-free tests). Behaviour-preserving: all five OBJs rebuild byte-identical. Also confirmed 0 of 40 ACF patches touch wing/body/gear/tail geometry. Still outstanding: the see-through cabin, mirrored registration and magenta firewall patch are unexplained; the 9 unconverted objects are not yet emitted; Plane Maker geometry, dimensional correction and the production license route are untouched. Second X-Plane session 2026-09-11 isolated the fault but did NOT find the cause. Swapping only ACF slot 15: stock fuselage.obj renders the cabin SOLID, our flightgear_c182t.obj renders it see-through with a magenta firewall patch - so the Laminar interior is not overdrawing and the fault is in the converted object. Eliminated against our object, each tested in the sim: texture alpha (rebuilt RGB), object header (stock TEXTURE/TEXTURE_LIT/TEXTURE_NORMAL and GLOBAL_specular 1.0), all ANIM blocks stripped, a single group with one TRIS and no other geometry, glass rebuilt fully opaque, and ACF slot 18 restored to stock wings.obj. Data is clean: 16,081 VT lines with zero NaN/Inf, zero zero-length or non-unit normals, UVs 0.004-0.996, and the cabin skin measures 98.4% outward on the port side. An offline OBJ8 rasteriser (z-buffer, backface cull) renders the same data as a complete solid fuselage with openings only at the window apertures. Correction to the previous note: the glazing change was wrong - Windscreen.Int/.Int.Back/.Side.Left/.Side.Right are interior surfaces (2/320, 2/66, 0/49, 0/49 outward/inward), now in a documented INTERIOR_ONLY set; dropped glazing did NOT cause the see-through cabin. The converter also narrowed KNOWN_UNCONVERTED to five light fixtures (Strobe, NavLight.L/R, NavlightTransp, BeaconOff) and changed create_cap_texture's rotate(180) to FLIP_TOP_BOTTOM, which remains UNVERIFIED because the hardcoded stamp coordinates were never confirmed against a UV island. Process notes: a zero-geometry object in glass slot 19 crashes X-Plane on load; pgrep -x 'X-Plane-x86_64' never matches (comm is 'Main Thread') and a false 'sim is down' reading led to a second instance whose RakNet UDP init failed, requiring a restart. Next unit: hand-write a minimal OBJ8 box at the cabin station and test occlusion offline before touching a live flight. ROOT CAUSE FOUND 2026-09-11: the see-through cabin is a triangle-winding bug. X-Plane winds triangles opposite to the stored vertex normal - Laminar's own objects/fuselage.obj shows 0.0% winding/normal agreement across 752 cabin-side and 212 tailcone faces - while AC3D winds the other way and _build_mesh emitted AC3D's ref order directly, giving 83.8% agreement, so X-Plane culled the near-side skin of every surface. That one fault explains all symptoms: the exposed cabin, the tailcone and cowl still looking solid (you see the inside of the far wall), and the magenta firewall patch (interior showing through culled cowl skin); it also explains why header, texture, alpha, ANIM and grouping all tested negative, since faces were discarded before any of that applied. The earlier offline rasteriser missed it because it culled using the same convention the converter assumed. Fix: _build_mesh emits each triangle's refs reversed while normals stay computed from the original order, moving the cabin band from 82.8% winding-outward / 83.8% agreement to 3.8% / 2.9% against the stock reference's 8.0% / 0.0%. Locked by WindingConventionTests.test_winding_opposes_the_stored_normal (donor-free); converter suite now 10 tests. CAVEAT: verified offline only - the corrected build has not been seen rendering in X-Plane, and one aircraft reload is needed to confirm. Still outstanding regardless: the CAP 487 registration placement (hardcoded UV stamp coordinates, unverified) and the five unconverted light fixtures. CONFIRMED IN X-PLANE 2026-09-11: the winding fix works. A fresh sim start (12:02:37) loaded the corrected objects (installed 11:59:42) and the 12:03:50 capture shows a SOLID cabin, the magenta firewall patch GONE, correctly transparent windows and a proper C182 silhouette - the see-through cabin, magenta patch and exposed interior were all the one winding bug. The offline-only caveat is lifted. Revealed by the fix: the CAP 487 registration is still wrong - on the PORT side it renders mirrored and sits too low, running off the fuselage side into the belly curve. Since the port side is painted by the un-flipped stamp at texel (1590,505), the atlas-band identification was wrong and the FLIP_TOP_BOTTOM change was applied to the wrong stamp; placement and per-side orientation remain unverified. Settle it empirically by stamping a labelled asymmetric test grid across the atlas and reading off which region paints which side, since two attempts to derive it from UV geometry failed. Exterior now confirmed working for geometry, winding, cabin, glass, gear, wing, tail, control surfaces and nav light; still outstanding are the registration and the five unconverted light fixtures, plus the untouched stock-C172 Plane Maker geometry. Flight-model audit 2026-09-11 with correction. The repeated claim that CAP 487 'flies like a C172' is NOT supported: the C172S and C182T share essentially the same wing, and the installed ACF measures 36.20 ft span (+0.56% vs 36 ft 0 in) and 173.04 ft2 area (-0.55% vs 174.0 ft2) on NACA 2412, with mass (1,970/3,100 lb), engine (230 HP, 2,400 RPM, RCP_INJ) and propeller (3 blades, 2,400 design RPM) already correct. '0 of 40 patches touch geometry' is true but misleading about aerodynamic effect. What WAS wrong: control-surface travels were stock C172S values - elevator 20/15 against TCDS 3A13 28/21, rudder 20 against 24, flap full 30 against 38, ailerons already correct at 20/15. Five patches added to ACF_PATCHES (now 45), each verified to match exactly one ACF record, applied, and LIVE-VERIFIED after reload: acf_elev_up 28.0, acf_elev_dn 21.0, acf_rudd_lr 24.0, acf_ail1_up 20.0, acf_ail1_dn 15.0. Added tests/test_c182t_flight_model.py (7 donor-free tests) in its own file to avoid the lane handed to Codex. Still outstanding in the flight model: horizontal tail span 11.20 ft vs the POH's 11 ft 8 in (-4.0%, geometry, untouched); vertical tail has no published target and is recorded unknown; and CG limits cannot be compared until the mapping between ACF z and the Cessna fuselage-station datum is derived - do not compare _cgZ_fwd 2.90/_cgZ_aft 3.90 ft to the TCDS 33.0-46.0 inch range before then. CG envelope corrected 2026-09-11 and the ACF datum blocker resolved. The firewall is still not located in X-Plane's frame and did not need to be: %MAC is datum independent, and TCDS 3A13 gives MAC 58.8 in with the MAC leading edge at FS 25.98 in. That required settling one convention: _wing/0/_part_z is the root QUARTER-CHORD, not the leading edge - a 1.30 ft / 27% MAC difference. Confirmed empirically against the donor mesh (which shares the ACF part frame, itself confirmed by the ACF engine reference at -1.134 m sitting 14 cm aft of the donor prop disc at -1.274 m): predicted vs measured wing LE agree within 11-12 mm at two clean spanwise stations against a 396 mm discriminator, and tip chord measures 3.63 ft vs the ACF's 3.60 ft. Integrating the ACF planform gives MAC 58.04 in vs TCDS 58.8 in (-1.3%), a third independent confirmation - with span +0.56% and area -0.55% - that the C172S-derived wing is already a correct C182T wing. Corrected: _cgZ_fwd 2.900 ft (18.73% MAC) -> 2.571 ft (FS 33.0 in, 11.94% MAC); _cgZ_aft 3.900 ft (39.40% MAC) -> 3.641 ft (FS 46.0 in, 34.05% MAC). The stock aft limit sat 5.35% MAC (~3.1 in) aft of the certificated limit, the stability-reducing direction. LIMITATION: the TCDS forward limit is weight-scheduled and X-Plane takes one value, so the most forward certificated point is used - correct at light weights, permissive at heavy ones; modelling the taper needs a loading-system change. acf/_cgZ left at 2.900 ft as the reference CG, now inside the envelope at 18.73% MAC. LIVE-VERIFIED after reload: X-Plane reports the limits relative to the reference CG, acf_cgZ_fwd -0.1003 m and acf_cgZ_aft +0.2259 m, matching 2.571-2.900 and 3.641-2.900 to the millimetre. ACF_PATCHES now 47; tests/test_c182t_flight_model.py now 11 tests. Flight model still outstanding: horizontal tail span 11.20 ft vs the POH's 11 ft 8 in (-4.0%), and the vertical tail, which has no published target and stays unknown. Stage 2 offline metrology completed 2026-09-11: scripts/measure_c182t.py emits deterministic JSON and side/front/top SVGs using named donor landmarks, strict existing parser, separate structural/rendered bounds and axis-derived propeller disc. Numeric fixture tests run without donor access. Prop diameter 79.255 in fails the 79.0 in hard maximum; main wheel track 102.992 in (-4.64%) and horizontal tail span 143.026 in (+2.16%) fail proposed tolerances. Ground-contact re-posing makes length, height, wheelbase and clearance provisional until the two-inch nose-strut condition is verified. Package span/height acceptance is blocked by unconverted Strobe/BeaconOff. All 9 unknowns and absolute donor FS for all 15 reference stations remain unmeasured; no donor firewall datum is invented. Two fresh donor-only builds plus reports are byte-identical (14 files), fixture replay equals live report, 25 converter/harness tests pass live or 24 pass plus one optional live skip with real cache reads denied. Console/radio 90 passed plus 17 subtests; git diff --check passes. Durable caches and test venv moved under ~/.cache/capvsar/ with strict hashes and compatibility links. See docs/C182T_MEASUREMENT_HARNESS.md. No geometry corrections or simulator actions in this unit. A-1 remains open; prior concurrent flight-model progress is preserved. Horizontal tail span corrected 2026-09-11 (flight-model lane, concurrent with the harness unit): the POH three-view (Fig 1-1 Sheet 1 p.1-3) gives 11 ft 8 in and the ACF had the stock C172S 11.200 ft, so _wing/8 and _wing/9 _semilen_SEG go 5.300 -> 5.53333 ft, giving exactly 3.5560 m; aircraft reloads clean. This is the surface the elevator acts on and the elevator got its certificated 28/21 travel earlier today, so leaving it 4% undersized would have kept pitch authority short by another route. Chords unchanged so per-side area rises 20.70 -> 21.55 ft2 (+4.1%); direction is right but NO source publishes a C182T horizontal tail AREA, so only span is verified and the area is a consequence, not a target. Null result: the ACF's Vs 51 / Vso 41 KIAS already match POH Fig 2-2 airspeed indicator markings exactly (green 51-140, white 41-100) and were not touched. Added docs/C182T_FLIGHT_TEST_CARD.md with sourced POH targets - stall speeds at 3,100 lb for flaps up/20/FULL at both CG limits, 924 FPM sea-level climb, 150 KTAS max, 145 KTAS at 80%/7,000 ft, takeoff and landing distances - each with entry conditions, tolerance and guidance on reading a miss. Point A3 (power-off stall, FULL flap, expect 41 KIAS) is the most diagnostic, since full flap was 30 deg until today and is now the certificated 38. Added scripts/capture_flight_test.py, READ-ONLY telemetry capture (RREF subscriptions only, no DREF writes, no commands) so live control stays reserved for services.ai_pilot.maneuver_server per AI-1/AI-2; smoke-tested against the live sim and it correctly flagged the current 2,782 lb loading against the card's 3,100 lb condition. ACF_PATCHES now 49; tests/test_c182t_flight_model.py now 14 tests. IMPORTANT: every flight-model correction made today is verified STATICALLY ONLY - correct value in the correct ACF record, confirmed by dataref after reload. None is verified in flight. Flight model remaining: the vertical tail (no published target, stays unknown) and the in-flight validation itself, now blocked only on someone flying the card.
 
+### AI-11
+
+**FDR records defaults as data and the live deck never subscribes a dataref (V2-7, red team RT-3)**
+
+`P0` · `high` · `bug` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort M · wave 3 · **open**
+
+- **Files:** `services/ai_pilot/fdr.py:sample_current_frame`, `services/ai_pilot/xplane_udp.py:get_dref`, `services/ai_pilot/web_server.py:run_web_server`, `services/ai_pilot/diagnostics.py:evaluate_frames`
+- **Problem:** Three defects that compound. (1) get_dref returns a never-invalidated cache with 0.0 defaults, so a dead link records lat 0, lon 0, 0 KIAS, DF power on, 121.500 selected, and stamps sim_time_s with the WALL CLOCK (default=time.time()). (2) run_web_server constructs the client, controller, agent and recorder and none of them ever calls subscribe_dref; in --live mode only legacy DATA packets (indices 3/20, off by default in X-Plane) populate anything, so heading, attitude, AGL, VVI, engine and every cap/df/* dataref are defaults forever. (3) The diagnostic engine then grades the recording as a DF coverage FAIL rather than a dead link, and its duration clamps to 0.0 if a real sim time ever follows a wall-clock frame. The README's 'read telemetry from live X-Plane 12' is speed and position at best, and only if the operator configures a Data Output the README never mentions. HANDOFF-claude-fixes-2026-09-13 called V2-7 'a debrief graded on fabricated telemetry'; that is exactly what this produces.
+- **Fix:** Subscribe every dataref the deck displays and the FDR records; carry per-dataref receive timestamps and record NaN/None past a staleness window; make sim_time_s NaN rather than wall clock; have the engine emit a 'telemetry link not established' finding and refuse to grade when position/DF validity never arrived.
+- **Done when:** services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt3a..test_rt3d and the test must pass; it then guards the fix.
+
 ### AI-1
 
 **Legacy AI pilot entrypoints bypass maneuver validation**
@@ -660,6 +682,39 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Problem:** Legacy substring chat matching can execute a negated takeoff instruction and announces a clearance without ATC state. Direct-write web/tool routes bypass the new airborne maneuver gate. The new maneuver_server isolates its controller but cannot exclude unrelated legacy processes from X-Plane.
 - **Fix:** Retire or migrate legacy mutation entrypoints to an explicit authority/phase contract, including control ownership shared by every writer. Do not expose autonomous ground phases until clearance state and command semantics are implemented.
 - **Done when:** Negated and quoted instructions never write controls; all enabled entrypoints honor takeover and one control owner; takeoff cannot manufacture its own clearance.
+
+### AI-10
+
+**Controller and live deck silently share UDP receive port 49005 (V2-6, red team RT-2)**
+
+`P1` · `high` · `bug` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort M · wave 3 · **open**
+
+- **Files:** `services/ai_pilot/xplane_udp.py:_init_socket`, `services/ai_pilot/maneuver_server.py`, `services/ai_pilot/web_server.py`
+- **Problem:** SO_REUSEADDR lets a second XPlaneUDPClient bind the same port; the dynamic-port fallback only runs if bind raises, which REUSEADDR prevents. maneuver_server and `web_server --live` both take the default 49005, so X-Plane's replies reach one of them and the other starves: for the controller that is Stale telemetry -> lease revoked -> sim/operation/pause_on in flight. This is V2-6 from the 2026-09-12 review, never ingested (see AI-9..AI-19 provenance).
+- **Fix:** Remove SO_REUSEADDR; let bind fail and fall back to a dynamic port as the code already intends; give web_server its own default port; the instance lock (AI-13) closes the rest.
+- **Done when:** services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt2_a_second_client_on_the_same_port_falls_back_or_refuses and the test must pass; it then guards the fix.
+
+### AI-12
+
+**Direct backend: no human-input arbitration, and its own fault path never pauses (D-3, red team RT-4)**
+
+`P1` · `high` · `bug` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort M · wave 3 · **open**
+
+- **Files:** `services/ai_pilot/direct_backend.py:_run`, `services/ai_pilot/direct_backend.py:_step`, `services/ai_pilot/direct_backend.py:CONTROL_DREFS`
+- **Problem:** Decision D-3 says 'Yoke: human always wins.' The backend writes yoke_pitch/roll/heading_ratio at 10 Hz with no sim/operation/override flag, never subscribes sim/joystick/*, and _step has no takeover hook, so a hand on the physical yoke races the loop frame by frame instead of winning; the only takeover is a software release(). Separately, _run's fault path calls _neutralize() and breaks but never pause() - the docstring on _envelope_fault says 'second line of defence: do not rely on the gate noticing first', but the second line stops at centred controls with 0.45 throttle and nobody flying. With the gate present the gate pauses; without it (AI-13) nothing does.
+- **Fix:** Decide the arbitration model (X-Plane override + joystick delta detection, or explicit deadman) and implement it; make the loop's fault path pause when it is the last line of defence.
+- **Done when:** services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt4a and test_rt4b and the test must pass; it then guards the fix.
+
+### AI-13
+
+**fly_card_h0.py flies the yoke with no gate, no lease, no lock and no pause (red team RT-5)**
+
+`P1` · `high` · `bug` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort M · wave 3 · **open**
+
+- **Files:** `scripts/fly_card_h0.py`, `scripts/fly_direct_backend.py`, `services/ai_pilot/maneuver_server.py`
+- **Problem:** The README states the direct backend gets 'the control lease, the strictly-increasing sequence, the exercise envelope and capture detection ... exactly as they do to the autopilot backend'. True for fly_direct_backend.py; false for fly_card_h0.py, which constructs XPlaneDirectBackend directly (lines 81-84), never imports ManeuverGate, never calls pause(), and is the script that has been flown five times. Neither yoke-writing script takes /tmp/cap-vsar-maneuver-controller.lock, so 'do not run it at the same time as maneuver_server' is advice: two writers on the same surfaces is reachable.
+- **Fix:** Route the H0 card through ManeuverGate (acquire/submit/tick) like fly_direct_backend.py; have every X-Plane writer take the same flock; pause on fault.
+- **Done when:** services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt5a, test_rt5b, test_rt5c and the test must pass; it then guards the fix.
 
 ### AI-2
 
@@ -718,6 +773,17 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Done when:** A representative towered-airport sortie starts from a named parking position, follows only the cleared taxi route, stops at every unauthorized hold line, never treats taxi instructions as runway-entry authority, completes ArduPlane takeoff/mission/autoland with exclusive control ownership, exits and becomes wholly runway-clear, receives a distinct return taxi clearance, and stops at the recorded starting position. Repeat at an untowered airport with recorded crew traffic checks. Inject stale telemetry, ambiguous routing, loss of clearance state, and an attempted second controller; every case stops safely without guessing. Static policy tests, MAVLink packet-intent tests, SITL trials, and supervised X-Plane 12 acceptance all pass.
 - **Depends on:** AI-1
 
+### AI-9
+
+**UDP receiver accepts telemetry from any sender (red team RT-1)**
+
+`P1` · `high` · `bug` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort M · wave 3 · **open**
+
+- **Files:** `services/ai_pilot/xplane_udp.py:_listen_loop`, `services/ai_pilot/xplane_udp.py:_init_socket`
+- **Problem:** _listen_loop does `data, _addr = recvfrom()` and never compares _addr with self.host; the socket is bound to 0.0.0.0. Any host on the LAN can inject RREF replies - subscription ids are small sequential integers - and so can keep a stale aircraft looking fresh and in-envelope (defeating pause-on-telemetry-loss) or feed the direct backend false attitude to steer against. Reproduced with a forged packet from 127.0.0.2.
+- **Fix:** Drop datagrams whose source address is not the configured X-Plane host; bind the receive socket to the interface facing X-Plane (127.0.0.1 when local) rather than 0.0.0.0.
+- **Done when:** services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt1_forged_telemetry_from_another_host_is_ignored and the test must pass; it then guards the fix.
+
 ### O-5
 
 **Mumble server has no per-role ACLs and images float**
@@ -740,6 +806,51 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Problem:** The containerization entry says to confirm spare AM4 licences against AM4_COMPAT.md, which does not exist. Three MO seats are assumed, not verified — a blocker discovered on exercise day would be expensive.
 - **Fix:** WRONG FINDING, corrected 2026-09-08. docs/AM4_COMPAT.md exists in the canonical repo and records the licence position: spare AM4 licences cover the DF heads and MO COM panel, and it explicitly distinguishes Air Manager from Air Player seats (sold separately) for crew stations that only display. The CHANGELOG citation resolved all along.
 - **Done when:** Three MO stations activate simultaneously in a rehearsal.
+
+### AI-14
+
+**ManeuverGate has no liveness coupling to its monitor (D-3, red team RT-6)**
+
+`P2` · `medium` · `bug` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort M · wave 3 · **open**
+
+- **Files:** `services/ai_pilot/maneuvers.py:ManeuverGate.acquire`, `services/ai_pilot/maneuver_server.py:monitor`
+- **Problem:** D-3: 'monitor death revokes the lease, pauses the sim, refuses new acquire() until restart.' The first two happen; the third does not - after _fault the gate re-arms on the next acquire() with no requirement that anything is ticking. maneuver_server's monitor thread returns on an exception and nothing tells the gate, after which acquire+submit still write to X-Plane and no tick() will ever notice stale or out-of-envelope telemetry. The pause-on-telemetry-loss promise lives entirely in a daemon thread.
+- **Fix:** Give the gate a heartbeat: refuse acquire/submit and self-fault when tick() has not run within max_age_seconds; latch a 'poisoned' state after a fault that only process restart clears.
+- **Done when:** services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt6a and test_rt6b and the test must pass; it then guards the fix.
+
+### AI-15
+
+**Any local process can acquire or revoke aircraft control with no credential (red team RT-7)**
+
+`P2` · `medium` · `bug` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort M · wave 3 · **open**
+
+- **Files:** `services/ai_pilot/maneuver_server.py:Handler.do_POST`
+- **Problem:** /api/acquire and /api/takeover ignore their JSON body; the only checks are Content-Type and a same-origin test that non-browser clients never trigger. The README calls the deck 'loopback-only' as if that were a boundary. On the workstation, loopback includes Codex, Gemini and Claude Code running with shell access - any of them can seize or drop the aircraft. test_maneuvers proves the bare POST succeeds and treats it as correct.
+- **Fix:** Require the same locally configured bearer credential the web deck already uses (CAPVSAR_AI_PILOT_TOKEN) on acquire, takeover and maneuver.
+- **Done when:** services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt7_seizing_or_revoking_control_needs_a_credential and the test must pass; it then guards the fix.
+
+### AI-16
+
+**Taxi coordinator launders an unauthorized departure and lets a clarification hold skip return-to-start (red team RT-8)**
+
+`P2` · `medium` · `bug` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort S · wave 3 · **open**
+
+- **Files:** `services/ai_pilot/taxi.py:mark_airborne`, `services/ai_pilot/taxi.py:load_route`
+- **Problem:** mark_airborne() has no phase check: from HOLDING_SHORT_DEPARTURE with no takeoff authority it succeeds silently and the machine proceeds as a normal flight - the one component whose stated job is that this never happens silently (test_taxi.py itself calls it from PARKED). load_route accepts an OUTBOUND route from HOLDING_FOR_CLARIFICATION regardless of whether the aircraft was mid-RETURN, so reporting uncertainty during the return taxi and loading an outbound route skips the 'sortie ends where it began' rule, which is only enforced on routes that declare themselves RETURN. Scope note, not a defect: the crossing rule trusts the route's own surface labels; a crossing labelled TAXIWAY needs no clearance until AI-8's surface graph exists.
+- **Fix:** mark_airborne must raise or record a violation unless phase is CLEARED_FOR_TAKEOFF; carry a 'return owed' flag from landing until RETURNED_TO_START and refuse OUTBOUND routes while it is set.
+- **Done when:** services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt8a and test_rt8b and the test must pass; it then guards the fix.
+- **Depends on:** AI-8
+
+### AI-17
+
+**Stale skill file asserts PIC authority and four retired mutation tools; README count stale (red team RT-9, RT-12)**
+
+`P2` · `medium` · `docs` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort S · wave 3 · **open**
+
+- **Files:** `services/ai_pilot/skills/xplane-pilot/SKILL.md`, `services/ai_pilot/agent_bridge.py:export_hermes_skill`, `services/ai_pilot/README.md`
+- **Problem:** The file on disk in a skills/ directory - the path Hermes, Codex, Gemini and Claude Code all discover - tells a model it may 'act as Pilot-in-Command' with execute_checklist, command_flight_phase, set_autopilot and spawn_on_runway, all of which are in RETIRED_MUTATION_TOOLS. export_hermes_skill() writes the correct observation-only text but nothing installs it. Whether Hermes on cainfra02 loads this copy is UNRESOLVED (unreachable from the reviewing host); coding agents working in this tree read it regardless. Also: the README's direct-backend section says '150 across the service'; the suite collects 200 and Codex's own CHANGELOG entry says 200.
+- **Fix:** Replace SKILL.md with the export_hermes_skill() text (or delete it and generate at install); fix the count.
+- **Done when:** services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt9 and test_rt12 and the test must pass; it then guards the fix.
 
 ### AI-4
 
@@ -1098,6 +1209,28 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. cap_ics_isolation is written (ALL/PILOT/COPILOT/CREW) and Split COM de-asserts the FM audio and mic variables, but nothing consumes either: every crew member sits in one Mumble channel, so isolation changes a lamp and nothing else. The panel teaches a control that has no effect, which is worse than omitting it.
 - **Fix:** Fixed 2026-09-08. Wired GMA 1347 ICS isolation and Split COM states into published variables and Mumble radio backend. Published cap_ics_isolation, cap_ics_pilot_isolated, cap_ics_copilot_isolated, cap_ics_crew_isolated, and cap_split_com_active in instruments/mo-audio-panel-gma1347/logic.lua. Added ICS REST endpoints and audio filtering in services/exercise/app/radio.py to route pilot/copilot/crew audio isolation and isolate observer on Split COM. Verified in tests/test_am.py and tests/test_radio.py.
 - **Done when:** Selecting PILOT genuinely removes the MO from the crew audio path.
+
+### AI-18
+
+**SIGTERM skips every shutdown safeguard (red team RT-11)**
+
+`P3` · `low` · `bug` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort S · wave 3 · **open**
+
+- **Files:** `services/ai_pilot/maneuver_server.py`, `services/ai_pilot/direct_backend.py`, `scripts/fly_direct_backend.py`, `scripts/fly_card_h0.py`
+- **Problem:** No signal handler anywhere in the control path. maneuver_server pauses on exit only via finally after KeyboardInterrupt; fly_direct_backend releases only in finally. SIGTERM - what systemd, a supervisor or a tidy-up script sends - runs neither, leaving the autopilot engaged on the last targets or the throttle at whatever the loop last wrote.
+- **Fix:** Install a SIGTERM handler that raises KeyboardInterrupt (or calls the same shutdown path) in every writer.
+- **Done when:** services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt11_a_termination_signal_reaches_the_shutdown_path and the test must pass; it then guards the fix.
+
+### AI-19
+
+**Advisory chat's no-action guard is a keyword list with no output filter (red team RT-13)**
+
+`P3` · `low` · `bug` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort S · wave 3 · **open**
+
+- **Files:** `services/ai_pilot/lightweight_agent.py:handle_user_command`
+- **Problem:** A fixed tuple of words gates the canned refusal; 'bank left', 'push the nose over', 'add power', 'pull up', 'select FLC', 'set 4500' all reach gemma4:12b, whose 'never claim to move controls' is a prompt instruction. There is no control path, so this is a trust finding: an operator can be told 'Roger, turning left' by an advisor that cannot turn, and the README says replies 'are instructed never to claim aircraft action' as though instructed meant enforced.
+- **Fix:** Filter LLM output for action claims (or prefix every LLM reply with the no-action banner); broaden the intent gate beyond a word list.
+- **Done when:** services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt13_control_language_never_produces_an_action_claim and the test must pass; it then guards the fix.
 
 ### F-11
 
