@@ -167,8 +167,11 @@ services:
       DATABASE_PATH: /app/data/aviation_data.db
       VSAR_CONSOLE_URL: http://exercise:8700
     healthcheck:
+      # L-10: was '/', which renders a template and proves nothing about the
+      # aviation database. /api/health opens the database read-only and fails
+      # closed when it is missing.
       test: ["CMD", "python", "-c",
-             "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8080/')"]
+             "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8080/api/health')"]
       interval: 30s
       timeout: 5s
       retries: 3
