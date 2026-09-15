@@ -119,6 +119,30 @@ class Profile(unittest.TestCase):
         self.assertLessEqual(corrected_in, 79.0)
         self.assertGreaterEqual(corrected_in, 77.5)
 
+    def test_a_blocked_correction_is_never_applied(self):
+        """Blocked entries carry a ready transform. It must stay inert."""
+        blocked = [c for c in corrections.load_profile()["corrections"]
+                   if c.get("status") == "blocked"]
+        self.assertTrue(blocked, "expected the profile to record blocked work")
+        for c in blocked:
+            # Named objects exist in the donor, so a typo does not hide here
+            # until the day someone flips the status to active.
+            self.assertTrue(c["objects"])
+            stub = [Stub(n, [(1.0, 2.0, 3.0)]) for n in ("Blade1", "Blade2", "Blade3", "FastProp")]
+            before = [tuple(v) for o in stub for v in o.vertices]
+            corrections.apply_corrections(stub, converter, {"corrections": [c]})
+            after = [tuple(v) for o in stub for v in o.vertices]
+            self.assertEqual(before, after, f"{c['id']} moved geometry while blocked")
+
+    def test_every_blocked_correction_says_what_it_is_waiting_for(self):
+        """A blocked item with no stated blocker is indistinguishable from
+        abandoned work, and the next reader will re-derive the analysis."""
+        for c in corrections.load_profile()["corrections"]:
+            if c.get("status") != "blocked":
+                continue
+            for field in ("blocked_on", "rationale", "source"):
+                self.assertTrue(c.get(field), f"{c['id']} missing {field}")
+
     def test_the_spinner_is_deliberately_not_scaled(self):
         """Spinner diameter is not propeller diameter."""
         active = [c for c in corrections.load_profile()["corrections"]
