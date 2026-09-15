@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 101 items, 9 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 101 items, 7 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -167,7 +167,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [F-10](#f-10) | P2 | low | Mission base cannot monitor the airband SAR net | console-ui | C9 | L | — | fixed |
 | [I-11](#i-11) | P2 | low | TDFM memory table is 6 generic channels, not a CAP fleet plan | instruments | C12 | M | — | fixed |
 | [I-14](#i-14) | P2 | low | GMA 1347 ICS isolation and Split COM are lamp-only | instruments | C12 | L | — | fixed |
-| [F-11](#f-11) | P3 | low | No operational sidetone on the new radio console | console-ui | C9 | S | — | open |
+| [F-11](#f-11) | P3 | low | No operational sidetone on the new radio console | console-ui | C9 | S | — | fixed |
 
 ### Wave 4 — After the SAREX — architecture, tooling, CalTopo phase 2.
 
@@ -179,7 +179,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [P-10](#p-10) | P2 | medium | DATAREF_CONTRACT.md does not match what the plugin publishes | docs | C14 | M | — | fixed |
 | [P-11](#p-11) | P2 | medium | Server fallback propagation diverges from the plugin | console-api | C15 | M | — | fixed |
 | [C15-2](#c15-2) | P3 | low | Consolidate five geodesy implementations | console-api | C15 | M | — | fixed |
-| [F-12](#f-12) | P3 | low | APX/EFJ control-head keys are artwork only | console-ui | C9 | M | — | open |
+| [F-12](#f-12) | P3 | low | APX/EFJ control-head keys are artwork only | console-ui | C9 | M | — | fixed |
 | [F-13](#f-13) | P3 | low | Net names are generic, not CAP nomenclature | console-ui | C9 | S | — | open |
 | [I-12](#i-12) | P3 | low | TDFM Guard is not an independent receiver | instruments | C12 | M | — | fixed |
 | [I-13](#i-13) | P3 | low | TDFM scan is a cosmetic flag | instruments | C12 | S | — | fixed |
@@ -826,8 +826,8 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 - **Files:** `services/exercise/app/geo.py`, `services/exercise/app/static/base.js`, `tests/test_geodesy.py`, `README.md`
 - **Problem:** Bearings are drawn as flat-earth 40 NM rays (fine at that scale) but nothing computes intersections or a confidence area, although the README advertises 'bearing logging & intersection cuts'. Base staff must eyeball the crossing. Bearing entry also requires typing the callsign rather than picking a reporting aircraft.
-- **Fix:** Fixed 2026-09-15. app/geo.py now owns forward great-circle ray intersection and confidence-polygon construction with a 40 NM search cap; the browser derives the same implementation behind a parity test. Mission Base draws the spherical rays, pairwise cuts and a filled confidence area, and replaces free-text bearing callsign entry with a selector populated from reporting aircraft.
-- **Done when:** Tests were added first and failed on the pre-fix tree for the missing shared cut, polygon and browser functions. The written-down three-bearing hand plot crosses at (0.0000, 0.0000), (0.0000, 0.0161) and (-0.0192, 0.0000); Python and the browser's executed JavaScript both reproduce the triangle within 0.0002 degree. Required command: 90 passed, 17 subtests. Not verified: visual plotting in a live browser or the deployed console.
+- **Fix:** Fixed 2026-09-15. app/geo.py owns forward great-circle ray intersection and confidence-polygon construction with a 40 NM search cap; the browser derives the same implementation behind a parity test. Mission Base draws the spherical rays, pairwise cuts and a filled confidence area, and replaces free-text bearing callsign entry with a selector populated from reporting aircraft. Review follow-ups preserve the operator's selection across 1 Hz renders, retain and mark a selection stale when its aircraft disappears, and compute the confidence cut from only the three newest bearings per aircraft while keeping the full log visible.
+- **Done when:** Original tests failed first for the missing shared cut, polygon and browser functions. The written-down three-bearing hand plot crosses at (0.0000, 0.0000), (0.0000, 0.0161) and (-0.0192, 0.0000); Python and executed browser JavaScript reproduce it within 0.0002 degree. Two review tests were also written first and failed because the executable policy block did not exist; they now prove an unchanged callsign set does not rebuild the select, a disappeared aircraft remains selected and marked stale, and only the newest three bearings per callsign feed the cut. Required command: 99 passed, 17 subtests. Not verified: live operator interaction in a deployed browser.
 
 ### F-9
 
@@ -1090,12 +1090,12 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **No operational sidetone on the new radio console**
 
-`P3` · `low` · `bug` · Exercise console (frontend) · cluster C9 (Radio console hardening) · effort S · wave 3 · **open**
+`P3` · `low` · `bug` · Exercise console (frontend) · cluster C9 (Radio console hardening) · effort S · wave 3 · **fixed**
 
 - **Files:** `services/exercise/app/static/mission-radio.js:251`
 - **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. The only oscillator is the 660 Hz headset-test beep. There is no talk-permit chirp on channel grant and no squelch tail, so an operator gets no acoustic confirmation that the radio actually keyed. NOTE (corrected 2026-09-10): they DO exist, as methods of the audio class in radio.js (playP25Chirp ~:29, playP25Tail ~:60, playAmSquelchBurst ~:102). An earlier note here said they were absent; that was a grep for standalone functions. This is a port, and the legacy implementations are the reference.
-- **Fix:** Synthesise a talk-permit chirp on grant and a squelch tail on release.
-- **Done when:** Keying produces an audible grant tone before speech is passed.
+- **Fix:** Fixed 2026-09-15. Ported the retired console's P25 permit chirp and tail plus its VHF-AM relay click and squelch burst. Tone choice, output gain and pending grant delay follow the latched transmitter radio, not console-wide selection. The microphone remains disabled until the 115 ms P25 chirp or 15 ms AM click finishes, and release plays the matching tail through that receiver's gain.
+- **Done when:** Two executable Node-backed behavioral tests were written first and failed because the sidetone decision block did not exist. They now prove the exact per-radio grant/release mapping and that the grant sequence places the tone before live microphone audio. Required suite: 101 passed, 17 subtests. Not verified: audible timing through a real headset against the live Mumble service.
 
 ### C15-1
 
@@ -1169,12 +1169,12 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **APX/EFJ control-head keys are artwork only**
 
-`P3` · `low` · `bug` · Exercise console (frontend) · cluster C9 (Radio console hardening) · effort M · wave 4 · **open**
+`P3` · `low` · `bug` · Exercise console (frontend) · cluster C9 (Radio console hardening) · effort M · wave 4 · **fixed**
 
 - **Files:** `services/exercise/app/static/mission-radio.js`
 - **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. SCAN, MON, SQL and EMER appear on the SVG faceplates but have no hit regions in the JS at all - grep finds none of those names. MON (squelch open) is what an operator actually reaches for to pull a marginal signal from an aircraft low in terrain, which is a real trained skill.
-- **Fix:** Add hit regions and behaviour, starting with MON.
-- **Done when:** MON opens the squelch and marginal traffic becomes audible.
+- **Fix:** Fixed 2026-09-15. Added an executable hit region over the EFJohnson faceplate's actual MON artwork; the APX artwork has no MON-labelled key, so no unrelated control was invented. Each receiver owns its own monitor flag. Normal receive audio uses a documented training RMS squelch threshold, while MON bypasses that threshold for the selected receiver only and visibly annunciates MONITOR.
+- **Done when:** Three executable Node-backed behavioral tests were written first and failed because the monitor policy block did not exist. They now prove one receiver's MON toggle does not alter the other, a marginal frame rejected by normal squelch passes with MON open, and the EFJ artwork coordinates produce a MON hit while APX correctly produces none. Required suite: 104 passed, 17 subtests. Not verified: audible marginal traffic through a live Mumble/headset session; the 0.012 RMS value is a training threshold, not calibrated hardware performance.
 
 ### F-13
 

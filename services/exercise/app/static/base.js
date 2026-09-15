@@ -98,6 +98,38 @@ const bearingCallsignChoices = aircraft => [...new Set(aircraft
   .map(a => String(a.callsign || '').trim()).filter(Boolean))].sort();
 // END F-8 PURE GEODESY
 
+// BEGIN F-8 BEARING UI POLICY
+// State ownership:
+// - aircraft is console/sortie state supplied by the live state push;
+// - selected is the operator's in-progress bearing entry and must survive it;
+// - the cut input is derived console state, bounded to the three newest LOBs
+//   per aircraft so coarse early bearings age out while a moving aircraft can
+//   still create a cut by taking bearings from successive positions.
+const MAX_CUT_BEARINGS_PER_CALLSIGN = 3;
+function bearingCallsignModel(aircraft, selectedValue) {
+  const active = [...new Set(aircraft.map(row => String(row.callsign || '').trim())
+    .filter(Boolean))].sort();
+  const prior = String(selectedValue || '').trim();
+  const stale = Boolean(prior && !active.includes(prior));
+  const options = active.map(value => ({value, stale:false}));
+  if(stale) options.push({value:prior, stale:true});
+  return {options, selected:prior || active[0] || '', stale};
+}
+function bearingCallsignNeedsRebuild(renderedOptions, model) {
+  return JSON.stringify(renderedOptions) !== JSON.stringify(model.options);
+}
+function recentBearingsForCut(bearings, maximum=MAX_CUT_BEARINGS_PER_CALLSIGN) {
+  const counts = new Map(), limit = Math.max(1, Number(maximum) || 1);
+  return bearings.filter(row => {
+    const callsign = String(row.callsign || '').trim();
+    const count = counts.get(callsign) || 0;
+    if(count >= limit) return false;
+    counts.set(callsign, count + 1);
+    return true;
+  });
+}
+// END F-8 BEARING UI POLICY
+
 function ensureBearingCallsignSelect() {
   const old = $('brgCallsign');
   if (!old || old.tagName === 'SELECT') return old;
@@ -111,25 +143,34 @@ function ensureBearingCallsignSelect() {
 function syncBearingCallsigns(aircraft) {
   const select = ensureBearingCallsignSelect();
   if (!select) return;
-  const selected = select.value;
-  const choices = bearingCallsignChoices(aircraft);
+  const model = bearingCallsignModel(aircraft, select.value);
+  const rendered = [...select.options].filter(option => option.value).map(option => ({
+    value:option.value, stale:option.dataset.stale === 'true',
+  }));
+  // render() runs every second. Leaving an unchanged select alone keeps an
+  // open dropdown open and preserves the operator's in-progress choice.
+  if(!bearingCallsignNeedsRebuild(rendered, model)) return;
   select.replaceChildren();
   const prompt = document.createElement('option');
   prompt.value = '';
-  prompt.textContent = choices.length ? 'select aircraft' : 'no aircraft reporting';
+  prompt.textContent = model.options.length ? 'select aircraft' : 'no aircraft reporting';
   prompt.disabled = true;
   select.appendChild(prompt);
-  choices.forEach(callsign => {
+  model.options.forEach(({value, stale}) => {
     const option = document.createElement('option');
-    option.value = option.textContent = callsign;
+    option.value = value;
+    option.dataset.stale = String(stale);
+    option.textContent = stale ? `${value} (not currently reporting)` : value;
     select.appendChild(option);
   });
-  select.value = choices.includes(selected) ? selected : (choices[0] || '');
+  select.value = model.selected;
+  select.classList.toggle('stale', model.stale);
+  select.title = model.stale ? 'Selected aircraft is not currently reporting' : '';
 }
 
 function renderBearingCut() {
   bearingCutLayer.clearLayers();
-  const cuts = bearingCutPolygon(bearingLog);
+  const cuts = bearingCutPolygon(recentBearingsForCut(bearingLog));
   cuts.forEach(point => L.circleMarker(point,
     {radius:5, color:'#7a1fa2', weight:2, fillColor:'#fff', fillOpacity:.9})
     .addTo(bearingCutLayer).bindTooltip('pairwise bearing cut'));

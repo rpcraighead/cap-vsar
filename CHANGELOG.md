@@ -3,6 +3,74 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-15 — F-12 per-radio MON / open squelch
+
+The EFJohnson control head's labelled MON key now has a hit region matching its
+actual SVG bounds and toggles open squelch. The APX artwork has no MON-labelled
+key, so no hit region was invented on one of its unrelated controls. The active
+annunciation changes to `MONITOR` and the speaker status states whether MON or
+normal squelch is active.
+
+Monitor state and PCM admission are per-radio. Toggling the displayed tactical
+radio does not alter the airband receiver. Normal reception rejects frames below
+a 0.012 RMS training threshold; MON on that receiver bypasses the threshold and
+passes the marginal frame to its own playback worklet. This threshold is a
+simulation decision, not a calibration claim about EFJohnson hardware.
+
+All three executable Node-backed behavioral tests were written first and failed
+on the pre-fix tree because the monitor policy block did not exist. Command run:
+`PYTHONPATH=. ~/.cache/capvsar/capvsar-planner-venv/bin/python3 -m pytest
+tests/test_console.py tests/test_radio.py tests/test_geodesy.py -q` — 104 passed,
+17 subtests passed.
+
+**Not verified:** marginal traffic was not played through a live Mumble/headset
+session.
+
+## 2026-09-15 — F-11 per-radio grant and release sidetones
+
+Mission Radio now ports the retired console's radio-specific sidetones. The
+tactical P25 receiver uses its three-tone permit chirp and carrier tail; the
+VHF-AM receiver uses its relay click and squelch burst. The PTT selection is an
+operator interaction latched at the start of the press. Tone output, playback
+clearing and the pending grant timer are per-radio state, so changing the UI
+selection cannot move a tone to the other receiver during a transmission.
+
+The server's grant starts the tone first and keeps microphone capture disabled
+until its 115 ms P25 or 15 ms AM duration has elapsed. Releasing early cancels
+that receiver's pending timer, leaves the microphone closed and plays its
+matching release tail.
+
+Both executable Node-backed behavioral tests were written first and failed on
+the pre-fix tree because the sidetone decision block did not exist. Command run:
+`PYTHONPATH=. ~/.cache/capvsar/capvsar-planner-venv/bin/python3 -m pytest
+tests/test_console.py tests/test_radio.py tests/test_geodesy.py -q` — 101 passed,
+17 subtests passed.
+
+**Not verified:** audible timing through a real headset against the live Mumble
+service.
+
+## 2026-09-15 — F-8 review follow-ups
+
+Mission Base no longer rebuilds the bearing callsign selector on every 1 Hz
+state push. The live callsign set is console state, while the selected callsign
+is an operator's in-progress interaction: an unchanged set leaves the DOM
+control alone, and a selected aircraft that disappears remains selected with a
+visible stale label instead of silently changing the bearing's attribution.
+
+The full bearing log remains sortie state and stays visible. The confidence cut
+now uses only the three newest bearings per aircraft. That bounded policy keeps
+enough observations for one moving aircraft to triangulate while allowing early
+coarse LOBs to age out as later observations improve the cut.
+
+Both executable Node-backed behavioral tests were written first and failed on
+the pre-fix tree because the policy block did not exist. Command run:
+`PYTHONPATH=. ~/.cache/capvsar/capvsar-planner-venv/bin/python3 -m pytest
+tests/test_console.py tests/test_radio.py tests/test_geodesy.py -q` — 99 passed,
+17 subtests passed.
+
+**Not verified:** the stale option and non-collapsing open selector were not
+exercised against a live 1 Hz state feed in a deployed browser.
+
 ## 2026-09-15 — L-10, D-5 and A-1 stage 3; and a review that changed the outcome
 
 Three tracker items closed or advanced alongside the console lane, plus the

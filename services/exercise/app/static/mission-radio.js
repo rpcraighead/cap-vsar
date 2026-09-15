@@ -7,11 +7,13 @@ const state = {
   started: 0, lastPong: 0, lastRx: 0, channels: [], config: null, timeout: null,
   wantOnline: false, reconnectTimer: null, reconnectAttempt: 0,
   txStarted: 0, txReceiver: 'main', lastLogged: null, rxLogTimer: null,
+  toneTimer: null, monitor: false,
 };
 const airband = {
   online: false, joining: false, tuning: false, epoch: 0, ws: null,
   playback: null, gain: null, lastPong: 0, lastRx: 0,
   timeout: null, lastLogged: null, rxLogTimer: null, retryTimer: null,
+  toneTimer: null, monitor: false,
 };
 
 // BEGIN F-10 PURE RADIO MIX
@@ -43,15 +45,58 @@ function distinctNetResolution(mainId, airbandId, channelIds, changed) {
                             : {radio: 'main', net: free};
 }
 // END F-10 PURE RADIO MIX
+
+// BEGIN F-11 PURE SIDETONE PLAN
+// The selected transmitter is latched when PTT starts. Tone selection is a
+// per-radio decision: the tactical radio is P25; the airband radio is VHF-AM.
+function transmitTonePlan(receiver, transition) {
+  const airband = receiver === 'airband';
+  if(transition === 'grant') return airband
+    ? {tone:'am-click', speechDelayMs:15}
+    : {tone:'p25-chirp', speechDelayMs:115};
+  return airband
+    ? {tone:'am-squelch-burst', speechDelayMs:0}
+    : {tone:'p25-tail', speechDelayMs:0};
+}
+function transmitGrantSequence(receiver) {
+  const plan = transmitTonePlan(receiver, 'grant');
+  return [
+    {action:'tone', tone:plan.tone, atMs:0},
+    {action:'speech', atMs:plan.speechDelayMs},
+  ];
+}
+// END F-11 PURE SIDETONE PLAN
+
+// BEGIN F-12 PURE MONITOR POLICY
+// This is a training threshold rather than a hardware calibration. MON bypasses
+// it for one receiver only; it never changes the other radio's squelch state.
+const SQUELCH_RMS_THRESHOLD = .012;
+function monitorStatesAfterToggle(current, receiver) {
+  return {
+    main:receiver==='main'?!current.main:current.main,
+    airband:receiver==='airband'?!current.airband:current.airband,
+  };
+}
+function squelchPasses(monitorOpen, rms, threshold=SQUELCH_RMS_THRESHOLD) {
+  return Boolean(monitorOpen)||Number(rms)>=threshold;
+}
+function controlHeadMonitorHit(model) {
+  // The EFJ artwork labels this exact 94x50 key MON. The APX faceplate has no
+  // MON-labelled control, so do not invent a hit region on an unrelated key.
+  return model==='efj5300' ? ['Monitor / open squelch',489,32,94,50,'mon'] : null;
+}
+// END F-12 PURE MONITOR POLICY
 const models = {
   apx4500: {className:'apx', title:'Motorola APX 4500 O2 control head', caption:'APX 4500 / O2 CONTROL HEAD',
     hits:[['Power / connect or disconnect',87,48,58,58,'power'],['Previous net',558,65,50,55,'prev'],
       ['Next net',558,127,50,55,'next'],['Home net',561,260,44,44,'home'],
       ['Choose mission net',199,244,76,52,'net'],['Next net',283,244,76,52,'next'],
       ['Adjust headset volume',367,244,76,52,'volume'],['Home net',451,244,76,52,'home'],
-      ['Headset volume knob: arrow keys or wheel',783,193,110,110,'knob']]},
+      ['Headset volume knob: arrow keys or wheel',783,193,110,110,'knob'],
+      ...[controlHeadMonitorHit('apx4500')].filter(Boolean)]},
   efj5300: {className:'efj',title:'EFJohnson 5300 mobile/base control head',caption:'EFJOHNSON 5300 / MOBILE-BASE CONTROL HEAD',
     hits:[['Choose mission net',180,32,94,50,'net'],['Home net',592,32,94,50,'home'],
+      controlHeadMonitorHit('efj5300'),
       ['Power / connect or disconnect',284,216,84,84,'power'],
       ['Next net: arrow keys or wheel',569,216,84,84,'channel']]},
 };
@@ -193,6 +238,7 @@ function render() {
   $('signalDot').classList.toggle('tx',state.tx);
   $('connectionState').textContent=state.tx?'Transmitting':state.tuning?'Tuning radio…':state.online?'Listening on the net':state.joining?'Connecting to mission voice…':'Radio disconnected';
   $('screenState').textContent=state.tx?'TRANSMIT':state.tuning?'TUNING':state.online?'RECEIVE':'OFFLINE';
+  if(state.monitor&&state.online&&!state.tx&&!state.tuning)$('screenState').textContent='MONITOR';
   $('screenNet').textContent=channel()?.label || 'PRIMARY';
   $('screenCall').textContent=$('callsign').value || 'MISSION BASE';
   if (!state.online) { $('speaker').textContent='Join the net to listen.'; $('instrument').classList.remove('receiving'); $('rxMeter').style.width='0%'; }
@@ -202,6 +248,8 @@ function render() {
     $('txMain').disabled=!state.online;
     $('txAirband').disabled=!airband.online;
   }
+  const monitorButton=document.querySelector('#hitRegions .hit[data-action="mon"]');
+  if(monitorButton){monitorButton.setAttribute('aria-pressed',String(state.monitor));monitorButton.title=state.monitor?'Monitor open — close squelch':'Monitor / open squelch';}
 }
 function setModel(model) {
   releaseAll(); state.model=model; const config=models[model];
@@ -213,6 +261,7 @@ function setModel(model) {
   $('modelCaption').textContent=config.caption; $('hitRegions').replaceChildren();
   for (const [label,x,y,w,h,action] of config.hits) {
     const button=document.createElement('button'); button.type='button'; button.className='hit';
+    button.dataset.action=action;
     button.setAttribute('aria-label',label); button.title=label;
     Object.assign(button.style,{left:`${x/9.6}%`,top:`${y/3.4}%`,width:`${w/9.6}%`,height:`${h/3.4}%`});
     button.addEventListener('click',()=>{
@@ -222,6 +271,7 @@ function setModel(model) {
       if(action==='home') { $('netSelect').value='primary'; tune(); }
       if(action==='net') { $('netSelect').focus(); try{$('netSelect').showPicker();}catch{} }
       if(action==='volume'||action==='knob') $('volume').focus();
+      if(action==='mon') toggleMonitor('main');
     });
     if(action==='knob'||action==='channel') {
       button.addEventListener('wheel',e=>{e.preventDefault(); adjust(action,e.deltaY<0?1:-1);},{passive:false});
@@ -282,8 +332,70 @@ function updateVolume() {
   if(state.gain) state.gain.gain.setTargetAtTime(levels.main,state.context.currentTime,.02);
   if(airband.gain) airband.gain.gain.setTargetAtTime(levels.airband,state.context.currentTime,.02);
 }
+function toggleMonitor(receiver) {
+  const radioState=receiver==='airband'?airband:state;
+  if(!radioState.online)return;
+  const next=monitorStatesAfterToggle({main:state.monitor,airband:airband.monitor},receiver);
+  state.monitor=next.main;airband.monitor=next.airband;
+  const speaker=$(receiver==='airband'?'airbandSpeaker':'speaker');
+  speaker.textContent=radioState.monitor?'MON open — all signal levels audible.':'Squelch restored.';
+  render();
+}
+
+// F-11 ports the legacy console's Web Audio tones. Each tone connects through
+// the keyed radio's own gain, so radio selection and volume remain per-radio.
+function toneDestination(receiver) {
+  return (receiver==='airband'?airband.gain:state.gain)||state.context.destination;
+}
+function playP25Chirp(receiver='main') {
+  const now=state.context.currentTime, destination=toneDestination(receiver);
+  let at=now;
+  for(const item of [{freq:941,dur:.035},{freq:1336,dur:.035},{freq:1209,dur:.045}]) {
+    const oscillator=state.context.createOscillator(), gain=state.context.createGain();
+    oscillator.type='sine';oscillator.frequency.setValueAtTime(item.freq,at);
+    gain.gain.setValueAtTime(.001,at);gain.gain.linearRampToValueAtTime(.18,at+.005);
+    gain.gain.exponentialRampToValueAtTime(.001,at+item.dur);
+    oscillator.connect(gain);gain.connect(destination);oscillator.start(at);oscillator.stop(at+item.dur);
+    oscillator.onended=()=>{oscillator.disconnect();gain.disconnect();};
+    at+=item.dur;
+  }
+}
+function playP25Tail(receiver='main') {
+  const now=state.context.currentTime, oscillator=state.context.createOscillator(), gain=state.context.createGain();
+  oscillator.type='sawtooth';oscillator.frequency.setValueAtTime(120,now);
+  oscillator.frequency.exponentialRampToValueAtTime(40,now+.04);
+  gain.gain.setValueAtTime(.2,now);gain.gain.exponentialRampToValueAtTime(.001,now+.04);
+  oscillator.connect(gain);gain.connect(toneDestination(receiver));oscillator.start(now);oscillator.stop(now+.04);
+  oscillator.onended=()=>{oscillator.disconnect();gain.disconnect();};
+}
+function playAmClick(receiver='airband') {
+  const now=state.context.currentTime, oscillator=state.context.createOscillator(), gain=state.context.createGain();
+  oscillator.type='triangle';oscillator.frequency.setValueAtTime(800,now);
+  oscillator.frequency.exponentialRampToValueAtTime(200,now+.015);
+  gain.gain.setValueAtTime(.25,now);gain.gain.exponentialRampToValueAtTime(.001,now+.015);
+  oscillator.connect(gain);gain.connect(toneDestination(receiver));oscillator.start(now);oscillator.stop(now+.015);
+  oscillator.onended=()=>{oscillator.disconnect();gain.disconnect();};
+}
+function playAmSquelchBurst(receiver='airband') {
+  const now=state.context.currentTime, length=Math.floor(state.context.sampleRate*.09);
+  const buffer=state.context.createBuffer(1,length,state.context.sampleRate), samples=buffer.getChannelData(0);
+  for(let i=0;i<length;i++) samples[i]=Math.random()*2-1;
+  const noise=state.context.createBufferSource(), filter=state.context.createBiquadFilter(), gain=state.context.createGain();
+  noise.buffer=buffer;filter.type='bandpass';filter.frequency.setValueAtTime(1400,now);filter.Q.setValueAtTime(1.5,now);
+  gain.gain.setValueAtTime(.22,now);gain.gain.exponentialRampToValueAtTime(.001,now+.09);
+  noise.connect(filter);filter.connect(gain);gain.connect(toneDestination(receiver));noise.start(now);noise.stop(now+.09);
+  noise.onended=()=>{noise.disconnect();filter.disconnect();gain.disconnect();};
+}
+function playTransmitTone(receiver, transition) {
+  const tone=transmitTonePlan(receiver,transition).tone;
+  if(tone==='p25-chirp')playP25Chirp(receiver);
+  if(tone==='p25-tail')playP25Tail(receiver);
+  if(tone==='am-click')playAmClick(receiver);
+  if(tone==='am-squelch-burst')playAmSquelchBurst(receiver);
+}
 function silenceMic() {
   if(state.tx) $('speaker').textContent='Listening for traffic.';
+  for(const radioState of [state,airband]) {clearTimeout(radioState.toneTimer);radioState.toneTimer=null;}
   state.capture?.port.postMessage({active:false});
   state.stream?.getAudioTracks().forEach(track=>{track.enabled=false;});
   state.tx=false; clearTimeout(state.timeout); state.timeout=null;
@@ -298,7 +410,9 @@ function releaseAll(message='') {
     if(seconds>=0.5) logEntry({from:($('callsign').value||'MISSION BASE').trim(),
                                to:'NET', net:txChannel?.name, outgoing:true, seconds});
   }
+  const wasTransmitting=state.tx, receiver=state.txReceiver;
   state.held.clear(); silenceMic();
+  if(wasTransmitting)playTransmitTone(receiver,'release');
   state.request=(state.request+1)%2147483647;
   sendRadio(state.txReceiver,{action:'ptt',active:false,request:state.request});
   if(message) notice(message);
@@ -504,13 +618,18 @@ function receive(data,receiver='main') {
     if(!radioState.online||radioState.tuning||data.byteLength<10||data.byteLength%2) return;
     const header=new DataView(data), epoch=header.getUint32(0,true), speaker=header.getUint32(4,true);
     if(epoch!==radioState.epoch) return;
-    const pcm=data.slice(8);radioState.playback.port.postMessage({speaker,pcm},[pcm]);
     let energy=0; for(let i=8;i<data.byteLength;i+=2){const sample=header.getInt16(i,true)/32768;energy+=sample*sample;}
+    const rms=Math.sqrt(energy/((data.byteLength-8)/2));
+    radioState.lastRx=Date.now();
+    if(!squelchPasses(radioState.monitor,rms)) {
+      if(receiver==='main'){$('rxMeter').style.width=`${Math.min(100,rms*260)}%`;$('instrument').classList.remove('receiving');}
+      return;
+    }
+    const pcm=data.slice(8);radioState.playback.port.postMessage({speaker,pcm},[pcm]);
     if(receiver==='main') {
-      $('rxMeter').style.width=`${Math.min(100,Math.sqrt(energy/((data.byteLength-8)/2))*260)}%`;
+      $('rxMeter').style.width=`${Math.min(100,rms*260)}%`;
       $('instrument').classList.add('receiving');
     }
-    radioState.lastRx=Date.now();
     return;
   }
   let message; try{message=JSON.parse(data);}catch{disconnect();notice('Invalid response from the voice server.');return;}
@@ -528,13 +647,21 @@ function receive(data,receiver='main') {
     render();
   } else if(message.type==='ptt') {
     if(message.active) {
-      if(!state.held.size||message.request!==state.request||!radioState.online||radioState.tuning){sendRadio(receiver,{action:'ptt',active:false,request:state.request});return;}
+      if(!state.held.size||message.request!==state.request||receiver!==state.txReceiver||!radioState.online||radioState.tuning){sendRadio(receiver,{action:'ptt',active:false,request:state.request});return;}
       state.tx=true;state.started=Date.now();radioState.playback.port.postMessage({clear:true});
-      state.stream?.getAudioTracks().forEach(track=>{track.enabled=true;});
-      state.capture.port.postMessage({active:true});
+      const plan=transmitTonePlan(receiver,'grant');playTransmitTone(receiver,'grant');
+      clearTimeout(radioState.toneTimer);
+      radioState.toneTimer=setTimeout(()=>{
+        radioState.toneTimer=null;
+        if(!state.tx||!state.held.size||state.txReceiver!==receiver||message.request!==state.request)return;
+        state.stream?.getAudioTracks().forEach(track=>{track.enabled=true;});
+        state.capture.port.postMessage({active:true});
+      },plan.speechDelayMs);
       clearTimeout(state.timeout);state.timeout=setTimeout(()=>releaseAll('60-second transmit limit reached. Release PTT before speaking again.'),60000);
     } else if(message.request===state.request) {
-      silenceMic();state.held.clear();if(message.reason)notice(message.reason);
+      const wasTransmitting=state.tx, owner=state.txReceiver;
+      silenceMic();state.held.clear();if(wasTransmitting)playTransmitTone(owner,'release');
+      if(message.reason)notice(message.reason);
     }
     render();
   } else if(message.type==='rx' && !rxIsSuppressed(state.tx,state.txReceiver,receiver)) {

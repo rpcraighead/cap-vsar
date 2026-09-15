@@ -1031,5 +1031,57 @@ class ServerStringsAreEscaped(unittest.TestCase):
                 self.assertNotEqual([], self._unescaped(src.replace(original, reverted)))
 
 
+class BearingInteractionPolicy(unittest.TestCase):
+    """F-8 review: execute the browser's state decisions under Node."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.source = (Path(__file__).resolve().parents[1] /
+                      "services/exercise/app/static/base.js").read_text()
+
+    def run_policy(self, expression):
+        import subprocess
+        start = self.source.index("// BEGIN F-8 BEARING UI POLICY")
+        end = self.source.index("// END F-8 BEARING UI POLICY")
+        script = self.source[start:end] + \
+            f"\nconsole.log(JSON.stringify({expression}));"
+        result = subprocess.run(["node", "-e", script], capture_output=True,
+                                text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout)
+
+    def test_callsign_refresh_preserves_the_operator_selection(self):
+        current = self.run_policy(
+            "(() => { const m=bearingCallsignModel("
+            "[{callsign:'CAP-2'},{callsign:'CAP-1'}],'CAP-2');"
+            "return {model:m,rebuild:bearingCallsignNeedsRebuild("
+            "[{value:'CAP-1',stale:false},{value:'CAP-2',stale:false}],m)}; })()")
+        self.assertEqual(current["model"]["selected"], "CAP-2")
+        self.assertFalse(current["model"]["stale"])
+        self.assertFalse(current["rebuild"],
+                         "an unchanged callsign set would collapse an open selector")
+
+        stale = self.run_policy(
+            "bearingCallsignModel([{callsign:'CAP-1'}],'CAP-2')")
+        self.assertEqual(stale["selected"], "CAP-2")
+        self.assertTrue(stale["stale"])
+        self.assertEqual(stale["options"], [
+            {"value": "CAP-1", "stale": False},
+            {"value": "CAP-2", "stale": True},
+        ])
+
+    def test_confidence_cut_uses_only_three_latest_bearings_per_aircraft(self):
+        rows = "[" + ",".join(
+            f"{{callsign:'{callsign}',bearing_true:{bearing}}}"
+            for callsign, bearing in (
+                ("A", 40), ("A", 30), ("A", 20), ("A", 10),
+                ("B", 60), ("B", 50),
+            )) + "]"
+        result = self.run_policy(
+            f"recentBearingsForCut({rows}).map(x=>[x.callsign,x.bearing_true])")
+        self.assertEqual(result, [["A", 40], ["A", 30], ["A", 20],
+                                  ["B", 60], ["B", 50]])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

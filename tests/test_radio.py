@@ -442,3 +442,84 @@ def test_the_two_radios_are_never_left_on_the_same_net():
     assert _run_js("distinctNetResolution('only','only',['only'],'main')") == {
         'radio': 'airband', 'net': 'only'}
     assert _run_js("distinctNetResolution('','',[],'main')") is None
+
+
+# --------------------------------------------------------------------- F-11
+
+def _sidetone_block():
+    source = RADIO_JS.read_text()
+    start = source.index('// BEGIN F-11 PURE SIDETONE PLAN')
+    end = source.index('// END F-11 PURE SIDETONE PLAN')
+    return source[start:end]
+
+
+def _run_sidetone_js(expression):
+    import json
+    import subprocess
+    script = _sidetone_block() + f'\nconsole.log(JSON.stringify({expression}));'
+    result = subprocess.run(['node', '-e', script], text=True,
+                            capture_output=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
+def test_each_radio_uses_its_own_grant_and_release_tones():
+    assert _run_sidetone_js("transmitTonePlan('main','grant')") == {
+        'tone': 'p25-chirp', 'speechDelayMs': 115}
+    assert _run_sidetone_js("transmitTonePlan('main','release')") == {
+        'tone': 'p25-tail', 'speechDelayMs': 0}
+    assert _run_sidetone_js("transmitTonePlan('airband','grant')") == {
+        'tone': 'am-click', 'speechDelayMs': 15}
+    assert _run_sidetone_js("transmitTonePlan('airband','release')") == {
+        'tone': 'am-squelch-burst', 'speechDelayMs': 0}
+
+
+def test_grant_plan_puts_the_tone_before_live_microphone_audio():
+    assert _run_sidetone_js("transmitGrantSequence('main')") == [
+        {'action': 'tone', 'tone': 'p25-chirp', 'atMs': 0},
+        {'action': 'speech', 'atMs': 115},
+    ]
+    assert _run_sidetone_js("transmitGrantSequence('airband')") == [
+        {'action': 'tone', 'tone': 'am-click', 'atMs': 0},
+        {'action': 'speech', 'atMs': 15},
+    ]
+
+
+# --------------------------------------------------------------------- F-12
+
+def _monitor_block():
+    source = RADIO_JS.read_text()
+    start = source.index('// BEGIN F-12 PURE MONITOR POLICY')
+    end = source.index('// END F-12 PURE MONITOR POLICY')
+    return source[start:end]
+
+
+def _run_monitor_js(expression):
+    import json
+    import subprocess
+    script = _monitor_block() + f'\nconsole.log(JSON.stringify({expression}));'
+    result = subprocess.run(['node', '-e', script], text=True,
+                            capture_output=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
+def test_mon_toggle_changes_only_the_selected_radio():
+    assert _run_monitor_js(
+        "monitorStatesAfterToggle({main:false,airband:false},'main')") == {
+            'main': True, 'airband': False}
+    assert _run_monitor_js(
+        "monitorStatesAfterToggle({main:true,airband:false},'airband')") == {
+            'main': True, 'airband': True}
+
+
+def test_mon_open_passes_audio_that_normal_squelch_rejects():
+    assert _run_monitor_js("squelchPasses(false,0.004)") is False
+    assert _run_monitor_js("squelchPasses(true,0.004)") is True
+    assert _run_monitor_js("squelchPasses(false,0.04)") is True
+
+
+def test_efj_mon_artwork_has_an_executable_hit_region():
+    assert _run_monitor_js("controlHeadMonitorHit('efj5300')") == [
+        'Monitor / open squelch', 489, 32, 94, 50, 'mon']
+    assert _run_monitor_js("controlHeadMonitorHit('apx4500')") is None
