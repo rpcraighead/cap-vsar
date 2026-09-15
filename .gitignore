@@ -41,3 +41,6 @@ docs/RT600_*.pdf
 docs/TDFM136*.pdf
 docs/GMA1347_*.pdf
 docs/gma.txt
+
+# Generated documentation site (scripts/build_docs_site.py)
+build/
