@@ -384,3 +384,61 @@ def test_browser_mix_keeps_tactical_and_airband_volumes_independent():
     result = subprocess.run(['node', '-e', script], text=True,
                             capture_output=True, check=True)
     assert json.loads(result.stdout) == {'main': 0.8, 'airband': 0.25}
+
+
+# -- review follow-ups on F-10 ------------------------------------------------
+# Three defects found reviewing F-10 before merge. Each is a decision extracted
+# into the pure block so it can be executed, not grepped.
+
+def _radio_mix_block():
+    source = RADIO_JS.read_text()
+    start = source.index('// BEGIN F-10 PURE RADIO MIX')
+    end = source.index('// END F-10 PURE RADIO MIX')
+    return source[start:end]
+
+
+def _run_js(expression):
+    import json
+    import subprocess
+    script = _radio_mix_block() + f'\nconsole.log(JSON.stringify({expression}));'
+    result = subprocess.run(['node', '-e', script], text=True,
+                            capture_output=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
+def test_keying_one_radio_does_not_suppress_the_other_radios_traffic():
+    """The airband transmission must still reach the CAP Form 110 log."""
+    # Keying tactical suppresses tactical rx only.
+    assert _run_js("rxIsSuppressed(true, 'main', 'main')") is True
+    assert _run_js("rxIsSuppressed(true, 'main', 'airband')") is False
+    # And the reverse.
+    assert _run_js("rxIsSuppressed(true, 'airband', 'airband')") is True
+    assert _run_js("rxIsSuppressed(true, 'airband', 'main')") is False
+    # Not transmitting suppresses nothing.
+    assert _run_js("rxIsSuppressed(false, 'main', 'main')") is False
+
+
+def test_a_secondary_receiver_failure_is_scoped_to_that_receiver():
+    """Operator nine's refused airband join must not drop their tactical net."""
+    assert _run_js("failureScope('airband')") == 'airband'
+    assert _run_js("failureScope('main')") == 'console'
+    assert _run_js("failureScope(undefined)") == 'console'
+
+
+def test_the_two_radios_are_never_left_on_the_same_net():
+    """Both on one net re-creates the X-9 symptom: the desk twice on the net,
+    doubled audio, and the operator's own transmission back in their headset."""
+    nets = "['primary','alternate','base','briefing']"
+    # Already distinct: nothing moves.
+    assert _run_js(f"distinctNetResolution('primary','alternate',{nets},'main')") is None
+    # Collision: the radio the operator did NOT touch is the one that moves.
+    assert _run_js(f"distinctNetResolution('primary','primary',{nets},'main')") == {
+        'radio': 'airband', 'net': 'alternate'}
+    assert _run_js(f"distinctNetResolution('primary','primary',{nets},'airband')") == {
+        'radio': 'main', 'net': 'alternate'}
+    # A single-channel server cannot satisfy the rule; it must not crash or
+    # invent a net that does not exist.
+    assert _run_js("distinctNetResolution('only','only',['only'],'main')") == {
+        'radio': 'airband', 'net': 'only'}
+    assert _run_js("distinctNetResolution('','',[],'main')") is None

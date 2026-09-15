@@ -706,7 +706,11 @@ to those generated donor-derived files.  Do not redistribute the combined
 aircraft package: it also contains locally copied Laminar Research files.
 """
     (target_aircraft / "FLIGHTGEAR_C182_PROTOTYPE_NOTICE.txt").write_text(notice)
+    # A-1 stage 3: record which corrections shaped this aircraft. The
+    # measurement fixture carries the same record, so a package and the
+    # report that accepted it can be checked against each other.
     manifest = {
+        "corrections_applied": corrections_applied,
         "prototype_only": True,
         "donor_repository": DONOR_REPOSITORY,
         "donor_commit": DONOR_COMMIT,

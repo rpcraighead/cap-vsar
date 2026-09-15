@@ -11,13 +11,36 @@ const state = {
 const airband = {
   online: false, joining: false, tuning: false, epoch: 0, ws: null,
   playback: null, gain: null, lastPong: 0, lastRx: 0,
-  timeout: null, lastLogged: null, rxLogTimer: null,
+  timeout: null, lastLogged: null, rxLogTimer: null, retryTimer: null,
 };
 
 // BEGIN F-10 PURE RADIO MIX
 function radioMixLevels(mainPercent, airbandPercent) {
   const level = value => Math.max(0, Math.min(100, Number(value))) / 100;
   return {main: level(mainPercent), airband: level(airbandPercent)};
+}
+
+// Should this rx event be dropped because the radio it arrived on is keyed?
+// The console-wide tx flag was used here once, which silently discarded every
+// airband rx - and therefore every airband CAP Form 110 log entry - whenever
+// the operator keyed the tactical net.
+function rxIsSuppressed(tx, txReceiver, receiver) {
+  return Boolean(tx) && txReceiver === receiver;
+}
+
+// A failure on the secondary receiver must not tear down the primary.
+function failureScope(receiver) {
+  return receiver === 'airband' ? 'airband' : 'console';
+}
+
+// Both radios pick from the same mission nets, so they can collide. Returns
+// which radio must move and where, or null when the selection is already
+// legal. The radio the operator just touched is the one that stays put.
+function distinctNetResolution(mainId, airbandId, channelIds, changed) {
+  if (!mainId || mainId !== airbandId) return null;
+  const free = channelIds.find(id => id !== mainId) ?? channelIds[0] ?? '';
+  return changed === 'main' ? {radio: 'airband', net: free}
+                            : {radio: 'main', net: free};
 }
 // END F-10 PURE RADIO MIX
 const models = {
@@ -217,13 +240,33 @@ function changeNet(delta) {
   const i=state.channels.findIndex(c=>c.id===$('netSelect').value);
   $('netSelect').value=state.channels[(i+delta+state.channels.length)%state.channels.length].id; tune();
 }
+// X-9 said one Mumble client per operator, so a desk could not appear on the
+// net as two people. F-10 deliberately spends two sessions per operator, and
+// both radios choose from the SAME four mission nets - airband proper is
+// PilotEdge's, in X-Plane, not a channel here. Nothing else stops an operator
+// putting both radios on one net, which would re-create exactly the symptom
+// X-9 closed: doubled audio, the desk listed twice, and the operator's own
+// transmission routed back into their headset with the mic open. This is the
+// guard that keeps them apart.
+function enforceDistinctNets(changed) {
+  if(!state.channels.length || !$('airbandNet')) return false;
+  const main=$('netSelect'), air=$('airbandNet');
+  const fix=distinctNetResolution(main.value,air.value,state.channels.map(c=>c.id),changed);
+  if(fix){ (fix.radio==='airband'?air:main).value=fix.net; }
+  // Make the collision unreachable in the UI as well as in state.
+  for(const option of main.options) option.disabled = option.value===air.value;
+  for(const option of air.options) option.disabled = option.value===main.value;
+  return Boolean(fix);
+}
 function tune() {
+  if(enforceDistinctNets('main')) { notice('Airband radio moved: the two radios cannot share a net.'); tuneAirband(); }
   releaseAll(); state.playback?.port.postMessage({clear:true}); state.lastRx=0;
   $('speaker').textContent='Listening for traffic.';
   if(state.online) { state.tuning=true; send({action:'tune',channel:$('netSelect').value}); }
   render();
 }
 function tuneAirband() {
+  if(enforceDistinctNets('airband')) { notice('Tactical radio moved: the two radios cannot share a net.'); tune(); return; }
   airband.playback?.port.postMessage({clear:true});airband.lastRx=0;
   $('airbandSpeaker').textContent='Listening for traffic.';
   if(airband.online) {
@@ -306,6 +349,27 @@ function scheduleReconnect(message) {
   state.reconnectTimer=setTimeout(()=>{state.reconnectTimer=null;connect(true);},delay);
   render();
 }
+function airbandLost(message) {
+  // The airband radio is a SECONDARY receiver. Tearing the console down when
+  // it fails meant a refused airband join - which happens to operator nine,
+  // because F-10 spends two of the server's sixteen sessions per desk - took
+  // that operator's working tactical net with it, and cleared wantOnline so
+  // nothing reconnected. Only this receiver stops.
+  const socket=airband.ws;airband.ws=null;socket?.close();
+  airband.online=false;airband.joining=false;airband.tuning=false;
+  clearTimeout(airband.rxLogTimer);airband.rxLogTimer=null;airband.lastLogged=null;
+  clearTimeout(airband.retryTimer);airband.retryTimer=null;
+  if(state.tx&&state.txReceiver==='airband'){releaseAll();state.txReceiver='main';}
+  $('airbandSpeaker').textContent='Airband radio offline.';
+  if(message)notice(message);
+  // Retry independently, so a transient hiccup on the secondary receiver
+  // recovers without disturbing the primary.
+  if(state.wantOnline&&state.online){
+    const generation=state.generation;
+    airband.retryTimer=setTimeout(()=>{airband.retryTimer=null;openAirbandSocket(generation);},5000);
+  }
+  render();
+}
 function connectionLost(message) {
   if(!state.wantOnline) return;
   ++state.generation; releaseAll();
@@ -355,8 +419,8 @@ function openAirbandSocket(generation) {
       accessCode:$('accessCode').value,channel:$('airbandNet').value,receiver:'airband'});
   });
   socket.addEventListener('message',event=>{if(airband.ws===socket)receive(event.data,'airband');});
-  socket.addEventListener('close',()=>{if(airband.ws===socket)connectionLost('Airband radio disconnected.');});
-  socket.addEventListener('error',()=>{if(airband.ws===socket)connectionLost('Could not reach the airband radio.');});
+  socket.addEventListener('close',()=>{if(airband.ws===socket)airbandLost('Airband radio disconnected.');});
+  socket.addEventListener('error',()=>{if(airband.ws===socket)airbandLost('Could not reach the airband radio.');});
   airband.timeout=setTimeout(()=>{if(airband.joining&&airband.ws===socket)connectionLost('The airband connection timed out.');},15000);
 }
 async function connect(automatic=false) {
@@ -425,6 +489,7 @@ function disconnect() {
   const airSocket=airband.ws;airband.ws=null;airSocket?.close();
   airband.online=false;airband.joining=false;airband.tuning=false;
   clearTimeout(airband.timeout);airband.timeout=null;
+  clearTimeout(airband.retryTimer);airband.retryTimer=null;
   state.stream?.getTracks().forEach(track=>track.stop()); state.stream=null;
   state.source?.disconnect(); state.source=null;
   state.capture?.disconnect(); state.playback?.disconnect();airband.playback?.disconnect();
@@ -472,7 +537,11 @@ function receive(data,receiver='main') {
       silenceMic();state.held.clear();if(message.reason)notice(message.reason);
     }
     render();
-  } else if(message.type==='rx' && !state.tx) {
+  } else if(message.type==='rx' && !rxIsSuppressed(state.tx,state.txReceiver,receiver)) {
+    // The gate is per-RADIO. Using the console-wide tx flag here meant that
+    // keying the tactical net silently discarded every airband rx event: the
+    // audio still played, but the speaker label never updated and the
+    // transmission was never written to the CAP Form 110 log.
     $(receiver==='airband'?'airbandSpeaker':'speaker').textContent=`${message.speaker} transmitting`;
     // F-9: one entry per station per transmission, not one per packet.
     const lastLogged=receiver==='airband'?airband.lastLogged:state.lastLogged;
@@ -486,7 +555,10 @@ function receive(data,receiver='main') {
     const timer=setTimeout(()=>{if(receiver==='airband')airband.lastLogged=null;else state.lastLogged=null;},3000);
     if(receiver==='airband')airband.rxLogTimer=timer;else state.rxLogTimer=timer;
   } else if(message.type==='pong') radioState.lastPong=Date.now();
-  else if(message.type==='error'){disconnect();notice(message.message||'Voice connection unavailable.');}
+  else if(message.type==='error'){
+    if(failureScope(receiver)==='airband')airbandLost(message.message||'Airband radio unavailable.');
+    else{disconnect();notice(message.message||'Voice connection unavailable.');}
+  }
 }
 
 $('logExport')?.addEventListener('click',exportLog);
@@ -577,6 +649,7 @@ async function init() {
     $('netSelect').replaceChildren(...state.channels.map(c=>new Option(c.label,c.id)));
     $('airbandNet').replaceChildren(...state.channels.map(c=>new Option(c.label,c.id)));
     $('airbandNet').value=state.channels.some(c=>c.id==='alternate')?'alternate':state.channels[1]?.id||state.channels[0]?.id||'';
+    enforceDistinctNets('main');
     $('accessRow').hidden=!state.config.accessCodeRequired;
     const secure=new URL(location.href);secure.protocol='https:';secure.port=String(state.config.securePort);$('secureLink').href=secure.href;
     if(!window.isSecureContext){$('secureHelp').hidden=false;}
