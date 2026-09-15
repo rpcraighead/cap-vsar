@@ -18,6 +18,10 @@ services/*/data/
 services/flightplanner/charts/
 services/exercise/radio-public/
 backups/
+# The board container's own git clone of this repository, and the deploy key
+# it pushes with. Both are per-host, and the key must never be committed.
+services/board/repo/
+services/board/secrets/
 *.log
 logs/fdr/
 

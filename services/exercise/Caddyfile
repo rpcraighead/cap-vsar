@@ -37,3 +37,31 @@ ms01, ms01.local, 192.0.2.151 {
 		reverse_proxy exercise:8700
 	}
 }
+
+# O-9: the ENGINEERING listener. A different port, and a different trust
+# domain, from the participant front door above. The agent coordination board
+# holds the lane locks, the dispatch queue and every handoff between Claude,
+# Codex and Antigravity - it is not participant content, and it must not be
+# reachable by following a link from the participant origin. Keeping it on
+# 8443 also means it can be firewalled or unpublished without touching the
+# exercise.
+#
+# LAN and WireGuard only; the router forwards nothing to this port.
+#
+# The board refuses every write that arrives without its own bearer token, so
+# this listener is the second gate rather than the only one. To add Authentik
+# SSO in front of it, uncomment forward_auth below - it is the same outpost
+# pattern already proven for LibreNMS on cainfra01, and it needs a provider
+# and application created in Authentik for this host first. See
+# services/board/README.md.
+ms01:8443, ms01.local:8443, 192.0.2.151:8443 {
+	tls internal
+	encode zstd gzip
+
+	# forward_auth auth.rpc-cyberflight.com {
+	# 	uri /outpost.goauthentik.io/auth/caddy
+	# 	copy_headers X-Authentik-Username X-Authentik-Groups
+	# }
+
+	reverse_proxy board:8770
+}

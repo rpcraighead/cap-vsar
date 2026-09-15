@@ -103,9 +103,14 @@ services:
     restart: unless-stopped
     depends_on:
       - exercise
+      - board
     ports:
       - "80:80"
       - "443:443"
+      # O-9: the engineering listener. Separate port so the board can never be
+      # reached by following the participant front door, and so it can be
+      # firewalled or unpublished on its own.
+      - "8443:8443"
     volumes:
       - ./services/exercise/Caddyfile:/etc/caddy/Caddyfile:ro
       - radio_caddy_data:/data
@@ -168,6 +173,47 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  # ---- Agent coordination board: the Claude/Codex/Antigravity lanes -------
+  # ENGINEERING surface, in a different trust domain from everything above.
+  # It is reachable only through Caddy's 8443 listener, never the participant
+  # front door on 443. It exists as its own container because the board used
+  # to be four routes on the AI Pilot deck, which only runs on the workstation
+  # next to X-Plane - so the board could not be opened from anywhere else.
+  board:
+    build: ./services/board
+    container_name: capvsar-board
+    restart: unless-stopped
+    expose:
+      - "8770"
+    volumes:
+      # A git working clone of THIS repository, all of its own. Never point
+      # this at an agent's live working tree: the board commits and pushes,
+      # and three agents leave work in progress in theirs.
+      - ${CAPVSAR_BOARD_REPO:-./services/board/repo}:/repo
+      - ${CAPVSAR_BOARD_SSH_KEY:-./services/board/secrets/id_ed25519}:/home/capvsar/.ssh/id_ed25519:ro
+      - ${CAPVSAR_BOARD_KNOWN_HOSTS:-./services/board/secrets/known_hosts}:/home/capvsar/.ssh/known_hosts:ro
+    environment:
+      TZ: ${TZ}
+      # Unset disables every write and the service says so at startup and in
+      # /api/health. It does not fall open.
+      CAPVSAR_BOARD_TOKEN: ${CAPVSAR_BOARD_TOKEN:-}
+      CAPVSAR_BOARD_ORIGINS: ${CAPVSAR_BOARD_ORIGINS:-}
+      CAPVSAR_BOARD_REPO: /repo
+      CAPVSAR_BOARD_FILE: docs/BOARD.md
+      CAPVSAR_BOARD_GIT_SYNC: "1"
+      # StrictHostKeyChecking stays on: this key can write to the monorepo.
+      GIT_SSH_COMMAND: >-
+        ssh -i /home/capvsar/.ssh/id_ed25519
+        -o UserKnownHostsFile=/home/capvsar/.ssh/known_hosts
+        -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8770/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
 # WireGuard intentionally NOT run here.
 # The GL-MT6000 already terminates WireGuard on its WAN (wgserver, UDP 51820)
