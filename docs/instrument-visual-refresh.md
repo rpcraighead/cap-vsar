@@ -7,6 +7,13 @@ only a generated PNG would be overwritten on the next build.
 
 ## Reference basis
 
+> **D-5:** the two figures below are page extracts from third-party documents.
+> They are no longer tracked in this repository - they stay on disk locally,
+> like the manuals themselves, and `docs/SOURCES.md` records the public URL each
+> came from so you can extract your own. The links resolve only in a working
+> tree that has them; a fresh clone will not render them, and that is deliberate.
+
+
 - [CAP installed-equipment photograph](figures/capdeck_p8-08.png): matte finish,
   shallow dark controls and scalloped grips. This photograph depicts RT-600
   hardware; Becker labeling continues to follow the Becker manual.
