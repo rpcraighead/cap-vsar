@@ -6,8 +6,43 @@ const state = {
   stream: null, source: null, capture: null, playback: null, gain: null,
   started: 0, lastPong: 0, lastRx: 0, channels: [], config: null, timeout: null,
   wantOnline: false, reconnectTimer: null, reconnectAttempt: 0,
-  txStarted: 0, lastLogged: null, rxLogTimer: null,
+  txStarted: 0, txReceiver: 'main', lastLogged: null, rxLogTimer: null,
 };
+const airband = {
+  online: false, joining: false, tuning: false, epoch: 0, ws: null,
+  playback: null, gain: null, lastPong: 0, lastRx: 0,
+  timeout: null, lastLogged: null, rxLogTimer: null, retryTimer: null,
+};
+
+// BEGIN F-10 PURE RADIO MIX
+function radioMixLevels(mainPercent, airbandPercent) {
+  const level = value => Math.max(0, Math.min(100, Number(value))) / 100;
+  return {main: level(mainPercent), airband: level(airbandPercent)};
+}
+
+// Should this rx event be dropped because the radio it arrived on is keyed?
+// The console-wide tx flag was used here once, which silently discarded every
+// airband rx - and therefore every airband CAP Form 110 log entry - whenever
+// the operator keyed the tactical net.
+function rxIsSuppressed(tx, txReceiver, receiver) {
+  return Boolean(tx) && txReceiver === receiver;
+}
+
+// A failure on the secondary receiver must not tear down the primary.
+function failureScope(receiver) {
+  return receiver === 'airband' ? 'airband' : 'console';
+}
+
+// Both radios pick from the same mission nets, so they can collide. Returns
+// which radio must move and where, or null when the selection is already
+// legal. The radio the operator just touched is the one that stays put.
+function distinctNetResolution(mainId, airbandId, channelIds, changed) {
+  if (!mainId || mainId !== airbandId) return null;
+  const free = channelIds.find(id => id !== mainId) ?? channelIds[0] ?? '';
+  return changed === 'main' ? {radio: 'airband', net: free}
+                            : {radio: 'main', net: free};
+}
+// END F-10 PURE RADIO MIX
 const models = {
   apx4500: {className:'apx', title:'Motorola APX 4500 O2 control head', caption:'APX 4500 / O2 CONTROL HEAD',
     hits:[['Power / connect or disconnect',87,48,58,58,'power'],['Previous net',558,65,50,55,'prev'],
@@ -128,12 +163,19 @@ function exportLog() {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 function channel() { return state.channels.find(c=>c.id===$('netSelect').value); }
-function send(data) {
-  if (state.ws?.readyState===WebSocket.OPEN) { state.ws.send(JSON.stringify(data)); return true; }
+function airbandChannel() { return state.channels.find(c=>c.id===$('airbandNet')?.value); }
+function activeReceiver() { return $('txAirband')?.checked ? 'airband' : 'main'; }
+function sendRadio(receiver,data) {
+  const socket=receiver==='airband'?airband.ws:state.ws;
+  if(socket?.readyState===WebSocket.OPEN) { socket.send(JSON.stringify(data)); return true; }
   return false;
 }
+function send(data) {
+  return sendRadio('main',data);
+}
 function render() {
-  const ready=state.online && !state.tuning;
+  const chosen=activeReceiver(), chosenState=chosen==='airband'?airband:state;
+  const ready=chosenState.online && !chosenState.tuning;
   $('ptt').disabled=!ready;
   $('ptt').setAttribute('aria-pressed',String(state.tx));
   $('pttLabel').textContent=state.tx?'TRANSMITTING':state.held.size?'KEYING MIC…':'HOLD TO TALK';
@@ -154,6 +196,12 @@ function render() {
   $('screenNet').textContent=channel()?.label || 'PRIMARY';
   $('screenCall').textContent=$('callsign').value || 'MISSION BASE';
   if (!state.online) { $('speaker').textContent='Join the net to listen.'; $('instrument').classList.remove('receiving'); $('rxMeter').style.width='0%'; }
+  if($('airbandState')) {
+    $('airbandState').textContent=airband.tuning?'Tuning…':airband.online?'Listening':'Disconnected';
+    $('airbandSpeaker').textContent=airband.online?($('airbandSpeaker').textContent||'Listening for traffic.'):'Join both radios to listen.';
+    $('txMain').disabled=!state.online;
+    $('txAirband').disabled=!airband.online;
+  }
 }
 function setModel(model) {
   releaseAll(); state.model=model; const config=models[model];
@@ -192,16 +240,47 @@ function changeNet(delta) {
   const i=state.channels.findIndex(c=>c.id===$('netSelect').value);
   $('netSelect').value=state.channels[(i+delta+state.channels.length)%state.channels.length].id; tune();
 }
+// X-9 said one Mumble client per operator, so a desk could not appear on the
+// net as two people. F-10 deliberately spends two sessions per operator, and
+// both radios choose from the SAME four mission nets - airband proper is
+// PilotEdge's, in X-Plane, not a channel here. Nothing else stops an operator
+// putting both radios on one net, which would re-create exactly the symptom
+// X-9 closed: doubled audio, the desk listed twice, and the operator's own
+// transmission routed back into their headset with the mic open. This is the
+// guard that keeps them apart.
+function enforceDistinctNets(changed) {
+  if(!state.channels.length || !$('airbandNet')) return false;
+  const main=$('netSelect'), air=$('airbandNet');
+  const fix=distinctNetResolution(main.value,air.value,state.channels.map(c=>c.id),changed);
+  if(fix){ (fix.radio==='airband'?air:main).value=fix.net; }
+  // Make the collision unreachable in the UI as well as in state.
+  for(const option of main.options) option.disabled = option.value===air.value;
+  for(const option of air.options) option.disabled = option.value===main.value;
+  return Boolean(fix);
+}
 function tune() {
+  if(enforceDistinctNets('main')) { notice('Airband radio moved: the two radios cannot share a net.'); tuneAirband(); }
   releaseAll(); state.playback?.port.postMessage({clear:true}); state.lastRx=0;
   $('speaker').textContent='Listening for traffic.';
   if(state.online) { state.tuning=true; send({action:'tune',channel:$('netSelect').value}); }
   render();
 }
+function tuneAirband() {
+  if(enforceDistinctNets('airband')) { notice('Tactical radio moved: the two radios cannot share a net.'); tune(); return; }
+  airband.playback?.port.postMessage({clear:true});airband.lastRx=0;
+  $('airbandSpeaker').textContent='Listening for traffic.';
+  if(airband.online) {
+    airband.tuning=true;
+    sendRadio('airband',{action:'tune',channel:$('airbandNet').value});
+  }
+  render();
+}
 function updateVolume() {
-  const value=Number($('volume').value)/100;
-  $('volumeValue').value=`${Math.round(value*100)}%`;
-  if(state.gain) state.gain.gain.setTargetAtTime(value,state.context.currentTime,.02);
+  const levels=radioMixLevels($('volume').value,$('airbandVolume')?.value??55);
+  $('volumeValue').value=`${Math.round(levels.main*100)}%`;
+  if($('airbandVolumeValue')) $('airbandVolumeValue').value=`${Math.round(levels.airband*100)}%`;
+  if(state.gain) state.gain.gain.setTargetAtTime(levels.main,state.context.currentTime,.02);
+  if(airband.gain) airband.gain.gain.setTargetAtTime(levels.airband,state.context.currentTime,.02);
 }
 function silenceMic() {
   if(state.tx) $('speaker').textContent='Listening for traffic.';
@@ -214,24 +293,27 @@ function releaseAll(message='') {
   // under half a second is a mis-key, not traffic.
   if(state.txStarted) {
     const seconds=(Date.now()-state.txStarted)/1000;
-    state.txStarted=0;
+      state.txStarted=0;
+    const txChannel=state.txReceiver==='airband'?airbandChannel():channel();
     if(seconds>=0.5) logEntry({from:($('callsign').value||'MISSION BASE').trim(),
-                               to:'NET', outgoing:true, seconds});
+                               to:'NET', net:txChannel?.name, outgoing:true, seconds});
   }
   state.held.clear(); silenceMic();
   state.request=(state.request+1)%2147483647;
-  send({action:'ptt',active:false,request:state.request});
+  sendRadio(state.txReceiver,{action:'ptt',active:false,request:state.request});
   if(message) notice(message);
   render();
 }
 function press(source) {
-  if(!state.online||state.tuning||state.held.has(source)) return;
+  const chosen=activeReceiver(),chosenState=chosen==='airband'?airband:state;
+  if(!chosenState.online||chosenState.tuning||state.held.has(source)) return;
   state.held.add(source);
   if(state.held.size===1) {
+    state.txReceiver=activeReceiver();
     state.txStarted=Date.now();
     notice(); state.request=(state.request+1)%2147483647;
     state.context.resume().catch(()=>connectionLost('Headset audio is paused.'));
-    send({action:'ptt',active:true,request:state.request});
+    sendRadio(state.txReceiver,{action:'ptt',active:true,request:state.request});
   }
   render();
 }
@@ -267,11 +349,34 @@ function scheduleReconnect(message) {
   state.reconnectTimer=setTimeout(()=>{state.reconnectTimer=null;connect(true);},delay);
   render();
 }
+function airbandLost(message) {
+  // The airband radio is a SECONDARY receiver. Tearing the console down when
+  // it fails meant a refused airband join - which happens to operator nine,
+  // because F-10 spends two of the server's sixteen sessions per desk - took
+  // that operator's working tactical net with it, and cleared wantOnline so
+  // nothing reconnected. Only this receiver stops.
+  const socket=airband.ws;airband.ws=null;socket?.close();
+  airband.online=false;airband.joining=false;airband.tuning=false;
+  clearTimeout(airband.rxLogTimer);airband.rxLogTimer=null;airband.lastLogged=null;
+  clearTimeout(airband.retryTimer);airband.retryTimer=null;
+  if(state.tx&&state.txReceiver==='airband'){releaseAll();state.txReceiver='main';}
+  $('airbandSpeaker').textContent='Airband radio offline.';
+  if(message)notice(message);
+  // Retry independently, so a transient hiccup on the secondary receiver
+  // recovers without disturbing the primary.
+  if(state.wantOnline&&state.online){
+    const generation=state.generation;
+    airband.retryTimer=setTimeout(()=>{airband.retryTimer=null;openAirbandSocket(generation);},5000);
+  }
+  render();
+}
 function connectionLost(message) {
   if(!state.wantOnline) return;
   ++state.generation; releaseAll();
   state.online=false;state.joining=false;state.tuning=false;
   const socket=state.ws;state.ws=null;socket?.close();
+  const airSocket=airband.ws;airband.ws=null;airSocket?.close();
+  airband.online=false;airband.joining=false;airband.tuning=false;
   state.stream?.getAudioTracks().forEach(track=>{track.enabled=false;});
   scheduleReconnect(message);
 }
@@ -303,6 +408,21 @@ async function devices() {
   $('output').disabled=!routing;
   $('outputHelp').textContent=routing?'Select your headset here, or use the system default.':'This browser uses the device’s selected audio output. Choose your Bluetooth headset in system settings.';
 }
+function openAirbandSocket(generation) {
+  if(generation!==state.generation||!state.wantOnline||airband.joining||airband.online)return;
+  airband.joining=true;render();
+  const socket=new WebSocket(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/api/radio/stream`);
+  airband.ws=socket;socket.binaryType='arraybuffer';airband.lastPong=Date.now();
+  socket.addEventListener('open',()=>{
+    if(generation!==state.generation){socket.close();return;}
+    sendRadio('airband',{action:'join',callsign:$('callsign').value.trim(),
+      accessCode:$('accessCode').value,channel:$('airbandNet').value,receiver:'airband'});
+  });
+  socket.addEventListener('message',event=>{if(airband.ws===socket)receive(event.data,'airband');});
+  socket.addEventListener('close',()=>{if(airband.ws===socket)airbandLost('Airband radio disconnected.');});
+  socket.addEventListener('error',()=>{if(airband.ws===socket)airbandLost('Could not reach the airband radio.');});
+  airband.timeout=setTimeout(()=>{if(airband.joining&&airband.ws===socket)connectionLost('The airband connection timed out.');},15000);
+}
 async function connect(automatic=false) {
   if(state.joining) return;
   if(!state.config?.configured) { notice('Mission voice has not been configured on this server.'); return; }
@@ -318,12 +438,17 @@ async function connect(automatic=false) {
       await state.context.audioWorklet.addModule('/static/radio-worklet.js');
       state.capture=new AudioWorkletNode(state.context,'radio-capture');
       state.playback=new AudioWorkletNode(state.context,'radio-playback');
+      airband.playback=new AudioWorkletNode(state.context,'radio-playback');
+      airband.gain=state.context.createGain();
       state.capture.connect(state.context.destination); // Worklet always outputs silence.
       state.playback.connect(state.gain);
+      airband.playback.connect(airband.gain);airband.gain.connect(state.context.destination);
+      updateVolume();
       state.capture.port.onmessage=({data})=>{
-        if(!state.tx||!state.held.size||state.ws?.readyState!==WebSocket.OPEN) return;
-        if(state.ws.bufferedAmount>1920*5) {releaseAll('Voice connection is delayed. Release PTT and try again.');return;}
-        state.ws.send(data);
+        const socket=state.txReceiver==='airband'?airband.ws:state.ws;
+        if(!state.tx||!state.held.size||socket?.readyState!==WebSocket.OPEN) return;
+        if(socket.bufferedAmount>1920*5) {releaseAll('Voice connection is delayed. Release PTT and try again.');return;}
+        socket.send(data);
       };
     }
     const microphone=$('microphone').value;
@@ -343,7 +468,7 @@ async function connect(automatic=false) {
     state.ws=socket; socket.binaryType='arraybuffer'; state.lastPong=Date.now();
     socket.addEventListener('open',()=>{
       if(generation!==state.generation){socket.close();return;}
-      send({action:'join',callsign:$('callsign').value.trim(),accessCode:$('accessCode').value,channel:$('netSelect').value});
+      send({action:'join',callsign:$('callsign').value.trim(),accessCode:$('accessCode').value,channel:$('netSelect').value,receiver:'main'});
     });
     socket.addEventListener('message',event=>{if(state.ws===socket) receive(event.data);});
     socket.addEventListener('close',()=>{if(state.ws===socket)connectionLost('Radio disconnected.');});
@@ -361,36 +486,50 @@ function disconnect() {
   ++state.generation; releaseAll();
   state.online=false; state.joining=false; state.tuning=false;
   const socket=state.ws; state.ws=null; socket?.close();
+  const airSocket=airband.ws;airband.ws=null;airSocket?.close();
+  airband.online=false;airband.joining=false;airband.tuning=false;
+  clearTimeout(airband.timeout);airband.timeout=null;
+  clearTimeout(airband.retryTimer);airband.retryTimer=null;
   state.stream?.getTracks().forEach(track=>track.stop()); state.stream=null;
   state.source?.disconnect(); state.source=null;
-  state.capture?.disconnect(); state.playback?.disconnect();
+  state.capture?.disconnect(); state.playback?.disconnect();airband.playback?.disconnect();
   state.capture=null; state.playback=null;
-  state.gain?.disconnect(); state.gain=null;
+  state.gain?.disconnect();airband.gain?.disconnect();state.gain=null;airband.gain=null;airband.playback=null;
   if(state.context) { const old=state.context; state.context=null; old.close().catch(()=>{}); }
   render();
 }
-function receive(data) {
+function receive(data,receiver='main') {
+  const radioState=receiver==='airband'?airband:state;
   if(data instanceof ArrayBuffer) {
-    if(!state.online||state.tuning||state.tx||data.byteLength<10||data.byteLength%2) return;
+    if(!radioState.online||radioState.tuning||data.byteLength<10||data.byteLength%2) return;
     const header=new DataView(data), epoch=header.getUint32(0,true), speaker=header.getUint32(4,true);
-    if(epoch!==state.epoch) return;
-    const pcm=data.slice(8); state.playback.port.postMessage({speaker,pcm},[pcm]);
+    if(epoch!==radioState.epoch) return;
+    const pcm=data.slice(8);radioState.playback.port.postMessage({speaker,pcm},[pcm]);
     let energy=0; for(let i=8;i<data.byteLength;i+=2){const sample=header.getInt16(i,true)/32768;energy+=sample*sample;}
-    $('rxMeter').style.width=`${Math.min(100,Math.sqrt(energy/((data.byteLength-8)/2))*260)}%`;
-    state.lastRx=Date.now(); $('instrument').classList.add('receiving');
+    if(receiver==='main') {
+      $('rxMeter').style.width=`${Math.min(100,Math.sqrt(energy/((data.byteLength-8)/2))*260)}%`;
+      $('instrument').classList.add('receiving');
+    }
+    radioState.lastRx=Date.now();
     return;
   }
   let message; try{message=JSON.parse(data);}catch{disconnect();notice('Invalid response from the voice server.');return;}
   if(message.type==='tuned') {
-    clearTimeout(state.timeout); state.timeout=null;
-    cancelReconnect();state.reconnectAttempt=0;
-    silenceMic(); state.held.clear(); state.online=true;state.joining=false;state.tuning=false;state.epoch=message.epoch;
-    $('netSelect').value=message.channel;state.playback.port.postMessage({clear:true});
-    state.lastPong=Date.now();$('speaker').textContent='Listening for traffic.';notice();render();
+    clearTimeout(radioState.timeout);radioState.timeout=null;
+    radioState.online=true;radioState.joining=false;radioState.tuning=false;radioState.epoch=message.epoch;
+    radioState.playback.port.postMessage({clear:true});radioState.lastPong=Date.now();
+    if(receiver==='main') {
+      cancelReconnect();state.reconnectAttempt=0;silenceMic();state.held.clear();
+      $('netSelect').value=message.channel;$('speaker').textContent='Listening for traffic.';
+      notice();openAirbandSocket(state.generation);
+    } else {
+      $('airbandNet').value=message.channel;$('airbandSpeaker').textContent='Listening for traffic.';
+    }
+    render();
   } else if(message.type==='ptt') {
     if(message.active) {
-      if(!state.held.size||message.request!==state.request||!state.online||state.tuning){send({action:'ptt',active:false,request:state.request});return;}
-      state.tx=true;state.started=Date.now();state.playback.port.postMessage({clear:true});
+      if(!state.held.size||message.request!==state.request||!radioState.online||radioState.tuning){sendRadio(receiver,{action:'ptt',active:false,request:state.request});return;}
+      state.tx=true;state.started=Date.now();radioState.playback.port.postMessage({clear:true});
       state.stream?.getAudioTracks().forEach(track=>{track.enabled=true;});
       state.capture.port.postMessage({active:true});
       clearTimeout(state.timeout);state.timeout=setTimeout(()=>releaseAll('60-second transmit limit reached. Release PTT before speaking again.'),60000);
@@ -398,17 +537,28 @@ function receive(data) {
       silenceMic();state.held.clear();if(message.reason)notice(message.reason);
     }
     render();
-  } else if(message.type==='rx' && !state.tx) {
-    $('speaker').textContent=`${message.speaker} transmitting`;
+  } else if(message.type==='rx' && !rxIsSuppressed(state.tx,state.txReceiver,receiver)) {
+    // The gate is per-RADIO. Using the console-wide tx flag here meant that
+    // keying the tactical net silently discarded every airband rx event: the
+    // audio still played, but the speaker label never updated and the
+    // transmission was never written to the CAP Form 110 log.
+    $(receiver==='airband'?'airbandSpeaker':'speaker').textContent=`${message.speaker} transmitting`;
     // F-9: one entry per station per transmission, not one per packet.
-    if(message.speaker && message.speaker!==state.lastLogged) {
-      state.lastLogged=message.speaker;
-      logEntry({from:message.speaker, to:($('callsign').value||'MISSION BASE').trim()});
+    const lastLogged=receiver==='airband'?airband.lastLogged:state.lastLogged;
+    if(message.speaker && message.speaker!==lastLogged) {
+      if(receiver==='airband')airband.lastLogged=message.speaker;
+      else state.lastLogged=message.speaker;
+      logEntry({from:message.speaker,to:($('callsign').value||'MISSION BASE').trim(),
+                net:message.net||(receiver==='airband'?airbandChannel():channel())?.name});
     }
-    clearTimeout(state.rxLogTimer);
-    state.rxLogTimer=setTimeout(()=>{state.lastLogged=null;},3000);
-  } else if(message.type==='pong') state.lastPong=Date.now();
-  else if(message.type==='error'){disconnect();notice(message.message||'Voice connection unavailable.');}
+    const oldTimer=receiver==='airband'?airband.rxLogTimer:state.rxLogTimer;clearTimeout(oldTimer);
+    const timer=setTimeout(()=>{if(receiver==='airband')airband.lastLogged=null;else state.lastLogged=null;},3000);
+    if(receiver==='airband')airband.rxLogTimer=timer;else state.rxLogTimer=timer;
+  } else if(message.type==='pong') radioState.lastPong=Date.now();
+  else if(message.type==='error'){
+    if(failureScope(receiver)==='airband')airbandLost(message.message||'Airband radio unavailable.');
+    else{disconnect();notice(message.message||'Voice connection unavailable.');}
+  }
 }
 
 $('logExport')?.addEventListener('click',exportLog);
@@ -463,18 +613,43 @@ setInterval(()=>{
   $('clock').textContent=new Date().toISOString().slice(11,19)+' Z';
   if(state.online) {
     if(Date.now()-state.lastPong>6000){connectionLost('Mission voice stopped responding.');return;}
-    send({action:'ping'});if(state.tx)send({action:'keepalive'});
+    if(airband.online&&Date.now()-airband.lastPong>6000){connectionLost('Airband radio stopped responding.');return;}
+    send({action:'ping'});if(airband.online)sendRadio('airband',{action:'ping'});
+    if(state.tx)sendRadio(state.txReceiver,{action:'keepalive'});
     if(state.tx)$('pttHint').textContent=`${Math.floor((Date.now()-state.started)/1000)}s / 60s · release to listen`;
     if(Date.now()-state.lastRx>400){$('rxMeter').style.width='0%';$('instrument').classList.remove('receiving');$('speaker').textContent=state.tx?'Microphone open — transmitting.':'Listening for traffic.';}
+    if(airband.online&&Date.now()-airband.lastRx>400)$('airbandSpeaker').textContent='Listening for traffic.';
   }
 },500);
 
+function installAirbandPanel() {
+  const panel=document.createElement('section');panel.id='airbandPanel';
+  panel.setAttribute('aria-label','Second radio receiver');
+  Object.assign(panel.style,{margin:'1rem 0',padding:'1rem',border:'1px solid #53605d',borderRadius:'8px',background:'#111817'});
+  panel.innerHTML=`<p class="eyebrow">RADIO 02 / AIRBAND</p>
+    <div class="radio-controls">
+      <div class="net-control"><label for="airbandNet">AERONAUTICAL SAR NET</label><select id="airbandNet"></select></div>
+      <div class="volume-control"><label for="airbandVolume">AIRBAND VOLUME <output id="airbandVolumeValue">55%</output></label><input id="airbandVolume" type="range" min="0" max="100" value="55"></div>
+    </div>
+    <div class="receiver-status"><div><span class="signal-dot"></span><strong id="airbandState">Disconnected</strong><span id="airbandSpeaker" style="display:block;color:#a0ada2;font-size:12px;margin:6px 0 0 17px">Join both radios to listen.</span></div></div>
+    <fieldset style="display:flex;gap:1.5rem;align-items:center;margin-top:.8rem;border:1px solid #39423d;border-radius:4px;padding:.8rem"><legend>PTT TRANSMITTER</legend><label style="display:flex;align-items:center;gap:.45rem;margin:0"><input id="txMain" style="appearance:auto;width:auto;height:auto;padding:0" type="radio" name="txRadio" value="main" checked> Tactical radio</label><label style="display:flex;align-items:center;gap:.45rem;margin:0"><input id="txAirband" style="appearance:auto;width:auto;height:auto;padding:0" type="radio" name="txRadio" value="airband"> Airband radio</label></fieldset>`;
+  document.querySelector('.station .radio-controls').insertAdjacentElement('afterend',panel);
+  $('airbandVolume').addEventListener('input',updateVolume);
+  $('airbandNet').addEventListener('change',tuneAirband);
+  $('txMain').addEventListener('change',render);$('txAirband').addEventListener('change',render);
+  document.querySelector('.ptt-help span').textContent='Both nets stay audible.';
+}
+
 async function init() {
+  installAirbandPanel();
   setModel(new URLSearchParams(location.search).get('model')==='efj5300'?'efj5300':'apx4500');
   try {
     const response=await fetch('/api/radio/config');if(!response.ok)throw new Error('Could not load the mission radio configuration.');
     state.config=await response.json();state.channels=state.config.channels;
     $('netSelect').replaceChildren(...state.channels.map(c=>new Option(c.label,c.id)));
+    $('airbandNet').replaceChildren(...state.channels.map(c=>new Option(c.label,c.id)));
+    $('airbandNet').value=state.channels.some(c=>c.id==='alternate')?'alternate':state.channels[1]?.id||state.channels[0]?.id||'';
+    enforceDistinctNets('main');
     $('accessRow').hidden=!state.config.accessCodeRequired;
     const secure=new URL(location.href);secure.protocol='https:';secure.port=String(state.config.securePort);$('secureLink').href=secure.href;
     if(!window.isSecureContext){$('secureHelp').hidden=false;}

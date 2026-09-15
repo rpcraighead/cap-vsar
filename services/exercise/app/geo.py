@@ -67,6 +67,91 @@ def move(lat: float, lon: float, bearing_deg: float, distance: float):
     return math.degrees(la2), (math.degrees(lo2) + 540.0) % 360.0 - 180.0
 
 
+def _cross(a, b):
+    return (a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0])
+
+
+def _unit(v):
+    length = math.sqrt(sum(x * x for x in v))
+    return tuple(x / length for x in v) if length > 1e-15 else None
+
+
+def bearing_intersection(first: dict, second: dict,
+                         max_range_nm: float = 40.0):
+    """Intersection of two forward great-circle bearing rays.
+
+    Each mapping supplies ``lat``, ``lon`` and ``bearing_true``.  ``None`` is
+    returned for parallel/coincident paths, an intersection behind either
+    observer, or a cut farther than ``max_range_nm`` from either observer.
+    The range cap matches the Mission Base rays and prevents their antipodal
+    great-circle crossing from becoming a plausible-looking search cut.
+    """
+    def path_plane(row):
+        lat = math.radians(float(row["lat"]))
+        lon = math.radians(float(row["lon"]))
+        brg = math.radians(float(row["bearing_true"]) % 360.0)
+        point = (math.cos(lat) * math.cos(lon),
+                 math.cos(lat) * math.sin(lon), math.sin(lat))
+        north = (-math.sin(lat) * math.cos(lon),
+                 -math.sin(lat) * math.sin(lon), math.cos(lat))
+        east = (-math.sin(lon), math.cos(lon), 0.0)
+        tangent = tuple(north[i] * math.cos(brg) + east[i] * math.sin(brg)
+                        for i in range(3))
+        return point, tangent, _cross(point, tangent)
+
+    p1, d1, n1 = path_plane(first)
+    p2, d2, n2 = path_plane(second)
+    crossing = _unit(_cross(n1, n2))
+    if crossing is None:
+        return None
+
+    candidates = []
+    for q in (crossing, tuple(-x for x in crossing)):
+        # A ray is the forward half of its great circle.  At its origin the
+        # candidate's tangent projection must point along, not against, the
+        # reported bearing.
+        forward1 = sum(d1[i] * q[i] for i in range(3))
+        forward2 = sum(d2[i] * q[i] for i in range(3))
+        if forward1 <= 1e-12 or forward2 <= 1e-12:
+            continue
+        lat = math.degrees(math.asin(max(-1.0, min(1.0, q[2]))))
+        lon = math.degrees(math.atan2(q[1], q[0]))
+        d_first = distance_nm(first["lat"], first["lon"], lat, lon)
+        d_second = distance_nm(second["lat"], second["lon"], lat, lon)
+        if d_first <= max_range_nm and d_second <= max_range_nm:
+            candidates.append((d_first + d_second, (lat, lon)))
+    return min(candidates, default=(None, None), key=lambda x: x[0])[1]
+
+
+def bearing_cut_polygon(bearings: list[dict], max_range_nm: float = 40.0):
+    """Return the sorted, de-duplicated pairwise cuts for a confidence area."""
+    points = []
+    for i, first in enumerate(bearings):
+        for second in bearings[i + 1:]:
+            point = bearing_intersection(first, second, max_range_nm)
+            if point is None:
+                continue
+            if not any(distance_nm(point[0], point[1], old[0], old[1]) < 0.01
+                       for old in points):
+                points.append(point)
+    if len(points) < 3:
+        return points
+
+    centre_lat = sum(p[0] for p in points) / len(points)
+    lon_x = sum(math.cos(math.radians(p[1])) for p in points)
+    lon_y = sum(math.sin(math.radians(p[1])) for p in points)
+    centre_lon = math.degrees(math.atan2(lon_y, lon_x))
+
+    def around(point):
+        dlon = (point[1] - centre_lon + 540.0) % 360.0 - 180.0
+        return math.atan2(dlon * math.cos(math.radians(centre_lat)),
+                          point[0] - centre_lat)
+
+    return sorted(points, key=around)
+
+
 def track_heading(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Heading implied by two consecutive fixes, for a track with no heading.
 

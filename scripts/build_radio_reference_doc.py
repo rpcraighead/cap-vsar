@@ -18,6 +18,14 @@ from docx.oxml.ns import nsdecls, qn
 
 ROOT = Path(__file__).resolve().parent.parent
 DOCS_DIR = ROOT / "docs"
+
+# D-5: this document used to embed page extracts from the Becker, RHOTHETA,
+# Technisonic and Garmin manuals. Those are third-party copyrighted pages and
+# this document is meant to be handed to squadron members, so the figures now
+# come from our own redrawn faceplates under instruments/*/resources/ - the
+# same artwork the simulated instruments render, produced by
+# scripts/make_df_artwork.py and scripts/make_panel_artwork.py. Do not point
+# these back at docs/figures/*_pNN_*.png.
 OUT_DOCX = DOCS_DIR / "CAP_V-SAR_Radio_Features_and_Use_Cases.docx"
 OUT_MD = DOCS_DIR / "RADIO_FEATURES_AND_USE_CASES.md"
 
@@ -323,8 +331,8 @@ def build_documents():
 
     add_image_with_caption(
         doc,
-        DOCS_DIR / "figures/tdfm_p11_front_panel-11.png",
-        "Figure 2: Technisonic TDFM-136B Airborne VHF-FM Transceiver Control Head Layout (TiL Document 08RE399A).",
+        ROOT / "instruments/cap-fm-tdfm-136b/resources/faceplate.png",
+        "Figure 2: CAP V-SAR rendering of the Technisonic TDFM-136B control head as simulated.",
         width_inches=5.8,
     )
 
@@ -380,8 +388,8 @@ def build_documents():
 
     add_image_with_caption(
         doc,
-        DOCS_DIR / "figures/gma1347_panel-04.png",
-        "Figure 3: Garmin GMA 1347 Audio Panel Control Faceplate (Nav III G1000 Configuration).",
+        ROOT / "instruments/mo-audio-panel-gma1347/resources/faceplate.png",
+        "Figure 3: CAP V-SAR rendering of the GMA 1347 audio panel as simulated.",
         width_inches=1.8,
     )
 
@@ -434,8 +442,8 @@ def build_documents():
 
     add_image_with_caption(
         doc,
-        DOCS_DIR / "figures/b517_p29_bearing_controls-29.png",
-        "Figure 4: Becker SAR-DF 517 Display Control Unit (DCU) Faceplate & Bearing Indicator Display.",
+        ROOT / "instruments/becker-sar-df-517/resources/faceplate.png",
+        "Figure 4: CAP V-SAR rendering of the Becker SAR-DF 517 display control unit as simulated.",
         width_inches=5.8,
     )
 
@@ -475,8 +483,8 @@ def build_documents():
 
     add_image_with_caption(
         doc,
-        DOCS_DIR / "figures/rt600_p08_front_panel-08.png",
-        "Figure 5: RHOTHETA RT-600 Airborne Direction Finder Display Control Unit (DCU 600).",
+        ROOT / "instruments/rhotheta-rt-600/resources/faceplate.png",
+        "Figure 5: CAP V-SAR rendering of the RHOTHETA RT-600 DCU 600 as simulated.",
         width_inches=5.8,
     )
 

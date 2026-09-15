@@ -25,8 +25,11 @@ class Measurements(unittest.TestCase):
     def test_fixture_targets_and_hard_prop_bound(self):
         r=self.result();c={x['id']:x for x in r['comparisons']}
         self.assertEqual(len(c),10)
-        self.assertEqual(c['propeller_diameter']['status'],'fail')
-        self.assertAlmostEqual(c['propeller_diameter']['measured']['in'],79.255,places=2)
+        # A-1 stage 3: the propeller correction closed this certification bound.
+        # It measured 79.255 in at stage 2, outside the TCDS 77.5-79.0 band.
+        self.assertEqual(c['propeller_diameter']['status'],'pass')
+        self.assertAlmostEqual(c['propeller_diameter']['measured']['in'],79.0,places=2)
+        self.assertLessEqual(c['propeller_diameter']['measured']['in'],79.0)
         self.assertEqual(c['main_wheel_track']['status'],'fail')
         self.assertEqual(c['horizontal_tail_span']['status'],'fail')
         self.assertEqual(c['wing_span']['status'],'provisional')
@@ -107,7 +110,8 @@ class Measurements(unittest.TestCase):
     @unittest.skipUnless(os.environ.get('CAPVSAR_TEST_LIVE_DONOR'), 'optional explicit live donor comparison')
     def test_fixture_matches_live_donor(self):
         # Core tests above never skip. Set env only for this separate integration check.
-        live=m.extract(m.load_donor(Path(os.environ['CAPVSAR_TEST_LIVE_DONOR'])))
+        objects,applied=m.load_donor(Path(os.environ['CAPVSAR_TEST_LIVE_DONOR']))
+        live=m.extract(objects,applied)
         self.assertEqual(json.loads(json.dumps(live)),self.f)
 
 

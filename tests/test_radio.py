@@ -42,8 +42,8 @@ def sockets(monkeypatch):
     clients=[]
     async def connect(self, key):
         self.client=Client();clients.append(self.client)
-        self.channel_id=3;self.channel_key=key;self.epoch=1
-        self.enqueue({'type':'tuned','channel':key,'epoch':1})
+        self.channel_id=3;self.channel_key=key;self.channel_name=key;self.epoch=1
+        self.enqueue(self.tuned_ack())
     monkeypatch.setattr(radio.MumbleRadio,'connect',connect)
     app=FastAPI();app.include_router(radio.router)
     radio.OPERATORS.clear()
@@ -58,9 +58,12 @@ def join(client):
     return sock
 
 
-def hello(sock, name='TEST BASE'):
-    sock.send_json({'action':'join','callsign':name,'channel':'primary'})
-    assert sock.receive_json()['type']=='tuned'
+def hello(sock, name='TEST BASE', channel='primary', receiver='main'):
+    sock.send_json({'action':'join','callsign':name,'channel':channel,
+                    'receiver':receiver})
+    response = sock.receive_json()
+    assert response['type']=='tuned'
+    return response
 
 
 def test_no_audio_before_ptt_and_release_stops_audio(sockets):
@@ -313,3 +316,129 @@ def test_sharing_does_not_consume_extra_session_slots(sockets, monkeypatch):
         with join(client) as second:
             hello(second, 'MISSION BASE')          # would have been refused
             assert len(radio.SESSIONS) == 1
+
+
+# --------------------------------------------------------------------- F-10
+
+def test_one_operator_gets_two_independent_radios_and_keys_the_selected_net(sockets):
+    client, clients = sockets
+    with join(client) as tactical, join(client) as airband:
+        tactical_ack = hello(tactical, 'MISSION BASE', 'primary', 'main')
+        airband_ack = hello(airband, 'MISSION BASE', 'alternate', 'airband')
+        assert tactical_ack['receiver'] == 'main'
+        assert airband_ack['receiver'] == 'airband'
+        assert len(clients) == 2 and len(radio.SESSIONS) == 2
+
+        radios = {item.receiver_kind: item for item in radio.SESSIONS}
+        assert radios['main'].log_identity == 'MISSION BASE / TACTICAL'
+        assert radios['airband'].log_identity == 'MISSION BASE / AIRBAND'
+
+        airband.send_json({'action':'ptt','active':True,'request':7})
+        assert airband.receive_json()['active'] is True
+        airband.send_bytes(bytes(1920))
+        airband.send_json({'action':'ping'})
+        assert airband.receive_json()['type'] == 'pong'
+        assert clients[0].sound_output.frames == []
+        assert clients[1].sound_output.frames == [bytes(1920)]
+
+
+def test_dual_radio_operator_uses_two_of_the_sixteen_slots(sockets, monkeypatch):
+    client, clients = sockets
+    monkeypatch.setenv('CAPVSAR_RADIO_MAX_SESSIONS', '2')
+    with join(client) as tactical, join(client) as airband:
+        hello(tactical, 'MISSION BASE', 'primary', 'main')
+        hello(airband, 'MISSION BASE', 'alternate', 'airband')
+        with join(client) as another_operator:
+            another_operator.send_json({'action':'join','callsign':'MRO 2',
+                                        'channel':'primary','receiver':'main'})
+            response = another_operator.receive_json()
+            assert response['type'] == 'error'
+            assert 'occupied' in response['message']
+        assert len(clients) == 2 and len(radio.SESSIONS) == 2
+
+
+def test_receive_event_carries_the_radio_log_identity():
+    async def check():
+        session = radio.MumbleRadio(None, 'MISSION BASE', receiver='airband')
+        session.channel_id = 4
+        session.channel_key = 'alternate'
+        session.channel_name = 'Mission Net ALTERNATE'
+        session.epoch = 1
+        session.deliver_audio(12, 4, 1, 'CAP 487', bytes(1920))
+        announcement = await session.queue_for(None).get()
+        assert announcement == {
+            'type': 'rx', 'speaker': 'CAP 487', 'session': 12,
+            'receiver': 'airband', 'net': 'Mission Net ALTERNATE',
+        }
+    asyncio.run(check())
+
+
+def test_browser_mix_keeps_tactical_and_airband_volumes_independent():
+    source = RADIO_JS.read_text()
+    start = source.index('// BEGIN F-10 PURE RADIO MIX')
+    end = source.index('// END F-10 PURE RADIO MIX')
+    block = source[start:end]
+    script = block + "\nconsole.log(JSON.stringify(radioMixLevels(80, 25)));"
+    import json
+    import subprocess
+    result = subprocess.run(['node', '-e', script], text=True,
+                            capture_output=True, check=True)
+    assert json.loads(result.stdout) == {'main': 0.8, 'airband': 0.25}
+
+
+# -- review follow-ups on F-10 ------------------------------------------------
+# Three defects found reviewing F-10 before merge. Each is a decision extracted
+# into the pure block so it can be executed, not grepped.
+
+def _radio_mix_block():
+    source = RADIO_JS.read_text()
+    start = source.index('// BEGIN F-10 PURE RADIO MIX')
+    end = source.index('// END F-10 PURE RADIO MIX')
+    return source[start:end]
+
+
+def _run_js(expression):
+    import json
+    import subprocess
+    script = _radio_mix_block() + f'\nconsole.log(JSON.stringify({expression}));'
+    result = subprocess.run(['node', '-e', script], text=True,
+                            capture_output=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
+def test_keying_one_radio_does_not_suppress_the_other_radios_traffic():
+    """The airband transmission must still reach the CAP Form 110 log."""
+    # Keying tactical suppresses tactical rx only.
+    assert _run_js("rxIsSuppressed(true, 'main', 'main')") is True
+    assert _run_js("rxIsSuppressed(true, 'main', 'airband')") is False
+    # And the reverse.
+    assert _run_js("rxIsSuppressed(true, 'airband', 'airband')") is True
+    assert _run_js("rxIsSuppressed(true, 'airband', 'main')") is False
+    # Not transmitting suppresses nothing.
+    assert _run_js("rxIsSuppressed(false, 'main', 'main')") is False
+
+
+def test_a_secondary_receiver_failure_is_scoped_to_that_receiver():
+    """Operator nine's refused airband join must not drop their tactical net."""
+    assert _run_js("failureScope('airband')") == 'airband'
+    assert _run_js("failureScope('main')") == 'console'
+    assert _run_js("failureScope(undefined)") == 'console'
+
+
+def test_the_two_radios_are_never_left_on_the_same_net():
+    """Both on one net re-creates the X-9 symptom: the desk twice on the net,
+    doubled audio, and the operator's own transmission back in their headset."""
+    nets = "['primary','alternate','base','briefing']"
+    # Already distinct: nothing moves.
+    assert _run_js(f"distinctNetResolution('primary','alternate',{nets},'main')") is None
+    # Collision: the radio the operator did NOT touch is the one that moves.
+    assert _run_js(f"distinctNetResolution('primary','primary',{nets},'main')") == {
+        'radio': 'airband', 'net': 'alternate'}
+    assert _run_js(f"distinctNetResolution('primary','primary',{nets},'airband')") == {
+        'radio': 'main', 'net': 'alternate'}
+    # A single-channel server cannot satisfy the rule; it must not crash or
+    # invent a net that does not exist.
+    assert _run_js("distinctNetResolution('only','only',['only'],'main')") == {
+        'radio': 'airband', 'net': 'only'}
+    assert _run_js("distinctNetResolution('','',[],'main')") is None

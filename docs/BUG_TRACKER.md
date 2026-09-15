@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 101 items, 13 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 101 items, 10 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -143,7 +143,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [D-5](#d-5) | P2 | medium | Manufacturer artwork is still redistributed, as figure extracts and in git history | docs | C14 | M | D-4 | open |
 | [F-6](#f-6) | P2 | medium | Unescaped server strings in four views (HTML injection) | console-ui | C8 | S | — | fixed |
 | [F-7](#f-7) | P2 | medium | Legacy console: precedence bug and autoplay-blocked audio | console-ui | C9 | S | — | fixed |
-| [F-8](#f-8) | P2 | medium | No bearing intersection maths despite the README | console-ui | C8 | M | — | open |
+| [F-8](#f-8) | P2 | medium | No bearing intersection maths despite the README | console-ui | C8 | M | — | fixed |
 | [F-9](#f-9) | P2 | medium | New radio console has no Form 110 log | console-ui | C9 | M | — | fixed |
 | [I-3](#i-3) | P2 | medium | Becker tone suppression bleeds across bands | instruments | C12 | S | — | fixed |
 | [I-4](#i-4) | P2 | medium | Stored 406 frame falls through to live data | instruments | C12 | S | — | fixed |
@@ -164,7 +164,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [X-6](#x-6) | P2 | medium | Untyped request bodies mutate scenario definitions | console-api | C7 | M | — | fixed |
 | [X-8](#x-8) | P2 | medium | Console operational hygiene: retention, logging, health, shutdown, root | console-api | C7 | M | — | fixed |
 | [X-9](#x-9) | P2 | medium | One Mumble client per browser socket, 16 max | console-api | C9 | M | — | fixed |
-| [F-10](#f-10) | P2 | low | Mission base cannot monitor the airband SAR net | console-ui | C9 | L | — | open |
+| [F-10](#f-10) | P2 | low | Mission base cannot monitor the airband SAR net | console-ui | C9 | L | — | fixed |
 | [I-11](#i-11) | P2 | low | TDFM memory table is 6 generic channels, not a CAP fleet plan | instruments | C12 | M | — | fixed |
 | [I-14](#i-14) | P2 | low | GMA 1347 ICS isolation and Split COM are lamp-only | instruments | C12 | L | — | fixed |
 | [F-11](#f-11) | P3 | low | No operational sidetone on the new radio console | console-ui | C9 | S | — | open |
@@ -398,8 +398,8 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 - **Files:** `services/exercise/Caddyfile:9-12`, `docker-compose.yml:67`, `docker-compose.yml:105`, `docker-compose.yml:146`, `scripts/firewall.sh:10-14`, `infra/ROUTER.md:24-29`
 - **Problem:** The Caddy container is a single-purpose proxy - reverse_proxy exercise:8700, with tls internal and site names hardcoded to ms01, ms01.local and 192.0.2.151 - existing to give tablets a trusted secure context for microphone access. flightplanner has no TLS front at all and is not in the Caddyfile. Because exercise :8700 and flightplanner :8090 remain published as plaintext HTTP on the LAN, the TLS front is bypassable and the non-Secure session cookie and any header or query-parameter token cross the wire in the clear on the default path. firewall.sh notes that Docker's iptables rules precede ufw's, so ufw does not filter published container ports and the router forward list is the real boundary. There is consequently no one place a user can log in once and reach the console, the mission base view and the planner. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35. INVESTIGATED 2026-09-13: path-mounting the planner behind one hostname is NOT viable without changing the planner first, which is what the identity plan warned about when it said to use a separate subdomain if the planner's URL construction makes path mounting brittle. Measured: services/flightplanner/static/js/app.js issues 13 absolute fetches rooted at / (lines 21, 63, 373, 396, 498, 667, 757, 903, 921, 939, 1057, 1165, 1208 - /api/tile-sources, /api/calculate-route, /api/sar/export-vsar and the rest), and templates/index.html and guide.html carry absolute hrefs (href="/", href="/guide", href="/guide/quickstart"). Mounted under /planner/ every one of those would resolve against the console instead. The exercise console has no such problem.
-- **Fix:** Fixed 2026-09-14 (472d3bb, 655b905). Caddy is the sole participant front door on 443, with port 80 limited to the public CA bootstrap and HTTPS redirects. Exercise 8700 and planner 8090 are no longer published. The planner is prefix-safe at `/planner/` through `ProxyFix`, generated template URLs, local tile URLs and prefixed frontend requests. The authenticated root portal lists applications by role. The AI Pilot engineering deck remains separate. `deploy.sh` now rebuilds local source images and repairs the exercise SQLite bind-mount ownership before restart. X-Plane uses a per-process CA bundle and an HTTPS station config rather than broad system trust.
-- **Done when:** Live on ms01 2026-09-14: cross-machine HTTPS health, CA bootstrap, redirect, roster login, portal, base, planner and prefixed tile-source checks all returned the expected 200/302/308 responses; direct connections to 8700 and 8090 were refused. `scripts/preflight.py` reported ALL PASS for front door, private backends, Mumble channels/ACL, chart source and CA publication. The installed station credential reached `/api/plugin/scenario` over verified HTTPS with the process-local CA bundle. Automated: 93 planner tests + 17 subtests, 38 setup/auth tests + 6 subtests, and 21 radio tests passed; Caddy and Compose configs validated on ms01.
+- **Fix:** Fixed 2026-09-14 (472d3bb, 655b905). Caddy is the sole participant front door on 443, with port 80 limited to the public CA bootstrap and HTTPS redirects. Exercise 8700 and planner 8090 are no longer published. The planner is prefix-safe at /planner/ through ProxyFix, generated template URLs, local tile URLs and prefixed frontend requests. The authenticated root portal lists applications by role. The AI Pilot engineering deck remains separate. deploy.sh now rebuilds local source images and repairs the exercise SQLite bind-mount ownership before restart. X-Plane uses a per-process CA bundle and an HTTPS station config rather than broad system trust.
+- **Done when:** Live on ms01 2026-09-14: cross-machine HTTPS health, CA bootstrap, redirect, roster login, portal, base, planner and prefixed tile-source checks all returned the expected 200/302/308 responses; direct connections to 8700 and 8090 were refused. scripts/preflight.py reported ALL PASS for front door, private backends, Mumble channels/ACL, chart source and CA publication. The installed station credential reached /api/plugin/scenario over verified HTTPS with the process-local CA bundle. Automated: 93 planner tests + 17 subtests, 38 setup/auth tests + 6 subtests, and 21 radio tests passed; Caddy and Compose configs validated on ms01.
 - **Depends on:** X-11, X-12
 
 ### O-2a
@@ -822,12 +822,12 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **No bearing intersection maths despite the README**
 
-`P2` · `medium` · `bug` · Exercise console (frontend) · cluster C8 (Base view & debrief) · effort M · wave 3 · **open**
+`P2` · `medium` · `bug` · Exercise console (frontend) · cluster C8 (Base view & debrief) · effort M · wave 3 · **fixed**
 
-- **Files:** `services/exercise/app/static/base.js:99-102`, `README.md`
+- **Files:** `services/exercise/app/geo.py`, `services/exercise/app/static/base.js`, `tests/test_geodesy.py`, `README.md`
 - **Problem:** Bearings are drawn as flat-earth 40 NM rays (fine at that scale) but nothing computes intersections or a confidence area, although the README advertises 'bearing logging & intersection cuts'. Base staff must eyeball the crossing. Bearing entry also requires typing the callsign rather than picking a reporting aircraft.
-- **Fix:** Compute pairwise intersections and a simple confidence polygon; add a callsign dropdown.
-- **Done when:** Three bearings produce a plotted cut area matching a hand plot.
+- **Fix:** Fixed 2026-09-15. app/geo.py now owns forward great-circle ray intersection and confidence-polygon construction with a 40 NM search cap; the browser derives the same implementation behind a parity test. Mission Base draws the spherical rays, pairwise cuts and a filled confidence area, and replaces free-text bearing callsign entry with a selector populated from reporting aircraft.
+- **Done when:** Tests were added first and failed on the pre-fix tree for the missing shared cut, polygon and browser functions. The written-down three-bearing hand plot crosses at (0.0000, 0.0000), (0.0000, 0.0161) and (-0.0192, 0.0000); Python and the browser's executed JavaScript both reproduce the triangle within 0.0002 degree. Required command: 90 passed, 17 subtests. Not verified: visual plotting in a live browser or the deployed console.
 
 ### F-9
 
@@ -1057,12 +1057,12 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Mission base cannot monitor the airband SAR net**
 
-`P2` · `low` · `bug` · Exercise console (frontend) · cluster C9 (Radio console hardening) · effort L · wave 3 · **open**
+`P2` · `low` · `bug` · Exercise console (frontend) · cluster C9 (Radio console hardening) · effort L · wave 3 · **fixed**
 
 - **Files:** `services/exercise/app/static/mission-radio.js`, `services/exercise/app/radio.py`
 - **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. The MRO must watch the VHF-FM tactical net and the VHF-AM aeronautical SAR frequency at the same time; the console joins one Mumble channel at a time. The retired /radio-legacy console had a second airband station (Icom IC-A120) and the rewrite dropped it, so the base can no longer hear aircraft calling on the air-to-ground frequency while working the tactical net.
-- **Fix:** A second simultaneous receive channel on the console, with independent volume and its own log identity. Note the 16-session cap in X-9 - two channels per operator doubles the session count.
-- **Done when:** One operator hears both nets at once and can key the correct one.
+- **Fix:** Fixed 2026-09-15. The console opens independently keyed tactical and airband WebSockets/Mumble radios for each operator, mixes both through separate Web Audio gain nodes, provides an independent airband channel/volume/status panel, and lets the operator select which radio the shared PTT keys. Received and transmitted Form 110 entries use the selected radio's net identity. X-9 sharing remains within each physical radio; the operator/receiver pair is the server key. The existing 16-session cap therefore supports at most 8 fully equipped dual-radio operators. Behavioral tests proved the second Mumble client, selected-net audio routing, cap accounting, log identity, and independent gain calculation. The local page was rendered and visually inspected in Chrome with no console errors.
+- **Done when:** Tests were written first and all four failed on the pre-fix tree. `PYTHONPATH=. ~/.cache/capvsar/capvsar-planner-venv/bin/python3 -m pytest tests/test_console.py tests/test_radio.py tests/test_geodesy.py -q` passes 94 tests and 17 subtests. Not verified: simultaneous audible traffic against the live Mumble server, and deployment.
 
 ### I-11
 
@@ -1184,8 +1184,8 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 - **Files:** `services/exercise/app/radio.py:29-34`
 - **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. Channels read PRIMARY / ALTERNATE / MISSION BASE / BRIEFING. Real heads show zone and channel tags from the fleet plan, and reading them correctly is part of the operator's job. Related to I-11 - the airborne and ground plans should agree.
-- **Fix:** Adopt the same channel naming as I-11 so cockpit and base refer to a channel identically. Verify names against CAPR 100-1 rather than inventing them.
-- **Done when:** A channel briefed by name is identifiable on both the aircraft radio and the base console.
+- **Fix:** UNKNOWN / stopped 2026-09-15. CAPR 100-1 paragraphs 1.9 and 6.13 confirm that channelization is governed by the National Programming Plan and that the actual codeplugs are distributed through the restricted Communications section of eServices. The public regulation does not list TAC 1, TAC 2, CC 1 or CC 2, and neither the vault nor the repo contains an approved exercise channel card mapping the four Mumble nets to those designators. I-11 contains plausible labels but explicitly says its frequencies are placeholders. No console label was changed because the task contract forbids inventing a mapping. Supply the approved exercise/wing channel card or an authoritative four-net mapping before resuming.
+- **Done when:** Not verified: no authoritative mapping exists in the available sources, so the item remains open and no implementation or test was attempted.
 
 ### I-12
 

@@ -45,3 +45,13 @@ docs/RT600_*.pdf
 docs/TDFM136*.pdf
 docs/GMA1347_*.pdf
 docs/gma.txt
+
+# D-5. Page extracts from those same manuals and decks - the -pNN- in each name
+# is the source page. Untracking the manuals (D-4) closed only half the
+# question; these images are the same copyrighted pages, just cropped. They
+# stay on disk and docs/SOURCES.md records the public URL each came from, so
+# anyone can re-extract their own. Our own redrawn faceplates live under
+# instruments/*/resources/ and docs/figures/manual/ and are deliberately NOT
+# covered by this rule.
+docs/figures/*.png
+!docs/figures/manual/

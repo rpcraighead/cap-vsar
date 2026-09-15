@@ -15,9 +15,11 @@ the single implementation and app/propagation.py and mock_bridge.py import it.
     python3 tests/test_geodesy.py
 """
 import importlib.util
+import json
 import math
 import os
 import re
+import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -121,8 +123,73 @@ check("debrief.js still uses the haversine, not a flat approximation",
       "Math.asin(Math.min(1, Math.sqrt(h)))" in debrief)
 # base.js draws the 40 NM bearing rays flat, which is fine at that scale and is
 # F-8's business - but it must at least scale longitude, or the rays lean.
-check("base.js scales longitude on its bearing rays",
-      "Math.cos(m.lat * Math.PI / 180)" in base_js)
+
+print("\n== F-8 bearing cut matches the hand plot ==")
+# Hand plot on an equatorial chart (longitude is east/west, latitude north/south):
+#   A  00.0000, -00.1000  observes 090 T (due east)
+#   B -00.1000,  00.0000  observes 000 T (due north)
+#   C  00.1000,  00.1000  observes 220 T
+# A/B cross at 00.0000, 00.0000.  Resolving C's 220-degree ray into north/east
+# components gives its A and B crossings near (00.0000, 00.0161) and
+# (-00.0192, 00.0000).  Those three written-down points are the confidence
+# triangle; the 0.0002-degree tolerance is about 12 metres at the equator.
+HAND_PLOT = [
+    {"callsign": "A", "lat": 0.0, "lon": -0.1, "bearing_true": 90.0},
+    {"callsign": "B", "lat": -0.1, "lon": 0.0, "bearing_true": 0.0},
+    {"callsign": "C", "lat": 0.1, "lon": 0.1, "bearing_true": 220.0},
+]
+HAND_EXPECTED = [(0.0, 0.0), (0.0, 0.0161), (-0.0192, 0.0)]
+
+
+def polygon_matches(actual, expected, tolerance=0.0002):
+    """Order-independent vertex comparison for the hand-plotted triangle."""
+    unmatched = list(expected)
+    for lat, lon in actual:
+        for i, (want_lat, want_lon) in enumerate(unmatched):
+            if abs(lat - want_lat) <= tolerance and abs(lon - want_lon) <= tolerance:
+                unmatched.pop(i)
+                break
+        else:
+            return False
+    return not unmatched and len(actual) == len(expected)
+
+
+cut_fn = getattr(geo, "bearing_cut_polygon", None)
+check("geo.py exposes bearing_cut_polygon", callable(cut_fn))
+python_cut = cut_fn(HAND_PLOT) if callable(cut_fn) else []
+check("three bearings make the written-down confidence triangle",
+      polygon_matches(python_cut, HAND_EXPECTED), repr(python_cut))
+
+# Execute the browser's actual pure geodesy block under Node.  This is not a
+# source-grep assertion: the functions are called with the same hand plot and
+# their numeric vertices must agree with geo.py.
+browser_block = re.search(
+    r"// BEGIN F-8 PURE GEODESY\n(.*?)// END F-8 PURE GEODESY",
+    base_js, re.S)
+check("base.js provides executable bearing-cut geodesy", browser_block is not None)
+if browser_block is not None:
+    node_script = browser_block.group(1) + "\nconsole.log(JSON.stringify({" \
+        "cut:bearingCutPolygon(" + json.dumps(HAND_PLOT) + ")," \
+        "destination:bearingDestination(33.17,-117.08,90,40)," \
+        "callsigns:bearingCallsignChoices([" \
+        "{callsign:'CAP-2'},{callsign:'CAP-1'},{callsign:'CAP-2'}])}));"
+    node = subprocess.run(["node", "-e", node_script], capture_output=True,
+                          text=True, timeout=10)
+    check("browser bearing-cut functions execute", node.returncode == 0,
+          node.stderr.strip())
+    if node.returncode == 0:
+        browser_result = json.loads(node.stdout)
+        check("browser cut matches the hand plot",
+              polygon_matches(browser_result["cut"], HAND_EXPECTED),
+              repr(browser_result["cut"]))
+        expected_destination = geo.move(33.17, -117.08, 90.0, 40.0)
+        check("browser bearing ray uses the shared direct-solution convention",
+              all(abs(a - b) < 1e-9 for a, b in
+                  zip(browser_result["destination"], expected_destination)),
+              repr(browser_result["destination"]))
+        check("browser callsign choices are unique and sorted",
+              browser_result["callsigns"] == ["CAP-1", "CAP-2"],
+              repr(browser_result["callsigns"]))
 
 print("\n== inside the console there is one implementation ==")
 prop_src = open(os.path.join(ROOT, "services", "exercise", "app", "propagation.py"),
@@ -138,4 +205,7 @@ check("only app/geo.py names the earth radius inside the console",
       "3440.065" not in prop_src and "3440.065" not in mock_src)
 
 print("\n" + ("ALL PASS" if not FAILED else "FAILURES: " + ", ".join(FAILED)))
-sys.exit(1 if FAILED else 0)
+if __name__ == "__main__":
+    sys.exit(1 if FAILED else 0)
+if FAILED:
+    raise AssertionError("geodesy checks failed: " + ", ".join(FAILED))
