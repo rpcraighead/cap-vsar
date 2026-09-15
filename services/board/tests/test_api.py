@@ -176,3 +176,39 @@ def test_a_broken_remote_is_reported_rather_than_hidden(make_app, git_repo):
     assert body["sync"]["error"]
     # The board still renders from the local clone.
     assert len(body["tasks"]) == 3
+
+
+def test_a_clone_on_the_wrong_branch_refuses_to_sync(make_app, git_repo):
+    """The bug this guards: pushing HEAD:<configured branch> from a clone that is
+    sitting on some other branch fast-forwards that branch onto the shared one,
+    so ticking a checkbox silently publishes unrelated work."""
+    upstream, work = git_repo
+    main_head = git("rev-parse", "main", cwd=work).stdout.strip()
+    git("checkout", "-b", "some-feature", cwd=work)
+    (work / "unrelated.txt").write_text("work in progress\n", encoding="utf-8")
+    git("add", "unrelated.txt", cwd=work)
+    git("commit", "-m", "unrelated feature work", cwd=work)
+
+    client, _ = make_app(repo=work, git_sync="1", CAPVSAR_BOARD_TOKEN=TOKEN,
+                         CAPVSAR_BOARD_PULL_INTERVAL="0")
+
+    resp = client.post("/api/board/task",
+                       json={"agent": "Codex", "task": "t"}, headers=AUTH)
+    sync = resp.json()["board"]["sync"]
+    assert sync["ok"] is False
+    assert "some-feature" in sync["error"] and "main" in sync["error"]
+
+    # The decisive assertion: upstream main did not move.
+    assert subprocess.run(["git", "rev-parse", "main"], cwd=upstream,
+                          capture_output=True, text=True).stdout.strip() == main_head
+
+
+def test_a_read_on_the_wrong_branch_reports_it_and_still_renders(make_app, git_repo):
+    _, work = git_repo
+    git("checkout", "-b", "some-feature", cwd=work)
+    client, _ = make_app(repo=work, git_sync="1", CAPVSAR_BOARD_PULL_INTERVAL="0")
+
+    body = client.get("/api/board").json()
+    assert body["sync"]["ok"] is False
+    assert "refusing to sync across branches" in body["sync"]["error"]
+    assert len(body["tasks"]) == 3

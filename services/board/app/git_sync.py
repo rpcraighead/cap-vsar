@@ -88,8 +88,34 @@ class GitSync:
     def is_repo(self) -> bool:
         return (self.repo / ".git").exists()
 
+    def current_branch(self) -> str:
+        """The branch the clone is actually on ("" if detached or unreadable)."""
+        try:
+            proc = self._git("rev-parse", "--abbrev-ref", "HEAD")
+        except (subprocess.TimeoutExpired, OSError):
+            return ""
+        return (proc.stdout or "").strip() if proc.returncode == 0 else ""
+
+    def _branch_mismatch(self) -> Optional[str]:
+        """Refuse to sync a clone that is not on the branch we are configured for.
+
+        Without this, a clone left on some other branch still pushes
+        `HEAD:<configured branch>` - which fast-forwards whatever that clone
+        happens to be sitting on onto the shared branch. Ticking one checkbox
+        would silently publish an unrelated branch. Fail closed instead; the
+        board still renders from disk and the UI shows the reason.
+        """
+        actual = self.current_branch()
+        if actual and actual != self.branch:
+            return (f"clone is on branch {actual!r} but this service is configured for "
+                    f"{self.branch!r} - refusing to sync across branches")
+        return None
+
     def pull(self, min_interval: float = 0.0) -> SyncResult:
         """Fast-forward the clone. Coalesced so polling tabs cannot flood it."""
+        mismatch = self._branch_mismatch()
+        if mismatch:
+            return SyncResult(False, mismatch)
         now = time.monotonic()
         if min_interval and (now - self._last_pull) < min_interval:
             return SyncResult(True, "skipped: pulled recently")
@@ -103,6 +129,10 @@ class GitSync:
         leave work in progress in this tree, and a board edit must not sweep
         their uncommitted changes into its own commit.
         """
+        mismatch = self._branch_mismatch()
+        if mismatch:
+            return SyncResult(False, mismatch)
+
         staged = self._run("add", "--", relpath)
         if not staged.ok:
             return staged
