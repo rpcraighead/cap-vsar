@@ -15,8 +15,10 @@ The pinned source is:
   `d81628fff8489af41d312c0e0bc14e1de2ac10a50d6c0c75f937441f81343fbe`
 - license presented by GitHub and the repository root: GPL-2.0
 - model source used by the converter: `Models/c182s.ac`; the donor's C182T
-  variant references this shared exterior, and `dev/C182T.blend` remains the
-  preferred editable source for later model work
+  variant references this shared exterior. `dev/C182S.blend` is that exterior's
+  editable source (88 objects, matching `Models/c182s.ac` 1:1) and is the
+  preferred source for later exterior model work. `dev/C182T.blend` is the
+  donor's cockpit/interior model and holds no airframe geometry
 - texture source: `Models/Liveries/Default.png`, with a CAP 487 registration
   added by the converter
 
@@ -75,7 +77,8 @@ release.
 Before any public aircraft release:
 
 1. Inventory the copyright and source history of `Models/c182s.ac`,
-   `dev/C182T.blend`, the blank livery and every texture layer used.
+   `dev/C182S.blend`, `dev/C182T.blend`, the blank livery and every texture
+   layer used.
 2. Resolve whether each required asset is GPL-2.0-only or has a documented
    later-version or dual-license grant.
 3. Select one production route above and record the decision in `NOTICE`.

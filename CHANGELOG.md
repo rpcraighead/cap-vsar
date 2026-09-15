@@ -3,6 +3,48 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-15 — A-1: the exterior editable source was misidentified and unpinned
+
+Stage 3 of `docs/bugs/CLAUDE_RESUME_C182_DIMENSIONS.md` told a Blender workflow to
+open `dev/C182T.blend`. That file is the donor's **cockpit/interior** model: 115
+mesh objects, all breakers, switches, levers and indicators, with no airframe
+geometry. Opening it to correct an exterior would have found nothing to correct.
+
+The exterior's editable source is `dev/C182S.blend` — 88 mesh objects matching the
+88 poly objects in `Models/c182s.ac` exactly, name for name, including every
+landmark `scripts/measure_c182t.py` selects on (`Airframe`, `Blade1`-`Blade3`,
+`Rudder`, `MainWheel.L`/`.R`, `FrontWheel`, `Strobe`, `BeaconOff`,
+`chrome_spinner`). Verified by opening both files headless and diffing their
+object names against a live parse of the `.ac`.
+
+`dev/C182S.blend` was also the one asset the donor pipeline did not checksum. The
+fetcher pinned `dev/C182T.blend`, which no exterior work touches, and left
+unverified the single file a geometry correction actually edits. Its SHA-256 is
+now pinned as `3bfe0720…a9a7ae58`; `validate_donor` passes against the live cached
+donor across all 8 pinned files. A regression test asserts both
+`Models/c182s.ac` and `dev/C182S.blend` stay pinned and that every pin is a
+well-formed SHA-256; it was verified to fail before the pin was added.
+
+Corrected the filename in three places in the resume doc (release boundary,
+editable-source line, stage-3 workflow) and two in `FLIGHTGEAR_C182_GPL_PLAN.md`
+(the editable-source claim and the production release gate's licensing
+inventory). Both blends are now named in the release boundary and the inventory,
+since both are GPL donor assets regardless of which one the exterior work uses.
+
+Installed Blender 4.5.14 LTS from the official tarball, SHA-256 verified, to
+`~/opt/blender-4.5.14` with no root. LTS and a pinned patch level were chosen
+because the stage-3 deliverable is a *reproducible* Blender Python script, so the
+Blender version is part of that contract. Recorded for whoever writes it:
+`Object.dimensions` is stale after a `bmesh` write and will report no change on a
+mesh that did change — read vertex data or force a depsgraph update.
+
+No geometry was corrected, no mesh or `.acf` was touched, and no tracker status
+changed. Verified: `tests.test_flightgear_c182` 11 passed; measurement harness 14
+passed with 1 optional skip, and that skip — the live donor comparison, which had
+never been runnable here — now passes, confirming the committed fixture matches a
+fresh donor parse byte for byte; console/radio 90 passed with 17 subtests;
+`git diff --check` clean. A-1 remains open at stage 3, not started.
+
 ## 2026-09-14 — O-8 single HTTPS participant front door deployed
 
 Deployed commits `472d3bb` and `655b905` to ms01. Caddy now serves the

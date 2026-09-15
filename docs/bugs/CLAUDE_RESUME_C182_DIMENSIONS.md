@@ -22,8 +22,8 @@ isolation. Before editing anything:
    in this unit. They contain other agents' work and are not needed to measure
    or correct the exterior mesh.
 5. Treat `docs/FLIGHTGEAR_C182_GPL_PLAN.md` as a release boundary. Do not add
-   the donor archive, donor mesh, `dev/C182T.blend`, donor textures, converted
-   OBJ files or any Laminar file to this Apache repository.
+   the donor archive, donor mesh, `dev/C182S.blend`, `dev/C182T.blend`, donor
+   textures, converted OBJ files or any Laminar file to this Apache repository.
 
 ## Current implementation
 
@@ -35,7 +35,12 @@ The prototype uses HHS81's FlightGear C182 project:
   `d81628fff8489af41d312c0e0bc14e1de2ac10a50d6c0c75f937441f81343fbe`
 - validated local donor cache: `~/.cache/capvsar/capvsar-flightgear-c182-pinned`
 - downloaded source archive: `~/.cache/capvsar/hhs81-c182s-1359d633.tar.gz`
-- editable donor source: `dev/C182T.blend` inside that external cache
+- editable donor source for the EXTERIOR: `dev/C182S.blend` inside that external
+  cache. It holds the 88 airframe objects that match `Models/c182s.ac` 1:1,
+  including every landmark the measurement harness selects on.
+  `dev/C182T.blend` is the donor's cockpit/interior model - breakers, switches,
+  levers, indicators - and contains no airframe geometry at all. Do not open it
+  for exterior work.
 
 The relevant repository files are:
 
@@ -131,7 +136,8 @@ centreline and left/right symmetry explicitly. Recompute every affected
 animation pivot from the corrected landmark profile.
 
 Prefer an external Blender workflow based on the donor's editable
-`dev/C182T.blend`, with a reproducible Blender Python correction/export script
+`dev/C182S.blend` - the exterior source, **not** `dev/C182T.blend`, which is the
+cockpit model - with a reproducible Blender Python correction/export script
 stored in this repository. Keep the `.blend`, exports and generated GPL assets
 outside git. If Blender is unavailable, the measurement harness and a concrete
 correction specification are still useful deliverables; do not substitute a
