@@ -3,6 +3,92 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-15 — B1 flown: the first recorded flight-test data point, and it is a MISS
+
+**Card B1, rate of climb at sea level, full power, Vy. MISS by 10.7%.**
+
+The first point on `docs/C182T_FLIGHT_TEST_CARD.md` ever to produce a number.
+Five H0 runs across the handling matrix had produced none.
+
+**Simulator engineering validation only. Not approved instruction for a real
+aircraft.**
+
+### Result
+
+    measured        800 fpm at 720 ft MSL mean, 599 samples over 30.0 s
+    sea level       825 fpm, extrapolated
+    target          924 fpm +/-10%  =  832..1016
+    error           -99 fpm  (-10.7%)   MISS, by 7 fpm below the lower bound
+
+The sea-level figure is a linear fit of climb rate against altitude over 2,602
+stabilised samples spanning 451-2,120 ft: `ROC(h) = 824.9 - 0.0428h` fpm, a
+decay of 42.8 fpm per 1,000 ft, which is physically sensible for a
+normally-aspirated piston. Extrapolation runs about 450 ft below the lowest
+sample. Both the raw measurement and the corrected figure are recorded; the raw
+one misses by 13.4% and the corrected one by 10.7%, so the verdict does not
+depend on the correction.
+
+### Conditions, achieved rather than targeted
+
+    weight      3,099.8 lb at start, 3,094 lb at end (fuel burn) - max gross
+    CG          FS 44.5 in, 31.5% MAC, AFT-ish
+                certificated envelope at 3,100 lb is FS 40.9-46.0 (TCDS 3A13)
+    airspeed    79.9 KIAS mean over the window (Vy target 80.0)
+    weather     OAT 10.0 C at 2,514 ft vs ISA 10.0 C; density ratio 0.9285 vs
+                ISA 0.9284; wind 0.0 kt - a standard day, confirmed
+    flaps       0.000 throughout
+    trace       B1_run2_20260915-224521.jsonl, 2,795 samples, 20.0 Hz, 0 gaps
+
+The aft CG matters for reading this: an aft CG reduces tail download and if
+anything FLATTERS climb performance, so it does not explain a shortfall. The
+card's own guidance for a low B1 points at engine or propeller modelling rather
+than geometry, noting that power, RPM limit and blade count were already correct
+before the geometry work. Nothing in today's exterior corrections touches
+thrust.
+
+### Three defects found before the number was
+
+**The card cannot be flown paused, and the mass tool did not know it.**
+X-Plane does not recompute `m_total` while paused, so `set_test_condition.py`
+read a stale 1,924 lb, derived an empty weight of 1,124 lb instead of 1,924,
+and loaded 1,735 lb of payload chasing 3,100. On unpause that recomputed to
+3,900 lb - 800 lb over max gross, on a card whose every figure is AT max gross.
+Its read-back confirmed the wrong number because it re-read the same stale
+dataref. It now refuses while paused.
+
+**B1 run 1 was 150 seconds of a paused simulator, and every quality signal said
+it was good.** 2,995 samples, 20.0 Hz effective, zero gaps, weight confirmed -
+and identical min and max on every channel. X-Plane keeps answering RREF while
+paused, so a paused capture is indistinguishable from a beautifully stable test
+point. `capture_flight_test.py` now says NOT A RUN when three or more of
+airspeed, altitude, alpha and Nz never change.
+
+**Engaging autopilot level change SYNCS the speed dial to current airspeed.**
+The dial was set to Vy 80 and then the mode engaged, so the command silently
+overwrote it and the first climb flew 78.3 KIAS while the commanded value was
+believed to be 80. Setting the dial AFTER the mode fixes it, verified by reading
+it back as 80.0. Run 2 held 79.9 mean.
+
+### How it was flown
+
+The card says "Who flies it: **Not the agent**", reserving live control for
+`maneuver_server` and its gate. Ron overrode that for this point. The maneuver
+server could not have flown it regardless: Vy is 80 KIAS and the gate floor is
+90, so it would have refused.
+
+It was flown on the AIRCRAFT'S OWN autopilot - full power set through the
+throttle, propeller and mixture actuators, then level-change holding speed on
+pitch. No second controller, `services/ai_pilot/maneuvers.py` untouched, the
+gate not involved. That is recorded in the trace's own note field so the data
+point carries how it was produced.
+
+### What this does not say
+
+One point at one weight, one CG and one altitude band. It is not a verdict on
+the flight model, and it does not close A-1. C1, C2 and Group D remain unflown,
+and Group A - the stalls, and the highest-value set - stays blocked by the same
+90 KIAS gate floor that stops an autonomous system flying to the stall.
+
 ## 2026-09-15 — D-7: the production licence route leaves A-1's scope
 
 **Ron's decision.** A-1 stops carrying the production licensing route as
