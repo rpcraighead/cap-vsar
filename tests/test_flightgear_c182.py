@@ -16,6 +16,7 @@ sys.path.insert(0, str(REPO / "scripts"))
 
 from build_c182t_package import ACF_PATCHES  # noqa: E402
 import fetch_flightgear_c182 as donor_fetch  # noqa: E402
+import convert_flightgear_c182  # noqa: E402
 from convert_flightgear_c182 import (  # noqa: E402
     DELIBERATELY_EXCLUDED,
     KNOWN_UNCONVERTED,
@@ -194,3 +195,52 @@ class DonorValidationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RegistrationPlacementTests(unittest.TestCase):
+    """The CAP 487 registration must land on the fuselage SIDES, reading correctly
+    from outside each one.
+
+    The atlas bands were measured from the converted mesh - every vertex with a
+    strongly lateral normal at fuselage half-width - not inferred from two door
+    panels, which is the derivation that was wrong twice. Port and starboard
+    share a u range and are separated by v; starboard's v axis is inverted.
+    """
+
+    def _boxes(self):
+        return (convert_flightgear_c182.REGISTRATION_PORT_BOX,
+                convert_flightgear_c182.REGISTRATION_STBD_BOX)
+
+    def test_neither_stamp_runs_off_the_aft_edge_of_its_panel(self):
+        # THE ORIGINAL BUG. Both stamps sat at x >= 1530 while the panels end at
+        # 1479, so the registration was painted onto the tailcone and ran off
+        # into the belly curve.
+        port, stbd = self._boxes()
+        self.assertLessEqual(port[2], convert_flightgear_c182.SIDE_PANEL_PORT[2])
+        self.assertLessEqual(stbd[2], convert_flightgear_c182.SIDE_PANEL_STBD[2])
+
+    def test_each_stamp_is_wholly_inside_its_own_side_panel(self):
+        for box, panel in zip(self._boxes(), (convert_flightgear_c182.SIDE_PANEL_PORT,
+                                              convert_flightgear_c182.SIDE_PANEL_STBD)):
+            self.assertGreaterEqual(box[0], panel[0])
+            self.assertGreaterEqual(box[1], panel[1])
+            self.assertLessEqual(box[2], panel[2])
+            self.assertLessEqual(box[3], panel[3])
+
+    def test_the_two_panels_do_not_overlap(self):
+        # If they did, one stamp would bleed onto the other side.
+        port = convert_flightgear_c182.SIDE_PANEL_PORT
+        stbd = convert_flightgear_c182.SIDE_PANEL_STBD
+        self.assertLess(port[3], stbd[1], "port band must end above the starboard band")
+
+    def test_both_stamps_sit_within_the_atlas(self):
+        w, h = convert_flightgear_c182.ATLAS_SIZE
+        for box in self._boxes():
+            self.assertTrue(0 <= box[0] < box[2] <= w and 0 <= box[1] < box[3] <= h)
+
+    def test_the_stamps_are_comparable_in_size(self):
+        # Same registration, same aeroplane; a big discrepancy means one box was
+        # edited and the other forgotten.
+        port, stbd = self._boxes()
+        self.assertAlmostEqual((port[2]-port[0]) / (stbd[2]-stbd[0]), 1.0, delta=0.08)
+        self.assertAlmostEqual((port[3]-port[1]) / (stbd[3]-stbd[1]), 1.0, delta=0.08)

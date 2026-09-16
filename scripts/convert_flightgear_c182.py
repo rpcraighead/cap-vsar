@@ -18,6 +18,12 @@ from typing import Iterable
 
 from PIL import Image, ImageDraw, ImageFont
 
+try:                                  # DejaVu is not guaranteed on every host
+    ImageFont.truetype("DejaVuSans-Bold.ttf", 12)
+    _HAS_DEJAVU = True
+except OSError:
+    _HAS_DEJAVU = False
+
 from fetch_flightgear_c182 import (
     DONOR_ARCHIVE_SHA256,
     DONOR_COMMIT,
@@ -461,30 +467,73 @@ def write_blank_obj(destination: Path) -> None:
     destination.write_text("A\n800\nOBJ\n\nPOINT_COUNTS 0 0 0 0\n")
 
 
+# Fuselage side panels in the 4096x2048 atlas, measured from the converted mesh
+# by selecting every vertex with a strongly lateral normal at fuselage
+# half-width. Both sides share a u range and are separated by v.
+ATLAS_SIZE = (4096, 2048)
+SIDE_PANEL_PORT = (111, 442, 1479, 894)     # corr(u, aft) +1.00, corr(v, up) +1.00
+SIDE_PANEL_STBD = (107, 1161, 1478, 1538)   # corr(u, aft) +1.00, corr(v, up) -1.00
+
+# Registration placement, aft fuselage, inside those panels.
+REGISTRATION_PORT_BOX = (1040, 582, 1424, 674)
+REGISTRATION_STBD_BOX = (1036, 1348, 1423, 1436)
+
+
 def create_cap_texture(source: Path, destination: Path) -> None:
     """Create a restrained CAP 487 prototype marking on the donor's blank livery."""
     image = Image.open(source).convert("RGBA")
-    draw = ImageDraw.Draw(image)
-    try:
-        font = ImageFont.truetype("DejaVuSans-Bold.ttf", 138)
-    except OSError:
-        font = ImageFont.load_default(size=138)
     fill = (13, 36, 77, 255)
     stroke = (235, 240, 246, 255)
     label = "CAP 487"
 
-    # The pinned donor's UV atlas gives each fuselage side its own region, so the
-    # label is stamped twice rather than shared. Measured from the donor's Door.L
-    # and Door.R UVs: both sides run aft with increasing u, but the right side's v
-    # axis is inverted (up is LOWER v) while the left side's is not. The right-hand
-    # stamp therefore needs a vertical flip only. Using rotate(180) here would also
-    # flip it horizontally and render the registration mirrored on that side.
-    draw.text((1590, 505), label, font=font, fill=fill, stroke_width=4, stroke_fill=stroke)
-    flipped = Image.new("RGBA", (950, 210), (0, 0, 0, 0))
-    flipped_draw = ImageDraw.Draw(flipped)
-    flipped_draw.text((10, 10), label, font=font, fill=fill, stroke_width=4, stroke_fill=stroke)
-    flipped = flipped.transpose(Image.FLIP_TOP_BOTTOM)
-    image.alpha_composite(flipped, (1530, 1120))
+    # WHERE THE SIDES ACTUALLY LIVE IN THE ATLAS, measured from the converted
+    # mesh rather than inferred from two door panels - the earlier derivation
+    # from Door.L/Door.R was wrong twice. Selecting every vertex whose normal is
+    # strongly lateral, at fuselage half-width, gives two clean bands that share
+    # a u range and are separated by v:
+    #
+    #   port       texels x 111..1479, y  442.. 894   corr(u,aft) +1.00  corr(v,up) +1.00
+    #   starboard  texels x 107..1478, y 1161..1538   corr(u,aft) +1.00  corr(v,up) -1.00
+    #
+    # Both stamps used to sit at x >= 1530, past the panel's aft edge at 1479,
+    # so the registration was painted onto the tailcone and ran off into the
+    # belly curve. That is the placement half of the bug.
+    #
+    # The orientation half: viewed from OUTSIDE the port side the nose is to the
+    # viewer's left, so increasing u (aft) runs rightward and increasing v (up)
+    # runs up - the panel shows the atlas exactly as drawn, and port needs no
+    # transform. Viewed from outside the STARBOARD side the nose is to the
+    # viewer's right, so increasing u runs LEFTWARD; v is inverted there as
+    # well, so image-up runs downward. Both axes reverse, which is a 180-degree
+    # ROTATION. The previous comment argued that rotate(180) would mirror the
+    # registration and used FLIP_TOP_BOTTOM instead; that reasoning had it
+    # backwards - a vertical flip alone leaves exactly the horizontal mirror
+    # that was observed.
+
+    def _stamp(box: tuple[int, int, int, int], rotate: bool) -> None:
+        x0, y0, x1, y1 = box
+        w, h = x1 - x0, y1 - y0
+        tile = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        tile_draw = ImageDraw.Draw(tile)
+        size = h
+        while size > 8:
+            trial = ImageFont.truetype("DejaVuSans-Bold.ttf", size) if _HAS_DEJAVU \
+                else ImageFont.load_default(size=size)
+            left, top, right, bottom = tile_draw.textbbox((0, 0), label, font=trial,
+                                                          stroke_width=4)
+            if right - left <= w and bottom - top <= h:
+                break
+            size -= 2
+        left, top, right, bottom = tile_draw.textbbox((0, 0), label, font=trial,
+                                                      stroke_width=4)
+        tile_draw.text(((w - (right - left)) / 2 - left, (h - (bottom - top)) / 2 - top),
+                       label, font=trial, fill=fill, stroke_width=4, stroke_fill=stroke)
+        if rotate:
+            tile = tile.transpose(Image.ROTATE_180)
+        image.alpha_composite(tile, (x0, y0))
+
+    _stamp(REGISTRATION_PORT_BOX, rotate=False)
+    _stamp(REGISTRATION_STBD_BOX, rotate=True)
     image.save(destination)
 
 
