@@ -44,6 +44,8 @@
 - **[2026-09-11 | Codex] AI Pilot Maneuver Server**: Live aircraft control is restricted to `services.ai_pilot.maneuver_server` with lease tokens and automatic pause on telemetry loss.
 - **[2026-09-13 | Codex, supersedes 2026-09-11] AI Pilot Web Deck**: Engineering deck on `8088` is now **loopback-only by default** — `--expose` is required for a network bind, mutating routes require `CAPVSAR_AI_PILOT_TOKEN` (Bearer), browser origins must be listed with `--allow-origin`, and `/api/*` sends `Cache-Control: no-store`. REST at `/api/telemetry`, `/api/checklists`, `/api/chat`, `/api/board`, `/api/fdr/*`. This deck stays OFF the participant front door (different trust domain).
 - **[2026-09-10 | Claude] Signal Link Budget**: `cap/df/signal` is calibrated as 0.0..1.0 link budget (NOT percent). Slant range accounts for height delta.
+- **[2026-09-15 | Claude] X-Plane UDP: RREF ids collide across clients**: X-Plane keeps streaming RREF subscriptions to the receive port after a client exits, and every new `XPlaneUDPClient` restarts dataref ids at 0 - so a second client reads the first's values under its OWN names (seen live: `elevation` returning latitude). Use a distinct `receive_port=` per tool, not the 49005 default. Affects any UDP tooling.
+- **[2026-09-15 | Claude] scripts/set_air_start.py**: places the aircraft airborne on a named runway's final, writing position AND velocity (`VEHS` sets no airspeed). KNOWN DEFECT: the first application after a long-distance jump gives a garbage altitude - apply twice until read-back matches. Writes no control and does not involve the maneuver gate.
 - **[2026-09-14 | Codex] O-8 front door**: Participant web traffic is Caddy 80/443 only; apps share `https://192.0.2.151/`, planner is `/planner/`, and backend 8700/8090 are private.
 
 ---
@@ -52,10 +54,10 @@
 *Agents append a 1-2 line receipt here when completing a task, before updating CHANGELOG.md.*
 
 - **2026-09-15 [Claude]**: `pytest` at the repo root collected nothing (SystemExit during import aborted the run). Guarded the four script-style files in `tests/` and scoped collection to `tests/` via `pytest.ini`. One command now runs the whole suite: 227 passed, 1 skipped, 23 subtests.
+- **2026-09-15 [Claude]**: Built `scripts/set_air_start.py` (46 tests) and flew it live at KRNM. Velocity write confirmed - 0 to 91 KIAS on unpause. Found a long-distance teleport defect (4.7M ft on first apply, exact on second) and an RREF port collision; both recorded in CHANGELOG. Aircraft left stable at 3,291 ft, 95.7 KIAS on the runway 09 heading.
 - **2026-09-14 [Codex O-8]**: Single HTTPS portal deployed on ms01; one roster login reached portal/base/planner, 8700/8090 refused, plugin HTTPS passed, and full preflight passed. Tests: planner 93+17 subtests, auth 38+6, radio 21.
 - **2026-09-13 [Codex JOB B]**: AI-7 implementation complete: loopback default, explicit --expose/--allow-origin, CAPVSAR_AI_PILOT_TOKEN bearer writes, API no-store, board timestamp/error state; engineering only. Pytest: 88 passed + 9 subtests (temporary security/UI harness), 4 socket setups blocked by sandbox; legacy POST tests need credential fixtures outside this lane. 8088 NOT killed/restarted: restart with local token required to activate protection; changes uncommitted for Claude review.
 - **2026-09-13 [Codex JOB C]**: Closed X-12/X-13/X-14: Secure cookies, no JSON/query session secrets, CSRF-confirmed joins, 128-bit badge suffixes, hashed/pruned/revoked sessions, base/instructor ICS gate; pytest 58 passed (37 auth + 21 radio), 6 subtests, using /tmp/capvsar_test_wakeup.py for sandbox TestClient wakeup hang; HTTPS and badge reissue required, old sessions revoked; working tree only, no restart.
-- **2026-09-13 [Codex JOB A]**: Closed L-15 in flightplanner: caller-only console credentials, instructor validation on mutations, no escalating fallback, fail-closed auth/redirects; planner pytest: 88 passed + 17 subtests. Working tree only; no services restarted; browser sessions require shared origin.
 
 ---
 

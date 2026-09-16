@@ -3,6 +3,101 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-15 — air start: one tool, six surprises, none of them the maths
+
+`scripts/set_air_start.py` places CAP 487 airborne on a named runway's final
+approach, flying, so the panels have live data without anyone hand-flying the
+simulator. It was written and tested entirely offline, then flown for the first
+time. **Every offline test passed and the tool was correct. The live run found
+six things anyway, and only the last one was a defect in the tool's own
+reasoning.** Recording the sequence because, as with card H0, the sequence is
+the useful part.
+
+Simulator engineering only. The tool writes position, attitude and velocity. It
+touches no flight control, no lease and no gate; `services/ai_pilot/maneuvers.py`
+was not modified and `maneuver_server` was never involved.
+
+### 1 — The sim will not start itself
+
+X-Plane launched, loaded, and then sat on the Quick Flight menu waiting for a
+human. It answers **no UDP at all** until a flight is loaded, so the readiness
+watcher stayed silent and looked identical to "still booting". The cause is the
+preference `_show_qfl_on_start 1`. `--help` documents `--pref:<key>=<value>`, so
+`--pref:_show_qfl_on_start=0` should boot straight into the last flight. The
+binary also carries an undocumented `--load_llah=` (lat/lon/alt/heading) and
+`--start_running`, neither in the public help; together they would put the
+aircraft airborne from the command line and make the reposition unnecessary.
+Unproven, and not yet in `scripts/launch_xplane_cap_vsar.sh`.
+
+### 2 — The prefs said KNTD. The flight was in Austria.
+
+"Resume last flight" restored 47.80 N, 13.00 E — on the ground, engine running.
+`_apt_id_str KNTD` in the preferences describes where a NEW flight would start,
+not what a resumed one restores. Worth knowing before trusting that field again.
+
+### 3 — Four point seven million feet
+
+The first reposition put the aeroplane at **4,699,505 ft, descending through
+36,000 fpm and accelerating**, tumbling, at 0 KIAS. The latitude and longitude
+were correct to five decimals. Paused it before anything else.
+
+### 4 — The instrument lied about the instrument
+
+Diagnosis went sideways for one round because `sim/flightmodel/position/elevation`
+read back as **33.06** — the latitude. X-Plane keeps streaming RREF subscriptions
+to the receive port after a client exits, and every new client restarts its
+dataref IDs at zero, so a second client's IDs collide with the first's still-live
+stream and values arrive under the wrong names. Every reading in this entry was
+re-taken on a fresh receive port. Any tool that subscribes on the default 49005
+inherits this.
+
+### 5 — The teleport, not the arithmetic
+
+Root cause of the 4.7 million feet: distance. Austria to California is about
+9,500 km, and `VEHS` re-centres the horizontal origin but leaves the vertical
+referenced to the old scenery origin — `local_x` and `local_z` came back small
+while `local_y` was 1,423,499 m. **Running the identical command a second time
+was exact**: 33.0663, -117.0994, 1310.64 m = 4300 ft MSL, the requested figures
+to the digit.
+
+So the tool has a real limitation, found only by flying it: *the first
+application after a long-distance jump produces a garbage altitude.* The fix is
+to read the achieved altitude back and re-apply when it is wrong — the same
+discipline `scripts/set_test_condition.py` already follows, and for the same
+reason. NOT YET IMPLEMENTED.
+
+### 6 — What actually worked
+
+The velocity write, which was the half that could not be verified offline.
+Airspeed went **0 to 91 KIAS the instant physics resumed**: the aeroplane flew
+rather than fell. That was the whole reason the tool exists — `VEHS` relocates
+"without resetting flight dynamics" and therefore sets no airspeed, and nothing
+in the tree wrote velocity before this.
+
+Left alone it then wandered — idle throttle, out of trim, rolling off to 20
+degrees of bank and descending. That is exactly what the docstring claims and
+had never been demonstrated. Stabilised with **X-Plane's own autopilot** (throttle
+0.70, HDG 090 M, altitude hold), which settled to 3,291 ft MSL, 95.7 KIAS, wings
+level at 1.1 degrees, vertical speed zero, tracking 100.2 true — the runway 09
+heading — 7.75 nm from the threshold. Unattended and steady, which was the point.
+
+### Standing notes
+
+* The ManeuverGate's envelope (3,000-6,000 ft indicated, 1,000 ft AGL, 90-140
+  KIAS, 35 degrees bank) permits the outer half of a 9 nm final and refuses from
+  4.0 nm in, and approach speed is under its 90 kt floor throughout. The gate's
+  grammar accepts heading and altitude only — there is no glidepath verb. It
+  cannot fly an approach, by design, and the tool now prints that verdict before
+  the flight rather than discovering it during one.
+* Runway geometry is read from X-Plane's own `apt.dat`. KRNM 09 measures 100.0
+  degrees true, not 090; the 27 threshold in that file agrees to seven decimals
+  with `KRNM_27_THRESHOLD` in `services/ai_pilot/flight_controller.py`, derived
+  independently.
+* Air Manager was not started. Panels remain untested against this condition.
+
+Offline coverage: 46 tests in `tests/test_air_start.py`; full suite 273 passed,
+1 skipped, 23 subtests. None of them would have caught items 1 through 5.
+
 ## 2026-09-14 — O-8 single HTTPS participant front door deployed
 
 Deployed commits `472d3bb` and `655b905` to ms01. Caddy now serves the
