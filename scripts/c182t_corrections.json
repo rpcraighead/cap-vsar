@@ -25,9 +25,9 @@
     {
       "id": "main_wheel_track_to_poh",
       "closes": "main_wheel_track",
-      "status": "blocked",
+      "status": "active",
       "blocked_on": "Which endpoints the POH three-view's wheel-track dimension actually marks. Ron or an SME, not a model.",
-      "type": "spanwise_ramp_about_centreline",
+      "type": "gear_track_widen",
       "objects": [
         "MainStrut.L",
         "MainStrut.R",
@@ -39,8 +39,20 @@
       "measured_centre_to_centre_in": 102.99,
       "measured_tyre_outer_face_in": 109.45,
       "target_in": 108.0,
-      "rationale": "DO NOT CORRECT THIS UNTIL THE READING IS SETTLED - the ambiguity flips the SIGN of the required correction. The dimension master already records that the POH drawing's dimension lines drop from the wheels and do not annotate whether they mark wheel centre or tyre outer face, and calls centre-to-centre the conventional reading. Measured both ways on a 6.46 in tyre: centre-to-centre is 102.99 in (-4.64%), tyre outer face is 109.45 in (+1.34%). One reading says the gear is nearly five inches too NARROW; the other says it is an inch and a half too WIDE. Widening the track to make centre-to-centre 108.0 would put the outer faces at about 115.9 in, roughly 7% too wide if the outer-face reading is the right one. That is inventing a coordinate, which section 1 of the resume doc forbids: mark it unknown and stop. The transform and object list above are ready to apply once the endpoint is sourced.",
-      "source": "POH p.1-3, Figure 1-1 Sheet 1 (front view); ambiguity recorded in c182t_dimension_master.json"
+      "rationale": "READING SETTLED 2026-09-15 as CENTRE-TO-CENTRE, by convergent inference rather than by reading POH Fig 1-1 Sheet 1 - nobody involved has the POH. The ambiguity flips the SIGN (centre-to-centre 102.99 in, -4.64%, too NARROW; tyre outer face 109.45 in, +1.34%, too WIDE), so the grounds matter. (1) THE POH'S OWN NOTE, on the companion gear dimension of the same three-view, measures wheel base 'nose wheel axle -> main wheel CENTRE LINE' (dimension master line 96, sourced POH Fig 1-1 Sheet 2 NOTE). A drawing that annotates one gear dimension to the wheel centreline is not measuring the other to the tyre faces. (2) CONSISTENCY, which is arithmetic rather than opinion: every other donor dimension is undersized - overall length -2.48%, overall height -2.78%, wheel base -3.64% - so the centre-to-centre reading makes the gear uniformly small like the rest of the airframe, while the outer-face reading makes the track the ONLY oversized dimension on the model and has it 1.34% too wide while its own wheelbase is 3.64% too short, which is not a plausible mesh. (3) Standard aeronautical convention measures landing gear track centre to centre; note that FAA-H-8083-31B uses 'tread' for the TYRE's rubber crown, which is the likely source of the original doubt. SOURCES CHECKED AND FOUND SILENT: EASA/FAA TCDS 3A13 gives the datum, levelling means and 6.00x6 main tyre size but no tread; Cessna's Specification and Description Skylane 182T Dec 2015 Rev C lists height, length, span, cabin and doors but no wheel track at all. THE TRANSFORM: each wheel moves outboard 0.0636 m (2.5 in), 1.3080 -> 1.3716 m half-track. A single spanwise scale would be wrong - scaling the wheel about an inboard root widens the TYRE too, taking the donor's 164 mm wheel to 193 mm - so MainWheel and WheelFairing TRANSLATE rigidly, keeping their own dimensions, and only MainStrut ramps, with its inboard attachment at |x|=0.938 m fixed and its outboard end taking the full delta. That is the spring leg flexing outward rather than growing. This is the MESH, not the ACF flight model's gear positions.",
+      "source": "POH p.1-3, Figure 1-1 Sheet 1 (front view); ambiguity recorded in c182t_dimension_master.json",
+      "rigid_objects": [
+        "MainWheel.L",
+        "MainWheel.R",
+        "WheelFairing.L",
+        "WheelFairing.R"
+      ],
+      "root_abs_x": 0.938,
+      "ramp_tip_abs_x": 1.235,
+      "measured_track_m": 2.616,
+      "target_track_m": 2.7432,
+      "reading": "main wheel centre to centre",
+      "evidence_strength": "INFERRED, not read off the drawing. Weaker than the propeller (a certification bound) or the horizontal tail span (a direct measurement), and recorded as such."
     },
     {
       "id": "horizontal_tail_span_to_poh",

@@ -117,6 +117,12 @@ class Profile(unittest.TestCase):
         # the root where the span transform leaves them alone.
         inert = [Stub(n, [corrections.xplane_to_ac((0.0, 0.4, 5.5))])
                  for n in ("Airframe", "Elevator", "ElevatorTrim")]
+        # Gear objects too: the track correction is active and would otherwise
+        # fail loudly for naming absent objects. Placed on the centreline, so
+        # the rigid translation moves them without affecting the prop radius.
+        inert += [Stub(n, [corrections.xplane_to_ac((0.0, -0.8, 1.4))])
+                  for n in ("MainStrut.L", "MainStrut.R", "MainWheel.L",
+                            "MainWheel.R", "WheelFairing.L", "WheelFairing.R")]
 
         self.assertAlmostEqual(2 * prop_radius(blades) / 0.0254, 79.255, places=2)
         corrections.apply_corrections(blades + inert, converter)
@@ -125,19 +131,21 @@ class Profile(unittest.TestCase):
         self.assertGreaterEqual(corrected_in, 77.5)
 
     def test_a_blocked_correction_is_never_applied(self):
-        """Blocked entries carry a ready transform. It must stay inert."""
-        blocked = [c for c in corrections.load_profile()["corrections"]
-                   if c.get("status") == "blocked"]
-        self.assertTrue(blocked, "expected the profile to record blocked work")
-        for c in blocked:
-            # Named objects exist in the donor, so a typo does not hide here
-            # until the day someone flips the status to active.
-            self.assertTrue(c["objects"])
-            stub = [Stub(n, [(1.0, 2.0, 3.0)]) for n in ("Blade1", "Blade2", "Blade3", "FastProp")]
-            before = [tuple(v) for o in stub for v in o.vertices]
-            corrections.apply_corrections(stub, converter, {"corrections": [c]})
-            after = [tuple(v) for o in stub for v in o.vertices]
-            self.assertEqual(before, after, f"{c['id']} moved geometry while blocked")
+        """Blocked entries carry a ready transform. It must stay inert.
+
+        The profile no longer HOLDS a blocked correction - all three are active
+        as of 2026-09-15 - so this drives the mechanism with a synthetic one.
+        Asserting that blocked work exists would have made this test fail on
+        the day the last blocker was cleared, which is the wrong signal.
+        """
+        blocked = dict(corrections.load_profile()["corrections"][0])
+        blocked["status"] = "blocked"
+        stub = [Stub(n, [(1.0, 2.0, 3.0)])
+                for n in ("Blade1", "Blade2", "Blade3", "FastProp")]
+        before = [tuple(v) for o in stub for v in o.vertices]
+        corrections.apply_corrections(stub, converter, {"corrections": [blocked]})
+        after = [tuple(v) for o in stub for v in o.vertices]
+        self.assertEqual(before, after, "a blocked correction moved geometry")
 
     def test_every_blocked_correction_says_what_it_is_waiting_for(self):
         """A blocked item with no stated blocker is indistinguishable from
@@ -213,3 +221,88 @@ class SpanBlend(unittest.TestCase):
              if x["id"] == "horizontal_tail_span_to_poh"][0]
         self.assertEqual(c["status"], "active")
         self.assertAlmostEqual(c["target_half_span_m"] * 2 / 0.0254, 140.0, places=3)
+
+
+class GearTrackWiden(unittest.TestCase):
+    """A-1 stage 3: main wheel track, widened to the POH.
+
+    The reading was settled as centre-to-centre by inference, not by reading
+    the drawing - see the correction's own rationale. These tests are about
+    the TRANSFORM being right, which is a separate question from the reading
+    being right.
+    """
+
+    ROOT, TIP, DELTA = 0.938, 1.235, 0.0636
+
+    def test_a_rigid_part_moves_without_changing_width(self):
+        # The whole reason wheel and fairing translate instead of scaling: a
+        # scale about an inboard root widens the TYRE as well as moving it.
+        inner = corrections._track_widen((1.226, -0.8, 1.4), self.ROOT, self.TIP,
+                                         self.DELTA, rigid=True)
+        outer = corrections._track_widen((1.390, -0.8, 1.4), self.ROOT, self.TIP,
+                                         self.DELTA, rigid=True)
+        self.assertAlmostEqual(outer[0] - inner[0], 1.390 - 1.226, places=9)
+
+    def test_a_rigid_part_moves_by_exactly_the_delta(self):
+        moved = corrections._track_widen((1.308, -0.8, 1.4), self.ROOT, self.TIP,
+                                         self.DELTA, rigid=True)
+        self.assertAlmostEqual(moved[0], 1.308 + self.DELTA, places=9)
+
+    def test_the_strut_attachment_is_a_fixed_point(self):
+        # If it moved, the leg would part company with the fuselage.
+        at_root = corrections._track_widen((self.ROOT, -0.7, 1.4), self.ROOT,
+                                           self.TIP, self.DELTA, rigid=False)
+        self.assertAlmostEqual(at_root[0], self.ROOT, places=9)
+
+    def test_strut_material_inboard_of_the_root_does_not_move(self):
+        # MainStrut reaches |x| 0.398, well inside the fuselage.
+        self.assertEqual(corrections._track_widen((0.398, -0.7, 1.4), self.ROOT,
+                                                  self.TIP, self.DELTA, rigid=False),
+                         (0.398, -0.7, 1.4))
+
+    def test_the_strut_tip_takes_the_full_delta(self):
+        tip = corrections._track_widen((self.TIP, -0.88, 1.4), self.ROOT, self.TIP,
+                                       self.DELTA, rigid=False)
+        self.assertAlmostEqual(tip[0], self.TIP + self.DELTA, places=9)
+
+    def test_the_strut_ramp_is_monotonic_between_root_and_tip(self):
+        xs = [self.ROOT + i * (self.TIP - self.ROOT) / 10 for i in range(11)]
+        moved = [corrections._track_widen((x, -0.7, 1.4), self.ROOT, self.TIP,
+                                          self.DELTA, rigid=False)[0] for x in xs]
+        self.assertEqual(moved, sorted(moved))
+
+    def test_both_sides_widen_outward_not_both_one_way(self):
+        left = corrections._track_widen((-1.308, -0.8, 1.4), self.ROOT, self.TIP,
+                                        self.DELTA, rigid=True)
+        right = corrections._track_widen((1.308, -0.8, 1.4), self.ROOT, self.TIP,
+                                         self.DELTA, rigid=True)
+        self.assertAlmostEqual(left[0], -right[0], places=9)
+        self.assertLess(left[0], -1.308)
+        self.assertGreater(right[0], 1.308)
+
+    def test_height_and_station_are_untouched(self):
+        moved = corrections._track_widen((1.308, -0.83, 1.41), self.ROOT, self.TIP,
+                                         self.DELTA, rigid=True)
+        self.assertEqual((moved[1], moved[2]), (-0.83, 1.41))
+
+    def test_the_profile_targets_nine_feet_centre_to_centre(self):
+        c = [x for x in corrections.load_profile()["corrections"]
+             if x["id"] == "main_wheel_track_to_poh"][0]
+        self.assertEqual(c["status"], "active")
+        self.assertAlmostEqual(c["target_track_m"] / 0.0254, 108.0, places=3)
+        self.assertIn("centre", c["reading"])
+
+    def test_the_record_admits_the_reading_is_inferred(self):
+        # It was not read off the drawing, and a later reader must not mistake
+        # it for the propeller's certification bound.
+        c = [x for x in corrections.load_profile()["corrections"]
+             if x["id"] == "main_wheel_track_to_poh"][0]
+        self.assertIn("INFERRED", c["evidence_strength"])
+
+    def test_wheel_and_fairing_are_rigid_and_the_strut_is_not(self):
+        c = [x for x in corrections.load_profile()["corrections"]
+             if x["id"] == "main_wheel_track_to_poh"][0]
+        rigid = set(c["rigid_objects"])
+        self.assertEqual(rigid, {"MainWheel.L", "MainWheel.R",
+                                 "WheelFairing.L", "WheelFairing.R"})
+        self.assertNotIn("MainStrut.L", rigid)

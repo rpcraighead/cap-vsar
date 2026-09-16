@@ -60,6 +60,49 @@ def _span_blend(vertex_xp, root_abs_x, ratio):
     return (math.copysign(moved, x), y, z)
 
 
+def _track_widen(vertex_xp, root_abs_x, tip_abs_x, delta, rigid):
+    """Move a main gear outboard: the wheel rigidly, the leg by bending.
+
+    A single spanwise SCALE is wrong here. Scaling the wheel about a root
+    inboard of it widens the TYRE as well as moving it - the donor's 164 mm
+    wheel would come out 193 mm wide. So the wheel and its fairing translate
+    rigidly by the full delta, keeping their own dimensions, and only the
+    strut ramps: its inboard attachment is a fixed point and its outboard end
+    takes the full delta, which is the leg flexing outward rather than growing.
+    """
+    x, y, z = vertex_xp
+    if rigid:
+        return (math.copysign(abs(x) + delta, x), y, z)
+    if abs(x) <= root_abs_x:
+        return vertex_xp
+    span = tip_abs_x - root_abs_x
+    ramp = 1.0 if span <= 0 else min(1.0, (abs(x) - root_abs_x) / span)
+    return (math.copysign(abs(x) + delta * ramp, x), y, z)
+
+
+def _apply_track_widen(correction, by_name, converter):
+    root = float(correction["root_abs_x"])
+    tip = float(correction["ramp_tip_abs_x"])
+    measured = float(correction["measured_track_m"])
+    target = float(correction["target_track_m"])
+    delta = (target - measured) / 2.0
+    rigid_names = set(correction["rigid_objects"])
+
+    touched = 0
+    for name in correction["objects"]:
+        obj = by_name[name]
+        rigid = name in rigid_names
+        corrected = []
+        for vertex in obj.vertices:
+            point = converter.ac_to_xplane(vertex)
+            moved = _track_widen(point, root, tip, delta, rigid)
+            if moved != point:
+                touched += 1
+            corrected.append(xplane_to_ac(moved))
+        obj.vertices = corrected
+    return delta, touched
+
+
 def _in_region(vertex_xp, region):
     """Is this vertex inside the correction's selection window?"""
     x, _, z = vertex_xp
@@ -111,7 +154,8 @@ def apply_corrections(objects, converter, profile: dict | None = None) -> list[d
         if correction.get("status") != "active":
             continue
         if correction["type"] not in ("radial_scale_about_axis",
-                                      "region_scale_with_root_blend"):
+                                      "region_scale_with_root_blend",
+                                      "gear_track_widen"):
             raise ValueError(f"Unknown correction type: {correction['type']}")
 
         missing = [n for n in correction["objects"] if n not in by_name]
@@ -120,6 +164,13 @@ def apply_corrections(objects, converter, profile: dict | None = None) -> list[d
             # leave the geometry wrong while reporting success.
             raise ValueError(
                 f"Correction {correction['id']} names absent objects: {missing}")
+
+        if correction["type"] == "gear_track_widen":
+            delta, touched = _apply_track_widen(correction, by_name, converter)
+            applied.append({"id": correction["id"], "closes": correction["closes"],
+                            "scale": delta, "objects": list(correction["objects"]),
+                            "vertices": touched})
+            continue
 
         if correction["type"] == "region_scale_with_root_blend":
             ratio, touched = _apply_region_scale(correction, by_name, converter)

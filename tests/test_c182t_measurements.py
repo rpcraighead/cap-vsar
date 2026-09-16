@@ -30,7 +30,11 @@ class Measurements(unittest.TestCase):
         self.assertEqual(c['propeller_diameter']['status'],'pass')
         self.assertAlmostEqual(c['propeller_diameter']['measured']['in'],79.0,places=2)
         self.assertLessEqual(c['propeller_diameter']['measured']['in'],79.0)
-        self.assertEqual(c['main_wheel_track']['status'],'fail')
+        # Closed 2026-09-15 by main_wheel_track_to_poh, after settling the
+        # POH reading as centre-to-centre by inference - see that correction's
+        # rationale, which records that it was NOT read off the drawing.
+        self.assertEqual(c['main_wheel_track']['status'],'pass')
+        self.assertAlmostEqual(c['main_wheel_track']['measured']['in'],108.0,places=2)
         # Closed 2026-09-15 by horizontal_tail_span_to_poh: a region transform
         # on the tail with the root as a fixed point. Was 'fail' at +2.16%.
         self.assertEqual(c['horizontal_tail_span']['status'],'pass')

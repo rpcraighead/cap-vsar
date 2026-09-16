@@ -3,6 +3,66 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-15 — A-1 stage 3: main wheel track, and a reading settled without the drawing
+
+The last blocked dimension. It had been held deliberately, and correctly: the
+POH three-view does not annotate whether its wheel-track dimension lines mark
+the wheel centre or the tyre outer face, and the two readings flip the SIGN -
+centre-to-centre says the gear is 4.64% too NARROW, tyre outer face says it is
+1.34% too WIDE. Correcting before settling that would have been actively wrong
+in one direction or the other.
+
+Nobody on this project has the POH, so it was settled by research and inference
+rather than by looking, and the record says so in those words.
+
+**Sources checked and found silent.** EASA/FAA TCDS 3A13 confirms the datum
+("lower portion of front face of firewall") and levelling means (139.65 in) this
+project already uses, and gives the main tyre size as 6.00 x 6 - but carries no
+tread figure. Cessna's own Specification and Description, Skylane 182T, December
+2015 Revision C - the document A-1 already cites - lists overall height, length,
+span, cabin and doors, and no wheel track at all. FAA-H-8083-31B uses "tread"
+for the TYRE's rubber crown rather than the gear track, which is very likely
+where the original doubt came from.
+
+**Three converging grounds.** The POH's own NOTE, for the companion gear
+dimension on the same three-view, measures wheel base to the main wheel CENTRE
+LINE; a drawing that annotates one gear dimension to the centreline is not
+measuring the other to the tyre faces. The dimension master had already conceded
+the point, assigning track a +/-1.0% band because its "endpoint convention
+[is] slightly unannotated". And the arithmetic: overall length -2.48%, overall
+height -2.78% and wheel base -3.64% are all undersized, so centre-to-centre
+makes the gear uniformly small like the rest of the airframe, while the
+outer-face reading makes track the only OVERSIZED dimension on the model and has
+it 1.34% too wide while its own wheelbase is 3.64% too short. That is not a
+plausible mesh.
+
+**The transform is not a scale.** Each wheel moves outboard 0.0636 m (2.5 in),
+1.3080 to 1.3716 m half-track. Scaling about an inboard root would widen the
+TYRE as well as move it - the donor's 164 mm wheel would come out 193 mm - so
+`MainWheel` and `WheelFairing` translate rigidly, keeping their own dimensions,
+and only `MainStrut` ramps, with its inboard attachment at |x| = 0.938 m held
+fixed and its outboard end taking the full delta. That is the spring leg flexing
+outward rather than growing.
+
+Verified rather than assumed: tyre width unchanged to 1e-9 at 0.1641 m, fairing
+width unchanged at 0.2366 m, strut attachment moved 0.000000 m, wheel centre
+1.3080 to 1.3716 m. Harness: `main_wheel_track` -4.637% to -0.000%, measured
+107.9996 in against a 108.0 in target, every other dimension unchanged. Seen in
+X-Plane after rebuild and reload, gear intact and no tear at the strut.
+
+**All three stage-3 dimensions are now corrected and nothing in the profile is
+blocked.** A test that asserted blocked work EXISTS was rewritten to drive the
+inert-while-blocked behaviour with a synthetic entry instead, because a test
+that fails on the day the last blocker clears is giving the wrong signal.
+
+This is the MESH, not the ACF flight model's gear geometry - the same
+distinction that now applies to the horizontal tail span.
+
+A-1 stays open. Plane Maker aerodynamic geometry, full X-Plane visual acceptance
+of the corrected exterior, the registration's aft-fuselage placement (blocked by
+a degenerate donor UV column) and the production license route are untouched.
+Suite 597 passed, 1 skipped, 52 subtests.
+
 ## 2026-09-15 — AI-4 closed, and node stops being a reason not to check things
 
 Two items that had been handed to a human because nobody had tried doing
