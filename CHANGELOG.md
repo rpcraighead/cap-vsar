@@ -3,6 +3,65 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-15 — AI-4 closed, and node stops being a reason not to check things
+
+Two items that had been handed to a human because nobody had tried doing
+them, and both turned out to be doable here.
+
+### node, without sudo
+
+Eleven tests had been failing all session for one reason: `node` is not
+installed on this workstation, and the browser halves of the console and radio
+suites shell out to it. `tests/test_geodesy.py` did worse - it called node at
+IMPORT time, so a missing interpreter raised FileNotFoundError during
+collection and took the whole suite down rather than skipping one check.
+
+This did not need a package manager or root. `~/.local/bin` is already on PATH,
+so node v22.11.0 went in as the official linux-x64 tarball under
+`~/.local/lib`, with `node`, `npm` and `npx` symlinked. The tarball's SHA-256
+was checked against nodejs.org's own SHASUMS256.txt before it was unpacked:
+`83bf07dd343002a26211cf1fcd46a9d9534219aad42ee02847816940bf610a72`.
+
+**The suite is green for the first time today: 571 passed, 1 skipped, 52
+subtests, nothing failing.** It had been 560 passed and 11 failed for hours,
+which is exactly long enough for a standing red to start reading as normal.
+
+### AI-4: both halves, and neither of them by eye
+
+AI-4's fix was built and installed on 2026-09-11 - the builder's IDX10
+remainder encoding corrected, the prop texture resampled 194x87 -> 256x128 -
+and the item stayed open only because neither had been confirmed against a
+fresh X-Plane load.
+
+**The log half is now a script rather than a reading.** `scripts/check_xplane_log.py`
+fails on exactly two things: an IDX10 or index-out-of-range line that NAMES
+prop_lever.obj, and a non-power-of-two texture warning that NAMES
+prop_lever.png. Requiring the file to be named matters - a bare "index out of
+range" from some other object is not this defect, and failing on it would train
+whoever runs the check to ignore its output. Two traps met by hand during this
+work are pinned by tests: a grep for "power of two" matches the
+`GL_ARB_texture_non_power_of_two` extension string that appears in every log,
+and X-Plane appends to Log.txt across reloads, so a log can be clean purely
+because it predates the package being tested. `--require-aircraft` refuses that
+second case. Against the live 501-line log after a fresh load: clean, rc 0.
+
+**The visual half was done by screenshot, not by a human.** The brief said to
+hand it over "if you cannot see the cockpit yourself"; the exterior livery had
+already been verified this way earlier in the session, so the condition did not
+apply. Entered the 3D cockpit over UDP, pitched the pilot's head to -45 degrees
+to bring the pedestal into frame, drove
+`sim/cockpit2/engine/actuators/prop_ratio_all` from 1.00 to 0.00 with readback
+confirming both, and captured a frame at each.
+
+The lever renders and it moves. Differencing the two quadrant crops leaves a
+narrow vertical band of strong change at x 261-344, y 158-384 - 0.35 percent of
+the crop. That shape is a lever travelling in its slot; a lighting or camera
+shift would have changed the whole frame.
+
+A clean log was explicitly not treated as sufficient on its own, and the tool
+prints that caveat on every clean run so the next reader cannot mistake one for
+the other. AI-4 is closed. Four items remain open: O-7b, D-5, AI-2 and A-1.
+
 ## 2026-09-15 — A-1: the exterior gets a sourced livery and its second corrected dimension
 
 Two strands of A-1 in one session, both of which began with a wrong belief that

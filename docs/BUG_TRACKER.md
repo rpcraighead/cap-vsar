@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 101 items, 5 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 101 items, 4 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -135,7 +135,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [AI-6](#ai-6) | P1 | high | Controller shutdown pause request does not pause live X-Plane | infra | C15 | M | — | fixed |
 | [O-5](#o-5) | P1 | high | Mumble server has no per-role ACLs and images float | infra | C5 | M | X-2, O-4 | fixed |
 | [O-7a](#o-7a) | P1 | high | Air Manager seat count for three MO stations unconfirmed | infra | C5 | S | — | resolved |
-| [AI-4](#ai-4) | P2 | medium | Installed exercise aircraft predates CAP 487 identity and has prop lever load error | infra | C15 | M | — | open |
+| [AI-4](#ai-4) | P2 | medium | Installed exercise aircraft predates CAP 487 identity and has prop lever load error | infra | C15 | M | — | fixed |
 | [D-1](#d-1) | P2 | medium | CHANGELOG entries contradict the code they describe | docs | C14 | S | — | fixed |
 | [D-2](#d-2) | P2 | medium | README and website contradict the code | docs | C14 | M | — | fixed |
 | [D-3](#d-3) | P2 | medium | CONOPS and referenced infra docs are missing from the repo | docs | C14 | S | — | resolved |
@@ -732,12 +732,12 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Installed exercise aircraft predates CAP 487 identity and has prop lever load error**
 
-`P2` · `medium` · `bug` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort M · wave 3 · **open**
+`P2` · `medium` · `bug` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort M · wave 3 · **fixed**
 
 - **Files:** `scripts/build_c182t_package.py`
 - **Problem:** Installed Cessna_182T_G1000.acf declares N499CP. X-Plane Log.txt reports prop_lever.obj line 187 IDX10 index out of range and a non-power-of-two prop_lever.png. Repository rename alone did not update this installed package.
 - **Fix:** Fixed builder IDX10 remainder encoding (four trailing indices now use IDX) and resampled generated prop texture from 194x87 to 256x128. Built staging package and installed only tailnum, selection icons, prop object/texture, and CAP livery rename with backups; file hashes verify all other installed content preserved. Backup: /home/ron/X-Plane 12/Output/capvsar-backups/AI4-20260911-083735
-- **Done when:** Installed static checks pass: all 30 ACF patches match, tailnum CAP 487, 125 vertices, 534 in-range indices/178 triangles, 256x128 texture, unchanged vertex/UV/index sequence, single prop-lever attachment. Console/radio: 86 passed, 8891 warnings in 2.62s. Remains open pending fresh X-Plane load log and visual cockpit/prop-lever confirmation.
+- **Done when:** Installed static checks pass: all 30 ACF patches match, tailnum CAP 487, 125 vertices, 534 in-range indices/178 triangles, 256x128 texture, unchanged vertex/UV/index sequence, single prop-lever attachment. Console/radio: 86 passed, 8891 warnings in 2.62s. Remains open pending fresh X-Plane load log and visual cockpit/prop-lever confirmation. CLOSED 2026-09-15, both halves. LOG: added scripts/check_xplane_log.py, which fails on exactly the two regressions this item is about - an IDX10 / index-out-of-range line naming prop_lever.obj, and a non-power-of-two texture warning naming prop_lever.png - rather than on any line that happens to mention them. It requires the FILE to be named, because a bare 'index out of range' from another object is not this defect and failing on it would train the reader to ignore the check. It also carries --require-aircraft, since X-Plane appends to Log.txt across reloads and a log can be clean purely because it predates the package under test; by hand during this work a grep for 'power of two' matched the GL_ARB_texture_non_power_of_two extension string present in every log, which is the false positive the tests now pin. Run against the live 501-line log after a fresh load of Cessna_182T_G1000.acf: clean, rc=0. 15 tests. VISUAL: done by screenshot rather than by a human at the workstation, which the brief allowed for anyone who can actually see the cockpit. Entered the 3D cockpit over UDP, pitched the pilot's head to -45 degrees to bring the pedestal into frame, drove sim/cockpit2/engine/actuators/prop_ratio_all from 1.00 to 0.00 with readback confirming 1.000 and 0.000, and captured a frame at each. The lever renders, and it moves: differencing the two quadrant crops leaves a narrow vertical band of strong change at x 261-344, y 158-384, 0.35% of the crop - the signature of a lever travelling in its slot rather than a lighting or camera shift. A clean log alone was explicitly NOT treated as sufficient, and the tool says so on every clean run.
 
 ### D-1
 
