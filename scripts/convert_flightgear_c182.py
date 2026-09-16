@@ -475,9 +475,60 @@ ATLAS_SIZE = (4096, 2048)
 SIDE_PANEL_PORT = (111, 442, 1479, 894)     # corr(u, aft) +1.00, corr(v, up) +1.00
 SIDE_PANEL_STBD = (107, 1161, 1478, 1538)   # corr(u, aft) +1.00, corr(v, up) -1.00
 
-# Registration placement, aft fuselage, inside those panels.
-REGISTRATION_PORT_BOX = (1040, 582, 1424, 674)
-REGISTRATION_STBD_BOX = (1036, 1348, 1423, 1436)
+# Prototype approximation of the CAP scheme, DRAWN rather than traced: D-5
+# forbids redistributing third-party artwork. Not authentic CAP markings.
+CAP_BLUE = (13, 36, 77, 255)
+CAP_RED = (176, 27, 42, 255)
+CAP_OUTLINE = (235, 240, 246, 255)
+CAP_LABEL = "CAP 487"
+CAP_TITLES = "CIVIL AIR PATROL"
+
+
+def _fit_font(draw, text, max_w, max_h):
+    size = max_h
+    while size > 8:
+        f = (ImageFont.truetype("DejaVuSans-Bold.ttf", size) if _HAS_DEJAVU
+             else ImageFont.load_default(size=size))
+        l, t, r, b = draw.textbbox((0, 0), text, font=f, stroke_width=3)
+        if r - l <= max_w and b - t <= max_h:
+            return f, (r - l, b - t, l, t)
+        size -= 2
+    return f, draw.textbbox((0, 0), text, font=f, stroke_width=3)[:4]
+
+def side_artwork(w: int, h: int, label: str = CAP_LABEL) -> Image.Image:
+    """One fuselage side, drawn in panel-local coordinates.
+
+    Panel-local y=0 is the TOP of the fuselage side on both sides: port
+    maps v straight through, and starboard's inverted v is handled by
+    rotating this whole tile 180 degrees, which also reverses u. Building
+    one tile and rotating it is why the two sides cannot disagree.
+    """
+    tile = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(tile)
+
+    # Cheatline: a broad blue band with a thin red accent under it, running
+    # the length of the side. Drawn from described geometry, not traced
+    # from CAP artwork - D-5 forbids redistributing third-party artwork,
+    # and this is a prototype approximation, not authentic CAP markings.
+    band_top = int(h * 0.56)
+    band_h = max(4, int(h * 0.105))
+    accent_h = max(2, int(h * 0.030))
+    gap = max(1, int(h * 0.018))
+    d.rectangle([0, band_top, w, band_top + band_h], fill=CAP_BLUE)
+    d.rectangle([0, band_top + band_h + gap,
+                 w, band_top + band_h + gap + accent_h], fill=CAP_RED)
+
+    # Titles forward, registration aft, both above the cheatline.
+    text_h = int(h * 0.20)
+    top_y = int(h * 0.30)
+    titles = CAP_TITLES
+    f1, (tw, th, lx, ly) = _fit_font(d, titles, int(w * 0.46), text_h)
+    d.text((int(w * 0.05) - lx, top_y - ly), titles, font=f1,
+           fill=CAP_BLUE, stroke_width=3, stroke_fill=CAP_OUTLINE)
+    f2, (rw, rh, rlx, rly) = _fit_font(d, label, int(w * 0.28), text_h)
+    d.text((w - int(w * 0.04) - rw - rlx, top_y - rly), label, font=f2,
+           fill=CAP_BLUE, stroke_width=3, stroke_fill=CAP_OUTLINE)
+    return tile
 
 
 def create_cap_texture(source: Path, destination: Path) -> None:
@@ -511,30 +562,13 @@ def create_cap_texture(source: Path, destination: Path) -> None:
     # backwards - a vertical flip alone leaves exactly the horizontal mirror
     # that was observed.
 
-    def _stamp(box: tuple[int, int, int, int], rotate: bool) -> None:
-        x0, y0, x1, y1 = box
-        w, h = x1 - x0, y1 - y0
-        tile = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-        tile_draw = ImageDraw.Draw(tile)
-        size = h
-        while size > 8:
-            trial = ImageFont.truetype("DejaVuSans-Bold.ttf", size) if _HAS_DEJAVU \
-                else ImageFont.load_default(size=size)
-            left, top, right, bottom = tile_draw.textbbox((0, 0), label, font=trial,
-                                                          stroke_width=4)
-            if right - left <= w and bottom - top <= h:
-                break
-            size -= 2
-        left, top, right, bottom = tile_draw.textbbox((0, 0), label, font=trial,
-                                                      stroke_width=4)
-        tile_draw.text(((w - (right - left)) / 2 - left, (h - (bottom - top)) / 2 - top),
-                       label, font=trial, fill=fill, stroke_width=4, stroke_fill=stroke)
+    for panel, rotate in ((SIDE_PANEL_PORT, False), (SIDE_PANEL_STBD, True)):
+        x0, y0, x1, y1 = panel
+        art = side_artwork(x1 - x0, y1 - y0, label)
         if rotate:
-            tile = tile.transpose(Image.ROTATE_180)
-        image.alpha_composite(tile, (x0, y0))
+            art = art.transpose(Image.ROTATE_180)
+        image.alpha_composite(art, (x0, y0))
 
-    _stamp(REGISTRATION_PORT_BOX, rotate=False)
-    _stamp(REGISTRATION_STBD_BOX, rotate=True)
     image.save(destination)
 
 

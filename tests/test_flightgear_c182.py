@@ -213,50 +213,73 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class RegistrationPlacementTests(unittest.TestCase):
-    """The CAP 487 registration must land on the fuselage SIDES, reading correctly
-    from outside each one.
+class SideLiveryTests(unittest.TestCase):
+    """Both fuselage sides must carry the same markings, reading correctly from
+    outside each one.
 
     The atlas bands were measured from the converted mesh - every vertex with a
     strongly lateral normal at fuselage half-width - not inferred from two door
     panels, which is the derivation that was wrong twice. Port and starboard
-    share a u range and are separated by v; starboard's v axis is inverted.
+    share a u range and are separated by v, and starboard's v axis is inverted,
+    so ONE tile is drawn and rotated 180 degrees for that side. Building it
+    once is what stops the two sides disagreeing.
     """
 
-    def _boxes(self):
-        return (convert_flightgear_c182.REGISTRATION_PORT_BOX,
-                convert_flightgear_c182.REGISTRATION_STBD_BOX)
-
-    def test_neither_stamp_runs_off_the_aft_edge_of_its_panel(self):
-        # THE ORIGINAL BUG. Both stamps sat at x >= 1530 while the panels end at
-        # 1479, so the registration was painted onto the tailcone and ran off
-        # into the belly curve.
-        port, stbd = self._boxes()
-        self.assertLessEqual(port[2], convert_flightgear_c182.SIDE_PANEL_PORT[2])
-        self.assertLessEqual(stbd[2], convert_flightgear_c182.SIDE_PANEL_STBD[2])
-
-    def test_each_stamp_is_wholly_inside_its_own_side_panel(self):
-        for box, panel in zip(self._boxes(), (convert_flightgear_c182.SIDE_PANEL_PORT,
-                                              convert_flightgear_c182.SIDE_PANEL_STBD)):
-            self.assertGreaterEqual(box[0], panel[0])
-            self.assertGreaterEqual(box[1], panel[1])
-            self.assertLessEqual(box[2], panel[2])
-            self.assertLessEqual(box[3], panel[3])
-
-    def test_the_two_panels_do_not_overlap(self):
-        # If they did, one stamp would bleed onto the other side.
+    def test_the_two_side_panels_do_not_overlap(self):
+        # If they did, one side's markings would bleed onto the other.
         port = convert_flightgear_c182.SIDE_PANEL_PORT
         stbd = convert_flightgear_c182.SIDE_PANEL_STBD
         self.assertLess(port[3], stbd[1], "port band must end above the starboard band")
 
-    def test_both_stamps_sit_within_the_atlas(self):
+    def test_both_panels_lie_inside_the_atlas(self):
         w, h = convert_flightgear_c182.ATLAS_SIZE
-        for box in self._boxes():
-            self.assertTrue(0 <= box[0] < box[2] <= w and 0 <= box[1] < box[3] <= h)
+        for panel in (convert_flightgear_c182.SIDE_PANEL_PORT,
+                      convert_flightgear_c182.SIDE_PANEL_STBD):
+            self.assertTrue(0 <= panel[0] < panel[2] <= w)
+            self.assertTrue(0 <= panel[1] < panel[3] <= h)
 
-    def test_the_stamps_are_comparable_in_size(self):
-        # Same registration, same aeroplane; a big discrepancy means one box was
-        # edited and the other forgotten.
-        port, stbd = self._boxes()
-        self.assertAlmostEqual((port[2]-port[0]) / (stbd[2]-stbd[0]), 1.0, delta=0.08)
-        self.assertAlmostEqual((port[3]-port[1]) / (stbd[3]-stbd[1]), 1.0, delta=0.08)
+    def test_the_artwork_exactly_fills_the_panel_it_is_asked_for(self):
+        # The old bug was placement running 831 px past the panel's aft edge.
+        # Sizing the tile to the panel makes that unrepresentable.
+        for panel in (convert_flightgear_c182.SIDE_PANEL_PORT,
+                      convert_flightgear_c182.SIDE_PANEL_STBD):
+            w, h = panel[2] - panel[0], panel[3] - panel[1]
+            self.assertEqual(convert_flightgear_c182.side_artwork(w, h).size, (w, h))
+
+    def test_the_artwork_carries_titles_registration_and_a_cheatline(self):
+        art = convert_flightgear_c182.side_artwork(1368, 452)
+        colours = {c[1][:3] for c in art.getcolors(1 << 20)}
+        self.assertIn(convert_flightgear_c182.CAP_BLUE[:3], colours)
+        self.assertIn(convert_flightgear_c182.CAP_RED[:3], colours)
+
+    def test_the_cheatline_spans_the_whole_length(self):
+        # A stripe that stops short reads as a paint error, not a scheme.
+        art = convert_flightgear_c182.side_artwork(1368, 452)
+        px = art.load()
+        rows = [y for y in range(art.height)
+                if px[2, y][:3] == convert_flightgear_c182.CAP_BLUE[:3]
+                and px[art.width - 3, y][:3] == convert_flightgear_c182.CAP_BLUE[:3]]
+        self.assertTrue(rows, "no blue row reaches both ends of the panel")
+
+    def test_starboard_is_the_port_tile_rotated_180(self):
+        # Not flipped. Viewed from outside starboard the nose is to the
+        # viewer's right, so u runs leftward, AND v is inverted - both axes
+        # reverse. A vertical flip alone leaves a horizontal mirror, which is
+        # exactly the defect that was reported.
+        from PIL import Image, ImageChops
+        art = convert_flightgear_c182.side_artwork(600, 200)
+        twice = art.transpose(Image.ROTATE_180).transpose(Image.ROTATE_180)
+        self.assertIsNone(ImageChops.difference(art, twice).getbbox())
+        flipped = art.transpose(Image.FLIP_TOP_BOTTOM)
+        self.assertIsNotNone(
+            ImageChops.difference(art.transpose(Image.ROTATE_180), flipped).getbbox(),
+            "rotate(180) and FLIP_TOP_BOTTOM must differ, or the bug is unrepresentable")
+
+    def test_markings_are_drawn_not_traced(self):
+        # D-5: no third-party artwork is redistributed. The scheme is generated
+        # from rectangles and text, so the source carries no image asset.
+        src = (REPO / "scripts" / "convert_flightgear_c182.py").read_text()
+        self.assertIn("CAP_TITLES", src)
+        self.assertNotIn("cap_logo", src.lower())
+
+
