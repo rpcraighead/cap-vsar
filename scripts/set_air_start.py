@@ -537,6 +537,20 @@ def apply(start: AirStart, host: str, port: int,
         return Achieved(seen[0], seen[1], seen[2], attempts, False)
 
 
+def llah(start: AirStart, alt_units: str = "m") -> str:
+    """The argument for X-Plane's undocumented --load_llah=.
+
+    LLAH is lat, lon, alt, heading. The separator and the altitude UNITS are
+    hypotheses: the flag appears in the binary but in neither `--help` nor any
+    format string, so the only way to know is to launch with it and read the
+    position back. Metres is the default because that is what VEHS and the
+    position datarefs use; --llah-alt-units ft is there for when it turns out
+    to be the other one.
+    """
+    alt = start.elevation_m if alt_units == "m" else start.altitude_ft
+    return "%.6f,%.6f,%.1f,%.1f" % (start.lat, start.lon, alt, start.heading_true)
+
+
 def describe(start: AirStart) -> str:
     ok, notes = gate_report(start)
     path = ("level" if not start.glidepath_deg
@@ -579,6 +593,11 @@ def main(argv=None) -> int:
                          "with another running tool (default %d)" % DEFAULT_RECEIVE_PORT)
     ap.add_argument("--attempts", type=int, default=3,
                     help="write-and-verify passes before giving up (default 3)")
+    ap.add_argument("--emit-llah", action="store_true",
+                    help="print the --load_llah= argument for this condition and "
+                         "exit; contacts no simulator")
+    ap.add_argument("--llah-alt-units", choices=("m", "ft"), default="m",
+                    help="altitude units inside --load_llah (default m; unverified)")
     ap.add_argument("--allow-long-jump", action="store_true",
                     help="permit a reposition beyond %.0f nm (known to leave the "
                          "aircraft at millions of feet)" % MAX_JUMP_NM)
@@ -596,6 +615,10 @@ def main(argv=None) -> int:
     except (LookupError, FileNotFoundError, ValueError) as exc:
         print("error: %s" % exc, file=sys.stderr)
         return 2
+
+    if args.emit_llah:
+        print(llah(start, args.llah_alt_units))
+        return 0
 
     print(describe(start))
     if args.dry_run:

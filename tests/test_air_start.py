@@ -519,3 +519,39 @@ class TestRefusesLongJumps:
         # A sim that has not reported position yet gets the benefit of the doubt.
         _, got = run_apply(fake=FakeClient(bad_writes=0))
         assert got.ok
+
+
+class TestLlah:
+    """--load_llah= is undocumented: it is in the binary but in neither --help
+    nor any format string, so these tests pin the FORMAT WE EMIT, not a claim
+    about what X-Plane accepts. That is settled by launching and reading back."""
+
+    def test_it_is_lat_lon_alt_heading(self):
+        s = start_fixture()
+        parts = sas.llah(s).split(",")
+        assert len(parts) == 4
+        assert float(parts[0]) == pytest.approx(s.lat, abs=1e-5)
+        assert float(parts[1]) == pytest.approx(s.lon, abs=1e-5)
+        assert float(parts[3]) == pytest.approx(s.heading_true, abs=0.1)
+
+    def test_metres_is_the_default(self):
+        # VEHS and the position datarefs are metres; that is the better guess.
+        assert float(sas.llah(start_fixture()).split(",")[2]) == pytest.approx(1310.6, abs=1.0)
+
+    def test_feet_is_available_for_when_the_guess_is_wrong(self):
+        assert float(sas.llah(start_fixture(), "ft").split(",")[2]) == pytest.approx(4300.0, abs=1.0)
+
+    def test_it_carries_enough_precision_to_land_on_the_centreline(self):
+        # Six decimals of latitude is about 0.1 m; three would be 100 m, which
+        # is a different part of the approach.
+        assert len(sas.llah(start_fixture()).split(",")[0].split(".")[1]) >= 5
+
+    def test_emit_llah_prints_one_line_and_touches_no_simulator(self, tmp_path, capsys, monkeypatch):
+        apt = tmp_path / "apt.dat"
+        apt.write_text(APT_DAT, encoding="utf-8")
+        monkeypatch.setattr(sas, "apply", lambda *a, **k: pytest.fail("must not contact the sim"))
+        rc = sas.main(["--airport", "KRNM", "--runway", "09", "--distance-nm", "9",
+                       "--apt-dat", str(apt), "--emit-llah"])
+        assert rc == 0
+        out = capsys.readouterr().out.strip().splitlines()
+        assert len(out) == 1 and out[0].count(",") == 3
