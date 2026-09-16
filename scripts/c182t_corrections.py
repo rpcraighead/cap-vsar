@@ -43,6 +43,60 @@ def _radial_scale_about_axis(vertex_xp, hub, axis, scale):
     return tuple(hub[i] + axial[i] + scale * radial[i] for i in range(3))
 
 
+def _span_blend(vertex_xp, root_abs_x, ratio):
+    """Scale spanwise about the centreline, anchored at the root.
+
+    x' = sign(x) * (root + (|x| - root) * ratio), so the root station is a
+    fixed point and everything outboard of it closes proportionally. Vertices
+    inboard of the root do not move at all. That is the "root blend": the
+    stabiliser meets the tailcone at the root, and a scale about the
+    centreline instead of the root would drag that junction inboard and tear
+    the skin where the two meet.
+    """
+    x, y, z = vertex_xp
+    if abs(x) <= root_abs_x:
+        return vertex_xp
+    moved = root_abs_x + (abs(x) - root_abs_x) * ratio
+    return (math.copysign(moved, x), y, z)
+
+
+def _in_region(vertex_xp, region):
+    """Is this vertex inside the correction's selection window?"""
+    x, _, z = vertex_xp
+    if region is None:
+        return True
+    if not (region["z_min"] <= z <= region["z_max"]):
+        return False
+    return abs(x) >= region.get("abs_x_min", 0.0)
+
+
+def _apply_region_scale(correction, by_name, converter):
+    region = correction.get("region")
+    root = float(correction["root_abs_x"])
+    measured = float(correction["measured_half_span_m"])
+    target = float(correction["target_half_span_m"])
+    if measured <= root or target <= root:
+        raise ValueError(f"{correction['id']}: root must lie inboard of the span")
+    ratio = (target - root) / (measured - root)
+
+    touched = 0
+    for name in correction["objects"]:
+        obj = by_name[name]
+        corrected = []
+        for vertex in obj.vertices:
+            point = converter.ac_to_xplane(vertex)
+            if _in_region(point, region if name in correction.get(
+                    "region_objects", correction["objects"]) else None):
+                moved = _span_blend(point, root, ratio)
+                if moved != point:
+                    touched += 1
+                corrected.append(xplane_to_ac(moved))
+            else:
+                corrected.append(vertex)
+        obj.vertices = corrected
+    return ratio, touched
+
+
 def apply_corrections(objects, converter, profile: dict | None = None) -> list[dict]:
     """Mutate parsed donor objects in place. Returns a record of what was applied.
 
@@ -56,7 +110,8 @@ def apply_corrections(objects, converter, profile: dict | None = None) -> list[d
     for correction in profile["corrections"]:
         if correction.get("status") != "active":
             continue
-        if correction["type"] != "radial_scale_about_axis":
+        if correction["type"] not in ("radial_scale_about_axis",
+                                      "region_scale_with_root_blend"):
             raise ValueError(f"Unknown correction type: {correction['type']}")
 
         missing = [n for n in correction["objects"] if n not in by_name]
@@ -65,6 +120,13 @@ def apply_corrections(objects, converter, profile: dict | None = None) -> list[d
             # leave the geometry wrong while reporting success.
             raise ValueError(
                 f"Correction {correction['id']} names absent objects: {missing}")
+
+        if correction["type"] == "region_scale_with_root_blend":
+            ratio, touched = _apply_region_scale(correction, by_name, converter)
+            applied.append({"id": correction["id"], "closes": correction["closes"],
+                            "scale": ratio, "objects": list(correction["objects"]),
+                            "vertices": touched})
+            continue
 
         rotation = converter.PROP_ROTATION
         hub, axis = rotation.center, rotation.axis

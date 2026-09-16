@@ -112,9 +112,14 @@ class Profile(unittest.TestCase):
         tip_xp = tuple(hub[i] + tip_m * perp[i] for i in range(3))
         blades = [Stub(n, [corrections.xplane_to_ac(tip_xp)])
                   for n in ("Blade1", "Blade2", "Blade3", "FastProp")]
+        # Every active correction must find its objects or apply_corrections
+        # fails loudly, so the tail objects are present but placed inboard of
+        # the root where the span transform leaves them alone.
+        inert = [Stub(n, [corrections.xplane_to_ac((0.0, 0.4, 5.5))])
+                 for n in ("Airframe", "Elevator", "ElevatorTrim")]
 
         self.assertAlmostEqual(2 * prop_radius(blades) / 0.0254, 79.255, places=2)
-        corrections.apply_corrections(blades, converter)
+        corrections.apply_corrections(blades + inert, converter)
         corrected_in = 2 * prop_radius(blades) / 0.0254
         self.assertLessEqual(corrected_in, 79.0)
         self.assertGreaterEqual(corrected_in, 77.5)
@@ -153,3 +158,58 @@ class Profile(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SpanBlend(unittest.TestCase):
+    """A-1 stage 3: the horizontal tail span, corrected by a region transform.
+
+    The earlier blocking note said the stabiliser lives inside Airframe with
+    the wings, so a spanwise scale would shrink the wings. It does not:
+    Airframe carries only the tip caps, the surface is the Elevator object,
+    and the wings are 3 metres forward of any window that selects the tail.
+    """
+
+    def test_the_root_station_does_not_move(self):
+        # If it did, the junction with the tailcone would tear.
+        root = 0.51
+        self.assertEqual(corrections._span_blend((root, 0.4, 5.5), root, 0.9),
+                         (root, 0.4, 5.5))
+
+    def test_vertices_inboard_of_the_root_are_untouched(self):
+        self.assertEqual(corrections._span_blend((0.2, 0.4, 5.5), 0.51, 0.9),
+                         (0.2, 0.4, 5.5))
+
+    def test_the_tip_lands_on_the_target_span(self):
+        root, measured, target = 0.51, 1.8164, 1.778
+        ratio = (target - root) / (measured - root)
+        moved = corrections._span_blend((measured, 0.4, 5.5), root, ratio)
+        self.assertAlmostEqual(moved[0], target, places=6)
+
+    def test_both_sides_move_symmetrically(self):
+        a = corrections._span_blend((1.8164, 0.4, 5.5), 0.51, 0.97)
+        b = corrections._span_blend((-1.8164, 0.4, 5.5), 0.51, 0.97)
+        self.assertAlmostEqual(a[0], -b[0], places=9)
+
+    def test_height_and_station_are_preserved(self):
+        moved = corrections._span_blend((1.8164, 0.42, 5.55), 0.51, 0.97)
+        self.assertEqual((moved[1], moved[2]), (0.42, 5.55))
+
+    def test_the_window_excludes_the_wings(self):
+        # The wings sit at z 0.548..1.815 on this donor. Selecting the tail by
+        # a z-window is only safe because of that separation, so pin it.
+        region = None
+        for c in corrections.load_profile()["corrections"]:
+            if c["id"] == "horizontal_tail_span_to_poh":
+                region = c["region"]
+        self.assertIsNotNone(region)
+        self.assertGreater(region["z_min"], 2.0, "window must clear the wings")
+        self.assertFalse(corrections._in_region((5.4558, 0.5, 1.0), region),
+                         "a wingtip must never be selected")
+        self.assertTrue(corrections._in_region((1.8164, 0.42, 5.5), region))
+
+    def test_the_correction_closes_the_span_to_the_poh(self):
+        profile = corrections.load_profile()
+        c = [x for x in profile["corrections"]
+             if x["id"] == "horizontal_tail_span_to_poh"][0]
+        self.assertEqual(c["status"], "active")
+        self.assertAlmostEqual(c["target_half_span_m"] * 2 / 0.0254, 140.0, places=3)

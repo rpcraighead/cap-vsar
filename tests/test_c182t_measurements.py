@@ -31,7 +31,13 @@ class Measurements(unittest.TestCase):
         self.assertAlmostEqual(c['propeller_diameter']['measured']['in'],79.0,places=2)
         self.assertLessEqual(c['propeller_diameter']['measured']['in'],79.0)
         self.assertEqual(c['main_wheel_track']['status'],'fail')
-        self.assertEqual(c['horizontal_tail_span']['status'],'fail')
+        # Closed 2026-09-15 by horizontal_tail_span_to_poh: a region transform
+        # on the tail with the root as a fixed point. Was 'fail' at +2.16%.
+        self.assertEqual(c['horizontal_tail_span']['status'],'pass')
+        self.assertAlmostEqual(c['horizontal_tail_span']['measured']['in'],140.0,places=2)
+        # The wings must be untouched by that transform - they live in the same
+        # object as the stabiliser tip caps, which is what blocked it before.
+        self.assertEqual(c['wing_span']['numeric_result'],'within_bounds')
         self.assertEqual(c['wing_span']['status'],'provisional')
         self.assertEqual(c['wing_span']['numeric_result'],'within_bounds')
         self.assertEqual(c['propeller_ground_clearance']['numeric_result'],'within_bounds')
