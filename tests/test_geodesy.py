@@ -138,4 +138,12 @@ check("only app/geo.py names the earth radius inside the console",
       "3440.065" not in prop_src and "3440.065" not in mock_src)
 
 print("\n" + ("ALL PASS" if not FAILED else "FAILURES: " + ", ".join(FAILED)))
-sys.exit(1 if FAILED else 0)
+
+
+def test_geodesy_checks_pass():
+    """The checks above run at import time; this reports them to pytest."""
+    assert not FAILED, "FAILURES: " + ", ".join(FAILED)
+
+
+if __name__ == "__main__":
+    sys.exit(1 if FAILED else 0)
