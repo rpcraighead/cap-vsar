@@ -253,6 +253,20 @@ def summarise(args, channels, samples, intervals, gaps) -> None:
     if allzero:
         print("  ALL ZERO     %s   <- verify these are genuinely zero" % ", ".join(allzero))
 
+    # A run in which nothing moved is not a run. X-Plane keeps answering RREF
+    # while PAUSED, so a paused capture returns a full-rate, gap-free trace of
+    # a stationary aeroplane - which reads exactly like a beautifully stable
+    # test point. This happened on B1 run 1: 2,995 samples, 20.0 Hz, zero gaps,
+    # and identical min and max on every channel.
+    frozen = [k for k in ("kias", "alt_msl_ft", "alpha_deg", "g_normal")
+              if len(series(k)) > 1 and max(series(k)) == min(series(k))]
+    if len(frozen) >= 3:
+        print("  NOT A RUN    %s never changed across %d samples."
+              % (", ".join(frozen), len(samples)))
+        print("               The simulator was almost certainly PAUSED. A paused")
+        print("               capture looks like a perfectly stable point. Do not")
+        print("               reduce this trace; fly the point and capture again.")
+
     weight = series("weight_kg")
     if weight:
         print("  weight       %.0f lb" % (max(weight) * LB_PER_KG))

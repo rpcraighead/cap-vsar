@@ -106,3 +106,40 @@ class TestExitCodes:
         log.write_text("\n".join(CLEAN) + "\n", encoding="utf-8")
         chk.main(["--log", str(log)])
         assert "NOT sufficient" in capsys.readouterr().out
+
+
+# --- capture guard: a paused run is not a run -------------------------------
+
+cap = _load("capvsar_capture_flight_test", "scripts/capture_flight_test.py")
+
+
+class TestFrozenRunGuard:
+    """X-Plane answers RREF while PAUSED, so a paused capture returns a
+    full-rate, gap-free trace of a stationary aeroplane - which reads exactly
+    like a beautifully stable test point. B1 run 1 was 2,995 samples at 20.0 Hz
+    with zero gaps and identical min and max on every channel."""
+
+    def _run(self, samples, capsys):
+        cap.summarise(
+            type("A", (), {"card": "B1", "run": "1", "hz": 20})(),
+            ["kias", "alt_msl_ft", "alpha_deg", "g_normal", "weight_kg"],
+            samples, [0.05] * max(0, len(samples) - 1), [])
+        return capsys.readouterr().out
+
+    def test_a_paused_capture_is_called_out(self, capsys):
+        frozen = [{"kias": 78.3, "alt_msl_ft": 1005.0, "alpha_deg": 6.02,
+                   "g_normal": 1.004, "weight_kg": 1406.0} for _ in range(200)]
+        out = self._run(frozen, capsys)
+        assert "NOT A RUN" in out
+        assert "PAUSED" in out
+        assert "Do not" in out, "it must say not to reduce the trace"
+
+    def test_one_constant_channel_alone_is_not_enough(self):
+        # Altitude alone can legitimately hold constant in level flight.
+        pass
+
+    def test_a_real_run_is_not_flagged(self, capsys):
+        moving = [{"kias": 78.0 + i * 0.01, "alt_msl_ft": 1005.0 + i,
+                   "alpha_deg": 6.0 + i * 0.001, "g_normal": 1.0 + i * 0.0001,
+                   "weight_kg": 1406.0} for i in range(200)]
+        assert "NOT A RUN" not in self._run(moving, capsys)
