@@ -323,3 +323,111 @@ class TestArguments:
     def test_describe_names_the_gate_verdict(self):
         s = sas.build_air_start(rwy("09"), distance_nm=9.0, kias=75.0)
         assert "WOULD REFUSE" in sas.describe(s)
+
+
+# ---------------------------------------------------------------------------
+# Write-verify-rewrite. The defect this exists for was found in flight: a
+# reposition from Austria to California put the aeroplane at 4,699,505 ft
+# descending through 36,000 fpm, with latitude and longitude correct to five
+# decimals, and the identical command applied again was exact.
+# ---------------------------------------------------------------------------
+
+LAT, LON, ALT_FT = 33.066279, -117.099453, 4300.0
+DREF_LAT = "sim/flightmodel/position/latitude"
+DREF_LON = "sim/flightmodel/position/longitude"
+DREF_ELE = "sim/flightmodel/position/elevation"
+
+
+class FakeClient:
+    """A simulator that lies about altitude for the first `bad_writes` writes."""
+
+    def __init__(self, bad_writes=0, silent=False, bad_alt_ft=4699505.0):
+        self.bad_writes = bad_writes
+        self.silent = silent
+        self.bad_alt_ft = bad_alt_ft
+        self.writes = 0
+        self.velocity_writes = 0
+        self.subscribed = []
+        self._state = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def set_position(self, lat_deg, lon_deg, ele_m, heading_true, pitch_deg, roll_deg):
+        self.writes += 1
+        alt = self.bad_alt_ft if self.writes <= self.bad_writes else ele_m / 0.3048
+        # Latitude and longitude land correctly even when the vertical does not.
+        self._state = (lat_deg, lon_deg, alt)
+
+    def send_dref(self, dref, value):
+        if dref.startswith("sim/flightmodel/position/local_v"):
+            self.velocity_writes += 1
+
+    def subscribe_dref(self, dref, freq_hz=1, **kw):
+        self.subscribed.append(dref)
+
+    def get_all_cached(self):
+        if self.silent or self._state is None:
+            return {}
+        lat, lon, alt = self._state
+        return {DREF_LAT: lat, DREF_LON: lon, DREF_ELE: alt * 0.3048}
+
+
+def start_fixture():
+    return sas.build_air_start(rwy("09"), distance_nm=9.0, kias=100.0)
+
+
+def run_apply(**kw):
+    fake = kw.pop("fake")
+    got = sas.apply(start_fixture(), "127.0.0.1", 49000, settle_s=0.0,
+                    read_timeout_s=0.5, client_factory=lambda: fake, **kw)
+    return fake, got
+
+
+class TestApplyVerifies:
+    def test_a_clean_sim_takes_one_write(self):
+        fake, got = run_apply(fake=FakeClient(bad_writes=0))
+        assert got.ok and got.attempts == 1 and fake.writes == 1
+
+    def test_the_austria_case_is_retried_and_succeeds(self):
+        fake, got = run_apply(fake=FakeClient(bad_writes=1))
+        assert got.ok, "the second application must be accepted"
+        assert got.attempts == 2 and fake.writes == 2
+        assert got.altitude_ft == pytest.approx(ALT_FT, abs=1.0)
+
+    def test_it_gives_up_rather_than_looping_forever(self):
+        fake, got = run_apply(fake=FakeClient(bad_writes=99), attempts=3)
+        assert not got.ok and fake.writes == 3
+        # It still reports what the simulator actually said, not what was asked.
+        assert got.altitude_ft == pytest.approx(4699505.0, abs=1.0)
+
+    def test_a_failure_reports_the_real_error_magnitude(self):
+        _, got = run_apply(fake=FakeClient(bad_writes=99), attempts=2)
+        assert got.error_ft(start_fixture()) > 4_000_000
+
+    def test_velocity_is_rewritten_on_every_attempt(self):
+        # A retry that moved the aeroplane without re-establishing its velocity
+        # would leave it correctly placed and falling.
+        fake, _ = run_apply(fake=FakeClient(bad_writes=1))
+        assert fake.velocity_writes == 6, "3 velocity drefs per attempt, 2 attempts"
+
+    def test_silence_is_not_reported_as_success(self):
+        # X-Plane answers no UDP at all while it sits on the Quick Flight menu.
+        _, got = run_apply(fake=FakeClient(silent=True), attempts=2)
+        assert not got.ok
+        assert got.altitude_ft != got.altitude_ft, "unverified must be NaN, not 0"
+
+    def test_a_small_altitude_discrepancy_is_tolerated(self):
+        fake, got = run_apply(fake=FakeClient(bad_writes=1, bad_alt_ft=ALT_FT + 10.0))
+        assert got.ok and got.attempts == 1, "10 ft is settling, not a failure"
+
+    def test_the_readback_does_not_use_the_shared_default_port(self):
+        # 49005 is the collision that made elevation read back as latitude.
+        assert sas.DEFAULT_RECEIVE_PORT != 49005
+
+    def test_attempts_must_be_at_least_one(self):
+        with pytest.raises(ValueError):
+            run_apply(fake=FakeClient(), attempts=0)

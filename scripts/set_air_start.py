@@ -376,26 +376,113 @@ VELOCITY_DREFS = ("sim/flightmodel/position/local_vx",
                   "sim/flightmodel/position/local_vz")
 
 
-def apply(start: AirStart, host: str, port: int, settle_s: float = 0.5) -> None:
-    XPlaneUDPClient = _load("capvsar_xplane_udp",
-                           "services/ai_pilot/xplane_udp.py").XPlaneUDPClient
+READBACK_DREFS = ("sim/flightmodel/position/latitude",
+                  "sim/flightmodel/position/longitude",
+                  "sim/flightmodel/position/elevation")
 
-    with XPlaneUDPClient(host=host, port=port) as client:
-        client.set_position(
-            lat_deg=start.lat,
-            lon_deg=start.lon,
-            ele_m=start.elevation_m,
-            heading_true=start.heading_true,
-            pitch_deg=start.pitch_deg,
-            roll_deg=start.roll_deg,
-        )
-        # VEHS relocates without resetting dynamics, so the velocity has to be
-        # written explicitly, and after the move: writing it first would have it
-        # overwritten by whatever the aircraft carried into the reposition.
-        time.sleep(settle_s)
-        for dref, value in zip(VELOCITY_DREFS,
-                               (start.local_vx, start.local_vy, start.local_vz)):
-            client.send_dref(dref, value)
+# NOT 49005. X-Plane keeps streaming RREF subscriptions to a receive port after
+# the client that asked for them exits, and every new client restarts its
+# dataref ids at zero - so a tool on the shared default reads the previous
+# tool's values under its own names. Observed live: elevation returning the
+# latitude. Anything that subscribes needs a port of its own.
+DEFAULT_RECEIVE_PORT = 49177
+
+ALTITUDE_TOLERANCE_FT = 50.0
+POSITION_TOLERANCE_NM = 0.25
+
+
+@dataclass(frozen=True)
+class Achieved:
+    lat: float
+    lon: float
+    altitude_ft: float
+    attempts: int
+    ok: bool
+
+    def error_ft(self, wanted: AirStart) -> float:
+        return self.altitude_ft - wanted.altitude_ft
+
+    def error_nm(self, wanted: AirStart) -> float:
+        return great_circle_nm(self.lat, self.lon, wanted.lat, wanted.lon)
+
+
+def _read_back(client, timeout_s: float = 4.0) -> Optional[Tuple[float, float, float]]:
+    for dref in READBACK_DREFS:
+        client.subscribe_dref(dref, 5)
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        time.sleep(0.4)
+        cache = client.get_all_cached()
+        if all(d in cache for d in READBACK_DREFS):
+            lat, lon, ele_m = (cache[d] for d in READBACK_DREFS)
+            if lat or lon:
+                return lat, lon, ele_m / M_PER_FT
+    return None
+
+
+def _write_once(client, start: AirStart, settle_s: float) -> None:
+    client.set_position(
+        lat_deg=start.lat,
+        lon_deg=start.lon,
+        ele_m=start.elevation_m,
+        heading_true=start.heading_true,
+        pitch_deg=start.pitch_deg,
+        roll_deg=start.roll_deg,
+    )
+    # VEHS relocates without resetting dynamics, so the velocity has to be
+    # written explicitly, and after the move: writing it first would have it
+    # overwritten by whatever the aircraft carried into the reposition.
+    time.sleep(settle_s)
+    for dref, value in zip(VELOCITY_DREFS,
+                           (start.local_vx, start.local_vy, start.local_vz)):
+        client.send_dref(dref, value)
+
+
+def apply(start: AirStart, host: str, port: int,
+          receive_port: int = DEFAULT_RECEIVE_PORT,
+          settle_s: float = 1.0, attempts: int = 3,
+          read_timeout_s: float = 4.0, client_factory=None) -> Achieved:
+    """Place the aircraft, then CHECK, and place it again if the sim disagreed.
+
+    A single write is not enough and this is not defensiveness. VEHS re-centres
+    the horizontal origin across a long jump but leaves the vertical referenced
+    to the old scenery origin: repositioning from Austria to California put the
+    aeroplane at 4,699,505 ft descending through 36,000 fpm, while its latitude
+    and longitude were correct to five decimals. The identical command applied a
+    second time - with the origin now local - was exact to the digit.
+
+    So this writes, reads the achieved position back, and writes again while the
+    simulator disagrees. Reporting what was actually achieved rather than what
+    was requested is the same discipline scripts/set_test_condition.py follows,
+    for the same reason.
+    """
+    if attempts < 1:
+        raise ValueError("attempts must be at least 1")
+    if client_factory is None:
+        XPlaneUDPClient = _load("capvsar_xplane_udp",
+                               "services/ai_pilot/xplane_udp.py").XPlaneUDPClient
+
+        def client_factory():
+            return XPlaneUDPClient(host=host, port=port, receive_port=receive_port)
+
+    with client_factory() as client:
+        seen = None
+        for attempt in range(1, attempts + 1):
+            _write_once(client, start, settle_s)
+            seen = _read_back(client, read_timeout_s)
+            if seen is None:
+                continue
+            lat, lon, alt_ft = seen
+            close = (abs(alt_ft - start.altitude_ft) <= ALTITUDE_TOLERANCE_FT
+                     and great_circle_nm(lat, lon, start.lat, start.lon)
+                     <= POSITION_TOLERANCE_NM)
+            if close:
+                return Achieved(lat, lon, alt_ft, attempt, True)
+        if seen is None:
+            # No telemetry came back at all. The write may still have landed;
+            # say so rather than claiming either success or failure.
+            return Achieved(float("nan"), float("nan"), float("nan"), attempts, False)
+        return Achieved(seen[0], seen[1], seen[2], attempts, False)
 
 
 def describe(start: AirStart) -> str:
@@ -435,6 +522,11 @@ def main(argv=None) -> int:
     ap.add_argument("--apt-dat", type=Path, default=None, help="override apt.dat location")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=49000)
+    ap.add_argument("--receive-port", type=int, default=DEFAULT_RECEIVE_PORT,
+                    help="UDP port to receive telemetry on; must not be shared "
+                         "with another running tool (default %d)" % DEFAULT_RECEIVE_PORT)
+    ap.add_argument("--attempts", type=int, default=3,
+                    help="write-and-verify passes before giving up (default 3)")
     ap.add_argument("--dry-run", action="store_true",
                     help="compute and print, write nothing to the simulator")
     args = ap.parse_args(argv)
@@ -452,11 +544,30 @@ def main(argv=None) -> int:
         print("\ndry run: nothing was written to the simulator")
         return 0
 
-    apply(start, args.host, args.port)
-    print("\nwritten to %s:%d. The engine must already be running - this tool does"
-          "\nnot advance the throttle, and a cold airframe at altitude is a glider."
-          % (args.host, args.port))
-    return 0
+    got = apply(start, args.host, args.port, receive_port=args.receive_port,
+                attempts=args.attempts)
+
+    if got.ok:
+        print("\nachieved on attempt %d of %d: %.5f, %.5f at %.0f ft MSL"
+              % (got.attempts, args.attempts, got.lat, got.lon, got.altitude_ft))
+        print("  %+.0f ft and %.2f nm from the requested point"
+              % (got.error_ft(start), got.error_nm(start)))
+        print("\nThe engine must already be running - this tool does not advance the"
+              "\nthrottle, and a cold airframe at altitude is a glider.")
+        return 0
+
+    if got.altitude_ft != got.altitude_ft:      # NaN: nothing came back
+        print("\nwrote to %s:%d but the simulator sent no telemetry back, so the"
+              "\nresult is UNVERIFIED. Is a flight loaded? X-Plane answers no UDP"
+              "\nwhile it sits on the Quick Flight menu." % (args.host, args.port),
+              file=sys.stderr)
+        return 3
+
+    print("\nFAILED after %d attempts. The simulator reports %.5f, %.5f at %.0f ft"
+          "\nMSL - %+.0f ft and %.2f nm from what was asked for."
+          % (got.attempts, got.lat, got.lon, got.altitude_ft,
+             got.error_ft(start), got.error_nm(start)), file=sys.stderr)
+    return 3
 
 
 if __name__ == "__main__":
