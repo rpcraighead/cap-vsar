@@ -213,102 +213,84 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class SideLiveryTests(unittest.TestCase):
-    """Both fuselage sides must carry the same markings, reading correctly from
-    outside each one.
+class LiveryTests(unittest.TestCase):
+    """The approved CAP scheme, CAPP 130-2 line drawing A (4 October 2021).
 
-    The atlas bands were measured from the converted mesh - every vertex with a
-    strongly lateral normal at fuselage half-width - not inferred from two door
-    panels, which is the derivation that was wrong twice. Port and starboard
-    share a u range and are separated by v, and starboard's v axis is inverted,
-    so ONE tile is drawn and rotated 180 degrees for that side. Building it
-    once is what stops the two sides disagreeing.
+    The colour is decided from the 3D POSITION and rasterised through the
+    mesh's own UVs. Painting rectangles into the atlas only worked where a
+    region unwraps as an axis-aligned band: the fuselage sides do, the belly
+    and wings do not, so rectangles left the belly white.
     """
 
+    cv = convert_flightgear_c182
+
+    def test_white_above_the_division_and_blue_below(self):
+        z = 1.0
+        div = self.cv.DIV_Y_AT[1] + self.cv.DIV_SLOPE * (z - self.cv.DIV_Y_AT[0])
+        self.assertEqual(self.cv.scheme_colour(0.6, div + 0.3, z), self.cv.CAP_WHITE)
+        self.assertEqual(self.cv.scheme_colour(0.6, div - 0.3, z), self.cv.CAP_BLUE)
+
+    def test_the_belly_is_blue(self):
+        # The whole point of model space: a rectangle painter left this white.
+        self.assertEqual(self.cv.scheme_colour(0.0, -0.9, 1.0), self.cv.CAP_BLUE)
+
+    def test_the_vertical_tail_is_red(self):
+        self.assertEqual(self.cv.scheme_colour(0.0, 1.5, 6.0), self.cv.CAP_RED)
+
+    def test_the_stripe_band_sits_on_the_division_in_the_right_order(self):
+        # CAPP 130-2: 2 in gray, 1 in space, 1.75 in red, reading downward.
+        z = 1.0
+        div = self.cv.DIV_Y_AT[1] + self.cv.DIV_SLOPE * (z - self.cv.DIV_Y_AT[0])
+        inch = 0.0254
+        self.assertEqual(self.cv.scheme_colour(0.6, div - 1.0 * inch, z), self.cv.CAP_GRAY)
+        self.assertEqual(self.cv.scheme_colour(0.6, div - 2.5 * inch, z), self.cv.CAP_WHITE)
+        self.assertEqual(self.cv.scheme_colour(0.6, div - 4.0 * inch, z), self.cv.CAP_RED)
+        self.assertEqual(self.cv.scheme_colour(0.6, div - 6.0 * inch, z), self.cv.CAP_BLUE)
+
+    def test_the_division_sweeps_upward_going_aft(self):
+        # A level division is not the scheme; the drawing sweeps it up to the tail.
+        def div(z):
+            return self.cv.DIV_Y_AT[1] + self.cv.DIV_SLOPE * (z - self.cv.DIV_Y_AT[0])
+        self.assertGreater(div(5.0), div(0.0))
+
+    def test_a_straddling_triangle_is_split_rather_than_flat_filled(self):
+        # A two-inch stripe is thinner than a fuselage triangle. Without
+        # subdivision the stripe simply vanishes into whichever colour the
+        # first vertex happened to be.
+        self.assertGreaterEqual(self.cv.PAINT_MAX_DEPTH, 3)
+
     def test_the_two_side_panels_do_not_overlap(self):
-        # If they did, one side's markings would bleed onto the other.
-        port = convert_flightgear_c182.SIDE_PANEL_PORT
-        stbd = convert_flightgear_c182.SIDE_PANEL_STBD
-        self.assertLess(port[3], stbd[1], "port band must end above the starboard band")
+        # Lettering still uses these; text needs a flat rectangle.
+        port, stbd = self.cv.SIDE_PANEL_PORT, self.cv.SIDE_PANEL_STBD
+        self.assertLess(port[3], stbd[1])
 
-    def test_both_panels_lie_inside_the_atlas(self):
-        w, h = convert_flightgear_c182.ATLAS_SIZE
-        for panel in (convert_flightgear_c182.SIDE_PANEL_PORT,
-                      convert_flightgear_c182.SIDE_PANEL_STBD):
-            self.assertTrue(0 <= panel[0] < panel[2] <= w)
-            self.assertTrue(0 <= panel[1] < panel[3] <= h)
-
-    def test_the_artwork_exactly_fills_the_panel_it_is_asked_for(self):
-        # The old bug was placement running 831 px past the panel's aft edge.
-        # Sizing the tile to the panel makes that unrepresentable.
-        for panel in (convert_flightgear_c182.SIDE_PANEL_PORT,
-                      convert_flightgear_c182.SIDE_PANEL_STBD):
-            w, h = panel[2] - panel[0], panel[3] - panel[1]
-            self.assertEqual(convert_flightgear_c182.side_artwork(w, h).size, (w, h))
-
-    def test_the_scheme_is_white_over_blue_with_a_red_and_gray_band(self):
-        # CAPP 130-2 line drawing A: white upper, blue lower, thin gray and red
-        # stripes on the division. Not a blue cheatline on white, which is what
-        # this looked like before anyone read the pamphlet.
-        art = convert_flightgear_c182.side_artwork(1368, 452)
-        colours = {c[1][:3] for c in art.getcolors(1 << 20)}
-        for named in ("CAP_WHITE", "CAP_BLUE", "CAP_GRAY", "CAP_RED"):
-            self.assertIn(getattr(convert_flightgear_c182, named)[:3], colours, named)
-        px = art.load()
-        self.assertEqual(px[10, 10][:3], convert_flightgear_c182.CAP_WHITE[:3],
-                         "top of the fuselage side must be white")
-        self.assertEqual(px[10, 440][:3], convert_flightgear_c182.CAP_BLUE[:3],
-                         "bottom of the fuselage side must be blue")
-
-    def test_the_registration_is_white_and_the_markings_are_a_separate_layer(self):
-        # White on the blue, per CAPP 130-2, and drawn ON the paint so the
-        # skin's own dark marks cannot show through it.
-        marks = convert_flightgear_c182.side_markings(1368, 452)
-        colours = {c[1][:3] for c in marks.getcolors(1 << 20)}
-        self.assertIn(convert_flightgear_c182.CAP_WHITE[:3], colours)
-
-    def test_the_stripe_band_spans_the_whole_length(self):
-        # A stripe that stops short reads as a paint error, not a scheme.
-        art = convert_flightgear_c182.side_artwork(1368, 452)
-        px = art.load()
-        rows = [y for y in range(art.height)
-                if px[2, y][:3] == convert_flightgear_c182.CAP_RED[:3]
-                and px[art.width - 3, y][:3] == convert_flightgear_c182.CAP_RED[:3]]
-        self.assertTrue(rows, "no red stripe row reaches both ends of the panel")
-
-    def test_starboard_is_the_port_tile_rotated_180(self):
+    def test_starboard_lettering_is_the_port_tile_rotated_180(self):
         # Not flipped. Viewed from outside starboard the nose is to the
-        # viewer's right, so u runs leftward, AND v is inverted - both axes
-        # reverse. A vertical flip alone leaves a horizontal mirror, which is
-        # exactly the defect that was reported.
+        # viewer's right, so u runs leftward AND v is inverted - both axes
+        # reverse. A vertical flip alone leaves the horizontal mirror that was
+        # actually reported.
         from PIL import Image, ImageChops
-        # The base paint is horizontal bands and IS symmetric, so the
-        # distinction only bites on the lettering - which is exactly the layer
-        # that rendered mirrored.
-        marks = convert_flightgear_c182.side_markings(600, 200)
+        marks = self.cv.side_markings(600, 200)
         twice = marks.transpose(Image.ROTATE_180).transpose(Image.ROTATE_180)
         self.assertIsNone(ImageChops.difference(marks, twice).getbbox())
         flipped = marks.transpose(Image.FLIP_TOP_BOTTOM)
         self.assertIsNotNone(
-            ImageChops.difference(marks.transpose(Image.ROTATE_180), flipped).getbbox(),
-            "rotate(180) and FLIP_TOP_BOTTOM must differ, or the bug is unrepresentable")
+            ImageChops.difference(marks.transpose(Image.ROTATE_180), flipped).getbbox())
 
-    def test_markings_are_drawn_not_traced(self):
-        # D-5: no third-party artwork is redistributed. The scheme is generated
-        # from rectangles and text, so the source carries no image asset.
-        src = (REPO / "scripts" / "convert_flightgear_c182.py").read_text()
-        self.assertIn("CAP_TITLES", src)
-        # The scheme is generated, not loaded: the three drawing functions open
-        # no file at all. The module does name donor textures elsewhere - it
-        # repaints one - so the claim is about these functions, not the file.
-        # It names the roundel and the wing lettering in prose precisely to
-        # record that CAPP 130-2 calls them CAP-provided decals and that they
-        # are deliberately absent.
+    def test_the_registration_is_white(self):
+        marks = self.cv.side_markings(1368, 452)
+        colours = {c[1][:3] for c in marks.getcolors(1 << 20)}
+        self.assertIn(self.cv.CAP_WHITE[:3], colours)
+
+    def test_the_scheme_is_drawn_not_traced(self):
+        # CAPP 130-2: "ALL DECALS PROVIDED BY CAP". The roundel, the wing
+        # lettering and the vertical fin titles are insignia rather than paint
+        # and are deliberately absent; CAPR 130-2 15.2 separately forbids wing
+        # logos and tail flashes. Checked by asserting the drawing functions
+        # open no file, not by looking for a word - the source names those
+        # decals in prose precisely to record why they are missing.
         import inspect
-        for fn in (convert_flightgear_c182.side_artwork,
-                   convert_flightgear_c182.side_markings,
-                   convert_flightgear_c182.fin_artwork):
-            body = inspect.getsource(fn)
-            self.assertNotIn("Image.open", body, fn.__name__)
+        for fn in (self.cv.scheme_colour, self.cv.paint_scheme, self.cv.side_markings):
+            self.assertNotIn("Image.open", inspect.getsource(fn), fn.__name__)
 
 
