@@ -52,7 +52,7 @@
       "measured_track_m": 2.616,
       "target_track_m": 2.7432,
       "reading": "main wheel centre to centre",
-      "evidence_strength": "INFERRED, not read off the drawing. Weaker than the propeller (a certification bound) or the horizontal tail span (a direct measurement), and recorded as such."
+      "evidence_strength": "INFERRED, not read off the drawing. Weaker than the propeller (a certification bound) or the horizontal tail span (a direct measurement), and recorded as such. RE-OPENED AS A QUESTION 2026-09-15 by decision D-8: the premise for inferring rather than reading - that the POH was unobtainable - was WRONG. services/flightplanner/app.py line 124 carries a public URL to the C182T NAV III POH and the planner already cites it as its performance source. Check the figure before trusting this correction. The centre-to-centre reading may well be right, but it should now rest on the drawing rather than on an argument from the drawing being unavailable."
     },
     {
       "id": "horizontal_tail_span_to_poh",

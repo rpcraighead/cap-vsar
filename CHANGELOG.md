@@ -3,6 +3,81 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-15 — D-8: aircraft fidelity forks from exercise-system development
+
+**Ron's decision.** The aircraft work stops gating the exercise system. A-1 and
+the 182 become a fidelity track with their own timeline; the SAREX path no
+longer waits on them. His reason: the flight-test work is bogging down system
+development, which is what the last several hours demonstrate.
+
+Recorded here and in A-1. The vault decisions entry and the board announcement
+are Ron's, as D-6 and D-7 were - the board is owned by the service and this
+session holds no engineering credential for it.
+
+### Why the fork is available at all
+
+The exercise system barely touches the aircraft. Counting references to the
+182T outside the aircraft-build lane:
+
+    xplane/        0     the DF engine is a GLOBAL plugin, fully aircraft-agnostic
+    instruments/   7
+    panels/        6
+    services/     47     almost all in services/ai_pilot, the autonomy lane
+
+The DF propagation engine, its 38 datarefs, terrain masking, 406 burst cadence
+and cone of confusion live in `Resources/plugins`, not in the aircraft. The MO
+panels are Air Manager. The radio, Mumble nets, console and planner are separate
+services. The Becker and the RT-600 are already not fitted to the 182 - they
+would work against any airframe unchanged.
+
+A-1 is currently the ONLY open P0, and it gates nothing the exercise needs.
+Session 1 - mission base stands up, seats connect, radios work, nothing flies -
+runs today with the aeroplane exactly as it is.
+
+### The options this leaves open, and their costs
+
+Not decided yet; recorded so the next reader does not have to reconstruct them.
+
+**1. Re-scope only.** The 182 stays as it is, A-1 leaves the critical path. Zero
+engineering. The aeroplane keeps its identity, livery and the planner coupling,
+and continues to fly like a 172 - which is now a recorded, understood defect
+rather than a mystery.
+
+**2. Switch the exercise aircraft to the stock `Cessna_172SP_G1000.acf`.** An
+honest flight model out of the box, because Laminar calibrated it, and it
+deletes A-1, the Plane Maker calibration, the GPL donor dependency and D-7's
+whole subject. CAP flies plenty of 172s, so it is authentic rather than a fudge.
+THE COST IS THE PLANNER: `services/flightplanner/app.py` carries a real C182T
+POH performance model - `get_cruise(alt, rpm, manifold_pressure)` from Figures
+5-6 and 5-12 - driving fuel flow, endurance and reserves. Flying a 172 while the
+planner plans a 182 recreates exactly the L-7a defect fixed this morning, where
+planner and simulator disagreed about the aeroplane. Either the planner is
+re-sourced to 172 performance, or the inconsistency is accepted knowingly.
+
+**3. Chase the POH.** See the correction below; A-1 may be far less blocked than
+this session has been assuming.
+
+### A correction that changes option 3
+
+Earlier today, settling the main wheel track, this session recorded that nobody
+on the project has the POH and declined to fetch one on D-5 grounds. **Both
+halves of that were wrong.** `services/flightplanner/app.py` line 124 carries a
+PUBLIC URL to the C182T NAV III POH and the planner already uses it as its cited
+performance source, and `docs/C182T_DIMENSION_MASTER.md` records a SHA-256 for
+the approved AFM, which means someone here has held the document. Consulting a
+source is not redistributing it; D-5 is about manufacturer page images being
+shipped in the tree.
+
+Two consequences. The Plane Maker calibration's nine recorded "unknowns" may be
+sourceable after all, so A-1's flight-model half may be fixable rather than
+merely diagnosed. And **the main wheel track correction rests on a premise that
+is now false**: it was settled as centre-to-centre by convergent inference
+explicitly BECAUSE the drawing could not be consulted. The inference may well be
+right - the POH's own note measures the companion gear dimension to the wheel
+centre line, and the arithmetic favoured it strongly - but it should now be
+checked against the figure rather than left standing on a reason that no longer
+holds. That is recorded against the correction itself, not quietly fixed.
+
 ## 2026-09-15 — why CAP 487 is slow: aerodynamically it is still a Cessna 172
 
 The flight-test misses are explained, and the explanation is checkable without
