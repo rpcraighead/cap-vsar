@@ -3,6 +3,73 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-15 — why CAP 487 is slow: aerodynamically it is still a Cessna 172
+
+The flight-test misses are explained, and the explanation is checkable without
+flying anything.
+
+### The ACF's aerodynamic definition is the stock C172SP's
+
+Diffing `Cessna_182T_G1000.acf` against the Laminar `Cessna_172SP.acf` it was
+copied from, restricted to the parameters that define aerodynamics:
+
+    _wing/   16,228 parameters, exactly 2 differ
+             _wing/8/_semilen_SEG and _wing/9/_semilen_SEG, both 5.53333
+    _body/    7,356 parameters, ZERO differ
+
+Those two are the horizontal stabiliser half-span, corrected on 2026-09-11.
+Every other aerodynamic parameter - wing area, chord, airfoil, sweep, dihedral,
+and all 7,356 fuselage cross-section values that set parasite drag - is
+byte-identical to the 172.
+
+A-1 has recorded since the beginning that "0 of 40 ACF patches touch wing, body,
+gear or tail geometry" and that the Plane Maker aerodynamic geometry was never
+converted. That was a statement about what had not been done. This is the first
+measurement of what it COSTS.
+
+### The flight test agrees, to 2.5%
+
+At the C1 condition the engine makes 214.0 HP. Scaling published max speeds by
+the cube root of power:
+
+    C172 airframe at 214 HP    126 x (214/180)^(1/3) = 133.5 KTAS
+    C182T airframe at 214 HP   150 x (214/230)^(1/3) = 146.4 KTAS
+    measured                                           130.1 KTAS
+
+The measurement sits 2.5% from the C172 prediction and 11.2% from the C182T
+one. The aeroplane is performing as a C172 airframe carrying a 182 engine,
+because that is what it is.
+
+B1 is consistent by the same reasoning. Climb rate is excess power divided by
+weight, and this airframe is being asked to lift 3,100 lb - well beyond the
+172's 2,550 lb maximum - on 172 aerodynamics, so the climb shortfall and the
+speed shortfall have one cause, not two.
+
+### What this retires
+
+The card's guidance for a low B1 says "engine or propeller modelling, not
+geometry". For this aircraft that is wrong, and the engine data says so
+directly: 2400.002 RPM against a rated 2400, 29.3 inHg at full throttle, 214.0
+HP of a rated 230. The propeller governor holds rated RPM exactly. The 93% power
+figure is a real but minor second finding; it cannot produce a 13.3% speed
+shortfall, because power required goes as the cube of speed.
+
+A correction to the C1 entry above: it said the result "corroborates" A-1's note
+about the Plane Maker geometry. At the time that was an inference from a single
+number. The cube-root comparison and this diff are what actually support it, and
+they are much stronger than what was written then.
+
+### What this does NOT license
+
+Editing drag parameters to make the numbers come out. The defect is that an
+entire aerodynamic definition was never converted, and the fix is the Plane
+Maker calibration against the 182T POH that A-1 has always listed - wing, body,
+gear and tail geometry, not a fudge factor. Two flight-test points and a diff
+locate the work; they do not substitute for it.
+
+A-1 stays open, with its flight-model half now diagnosed rather than merely
+suspected.
+
 ## 2026-09-15 — C1 flown: a second MISS, and it moves the diagnosis off the engine
 
 **Card C1, max speed at sea level, full power, level. MISS by 13.3%.**
