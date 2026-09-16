@@ -3,6 +3,53 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-15 — D-7: the production licence route leaves A-1's scope
+
+**Ron's decision.** A-1 stops carrying the production licensing route as
+outstanding work. The prototype stays local and the exterior continues on
+technical merit. Recorded in `docs/FLIGHTGEAR_C182_GPL_PLAN.md` and in A-1;
+full reasoning belongs in the vault decisions file, and the board announcement
+is Ron's to post, as D-6 was.
+
+His reasoning: the exterior is converging on the real C182T shape, so the result
+is progressively less like the HHS81 donor's model and closer to what Cessna
+designed — the question moves away from the GPL donor rather than being resolved
+in its favour.
+
+That is right about the direction of travel. Three things it does not change are
+recorded with it, so the next reader does not re-derive them:
+
+**No percentage clears derivation.** The corrections are parametric transforms
+applied to the donor mesh at load time, and `scripts/build_c182t_package.py`
+refuses to run without the pinned donor cache — it fails with "donor is
+incomplete". Every entry in `c182t_corrections.json` is a transform *of* that
+mesh. A build that cannot run without the GPL input stays derivative however far
+the vertices move; there is no threshold in copyright that says otherwise. This
+needs no action, because the architecture already handles it: donor outside the
+repository, GPL text and provenance manifest inside the generated package,
+repository itself Apache.
+
+**The binding constraint on redistributing the built package is Laminar.** The
+plan already says so twice — the package is a Laminar Research C172 carrying our
+exterior, with Laminar's cockpit and systems inside it. That does not move with
+mesh accuracy, because it is not about the mesh. If redistribution is ever
+contemplated, that is the thing to resolve first, and it is unrelated to both
+the donor and Cessna.
+
+**The repository mirror is unaffected.** Donor assets and Laminar files are
+already excluded from the repo, so the public mirror D-6 refers to is not gated
+on any of this.
+
+On Cessna: design patents on a 1956-origin airframe are long expired. What
+remains live is trademark and trade dress — the Cessna and Skylane word marks,
+the tail script — none of which this package applies. It wears CAP markings,
+governed separately by CAPR 130-2, drawn from CAPP 130-2 rather than traced.
+
+A scope decision about a local prototype, not legal advice. A-1's remaining
+outstanding work is now Plane Maker aerodynamic geometry, full X-Plane visual
+acceptance of the corrected exterior, and the registration's aft-fuselage
+placement.
+
 ## 2026-09-15 — A-1 stage 3: main wheel track, and a reading settled without the drawing
 
 The last blocked dimension. It had been held deliberately, and correctly: the

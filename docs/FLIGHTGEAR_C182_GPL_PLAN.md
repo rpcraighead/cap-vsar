@@ -103,3 +103,49 @@ Production acceptance still requires:
   the selected C182T POH; and
 - regression flight tests after the exterior and flight-model coordinate
   systems are aligned.
+
+## Decision D-7 — the production licence route is out of scope (2026-09-15)
+
+**Ron's decision.** The production licensing route in "Production routes" and
+"Production release gate" above is no longer carried as outstanding work on
+A-1. The prototype stays local and the exterior work continues on technical
+merit alone. Full reasoning belongs in the vault decisions file; this section
+records the decision and, more usefully, what it does **not** change.
+
+Ron's reasoning: the exterior is converging on the real C182T shape, so the
+result is progressively less like the HHS81 donor's model and progressively
+closer to what Cessna designed — which moves the question away from the GPL
+donor rather than resolving it in the donor's favour.
+
+That reasoning is sound about the *direction of travel*. Three things it does
+not change, recorded so the next reader does not re-derive them:
+
+**There is no percentage that clears derivation.** The corrections are
+parametric transforms applied to the donor mesh at load time, and
+`scripts/build_c182t_package.py` cannot produce an aircraft without the pinned
+donor cache present — it refuses with "donor is incomplete". Every correction
+in `scripts/c182t_corrections.json` is recorded as a transform *of* that mesh.
+A build that cannot run without the GPL input is derivative however far the
+vertices move, and no threshold in copyright says otherwise. This needs no
+action, because the existing architecture already handles it correctly: the
+donor stays outside the repository, the GPL text and provenance manifest ship
+inside the generated package, and the repository itself stays Apache.
+
+**The binding constraint on redistributing the BUILT PACKAGE is Laminar, not
+the donor and not Cessna.** As this document already says at "Current decision"
+and at release-gate item 4, the package is a Laminar Research C172 with our
+exterior on it, and carries Laminar's cockpit and systems. That constraint does
+not move with mesh accuracy, because it is not about the mesh. If redistributing
+the aircraft is ever contemplated, this is the thing to resolve first.
+
+**The repository mirror is unaffected.** Donor assets and Laminar files are
+already excluded from the repo, so the public mirror referenced by D-6 is not
+gated on any of this.
+
+On Cessna specifically: design patents on a 1956-origin airframe are long
+expired. What remains live is trademark and trade dress — the Cessna and
+Skylane word marks and the tail script — none of which this package applies.
+The aircraft wears CAP markings, which CAPR 130-2 governs on its own terms, and
+the scheme is drawn from CAPP 130-2 rather than traced.
+
+This is a scope decision about a local prototype and is not legal advice.
