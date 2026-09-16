@@ -3,6 +3,76 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-15 — C1 flown: a second MISS, and it moves the diagnosis off the engine
+
+**Card C1, max speed at sea level, full power, level. MISS by 13.3%.**
+
+    KTAS         130.1 mean over 60.0 s, 1139 samples, spread 0.0, drift +0.0
+    altitude     556 ft MSL, level at +1 fpm mean
+    target       150 KTAS +/-5  =  145..155
+    error        -19.9 KTAS  (-13.3%)   MISS
+
+A clean measurement: fully stabilised, no drift across the window, so the
+"still accelerating reads low" caveat does not apply. Conditions: 3,100 lb at
+start and 3,092 lb at end, CG FS 44.4 in (31.4% MAC, aft), flaps 0, standard
+day, full power throttle/prop/mixture. Flown on the aircraft's own autopilot in
+ALTITUDE HOLD so that speed was the dependent variable - level change would have
+commanded a speed and measured nothing.
+
+### Two misses in the same direction, and what separates them
+
+    B1  rate of climb   -10.7%
+    C1  max speed       -13.3%
+
+Both low by a similar margin, which is why C1 was flown: it discriminates. The
+card's guidance for a low B1 says "engine or propeller modelling, not geometry".
+The engine data says otherwise.
+
+At the C1 condition the engine is at **2400.002 RPM against a rated 2400**, MAP
+29.3 inHg at full throttle, producing **214.0 HP against a rated 230 - 93%**.
+The propeller lever reads 0.30 but the governor is holding rated RPM exactly, so
+the propeller is not the constraint.
+
+A 7% power shortfall does not explain a 13.3% speed shortfall. In level flight
+power required goes as the cube of speed, so 93% power costs about 2.4% of
+speed, not 13%. Working backwards from the measurement:
+
+    (130.1/150)^3 = 0.652   power-equivalent of the speed shortfall
+    actual power  = 0.930
+    implied       = 1.43x   more drag, or that much less propulsive efficiency
+
+So the airframe is absorbing roughly 43% more power at speed than it should.
+That is DRAG or PROPELLER EFFICIENCY, and both are Plane Maker parameters rather
+than mesh geometry. It corroborates A-1's own outstanding item: the Plane Maker
+aerodynamic geometry is still inherited from the C172 and has never been
+calibrated against the 182T POH. Today's exterior corrections cannot have caused
+this - X-Plane takes drag from the ACF, not from the OBJ.
+
+The 7% power shortfall is a second, smaller finding worth its own look.
+
+### A reading that nearly became a false conclusion
+
+`ENGN_power`, `ENGN_MPR` and `prop_speed_rpm` are ARRAY datarefs. Read without
+an index they returned 0.0, and the first engine check therefore reported 0 RPM,
+0 inHg and 0 HP - which reads as an engine producing nothing at full throttle.
+With `[0]` the same three read 2400 RPM, 29.3 inHg and 214 HP.
+
+This is exactly the failure `scripts/capture_flight_test.py` validates against
+in its own docstring: "X-Plane replies 0.0 to an unrecognised name, so an
+unvalidated name produces silent zeros that look exactly like measurements."
+The capture tool was right; the ad-hoc check bypassed it and was caught only
+because a dead engine at full throttle is not a believable reading.
+
+### Recorded
+
+`scripts/reduce_cruise_point.py` reduces cruise points: steadiest 60-second
+window, KTAS with the altitude band, and an explicit drift figure, because a
+max-speed point that has not stopped accelerating reads low and the reader has
+to be able to see that.
+
+Two of the card's points are now flown and both MISS. C2 and Group D remain, and
+Group A stays blocked behind the 90 KIAS gate floor.
+
 ## 2026-09-15 — B1 flown: the first recorded flight-test data point, and it is a MISS
 
 **Card B1, rate of climb at sea level, full power, Vy. MISS by 10.7%.**
