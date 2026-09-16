@@ -74,8 +74,31 @@ class XPlaneUDPClient:
         self._listener_thread.start()
         logger.info("X-Plane UDP receiver thread started")
 
+    def unsubscribe_all(self) -> None:
+        """Cancel every active subscription."""
+        with self._lock:
+            drefs = list(self._dref_to_id)
+        for dataref in drefs:
+            self.unsubscribe_dref(dataref)
+        with self._lock:
+            self._dref_to_id.clear()
+            self._id_to_dref.clear()
+
     def stop(self) -> None:
-        """Stop receiver thread and close socket."""
+        """Stop receiver thread and close socket.
+
+        Subscriptions are cancelled FIRST, and that order is the point.
+        X-Plane streams RREF to a port until it is told to stop - not until
+        the client dies - so a client that merely closes its socket leaves its
+        stream arriving at whatever binds that port next, decoded against that
+        new client's own id numbering. The ids both start at zero, so the
+        values land under the wrong names silently: observed live, a tool that
+        asked for elevation received the previous tool's latitude in every
+        sample. For a recorder like scripts/capture_flight_test.py that is
+        airspeed logged as bank angle at 20 Hz into a trace someone will
+        later reason about.
+        """
+        self.unsubscribe_all()
         self._running = False
         if self._listener_thread and self._listener_thread.is_alive():
             self._listener_thread.join(timeout=1.0)
