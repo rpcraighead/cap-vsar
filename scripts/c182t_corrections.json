@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "description": "A-1 stage 3 exterior geometry corrections for CAP 487, applied to the pinned donor mesh at load time by both the converter and the measurement harness. Every entry names the dimension it closes, the sourced target, and why this transform was chosen. Corrections are deliberately parametric and version-controlled here rather than baked into a mesh, because the donor mesh is GPL and stays outside this repository (docs/FLIGHTGEAR_C182_GPL_PLAN.md).",
+  "donor_commit": "1359d63393c7fc9145953b081d151d93627e791a",
+  "corrections": [
+    {
+      "id": "prop_diameter_to_tcds",
+      "closes": "propeller_diameter",
+      "status": "active",
+      "type": "radial_scale_about_axis",
+      "objects": [
+        "Blade1",
+        "Blade2",
+        "Blade3",
+        "FastProp"
+      ],
+      "axis_from": "converter.PROP_ROTATION",
+      "measured_before_in": 79.25502,
+      "target_in": 79.0,
+      "scale": 0.99678,
+      "rationale": "TCDS 3A13 gives the McCauley B3D36C431/80VSA-1 a certification band of 77.5-79.0 in; the donor measured 79.255 in, outside it. This is a certification bound, not a tolerance, so the value must move. A radial scale about the existing propeller axis was chosen over clipping the blade tips because it preserves topology, vertex count, UVs and the hub position exactly, and at 0.32 percent the difference between scaling and trimming is under a third of a millimetre at the tip. FastProp, the blur disc, is scaled with the blades so the spinning propeller still matches the static one. chrome_spinner is deliberately NOT scaled: the spinner diameter is not the propeller diameter.",
+      "preserves": "Hub position and rotation axis are unchanged by construction, because the transform only scales the component perpendicular to that axis. No animation pivot moves, so converter.PROP_ROTATION needs no recomputation.",
+      "source": "TCDS 3A13 p.33 Propeller Limits, 182S/182T item (2); POH p.1-3 front view annotates 79\" MAX"
+    },
+    {
+      "id": "main_wheel_track_to_poh",
+      "closes": "main_wheel_track",
+      "status": "blocked",
+      "blocked_on": "Which endpoints the POH three-view's wheel-track dimension actually marks. Ron or an SME, not a model.",
+      "type": "spanwise_ramp_about_centreline",
+      "objects": [
+        "MainStrut.L",
+        "MainStrut.R",
+        "MainWheel.L",
+        "MainWheel.R",
+        "WheelFairing.L",
+        "WheelFairing.R"
+      ],
+      "measured_centre_to_centre_in": 102.99,
+      "measured_tyre_outer_face_in": 109.45,
+      "target_in": 108.0,
+      "rationale": "DO NOT CORRECT THIS UNTIL THE READING IS SETTLED - the ambiguity flips the SIGN of the required correction. The dimension master already records that the POH drawing's dimension lines drop from the wheels and do not annotate whether they mark wheel centre or tyre outer face, and calls centre-to-centre the conventional reading. Measured both ways on a 6.46 in tyre: centre-to-centre is 102.99 in (-4.64%), tyre outer face is 109.45 in (+1.34%). One reading says the gear is nearly five inches too NARROW; the other says it is an inch and a half too WIDE. Widening the track to make centre-to-centre 108.0 would put the outer faces at about 115.9 in, roughly 7% too wide if the outer-face reading is the right one. That is inventing a coordinate, which section 1 of the resume doc forbids: mark it unknown and stop. The transform and object list above are ready to apply once the endpoint is sourced.",
+      "source": "POH p.1-3, Figure 1-1 Sheet 1 (front view); ambiguity recorded in c182t_dimension_master.json"
+    },
+    {
+      "id": "horizontal_tail_span_to_poh",
+      "closes": "horizontal_tail_span",
+      "status": "blocked",
+      "blocked_on": "Needs a region transform inside a shared object with a blended root - Blender work, not a parametric scale.",
+      "type": "region_scale_with_root_blend",
+      "objects": [
+        "Airframe (aft outboard region only)",
+        "Elevator",
+        "ElevatorTrim"
+      ],
+      "measured_in": 143.03,
+      "target_in": 140.0,
+      "rationale": "The measurement is sound - verified independently, not assumed. The aft_outboard window selects 156 vertices spanning exactly +/-1.8164 m in a thin horizontal band at z 5.09-5.61, symmetric to 1e-4, so it is genuinely the stabiliser and not a stray feature. The +2.16% is a real mesh error. What blocks the correction is decomposition, not measurement: the stabiliser has no object of its own - it lives inside Airframe, which also carries the fuselage and the wings (max |x| 5.4558 m is a wingtip). A spanwise scale on Airframe would shrink the WINGS. Correcting the tail therefore needs a region-selected transform with a blend at the fuselage junction, or the skin tears where the stabiliser meets the tailcone. This is the case the resume doc's Blender preference is actually for, unlike the propeller, which was a scale about a known axis and exactly expressible as a number.",
+      "also_found": "The master's ambiguity note for this target says the stabiliser and elevator tips 'are flush on this airframe'. In this donor they are not: the stabiliser half-span is 1.8164 m and the Elevator object reaches 1.8212 m, 0.189 in further per side. It does not change the verdict - both readings are about 3 in over the 140.0 in target - but the note should be corrected so the next reader does not treat the two as interchangeable.",
+      "source": "POH p.1-3, Figure 1-1 Sheet 1 (top view)"
+    }
+  ]
+}

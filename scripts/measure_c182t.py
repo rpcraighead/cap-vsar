@@ -7,6 +7,7 @@ import json
 import math
 from pathlib import Path
 
+import c182t_corrections as corrections
 import convert_flightgear_c182 as converter
 from fetch_flightgear_c182 import DEFAULT_DONOR, DONOR_ARCHIVE_SHA256, DONOR_COMMIT, validate_donor, sha256
 
@@ -61,7 +62,7 @@ def center(pts):
     return tuple((a+b)/2 for a,b in bounds(pts))
 
 
-def extract(objects):
+def extract(objects, applied=()):
     """Reduce strictly parsed donor to a license-safe numeric landmark fixture."""
     converter.assert_all_objects_classified(objects)
     names = [o.name for o in objects]
@@ -106,6 +107,7 @@ def extract(objects):
     def group(objs):
         return {'objects':sorted(o.name for o in objs),'bounds_m':bounds([p for o in objs for p in points(o)])}
     return {'schema_version':1,'donor_archive_sha256':DONOR_ARCHIVE_SHA256,'donor_commit':DONOR_COMMIT,
+        'corrections_applied':list(applied),
         'landmarks':landmarks,'prop_axis':axis,'prop_radius_m':radius,
         'bounds':{'structural':group(structural),'all_rendered':group(rendered)},
         'known_unconverted':sorted(converter.KNOWN_UNCONVERTED)}
@@ -271,10 +273,18 @@ def write_overlays(result, directory):
         (directory/f'{view}.svg').write_text('\n'.join(parts)+'\n')
 
 
-def load_donor(path):
+def load_donor(path, corrected=True):
+    """Parse the pinned donor. A-1 stage 3 corrections are applied by default.
+
+    Measuring the raw donor is still possible (--raw), and is what the stage-2
+    baseline numbers refer to. What the harness measures by default must be
+    what the converter emits, or an accepted dimension means nothing.
+    """
     validate_donor(path)
     root=converter.AC3DParser((path/'Models/c182s.ac').read_text(errors='strict')).parse()
-    return [o for o in converter.flatten(root) if o.kind=='poly' and o.surfaces]
+    objects=[o for o in converter.flatten(root) if o.kind=='poly' and o.surfaces]
+    applied=corrections.apply_corrections(objects, converter) if corrected else []
+    return objects, applied
 
 
 def main():
@@ -283,8 +293,14 @@ def main():
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--fixture',type=Path,help='Replay derived numeric fixture without any donor access')
     parser.add_argument('--write-fixture',type=Path)
+    parser.add_argument('--raw',action='store_true',
+                        help='Measure the uncorrected donor (stage-2 baseline)')
     args=parser.parse_args()
-    fixture=json.loads(args.fixture.read_text()) if args.fixture else extract(load_donor(args.donor))
+    if args.fixture:
+        fixture=json.loads(args.fixture.read_text())
+    else:
+        objects,applied=load_donor(args.donor, corrected=not args.raw)
+        fixture=extract(objects, applied)
     result=report(fixture,json.loads(MASTER.read_text()))
     result['master_sha256']=sha256(MASTER)
     args.output.mkdir(parents=True,exist_ok=True)

@@ -82,9 +82,33 @@ ACF_PATCHES = {
     r"^P _prop/0/_min_pitch .*": "P _prop/0/_min_pitch 10.000000000",
     r"^P _prop/0/_max_pitch .*": "P _prop/0/_max_pitch 40.000000000",
 
-    # Weight & Balance: Empty 1,970 lbs, MTOW 3,100 lbs
-    r"^P acf/_m_empty .*": "P acf/_m_empty 1970.000000000",
+    # Weight & Balance. MTOW 3,100 lbs.
+    #
+    # L-7a: empty weight was 1,970 lb here while the flight planner used the POH
+    # Figure 6-3 SAMPLE aircraft - 1,924 lb, moment/1000 70.9 - as its planning
+    # baseline. A 46 lb disagreement in empty weight means planner and simulator
+    # never agreed on takeoff weight, CG or performance for the same loading,
+    # and the crew sees both numbers. The sample aircraft is not a measurement
+    # of CAP 487; it is a shared, sourced baseline, and it must be the SAME
+    # shared baseline on both sides. services/flightplanner/app.py is the other
+    # half and carries the same values; tests/test_loading_baseline.py fails if
+    # they drift apart again.
+    r"^P acf/_m_empty .*": "P acf/_m_empty 1924.000000000",
     r"^P acf/_m_max .*": "P acf/_m_max 3100.000000000",
+
+    # L-7a: the EMPTY CG was never patched at all. The stock C172SP ships
+    # _cgZ 2.900095 - Laminar sets _cgZ to _cgZ_fwd on both aircraft checked -
+    # and the builder moved the LIMITS to the C182T envelope below while leaving
+    # the empty CG at the C172S value. It happened to land within 0.15 in of the
+    # right answer, which is luck, not derivation, and luck does not survive the
+    # next envelope change.
+    #
+    # Derived from the same POH sample and the same %MAC mapping used for the
+    # limits below:
+    #   empty arm = 70,900 lb-in / 1,924 lb = 36.850 in aft of datum
+    #   %MAC      = (36.850 - 25.98) / 58.8 = 18.483%
+    #   _cgZ      = 1.994 + 0.18483 * 4.837 = 2.888 ft
+    r"^P acf/_cgZ .*": "P acf/_cgZ 2.888000000",
 
     # Fuel System: 87 gal usable (92 gal total) = 522 lbs fuel
     r"^P acf/_m_fuel_max_tot .*": "P acf/_m_fuel_max_tot 522.000000000",

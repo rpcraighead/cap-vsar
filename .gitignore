@@ -18,6 +18,10 @@ services/*/data/
 services/flightplanner/charts/
 services/exercise/radio-public/
 backups/
+# The board container's own git clone of this repository, and the deploy key
+# it pushes with. Both are per-host, and the key must never be committed.
+services/board/repo/
+services/board/secrets/
 *.log
 logs/fdr/
 
@@ -44,3 +48,12 @@ docs/gma.txt
 
 # Generated documentation site (scripts/build_docs_site.py)
 build/
+# D-5. Page extracts from those same manuals and decks - the -pNN- in each name
+# is the source page. Untracking the manuals (D-4) closed only half the
+# question; these images are the same copyrighted pages, just cropped. They
+# stay on disk and docs/SOURCES.md records the public URL each came from, so
+# anyone can re-extract their own. Our own redrawn faceplates live under
+# instruments/*/resources/ and docs/figures/manual/ and are deliberately NOT
+# covered by this rule.
+docs/figures/*.png
+!docs/figures/manual/

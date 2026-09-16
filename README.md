@@ -30,7 +30,7 @@ documentation they were built from.
 | **Mission Base Headset Radio** | `https://192.0.2.151/radio` | APX 4500 / EFJohnson 5300 instrument faces, live Mumble voice, touch or spacebar PTT; [headset and HTTPS setup](docs/mission-base-radio/README.md) |
 | Legacy MRO Text Console | `https://192.0.2.151/radio-legacy` | Previous APX 6500 / Icom training console, typed messages, sidetones and Form 110 log |
 | Instructor Console | `https://192.0.2.151/instructor` | Exercise scenario management, map-pin beacon placement, propagation fault injection |
-| Mission Base Console | `https://192.0.2.151/base` | Situational awareness map (hidden beacon truth), bearing logging & intersection cuts |
+| Mission Base Console | `https://192.0.2.151/base` | Situational-awareness map (hidden beacon truth), reporting-aircraft bearing entry, pairwise bearing cuts and confidence area |
 | Debrief Console | `https://192.0.2.151/debrief` | Recorded flight replay against truth, CPA, track efficiency, bearing error scoring |
 | Flight Planner | `https://192.0.2.151/planner/` | Pre-flight navigation log, geodetic CAP search patterns (SS, CS, PS), FMS export |
 

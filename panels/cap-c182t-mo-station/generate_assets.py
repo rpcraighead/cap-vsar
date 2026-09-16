@@ -95,10 +95,17 @@ def create_preview(instrument_list, subtitle="MISSION OBSERVER STATION"):
 
     # Render each instrument
     for name, uuid, x, y, w, h in instrument_list:
-        # Always use the current source artwork for our instruments. Only the
-        # stock MFD preview comes from the Air Manager installation.
-        inst_prev_path = (ROOT / "instruments" / LOCAL_INSTRUMENTS[name] / "preview.png"
-                          if name in LOCAL_INSTRUMENTS else INST_BASE / uuid / "preview.png")
+        # D-5: this used to composite the stock instrument preview straight out
+        # of the Air Manager installation for anything we do not draw
+        # ourselves, which put a Sim Innovations asset into a committed PNG and
+        # into the distributed station zip. Only our own artwork is composited
+        # now; everything else gets a placeholder drawn here. That also means
+        # this script produces a complete preview on a machine with no Air
+        # Manager installed, which it previously could not.
+        if name not in LOCAL_INSTRUMENTS:
+            _draw_stock_placeholder(draw, name, x, y, w, h, font_sub)
+            continue
+        inst_prev_path = ROOT / "instruments" / LOCAL_INSTRUMENTS[name] / "preview.png"
         if os.path.exists(inst_prev_path):
             inst_img = Image.open(inst_prev_path).convert("RGBA")
             inst_resized = inst_img.resize((w, h), Image.Resampling.LANCZOS)
@@ -107,6 +114,27 @@ def create_preview(instrument_list, subtitle="MISSION OBSERVER STATION"):
             print(f"Warning: could not find preview for {name} ({uuid}) at {inst_prev_path}")
 
     return preview
+
+
+def _draw_stock_placeholder(draw, name, x, y, w, h, font):
+    """Mark where a stock Air Manager instrument sits, without reproducing it.
+
+    The panel genuinely mounts a stock instrument at this position, so the
+    preview must show the slot; what it must not do is redistribute the
+    vendor's artwork to do it.
+    """
+    draw.rectangle([x, y, x + w, y + h], fill=(16, 18, 22, 255),
+                   outline=BORDER_COLOR, width=2)
+    lines = [name.upper(), "stock Air Manager instrument", "not redistributed"]
+    line_h = 20
+    top = y + (h - line_h * len(lines)) // 2
+    for i, text in enumerate(lines):
+        try:
+            tw = draw.textlength(text, font=font)
+        except AttributeError:
+            tw = len(text) * 7
+        draw.text((x + (w - tw) / 2, top + i * line_h),
+                  text, fill=(120, 132, 150, 255), font=font)
 
 def main():
     repo_panel_dir = str(Path(__file__).resolve().parent)

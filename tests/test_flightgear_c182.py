@@ -192,6 +192,22 @@ class DonorValidationTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "pinned commit"):
                     donor_fetch.validate_donor(root)
 
+    def test_every_asset_the_exterior_pipeline_reads_is_pinned(self):
+        """The exterior editable source must be checksum-verified like the rest.
+
+        `dev/C182S.blend` is the editable source of `Models/c182s.ac` - the file
+        the converter parses and the measurement harness selects its landmarks
+        on, and the one asset a geometry correction actually edits. It was the
+        single unpinned file in an otherwise fully checksum-verified donor
+        pipeline, while `dev/C182T.blend` (the cockpit model, which no exterior
+        work touches) was pinned. Guard against that regressing.
+        """
+        pinned = donor_fetch.REQUIRED_FILE_SHA256
+        self.assertIn("Models/c182s.ac", pinned)
+        self.assertIn("dev/C182S.blend", pinned)
+        for name, digest in pinned.items():
+            self.assertRegex(digest, r"^[0-9a-f]{64}$", f"{name} is not a sha256")
+
 
 if __name__ == "__main__":
     unittest.main()

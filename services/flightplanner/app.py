@@ -80,6 +80,18 @@ OPEN_METEO_URL = 'https://api.open-meteo.com/v1/forecast'
 WINDS_LEVELS_HPA = [925, 900, 850, 800, 700, 600]
 WINDS_TARGET_ALT = [3000, 6000, 9000, 12000]
 _winds_cache = {}  # (round(lat,1), round(lon,1), 'YYYYMMDDHH') -> winds dict
+# L-10: this grew without limit. The key carries an hour stamp, so every hour
+# minted a fresh generation and the old one was never dropped - a long-running
+# base station accumulated every point anyone had ever planned through.
+_WINDS_CACHE_MAX = 512
+
+
+def _winds_cache_put(key, value):
+    """Insert, evicting oldest-first once the cache is full."""
+    if len(_winds_cache) >= _WINDS_CACHE_MAX:
+        for stale in list(_winds_cache)[:len(_winds_cache) - _WINDS_CACHE_MAX + 1]:
+            _winds_cache.pop(stale, None)
+    _winds_cache[key] = value
 
 MAX_PARALLEL_DIMENSION_NM = 50.0
 MAX_PARALLEL_LEGS = 200
@@ -111,8 +123,15 @@ OURAIRPORTS_URLS = {
 # Cessna 182T NAV III GFC 700, 182TIMBUS-01, revision 1 (20 Dec 2007).
 # https://www.aeroelectric.com/Reference_Docs/Cessna/cessna-poh/C182T_2007_NavIII-G1000%2BGFC700_POH-PIM_fromCessna.pdf
 # The user selected the POH SAMPLE aircraft as the simulation planning baseline.
-# Its empty weight/moment are not a measurement of CAP 487. The builder still
-# uses 1970 lb; use 1924 lb in the sim to match this sample loading calculation.
+# Its empty weight/moment are not a measurement of CAP 487 - they are a shared,
+# sourced baseline, which only works if BOTH sides use the same one.
+#
+# L-7a, 2026-09-15: they did not. The builder specified 1,970 lb while this used
+# 1,924 lb, so planner and simulator disagreed by 46 lb on every takeoff weight,
+# CG and performance number for the same loading - and the crew reads both. The
+# builder now carries 1,924 lb and an empty CG derived from the 70.9 moment
+# rather than inherited from the stock C172S. tests/test_loading_baseline.py
+# fails if the two drift apart again; change them together or not at all.
 AIRCRAFT_DATABASE = {
     'CAP 487': {
         'name': 'CAP 487 - Cessna 182T NAV III (POH sample baseline)',
@@ -319,6 +338,11 @@ def init_database():
     c.execute('CREATE TABLE IF NOT EXISTS airports (icao TEXT PRIMARY KEY, name TEXT, city TEXT, state TEXT, latitude REAL, longitude REAL, elevation INTEGER)')
     c.execute('CREATE TABLE IF NOT EXISTS runways (id INTEGER PRIMARY KEY, airport_icao TEXT, runway_id TEXT, length INTEGER, surface TEXT)')
     c.execute('CREATE TABLE IF NOT EXISTS navaids (id TEXT PRIMARY KEY, name TEXT, type TEXT, latitude REAL, longitude REAL)')
+    # L-10: this data is OurAirports, not the FAA NASR cycle a pilot expects,
+    # and nothing recorded which source or how old it was. Crews were reading
+    # airport data of unknown vintage off a planner that looked authoritative.
+    c.execute('CREATE TABLE IF NOT EXISTS data_source '
+              '(key TEXT PRIMARY KEY, source TEXT, fetched_at TEXT, rows INTEGER)')
     conn.commit()
     conn.close()
 
@@ -596,6 +620,13 @@ def download_database(lock_file=None):
                     log_msg(f"Skipping navaid row {nid or '<unknown>'}: {e}")
         conn.commit()
         
+        # Stamp what this data actually is, so the UI can stop implying a
+        # currency the source does not have.
+        for key, rows in (('airports', cnt), ('runways', rcnt), ('navaids', ncnt)):
+            c.execute('INSERT OR REPLACE INTO data_source VALUES (?,?,?,?)',
+                      (key, OURAIRPORTS_URLS[key], get_utc_now().isoformat(timespec='seconds'), rows))
+        conn.commit()
+
         _publish_update_status(
             message=f'Done! {cnt} airports, {rcnt} runways, {ncnt} navaids',
             progress=100)
@@ -736,7 +767,7 @@ def fetch_winds_aloft(lat, lon):
                 'temp': round(tmp),
             }
         result = {'station': 'GFS (Open-Meteo)', 'simulated': False, 'levels': levels}
-        _winds_cache[key] = result
+        _winds_cache_put(key, result)
         return result
     except Exception as e:
         log_msg(f'Winds aloft fetch failed ({e}); using estimate')
@@ -1173,6 +1204,38 @@ def _allow_vsar_export(client):
 
 
 # Flask Routes
+@app.route('/api/health')
+def health():
+    """Liveness that actually proves the planner can serve a flight plan.
+
+    L-10: the compose healthcheck hit `/`, which renders a template and says
+    nothing about the aviation database. A planner whose database had vanished
+    reported healthy and then failed on the first airport lookup - during an
+    exercise, that is the worst possible moment to discover it.
+
+    A missing or unreadable database is a hard failure (503). An empty one is
+    not: a fresh container legitimately starts before the first download, so
+    `populated` is reported separately rather than held against liveness.
+    """
+    body = {'status': 'ok', 'database': DATABASE_PATH}
+    try:
+        conn = sqlite3.connect(f'file:{DATABASE_PATH}?mode=ro', uri=True, timeout=2)
+        try:
+            body['airports'] = conn.execute('SELECT COUNT(*) FROM airports').fetchone()[0]
+            body['populated'] = body['airports'] > 0
+            body['data_source'] = [
+                {'key': k, 'source': src, 'fetched_at': at, 'rows': rows}
+                for k, src, at, rows in conn.execute(
+                    'SELECT key, source, fetched_at, rows FROM data_source ORDER BY key')
+            ]
+        finally:
+            conn.close()
+    except Exception as e:
+        return jsonify({'status': 'unhealthy', 'database': DATABASE_PATH,
+                        'error': str(e)}), 503
+    return jsonify(body)
+
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -1307,9 +1370,13 @@ def _fetch_tile_upstream(spec, z, x, y, dest_path):
 
 @app.route('/tiles/<chart_type>/<int:z>/<int:x>/<int:y>.png')
 def serve_tile(chart_type, z, x, y):
-    spec = TILE_CACHE.get(chart_type)
-    if spec is None:
+    # L-10: chart_type reaches the filesystem only as a TILE_CACHE key, and
+    # z/x/y are <int:> converters, so traversal was never reachable here. The
+    # explicit membership test states that invariant rather than leaving it to
+    # be re-derived by the next reader of this function.
+    if chart_type not in TILE_CACHE:
         return '', 404
+    spec = TILE_CACHE[chart_type]
     tile_dir = os.path.join(CHARTS_DIR, spec['dir'], str(z), str(x))
     tile_file = f'{y}.png'
     full_path = os.path.join(tile_dir, tile_file)

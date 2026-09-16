@@ -97,6 +97,277 @@ heading — 7.75 nm from the threshold. Unattended and steady, which was the poi
 
 Offline coverage: 46 tests in `tests/test_air_start.py`; full suite 273 passed,
 1 skipped, 23 subtests. None of them would have caught items 1 through 5.
+## 2026-09-15 — F-12 per-radio MON / open squelch
+
+The EFJohnson control head's labelled MON key now has a hit region matching its
+actual SVG bounds and toggles open squelch. The APX artwork has no MON-labelled
+key, so no hit region was invented on one of its unrelated controls. The active
+annunciation changes to `MONITOR` and the speaker status states whether MON or
+normal squelch is active.
+
+Monitor state and PCM admission are per-radio. Toggling the displayed tactical
+radio does not alter the airband receiver. Normal reception rejects frames below
+a 0.012 RMS training threshold; MON on that receiver bypasses the threshold and
+passes the marginal frame to its own playback worklet. This threshold is a
+simulation decision, not a calibration claim about EFJohnson hardware.
+
+All three executable Node-backed behavioral tests were written first and failed
+on the pre-fix tree because the monitor policy block did not exist. Command run:
+`PYTHONPATH=. ~/.cache/capvsar/capvsar-planner-venv/bin/python3 -m pytest
+tests/test_console.py tests/test_radio.py tests/test_geodesy.py -q` — 104 passed,
+17 subtests passed.
+
+**Not verified:** marginal traffic was not played through a live Mumble/headset
+session.
+
+## 2026-09-15 — F-11 per-radio grant and release sidetones
+
+Mission Radio now ports the retired console's radio-specific sidetones. The
+tactical P25 receiver uses its three-tone permit chirp and carrier tail; the
+VHF-AM receiver uses its relay click and squelch burst. The PTT selection is an
+operator interaction latched at the start of the press. Tone output, playback
+clearing and the pending grant timer are per-radio state, so changing the UI
+selection cannot move a tone to the other receiver during a transmission.
+
+The server's grant starts the tone first and keeps microphone capture disabled
+until its 115 ms P25 or 15 ms AM duration has elapsed. Releasing early cancels
+that receiver's pending timer, leaves the microphone closed and plays its
+matching release tail.
+
+Both executable Node-backed behavioral tests were written first and failed on
+the pre-fix tree because the sidetone decision block did not exist. Command run:
+`PYTHONPATH=. ~/.cache/capvsar/capvsar-planner-venv/bin/python3 -m pytest
+tests/test_console.py tests/test_radio.py tests/test_geodesy.py -q` — 101 passed,
+17 subtests passed.
+
+**Not verified:** audible timing through a real headset against the live Mumble
+service.
+
+## 2026-09-15 — F-8 review follow-ups
+
+Mission Base no longer rebuilds the bearing callsign selector on every 1 Hz
+state push. The live callsign set is console state, while the selected callsign
+is an operator's in-progress interaction: an unchanged set leaves the DOM
+control alone, and a selected aircraft that disappears remains selected with a
+visible stale label instead of silently changing the bearing's attribution.
+
+The full bearing log remains sortie state and stays visible. The confidence cut
+now uses only the three newest bearings per aircraft. That bounded policy keeps
+enough observations for one moving aircraft to triangulate while allowing early
+coarse LOBs to age out as later observations improve the cut.
+
+Both executable Node-backed behavioral tests were written first and failed on
+the pre-fix tree because the policy block did not exist. Command run:
+`PYTHONPATH=. ~/.cache/capvsar/capvsar-planner-venv/bin/python3 -m pytest
+tests/test_console.py tests/test_radio.py tests/test_geodesy.py -q` — 99 passed,
+17 subtests passed.
+
+**Not verified:** the stale option and non-collapsing open selector were not
+exercised against a live 1 Hz state feed in a deployed browser.
+
+## 2026-09-15 — L-7a: one loading baseline; F-13 closed by decision D-6
+
+**L-7a — the planner and the simulator now share a baseline.** Two defects, and
+the second was not in the tracker.
+
+The first was the one L-7a describes: the builder specified 1,970 lb empty while
+the planner used 1,924 lb. Those are two different POH figures, not a typo —
+section 1.3's *standard* empty weight, rounded, versus Figure 6-3's *sample
+aircraft*. Ron selected the sample as the shared planning baseline, so the
+builder now carries it. Which figure is used matters less than that both sides
+use the same one: 46 lb moved every takeoff weight, CG and performance number
+for identical loading, and the crew reads both numbers.
+
+The second was found while checking the first. **The empty CG was never patched
+at all.** The builder moves `_cgZ_fwd` and `_cgZ_aft` to the C182T envelope but
+left `_cgZ` at the stock C172SP's 2.900095 — Laminar sets `_cgZ` to `_cgZ_fwd`
+on both stock aircraft checked. It happened to land within 0.15 in of the right
+answer, which is luck rather than derivation, and luck does not survive the next
+envelope change. `_cgZ` is now 2.888 ft, derived from the sample's 70.9
+moment/1000 through the same %MAC mapping the limits already use.
+
+L-7a's premise that the CG datum mapping was unverified turned out to be stale:
+the mapping exists, placed by %MAC because no consulted source locates the
+firewall in X-Plane's frame, and it is sound — it reproduces both of its own
+documented anchors (FS 33.0 → 2.5715 ft, FS 46.0 → 3.6409 ft).
+
+`tests/test_loading_baseline.py` holds the two sides together, reading the
+planner's `AIRCRAFT_DATABASE` with `ast` rather than importing it — importing
+`services/flightplanner/app.py` shadows the exercise service's `app` *package*
+on `sys.path` and breaks two unrelated test modules when pytest collects the
+directory in one process. Found that the hard way.
+
+Marked **resolved rather than fixed**: the X-Plane half of the original verify —
+loading CAP 487 at identical fuel and payload in the sim and confirming it agrees
+with the planner — has not been run.
+
+**F-13 — closed as won't-fix by decision D-6.** The base console's net names stay
+generic. CAPR 100-1 puts channel names and codeplugs in the restricted NPP and no
+approved mapping exists here; Codex stopped rather than inventing plausible CAP
+nomenclature, which was the right call. Generic names are *preferred* rather than
+merely tolerated: a simulator channel name that could be mistaken for a real
+comms plan risks negative transfer to aircrew, and a repository bound for a
+public mirror makes restricted channel data a D-5 release-gate question. Full
+reasoning in the vault's decisions file. One follow-up for before that mirror:
+I-11 already shipped CAP fleet-plan names in the TDFM memory table.
+
+## 2026-09-15 — L-10, D-5 and A-1 stage 3; and a review that changed the outcome
+
+Three tracker items closed or advanced alongside the console lane, plus the
+review that caught four defects in it before they merged.
+
+**L-10 — planner hygiene (fixed).** `requests` 2.31.0 carried CVE-2024-35195 and
+CVE-2024-47081; pinned to 2.32.5. `gunicorn` and `Werkzeug` were unpinned
+entirely, so the image rebuilt to whatever shipped that day; both pinned past
+their advisories, with Werkzeug held at 3.0.x because Flask 3.0.0 does not
+support 3.1. The container ran as root and now does not. The compose
+healthcheck hit `/`, which renders a template and proves nothing about the
+aviation database — `/api/health` opens it read-only and fails closed at 503
+when it is missing, while an empty database reports `populated: false` and stays
+healthy so first boot is not permanently unhealthy. A `data_source` table
+records what the data actually is: OurAirports, with fetch time and row counts,
+rather than a planner implying an FAA cycle it does not have. `_winds_cache`
+grew without limit because its key carries an hour stamp; bounded at 512.
+
+**D-5 — third-party artwork (advanced, still open).** Nine page extracts
+untracked, the reference document rebuilt against our own redrawn faceplates,
+and — the part that mattered — both tracked artifacts regenerated, because
+fixing only the generator would have left the shipped document unchanged. The
+`.docx` fell 3,391,958 → 1,374,133 bytes and the `.pdf` 1,885,160 → 728,782;
+the old PDF's 1653×2339 images at 285 DPI, which are A4 page scans, are gone.
+The station panel preview no longer composites the stock Sim Innovations MFD
+tile out of an Air Manager installation, and as a side effect now renders on a
+machine with no Air Manager at all.
+
+Found while doing it: **D-4 had never actually landed on main.** The nine vendor
+manuals were still tracked, while `.gitignore` listed them — which does nothing
+for files git already tracks. The untracking exists only on the unmerged
+`fix/claude-console-2026-09-13`. Closed here under the standing D-4 decision. A
+test caught this, not a person; `tests/test_release_boundary.py` now enforces
+the whole boundary. D-5 stays open: no history rewrite, so its own verify
+criterion is unmet until the scrub agreed in D-4 happens before sharing.
+
+**A-1 stage 3 — propeller (advanced, still open).** 79.255 → 78.9998 in, inside
+the TCDS 77.5–79.0 band. A global scale fault was ruled out first: the errors
+run −4.64 to +2.16 percent with differing signs, so the regions are
+independently wrong and a whole-model scale would be the wrong fix. Corrections
+are parametric and version-controlled rather than baked into a mesh, since the
+donor is GPL and stays outside this repository, and the same module is applied
+by both the converter and the measurement harness so that what is measured is
+what is emitted; `--raw` still reproduces the stage-2 baseline. The hub and axis
+are fixed points of the transform, so no animation pivot moved.
+
+**The review.** Reviewing F-8 and F-10 before merge found five defects. The
+algorithmic work was sound — the great-circle intersection maths, the X-9
+session keying, and stopping on F-13 rather than inventing CAP nomenclature.
+Every defect was one shape: console-wide state read where per-instance state was
+required. An airband socket error tore down the tactical net; the transmit gate
+suppressed the other radio's traffic and its log entries; nothing kept the two
+radios on distinct nets, which re-created the symptom X-9 closed. Three are
+fixed; two in `base.js` are queued, because they need a policy decision rather
+than a patch. That failure shape is now named in the lane's own prompt.
+
+## 2026-09-15 — F-13 stopped: channel mapping is not sourced
+
+F-13 remains open. CAPR 100-1 §§1.9 and 6.13 say the National Programming
+Plan governs channelization and that its codeplugs are distributed through the
+restricted Communications area in eServices. The public regulation does not
+list the proposed TAC 1/TAC 2/CC 1/CC 2 mapping, and neither the project nor the
+vault contains an approved exercise channel card mapping those designators to
+the four Mumble nets. I-11 supplies plausible labels but explicitly calls its
+frequencies placeholders. Per the lane's stop rule, no console name was guessed.
+
+**Not verified:** no implementation or test was attempted. Resume only with an
+approved exercise/wing channel card or an authoritative four-net mapping.
+
+## 2026-09-15 — F-10 simultaneous tactical and airband radios
+
+Mission Radio now opens two independent Mumble radios for each operator. The
+new airband panel has its own channel, receive status, playback worklet and
+volume gain, while a clear PTT selector routes microphone audio only to the
+chosen tactical or airband radio. Incoming and outgoing CAPF-110 entries carry
+the selected radio's net identity so simultaneous traffic remains attributable.
+Extra browser faces still share each physical radio under X-9, but the two
+physical radios intentionally consume two sessions. The unchanged 16-session
+cap therefore supports at most **8 dual-radio operators**.
+
+Four behavioral tests were written first and verified red on the pre-fix tree:
+the second receiver shared the first Mumble client, session accounting allowed
+a ninth dual-radio operator, receive announcements lacked a radio/net identity,
+and no independently executable browser mix existed. Command run:
+`PYTHONPATH=. ~/.cache/capvsar/capvsar-planner-venv/bin/python3 -m pytest
+tests/test_console.py tests/test_radio.py tests/test_geodesy.py -q` — 94 passed,
+17 subtests passed. The local `/radio` page was also rendered and visually
+inspected in Chrome; both channel/volume controls and the PTT selector were
+present and the browser console had no errors.
+
+**Not verified:** simultaneous audible traffic against the live Mumble server,
+or deployment to ms01.
+
+## 2026-09-15 — F-8 Mission Base bearing intersections
+
+Mission Base now computes forward great-circle intersections between logged
+bearings, marks every valid pairwise cut within the displayed 40 NM rays, and
+fills the resulting confidence polygon when three or more distinct cuts exist.
+The Python authority lives in `services/exercise/app/geo.py`; the browser copy is
+executed against the same fixture so the deployment boundary cannot silently
+drift. Bearing rays now use the same spherical direct solution instead of the
+former flat-earth endpoint approximation. Bearing entry uses a reporting-aircraft
+selector rather than requiring the base operator to type a callsign.
+
+Tests were written first and verified red on the pre-fix behavior: the shared
+cut function, confidence triangle and executable browser functions were all
+missing. The hand-plot fixture records its expected crossings explicitly as
+`(0.0000, 0.0000)`, `(0.0000, 0.0161)` and `(-0.0192, 0.0000)`; Python and the
+browser JavaScript agree within 0.0002 degree. Command run:
+`PYTHONPATH=. ~/.cache/capvsar/capvsar-planner-venv/bin/python3 -m pytest
+tests/test_console.py tests/test_radio.py tests/test_geodesy.py -q` — 90 passed,
+17 subtests passed.
+
+**Not verified:** the cut layers and callsign selector have not been visually
+exercised in a live browser, and this working tree has not been deployed.
+
+## 2026-09-15 — A-1: the exterior editable source was misidentified and unpinned
+
+Stage 3 of `docs/bugs/CLAUDE_RESUME_C182_DIMENSIONS.md` told a Blender workflow to
+open `dev/C182T.blend`. That file is the donor's **cockpit/interior** model: 115
+mesh objects, all breakers, switches, levers and indicators, with no airframe
+geometry. Opening it to correct an exterior would have found nothing to correct.
+
+The exterior's editable source is `dev/C182S.blend` — 88 mesh objects matching the
+88 poly objects in `Models/c182s.ac` exactly, name for name, including every
+landmark `scripts/measure_c182t.py` selects on (`Airframe`, `Blade1`-`Blade3`,
+`Rudder`, `MainWheel.L`/`.R`, `FrontWheel`, `Strobe`, `BeaconOff`,
+`chrome_spinner`). Verified by opening both files headless and diffing their
+object names against a live parse of the `.ac`.
+
+`dev/C182S.blend` was also the one asset the donor pipeline did not checksum. The
+fetcher pinned `dev/C182T.blend`, which no exterior work touches, and left
+unverified the single file a geometry correction actually edits. Its SHA-256 is
+now pinned as `3bfe0720…a9a7ae58`; `validate_donor` passes against the live cached
+donor across all 8 pinned files. A regression test asserts both
+`Models/c182s.ac` and `dev/C182S.blend` stay pinned and that every pin is a
+well-formed SHA-256; it was verified to fail before the pin was added.
+
+Corrected the filename in three places in the resume doc (release boundary,
+editable-source line, stage-3 workflow) and two in `FLIGHTGEAR_C182_GPL_PLAN.md`
+(the editable-source claim and the production release gate's licensing
+inventory). Both blends are now named in the release boundary and the inventory,
+since both are GPL donor assets regardless of which one the exterior work uses.
+
+Installed Blender 4.5.14 LTS from the official tarball, SHA-256 verified, to
+`~/opt/blender-4.5.14` with no root. LTS and a pinned patch level were chosen
+because the stage-3 deliverable is a *reproducible* Blender Python script, so the
+Blender version is part of that contract. Recorded for whoever writes it:
+`Object.dimensions` is stale after a `bmesh` write and will report no change on a
+mesh that did change — read vertex data or force a depsgraph update.
+
+No geometry was corrected, no mesh or `.acf` was touched, and no tracker status
+changed. Verified: `tests.test_flightgear_c182` 11 passed; measurement harness 14
+passed with 1 optional skip, and that skip — the live donor comparison, which had
+never been runnable here — now passes, confirming the committed fixture matches a
+fresh donor parse byte for byte; console/radio 90 passed with 17 subtests;
+`git diff --check` clean. A-1 remains open at stage 3, not started.
 
 ## 2026-09-14 — O-8 single HTTPS participant front door deployed
 
