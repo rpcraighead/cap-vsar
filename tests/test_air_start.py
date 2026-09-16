@@ -534,12 +534,13 @@ class TestLlah:
         assert float(parts[1]) == pytest.approx(s.lon, abs=1e-5)
         assert float(parts[3]) == pytest.approx(s.heading_true, abs=0.1)
 
-    def test_metres_is_the_default(self):
-        # VEHS and the position datarefs are metres; that is the better guess.
-        assert float(sas.llah(start_fixture()).split(",")[2]) == pytest.approx(1310.6, abs=1.0)
+    def test_feet_is_the_default(self):
+        # Settled live: passing metres put the aeroplane at 1310.6 FEET, so the
+        # flag reads the altitude as feet. Position and heading were exact.
+        assert float(sas.llah(start_fixture()).split(",")[2]) == pytest.approx(4300.0, abs=1.0)
 
-    def test_feet_is_available_for_when_the_guess_is_wrong(self):
-        assert float(sas.llah(start_fixture(), "ft").split(",")[2]) == pytest.approx(4300.0, abs=1.0)
+    def test_metres_is_still_reachable(self):
+        assert float(sas.llah(start_fixture(), "m").split(",")[2]) == pytest.approx(1310.6, abs=1.0)
 
     def test_it_carries_enough_precision_to_land_on_the_centreline(self):
         # Six decimals of latitude is about 0.1 m; three would be 100 m, which

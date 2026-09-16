@@ -537,15 +537,16 @@ def apply(start: AirStart, host: str, port: int,
         return Achieved(seen[0], seen[1], seen[2], attempts, False)
 
 
-def llah(start: AirStart, alt_units: str = "m") -> str:
+def llah(start: AirStart, alt_units: str = "ft") -> str:
     """The argument for X-Plane's undocumented --load_llah=.
 
-    LLAH is lat, lon, alt, heading. The separator and the altitude UNITS are
-    hypotheses: the flag appears in the binary but in neither `--help` nor any
-    format string, so the only way to know is to launch with it and read the
-    position back. Metres is the default because that is what VEHS and the
-    position datarefs use; --llah-alt-units ft is there for when it turns out
-    to be the other one.
+    LLAH is lat, lon, alt, heading, comma separated, and the altitude is in
+    FEET. None of that is documented - the flag is in the binary but in
+    neither `--help` nor any format string - so it was settled by launching
+    and reading the position back, which is what the launcher still tells you
+    to do. Metres was the first guess, because VEHS and the position datarefs
+    use metres; passing 1310.6 (metres for 4300 ft) put the aeroplane at
+    399.5 m, which is 1310.6 FEET. Position and heading landed exactly.
     """
     alt = start.elevation_m if alt_units == "m" else start.altitude_ft
     return "%.6f,%.6f,%.1f,%.1f" % (start.lat, start.lon, alt, start.heading_true)
@@ -596,8 +597,9 @@ def main(argv=None) -> int:
     ap.add_argument("--emit-llah", action="store_true",
                     help="print the --load_llah= argument for this condition and "
                          "exit; contacts no simulator")
-    ap.add_argument("--llah-alt-units", choices=("m", "ft"), default="m",
-                    help="altitude units inside --load_llah (default m; unverified)")
+    ap.add_argument("--llah-alt-units", choices=("m", "ft"), default="ft",
+                    help="altitude units inside --load_llah (default ft, verified "
+                         "live against X-Plane 12.4.3)")
     ap.add_argument("--allow-long-jump", action="store_true",
                     help="permit a reposition beyond %.0f nm (known to leave the "
                          "aircraft at millions of feet)" % MAX_JUMP_NM)

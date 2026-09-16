@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 try:                                  # DejaVu is not guaranteed on every host
     ImageFont.truetype("DejaVuSans-Bold.ttf", 12)
@@ -475,13 +475,39 @@ ATLAS_SIZE = (4096, 2048)
 SIDE_PANEL_PORT = (111, 442, 1479, 894)     # corr(u, aft) +1.00, corr(v, up) +1.00
 SIDE_PANEL_STBD = (107, 1161, 1478, 1538)   # corr(u, aft) +1.00, corr(v, up) -1.00
 
-# Prototype approximation of the CAP scheme, DRAWN rather than traced: D-5
-# forbids redistributing third-party artwork. Not authentic CAP markings.
-CAP_BLUE = (13, 36, 77, 255)
-CAP_RED = (176, 27, 42, 255)
-CAP_OUTLINE = (235, 240, 246, 255)
+# The approved CAP corporate scheme, from CAPP 130-2 "CAP Aircraft Painting and
+# Marking" (4 October 2021), whose line drawing "A" is a SKYLANE - this exact
+# aircraft. SHA-256 8aead1f9ca5f60793c879359e7b77ff134a26b8f50d4131fc1f20fbea6932f0b.
+# Mandated by CAPR 130-2 15.2, which also forbids wing logos and tail flashes.
+#
+#   white upper fuselage, BLUE lower fuselage, RED vertical tail
+#   a thin gray/red stripe band on the division line
+#   registration in WHITE 12-inch vertical block on the blue, aft
+#   "UNITED STATES AIR FORCE AUXILIARY" along the aft fuselage (CAPR 130-2 15.5)
+#
+# Colours are sampled from that drawing's own paint legend rather than guessed;
+# the codes are the authority and these are the drawing's rendering of them.
+CAP_WHITE = (245, 246, 240, 255)     # Matterhorn White, AF3102
+CAP_BLUE = (62, 74, 124, 255)        # Blue, 753046
+CAP_GRAY = (178, 194, 207, 255)      # Gray, 753048
+CAP_RED = (217, 69, 67, 255)         # CAP Red, A07313 Acry Glo
+CAP_OUTLINE = (245, 246, 240, 255)
 CAP_LABEL = "CAP 487"
-CAP_TITLES = "CIVIL AIR PATROL"
+CAP_TITLES = "UNITED STATES AIR FORCE AUXILIARY"
+
+# The fuselage side is about 48 inches tall on a 182, so panel pixels can be
+# sized in the inches CAPP 130-2 actually specifies.
+SIDE_HEIGHT_IN = 48.0
+
+# Luminance of clean donor skin. Detail darker than this survives a repaint.
+SKIN_WHITE_LEVEL = 210
+# Below this the donor pixel is not skin - a different UV island inside the
+# same bounding box - and is left alone.
+SKIN_MIN_LEVEL = 70
+
+# Vertical fin, measured the same way as the fuselage sides.
+FIN_PANEL_PORT = (2318, 284, 2688, 385)     # corr(v, up) +1.00
+FIN_PANEL_STBD = (2318, 1653, 2688, 1753)   # corr(v, up) -1.00
 
 
 def _fit_font(draw, text, max_w, max_h):
@@ -496,39 +522,94 @@ def _fit_font(draw, text, max_w, max_h):
     return f, draw.textbbox((0, 0), text, font=f, stroke_width=3)[:4]
 
 def side_artwork(w: int, h: int, label: str = CAP_LABEL) -> Image.Image:
-    """One fuselage side, drawn in panel-local coordinates.
+    """One fuselage side of the approved CAP scheme, in panel-local coordinates.
 
-    Panel-local y=0 is the TOP of the fuselage side on both sides: port
-    maps v straight through, and starboard's inverted v is handled by
-    rotating this whole tile 180 degrees, which also reverses u. Building
-    one tile and rotating it is why the two sides cannot disagree.
+    Panel-local y=0 is the TOP of the fuselage side on both sides: port maps v
+    straight through, and starboard's inverted v is handled by rotating this
+    whole tile 180 degrees, which also reverses u. Building one tile and
+    rotating it is why the two sides cannot disagree.
+
+    Every mark is generated from rectangles and text. Nothing is traced: D-5
+    forbids redistributing third-party artwork, and CAPP 130-2 says the decals
+    are provided by CAP. The CAP roundel, the wing "CAP" lettering and the
+    vertical CIVIL AIR PATROL on the fin are therefore NOT reproduced here, so
+    this is the paint scheme without the insignia - an approximation for
+    simulation, not authentic CAP markings.
     """
     tile = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(tile)
+    inch = h / SIDE_HEIGHT_IN
 
-    # Cheatline: a broad blue band with a thin red accent under it, running
-    # the length of the side. Drawn from described geometry, not traced
-    # from CAP artwork - D-5 forbids redistributing third-party artwork,
-    # and this is a prototype approximation, not authentic CAP markings.
-    band_top = int(h * 0.56)
-    band_h = max(4, int(h * 0.105))
-    accent_h = max(2, int(h * 0.030))
-    gap = max(1, int(h * 0.018))
-    d.rectangle([0, band_top, w, band_top + band_h], fill=CAP_BLUE)
-    d.rectangle([0, band_top + band_h + gap,
-                 w, band_top + band_h + gap + accent_h], fill=CAP_RED)
+    # The division between white above and blue below, with the stripe band
+    # sitting on it: 2 in gray, 1 in space, 1.75 in red (CAPP 130-2 line A).
+    split = int(h * 0.52)
+    gray_h = max(2, round(2.00 * inch))
+    space_h = max(1, round(1.00 * inch))
+    red_h = max(2, round(1.75 * inch))
+    band_h = gray_h + space_h + red_h
 
-    # Titles forward, registration aft, both above the cheatline.
-    text_h = int(h * 0.20)
-    top_y = int(h * 0.30)
-    titles = CAP_TITLES
-    f1, (tw, th, lx, ly) = _fit_font(d, titles, int(w * 0.46), text_h)
-    d.text((int(w * 0.05) - lx, top_y - ly), titles, font=f1,
-           fill=CAP_BLUE, stroke_width=3, stroke_fill=CAP_OUTLINE)
-    f2, (rw, rh, rlx, rly) = _fit_font(d, label, int(w * 0.28), text_h)
-    d.text((w - int(w * 0.04) - rw - rlx, top_y - rly), label, font=f2,
-           fill=CAP_BLUE, stroke_width=3, stroke_fill=CAP_OUTLINE)
+    d.rectangle([0, 0, w, split - 1], fill=CAP_WHITE)
+    d.rectangle([0, split + band_h, w, h], fill=CAP_BLUE)
+    d.rectangle([0, split, w, split + gray_h], fill=CAP_GRAY)
+    d.rectangle([0, split + gray_h + space_h,
+                 w, split + gray_h + space_h + red_h], fill=CAP_RED)
     return tile
+
+
+def side_markings(w: int, h: int, label: str = CAP_LABEL) -> Image.Image:
+    """Lettering, drawn ON the paint. Kept out of side_artwork because the base
+    colours are modulated by the skin's own shading and the lettering must not
+    be - a dark mark under the registration would show through the paint."""
+    tile = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(tile)
+    inch = h / SIDE_HEIGHT_IN
+    split = int(h * 0.52)
+    band_h = (max(2, round(2.00 * inch)) + max(1, round(1.00 * inch))
+              + max(2, round(1.75 * inch)))
+
+    # Registration: 12 inch vertical block, WHITE, on the blue, aft.
+    reg_h = round(12.0 * inch)
+    f, (rw, rh, rlx, rly) = _fit_font(d, label, int(w * 0.30), reg_h)
+    d.text((w - int(w * 0.05) - rw - rlx,
+            split + band_h + int(h * 0.06) - rly),
+           label, font=f, fill=CAP_WHITE)
+
+    # United States Air Force Auxiliary, small, along the aft fuselage just
+    # under the stripe band (CAPR 130-2 15.5 calls for the graphic; this is the
+    # lettering only).
+    aux_h = max(6, round(2.2 * inch))
+    f2, (aw, ah, alx, aly) = _fit_font(d, CAP_TITLES, int(w * 0.34), aux_h)
+    d.text((int(w * 0.40) - alx, split - ah - int(0.8 * inch) - aly),
+           CAP_TITLES, font=f2, fill=CAP_BLUE)
+    return tile
+
+
+def fin_artwork(w: int, h: int) -> Image.Image:
+    """The vertical tail: red, per CAPP 130-2. Lettering is a CAP-provided
+    decal and is deliberately not reproduced."""
+    tile = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    ImageDraw.Draw(tile).rectangle([0, 0, w, h], fill=CAP_RED)
+    return tile
+
+
+def _keep_detail(art: Image.Image, under: Image.Image) -> Image.Image:
+    """Repaint the skin without erasing what is moulded into it.
+
+    A flat fill covers the donor's window frames, door outlines, panel lines
+    and rivets, which are baked into the texture rather than modelled. Real
+    paint does not do that. Multiplying the new colour by the old luminance -
+    normalised so clean white skin passes through unchanged - keeps every dark
+    detail and shades the new colour with the old shading.
+    """
+    lum = under.convert("L")
+    detail = lum.point(lambda v: min(255, int(v * 255 / SKIN_WHITE_LEVEL)))
+    shaded = ImageChops.multiply(art.convert("RGB"), Image.merge("RGB", (detail,) * 3))
+    # Paint only where there is skin. A panel's bounding box also contains
+    # unrelated atlas islands, and filling those repaints parts of the
+    # aeroplane the scheme says nothing about.
+    skin = lum.point(lambda v: 255 if v >= SKIN_MIN_LEVEL else 0)
+    shaded.putalpha(ImageChops.multiply(art.getchannel("A"), skin))
+    return shaded
 
 
 def create_cap_texture(source: Path, destination: Path) -> None:
@@ -562,12 +643,21 @@ def create_cap_texture(source: Path, destination: Path) -> None:
     # backwards - a vertical flip alone leaves exactly the horizontal mirror
     # that was observed.
 
-    for panel, rotate in ((SIDE_PANEL_PORT, False), (SIDE_PANEL_STBD, True)):
+    for panel, rotate, maker in ((SIDE_PANEL_PORT, False, side_artwork),
+                                 (SIDE_PANEL_STBD, True, side_artwork),
+                                 (FIN_PANEL_PORT, False, fin_artwork),
+                                 (FIN_PANEL_STBD, True, fin_artwork)):
         x0, y0, x1, y1 = panel
-        art = side_artwork(x1 - x0, y1 - y0, label)
+        art = (maker(x1 - x0, y1 - y0, label) if maker is side_artwork
+               else maker(x1 - x0, y1 - y0))
         if rotate:
             art = art.transpose(Image.ROTATE_180)
-        image.alpha_composite(art, (x0, y0))
+        image.alpha_composite(_keep_detail(art, image.crop(panel)), (x0, y0))
+        if maker is side_artwork:
+            marks = side_markings(x1 - x0, y1 - y0, label)
+            if rotate:
+                marks = marks.transpose(Image.ROTATE_180)
+            image.alpha_composite(marks, (x0, y0))
 
     image.save(destination)
 
