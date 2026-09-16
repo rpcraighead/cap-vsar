@@ -349,6 +349,8 @@ class FakeClient:
         self.velocity_writes = 0
         self.subscribed = []
         self._state = None
+        self.paused = False
+        self.pause_calls = []
 
     def __enter__(self):
         return self
@@ -362,6 +364,10 @@ class FakeClient:
         # Latitude and longitude land correctly even when the vertical does not.
         self._state = (lat_deg, lon_deg, alt)
 
+    def set_paused(self, paused):
+        self.paused = bool(paused)
+        self.pause_calls.append(bool(paused))
+
     def send_dref(self, dref, value):
         if dref.startswith("sim/flightmodel/position/local_v"):
             self.velocity_writes += 1
@@ -370,10 +376,13 @@ class FakeClient:
         self.subscribed.append(dref)
 
     def get_all_cached(self):
+        # The pause state is readable before any write; the position is not.
+        cache = {"sim/time/paused": 1.0 if self.paused else 0.0}
         if self.silent or self._state is None:
-            return {}
+            return cache
         lat, lon, alt = self._state
-        return {DREF_LAT: lat, DREF_LON: lon, DREF_ELE: alt * 0.3048}
+        cache.update({DREF_LAT: lat, DREF_LON: lon, DREF_ELE: alt * 0.3048})
+        return cache
 
 
 def start_fixture():
@@ -431,3 +440,82 @@ class TestApplyVerifies:
     def test_attempts_must_be_at_least_one(self):
         with pytest.raises(ValueError):
             run_apply(fake=FakeClient(), attempts=0)
+
+
+class TestPausesWhilePlacing:
+    def test_it_freezes_the_sim_before_moving_anything(self):
+        # A placement made with physics running can verify correct and then
+        # diverge: observed live at 4,604,172 ft, inverted, seconds after a
+        # read-back of exactly 4300 ft.
+        fake, _ = run_apply(fake=FakeClient(bad_writes=0))
+        assert fake.pause_calls[0] is True
+
+    def test_a_running_sim_is_handed_back_running(self):
+        fake, got = run_apply(fake=FakeClient(bad_writes=1))
+        assert got.ok and fake.paused is False
+
+    def test_a_sim_found_paused_is_left_paused(self):
+        fake = FakeClient(bad_writes=0)
+        fake.paused = True
+        _, got = run_apply(fake=fake)
+        assert got.ok and fake.paused is True, "do not start a sim the user had stopped"
+
+    def test_leave_paused_overrides_a_running_sim(self):
+        fake, got = run_apply(fake=FakeClient(bad_writes=0), leave_paused=True)
+        assert got.ok and fake.paused is True
+
+    def test_a_failed_placement_is_never_unpaused(self):
+        # Unpausing onto a bad vertical is how it ends up inverted in space.
+        fake, got = run_apply(fake=FakeClient(bad_writes=99), attempts=2)
+        assert not got.ok and fake.paused is True
+
+    def test_silence_also_stays_frozen(self):
+        fake, got = run_apply(fake=FakeClient(silent=True), attempts=1)
+        assert not got.ok and fake.paused is True
+
+
+class TestRefusesLongJumps:
+    """Neither retrying nor pausing survives a cross-continent reposition.
+    Both were implemented and both were disproved in flight, so the tool
+    refuses the move instead of reporting confident nonsense about it."""
+
+    def _at(self, lat, lon):
+        fake = FakeClient(bad_writes=0)
+        fake._state = (lat, lon, 4300.0)
+        return fake
+
+    def test_a_local_reposition_is_allowed(self):
+        fake = self._at(LAT + 0.2, LON + 0.2)      # a few nm
+        _, got = run_apply(fake=fake)
+        assert got.ok and fake.writes == 1
+
+    def test_austria_to_california_is_refused(self):
+        fake = self._at(47.8046, 12.9968)          # where this actually happened
+        with pytest.raises(sas.LongJumpRefused, match="millions of feet"):
+            run_apply(fake=fake)
+
+    def test_the_refusal_names_the_distance_and_the_way_out(self):
+        fake = self._at(47.8046, 12.9968)
+        with pytest.raises(sas.LongJumpRefused) as exc:
+            run_apply(fake=fake)
+        msg = str(exc.value)
+        assert "KRNM" in msg and "--allow-long-jump" in msg
+        assert "5260 nm" in msg, "say how far it was asked to move"
+        assert "limit 100" in msg
+
+    def test_nothing_is_written_when_the_jump_is_refused(self):
+        # A refusal after the write is a refusal after the damage.
+        fake = self._at(47.8046, 12.9968)
+        with pytest.raises(sas.LongJumpRefused):
+            run_apply(fake=fake)
+        assert fake.writes == 0 and fake.velocity_writes == 0
+
+    def test_the_override_exists_for_when_the_operator_knows_better(self):
+        fake = self._at(47.8046, 12.9968)
+        _, got = run_apply(fake=fake, allow_long_jump=True)
+        assert got.ok and fake.writes == 1
+
+    def test_an_unknown_current_position_does_not_block_the_move(self):
+        # A sim that has not reported position yet gets the benefit of the doubt.
+        _, got = run_apply(fake=FakeClient(bad_writes=0))
+        assert got.ok

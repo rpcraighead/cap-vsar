@@ -380,6 +380,8 @@ READBACK_DREFS = ("sim/flightmodel/position/latitude",
                   "sim/flightmodel/position/longitude",
                   "sim/flightmodel/position/elevation")
 
+PAUSED_DREF = "sim/time/paused"
+
 # NOT 49005. X-Plane keeps streaming RREF subscriptions to a receive port after
 # the client that asked for them exits, and every new client restarts its
 # dataref ids at zero - so a tool on the shared default reads the previous
@@ -387,8 +389,21 @@ READBACK_DREFS = ("sim/flightmodel/position/latitude",
 # latitude. Anything that subscribes needs a port of its own.
 DEFAULT_RECEIVE_PORT = 49177
 
+# Beyond this, refuse. VEHS re-centres the horizontal origin but X-Plane keeps
+# deriving the vertical from the old scenery origin, and the failure is worse
+# than an error: the placement reads back EXACTLY right while the simulator is
+# paused, and the aeroplane is at 4.7 million feet inverted a second after
+# physics resumes. Neither retrying nor pausing fixes it - both were tried live.
+# A flight must be LOADED near the destination (--load_llah at startup, or the
+# Flight Configuration screen); after that, local repositioning is exact.
+MAX_JUMP_NM = 100.0
+
 ALTITUDE_TOLERANCE_FT = 50.0
 POSITION_TOLERANCE_NM = 0.25
+
+
+class LongJumpRefused(RuntimeError):
+    """The aircraft is too far from the target for a reposition to survive."""
 
 
 @dataclass(frozen=True)
@@ -441,7 +456,8 @@ def _write_once(client, start: AirStart, settle_s: float) -> None:
 def apply(start: AirStart, host: str, port: int,
           receive_port: int = DEFAULT_RECEIVE_PORT,
           settle_s: float = 1.0, attempts: int = 3,
-          read_timeout_s: float = 4.0, client_factory=None) -> Achieved:
+          read_timeout_s: float = 4.0, leave_paused: bool = False,
+          allow_long_jump: bool = False, client_factory=None) -> Achieved:
     """Place the aircraft, then CHECK, and place it again if the sim disagreed.
 
     A single write is not enough and this is not defensiveness. VEHS re-centres
@@ -466,6 +482,37 @@ def apply(start: AirStart, host: str, port: int,
             return XPlaneUDPClient(host=host, port=port, receive_port=receive_port)
 
     with client_factory() as client:
+        # Pause before moving. A placement made with physics running can verify
+        # correct and then diverge: after two long jumps in a row the aeroplane
+        # read back at exactly 4300 ft, and seconds later was at 4,604,172 ft
+        # inverted and descending through 120,778 fpm, because X-Plane kept
+        # re-deriving the vertical from the stale origin while the frames ran.
+        # Frozen, the placement settles before physics can act on a bad one.
+        client.subscribe_dref(PAUSED_DREF, 5)
+        for dref in READBACK_DREFS:
+            client.subscribe_dref(dref, 5)
+        time.sleep(0.6)
+        cache = client.get_all_cached()
+        was_paused = bool(cache.get(PAUSED_DREF, 0.0))
+
+        # How far is the aeroplane being asked to move? Checked BEFORE writing,
+        # because a refusal after the write is a refusal after the damage.
+        here_lat = cache.get(READBACK_DREFS[0])
+        here_lon = cache.get(READBACK_DREFS[1])
+        if here_lat and here_lon and not allow_long_jump:
+            jump_nm = great_circle_nm(here_lat, here_lon, start.lat, start.lon)
+            if jump_nm > MAX_JUMP_NM:
+                raise LongJumpRefused(
+                    "refusing to move the aircraft %.0f nm (limit %.0f).\n"
+                    "X-Plane keeps the vertical referenced to the scenery origin it "
+                    "loaded with, so a jump this far\nreads back correct while paused "
+                    "and puts the aeroplane at millions of feet the moment physics "
+                    "resumes.\nLoad a flight near %s first, then reposition locally - "
+                    "that is exact. --allow-long-jump overrides."
+                    % (jump_nm, MAX_JUMP_NM, start.icao))
+        client.set_paused(True)
+        time.sleep(0.3)
+
         seen = None
         for attempt in range(1, attempts + 1):
             _write_once(client, start, settle_s)
@@ -477,7 +524,12 @@ def apply(start: AirStart, host: str, port: int,
                      and great_circle_nm(lat, lon, start.lat, start.lon)
                      <= POSITION_TOLERANCE_NM)
             if close:
+                if not (was_paused or leave_paused):
+                    client.set_paused(False)
                 return Achieved(lat, lon, alt_ft, attempt, True)
+        # A placement that never converged is left FROZEN regardless of how the
+        # simulator was found: unpausing onto a bad vertical is how the
+        # aeroplane ends up inverted in space.
         if seen is None:
             # No telemetry came back at all. The write may still have landed;
             # say so rather than claiming either success or failure.
@@ -527,6 +579,12 @@ def main(argv=None) -> int:
                          "with another running tool (default %d)" % DEFAULT_RECEIVE_PORT)
     ap.add_argument("--attempts", type=int, default=3,
                     help="write-and-verify passes before giving up (default 3)")
+    ap.add_argument("--allow-long-jump", action="store_true",
+                    help="permit a reposition beyond %.0f nm (known to leave the "
+                         "aircraft at millions of feet)" % MAX_JUMP_NM)
+    ap.add_argument("--leave-paused", action="store_true",
+                    help="stay paused after placing, instead of restoring the "
+                         "simulator's previous run state")
     ap.add_argument("--dry-run", action="store_true",
                     help="compute and print, write nothing to the simulator")
     args = ap.parse_args(argv)
@@ -544,8 +602,13 @@ def main(argv=None) -> int:
         print("\ndry run: nothing was written to the simulator")
         return 0
 
-    got = apply(start, args.host, args.port, receive_port=args.receive_port,
-                attempts=args.attempts)
+    try:
+        got = apply(start, args.host, args.port, receive_port=args.receive_port,
+                    attempts=args.attempts, leave_paused=args.leave_paused,
+                    allow_long_jump=args.allow_long_jump)
+    except LongJumpRefused as exc:
+        print("\nerror: %s" % exc, file=sys.stderr)
+        return 4
 
     if got.ok:
         print("\nachieved on attempt %d of %d: %.5f, %.5f at %.0f ft MSL"
