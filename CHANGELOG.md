@@ -3,6 +3,140 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-15 — A-1: the exterior gets a sourced livery and its second corrected dimension
+
+Two strands of A-1 in one session, both of which began with a wrong belief that
+survived because nobody had checked it.
+
+**Simulator engineering only. Not approved instruction for a real aircraft.**
+
+### The registration, and then the whole scheme
+
+The CAP 487 registration rendered mirrored and ran off the fuselage into the
+belly curve. Two earlier attempts derived the atlas mapping from the Door.L and
+Door.R UVs and both got it wrong, so this measured it from the whole converted
+mesh instead - every vertex with a strongly lateral normal at fuselage
+half-width. That gives two clean bands sharing a `u` range, separated by `v`:
+
+    port       x  111..1479, y  442.. 894   corr(u,aft) +1.00  corr(v,up) +1.00
+    starboard  x  107..1478, y 1161..1538   corr(u,aft) +1.00  corr(v,up) -1.00
+
+Two faults, not one. **Placement**: both stamps sat at x >= 1530 while the
+panels end at 1479, so the registration was painted onto the tailcone, 831 and
+1002 px past the aft edge. **Orientation**: viewed from outside the starboard
+side the nose is to the viewer's right, so increasing `u` runs LEFTWARD, and
+`v` is inverted there as well - both axes reverse, which is a 180-degree
+rotation. The old comment argued that `rotate(180)` would mirror the
+registration and used `FLIP_TOP_BOTTOM`; that had it backwards, and a vertical
+flip alone leaves exactly the horizontal mirror that was reported.
+
+Asked whether anyone had looked at what a CAP aircraft is actually painted
+like, the answer was no - the first scheme was invented from an impression, in
+a repository that cites TCDS pages and POH revisions for every other dimension.
+
+The authority is **CAPP 130-2, "CAP Aircraft Painting and Marking", 4 October
+2021**, SHA-256 `8aead1f9ca5f60793c879359e7b77ff134a26b8f50d4131fc1f20fbea6932f0b`,
+mandated by CAPR 130-2 15.2. Its line drawing A is a SKYLANE - this aircraft.
+White upper fuselage, BLUE lower fuselage, RED vertical tail, thin gray and red
+stripes on the division, registration in WHITE 12-inch vertical block on the
+blue, and UNITED STATES AIR FORCE AUXILIARY along the aft fuselage (15.5).
+Colours are sampled from that drawing's own paint legend rather than guessed:
+Matterhorn White AF3102, Blue 753046, Gray 753048, CAP Red A07313.
+
+Everything is generated from rectangles and text, and now for a sourced reason
+rather than a general nervousness: CAPP 130-2 says ALL DECALS PROVIDED BY CAP,
+so the roundel, the wing lettering and the vertical fin titles are insignia
+rather than paint and are deliberately absent. CAPR 130-2 15.2 separately
+forbids wing logos and tail flashes.
+
+### Why rectangles had to go
+
+Painting rectangles into the atlas only works where a region unwraps as an
+axis-aligned band. Measured, the fuselage sides do and nothing else does:
+
+    belly bands   corr(u,aft) +0.07..+0.29   corr(v,up) -0.37..+0.27
+    wing bands    corr(u,aft) +0.01..+0.90   corr(v,up) -0.66..+0.85
+
+No arrangement of rectangles puts a stripe in the right place on those, which
+is why the belly stayed white and the fin got a red band instead of a red fin.
+`scheme_colour()` now decides from the 3D POSITION and `paint_scheme()`
+rasterises it through the mesh's own UVs, so the wrap, the belly, the gear
+fairings and the fin all follow one rule and the hand-measured panel constants
+are deleted rather than multiplied. A two-inch stripe is thinner than a
+fuselage triangle, so triangles whose three corners disagree are split at the
+edge midpoints and recursed to four levels - only where a boundary actually
+crosses, which keeps a full repaint at 3 seconds.
+
+Two further faults found on the way: a flat fill erased the donor's window
+frames, door outlines and rivets, which are baked into the texture and which
+real paint does not touch, so the new colour is multiplied by the old
+luminance; and a panel's bounding box also contains unrelated atlas islands, so
+the repaint is masked to actual skin rather than filling the box.
+
+Seen in X-Plane after rebuild and reload. **Outstanding:** the registration
+sits on the cabin rather than the aft fuselage where a 182 wears it, and that
+is a DONOR limitation rather than a choice - the aft fuselage side maps to a
+degenerate single column at x=2204, with no width to paint a 12-inch
+registration into. Re-UV-ing it is mesh work.
+
+### Horizontal tail span, and a blocking reason that was wrong
+
+**This is the MESH, not the flight model.** The 2026-09-11 entry titled
+"horizontal tail span corrected" changed `_wing/8` and `_wing/9` in the ACF.
+This is a different correction, to the exterior geometry, closing the same
+published dimension by a different mechanism. The A-1 entry's caution about not
+conflating the two now cuts both ways: both exist.
+
+The correction had been recorded as blocked, on the grounds that the stabiliser
+has no object of its own - that it lives inside `Airframe` alongside the wings,
+so a spanwise scale would shrink the WINGS, making it Blender work rather than
+a parametric scale. `Airframe` does not carry the stabiliser. At z 4.8-6.3 it
+holds 738 vertices at |x| <= 0.2, the tailcone and fin, and 156 at
+|x| 1.600-1.816 with nothing in between: those are the tip caps. The surface
+itself is the `Elevator` object, 427 vertices spanning |x| 0.510-1.821, plus
+`ElevatorTrim`.
+
+So the transform never has to touch `Airframe` broadly. It selects the tail by
+a z-window, and that window is safe for a checked reason rather than a hoped
+one: the wings sit at z 0.548-1.815, three metres forward, and zero wing
+vertices fall inside it. That was verified before the transform was written and
+is pinned by a test that feeds a wingtip to the selector and requires it to be
+rejected.
+
+`region_scale_with_root_blend` anchors at the root station |x| = 0.51 m, where
+the elevator meets the fuselage. That station is a fixed point and everything
+outboard closes proportionally, so the junction cannot tear - a scale about the
+CENTRELINE would have dragged the root inboard and opened the skin there, which
+is what the original note was right to worry about, just for the wrong object.
+`Elevator` and `ElevatorTrim` take the same transform whole, being entirely
+tail, which preserves the donor's 0.189 in per side elevator overhang instead
+of silently flushing it.
+
+Measured by the harness rather than asserted: `horizontal_tail_span` error goes
+from 3.026 in (+2.162%) to 0.003 in (+0.002%), inside the 138.6-141.4 in
+bounds. Every other dimension is unchanged, `wing_span` still -0.374% - the
+claim the old rationale worried about, now checked rather than argued.
+
+`tests/fixtures/c182t_landmarks.json` was regenerated. It still carried the old
+1.8164 m half-span, so the replay tests were passing, self-consistent, against
+geometry the converter no longer emits - a measurement that looks fine and is
+not, which is the failure class this project keeps meeting. The measurements
+test asserted this dimension FAILS; it no longer does.
+
+Package rebuilt: 436 vertices corrected for the propeller, 594 for the tail.
+Suite 560 passed, 1 skipped, 52 subtests. Eleven failures are unrelated and
+unchanged - `node` is not installed on this workstation, and the browser halves
+of the console and radio suites need it.
+
+### A-1 remains open
+
+`main_wheel_track` is still blocked, deliberately. The POH drawing does not
+annotate whether its dimension lines mark wheel centre or tyre outer face, and
+the two readings put the gear 4.64% too narrow or 1.34% too wide. The ambiguity
+flips the SIGN of the correction, so it is a reading of the source and not a
+measurement. Also outstanding: Plane Maker aerodynamic geometry, X-Plane visual
+acceptance of the corrected exterior, and the production license route.
+
 ## 2026-09-15 — air start: one tool, six surprises, none of them the maths
 
 `scripts/set_air_start.py` places CAP 487 airborne on a named runway's final
