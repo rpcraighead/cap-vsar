@@ -3,6 +3,56 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-17 — MO station gets a mission equipment master switch and CB panel
+
+The SAR mission kit (DF head, TDFM-136B, GMA 1347/MFD feed) was drawing power
+straight off the aircraft avionics master with no way to cut it as a unit or
+shed one system's load, unlike the real mission-kit wiring it replicates.
+Added `instruments/cap-mission-master-switch/` (a guarded rocker switch — the
+guard must be lifted before the switch answers) and
+`instruments/cap-mission-cb-panel/` (one pull breaker each for DF, FM radio
+and audio/MFD), both canvas-drawn, no image assets. Published contract in
+`docs/DATAREF_CONTRACT.md` Part 6: `cap_mission_master_on`,
+`cap_mission_cb_df_in`, `cap_mission_cb_fm_in`, `cap_mission_cb_audio_in`, all
+defaulting `true` so an MO station panel without these two instruments is
+unaffected.
+
+Patched the four existing consumer instruments (`becker-sar-df-517`,
+`rhotheta-rt-600`, `cap-fm-tdfm-136b`, `mo-audio-panel-gma1347`) to AND the new
+variables into the `avionics_switch_on and bus_volts >= MIN_BUS_VOLTS` gate
+each already had, so the mission switch/breakers can cut power but can never
+substitute for a dead aircraft bus. Added both instruments to the MO station's
+two layouts in the panel's unused bottom strip (y:900-1050), to
+`panel_geometry.py`'s `KNOWN_INSTRUMENTS`, and to
+`scripts/deploy_df_instruments.py`. Regenerated panel assets and deployed.
+
+12 new tests in `tests/test_mission_power.py` (guard interlock, per-breaker
+independence, gating never overriding a dead bus) plus updates to
+`tests/test_panel.py`'s hardcoded instrument count. Full suite passes; the 6
+pre-existing `pytest`-import errors are unrelated (module not installed in
+this environment).
+
+## 2026-09-17 — A-1: first isolated flight-model calibration experiment staged
+
+The installed CAP 487 ACF and a clean rebuild from the pinned donor are
+byte-identical (SHA-256 `eaae3c83…958b6dd`). The inherited fuselage Plane Maker
+drag coefficient is 0.200000003. The X-Plane Plane Maker manual describes this
+coefficient as frontal-area based and gives 0.1 for an average fuselage; that
+example is not a sourced C182T value. The project POH confirms C1's 150 KTAS
+sea-level and B1's 924 FPM targets, with fairings and standard conditions.
+
+Added `scripts/c182t_flight_model_experiment.py` to create an isolated ACF with
+one explicit fuselage Cd perturbation. It refuses overwriting the source ACF,
+an existing output, a non-CAP-487 aircraft and a previously altered baseline.
+Built separate local baseline and Cd=0.100 candidates under `/tmp`. Directory
+comparison finds exactly one differing file, the ACF, whose diff is exactly one
+record. The builder default and installed aircraft were not changed. The
+candidate has not flown; it is not a calibration result and A-1 stays open.
+See `docs/C182T_FLIGHT_MODEL_CALIBRATION.md` for hashes, source conditions and
+the matched B1/C1 acceptance sequence. The 4 experiment-safety tests and 14
+existing flight-model tests pass; 65 converter/measurement/correction tests pass
+with one optional live-donor skip.
+
 ## 2026-09-15 — D-8: aircraft fidelity forks from exercise-system development
 
 **Ron's decision.** The aircraft work stops gating the exercise system. A-1 and

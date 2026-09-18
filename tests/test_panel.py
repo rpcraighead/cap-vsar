@@ -21,6 +21,8 @@ EXPECTED_INSTRUMENTS = {
     "Becker517": "faefb90d-5704-48c7-8deb-c683d94b4eb3",
     "RT600": "d783d409-9bfa-49f2-ad5d-883af29848d6",
     "TDFM136B": "26df5da8-8ce7-4255-bb0e-520453134609",
+    "MissionMaster": "d285e0f7-b787-42c7-85fd-ec8990f6db33",
+    "MissionCBPanel": "aa9851bc-5ba6-4f5e-a465-d456403fbfc8",
 }
 
 class TestMOPanel(unittest.TestCase):
@@ -159,7 +161,7 @@ class TestMOPanel(unittest.TestCase):
         for layout in geom["layouts"]:
             self.assertEqual(layout["width"], 1920)
             self.assertEqual(layout["height"], 1080)
-            self.assertEqual(len(layout["instruments"]), 4)
+            self.assertEqual(len(layout["instruments"]), 6)
             mfd = [i for i in layout["instruments"] if i["uuid"] == EXPECTED_INSTRUMENTS["MFD"]][0]
             self.assertEqual(mfd["properties"].get("Streaming"), "true")
             self.assertEqual(mfd["properties"].get("Display unit function"), "MFD")

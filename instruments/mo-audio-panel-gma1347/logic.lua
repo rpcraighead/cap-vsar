@@ -485,9 +485,15 @@ end
 local MIN_BUS_VOLTS = 10.0
 local avionics_switch_on = false
 local bus_volts = 0.0
+-- Mission-kit gating, independent of the airframe bus — see
+-- docs/DATAREF_CONTRACT.md Part 6. Both default true so a panel without the
+-- master switch / CB panel instruments behaves exactly as before.
+local mission_master_on = true
+local mission_cb_in = true
 
 local function update_power()
     local powered = avionics_switch_on and (bus_volts >= MIN_BUS_VOLTS)
+        and mission_master_on and mission_cb_in
     if powered == st.powered then return end
     st.powered = powered
     if powered then
@@ -509,6 +515,16 @@ end)
 
 xpl_dataref_subscribe("sim/cockpit2/electrical/bus_volts", "FLOAT[6]", function(val)
     bus_volts = type(val) == "table" and (val[1] or 0.0) or (type(val) == "number" and val or 0.0)
+    update_power()
+end)
+
+si_variable_subscribe("cap_mission_master_on", "BOOL", function(v)
+    mission_master_on = v and true or false
+    update_power()
+end)
+
+si_variable_subscribe("cap_mission_cb_audio_in", "BOOL", function(v)
+    mission_cb_in = v and true or false
     update_power()
 end)
 

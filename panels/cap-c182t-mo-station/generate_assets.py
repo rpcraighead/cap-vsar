@@ -35,6 +35,7 @@ INST_BASE = Path.home() / "Air Manager/instruments/OPEN_DIRECTORY"
 LOCAL_INSTRUMENTS = {
     "Becker517": "becker-sar-df-517", "RT600": "rhotheta-rt-600",
     "TDFM136B": "cap-fm-tdfm-136b", "GMA1347": "mo-audio-panel-gma1347",
+    "MissionMaster": "cap-mission-master-switch", "MissionCBPanel": "cap-mission-cb-panel",
 }
 
 def create_background():
