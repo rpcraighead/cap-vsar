@@ -3,6 +3,77 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-17 — card H0 FLOWN on the sixth attempt; roll is linear, pitch is not
+
+Card H0 (control and trim confidence, 100 KIAS clean) produced its first valid
+data. Five earlier attempts never reached a control input from a stabilized
+reference; run 6 reached one in **12 seconds** and flew all ten points.
+
+**Simulator engineering validation only.** Flown through the existing authorized
+`ManeuverGate`; `services/ai_pilot/maneuvers.py` unmodified, no second
+controller, no bypass.
+
+Conditions: CAP 487 clean at **2,718 lb**, over the Pacific ~9 NM west of KNZY
+at 4,500 ft so AGL and indicated altitude coincide, placed by `set_air_start.py`
+(0 ft and 0.00 nm from the requested point on the first attempt). Reference
+condition met to 0.4 KIAS, 17.4 ft, 45.6 fpm and 0.7 deg of bank against
+tolerances of 2.0 / 60 / 120 / 2.0. Trace
+`~/.cache/capvsar/flight-tests/H0_run6_20260917-192836.jsonl`, 5,460 samples
+over 4.6 minutes.
+
+**Roll is the clean axis.** Doubling the input gives 2.05x right and 1.97x left,
+and time-to-peak is 3.1 s on all four roll points — identical across magnitude
+and direction. Asymmetry 8-12%, the expected size for the left-turning tendency.
+
+**Pitch is the finding.** Doubling the input gives only 1.54x nose-up and 1.86x
+nose-down, so the response compresses where roll does not. Recovery ran 29-42 s
+nose-up and 33 s to beyond the 45 s window nose-down, and `pitch -0.10` is the
+run's one point that **did not recover in time**. The small-input asymmetry is
+20.9% at ±0.05 but only 4.5% at ±0.10 — a power-on pitch coupling would grow
+with excursion size, not shrink, so the likeliest reading is the altitude-hold
+loop still authoring part of the small-input response. That is exactly the
+interference the card warns about, and it means the ±0.05 pitch numbers are
+controller-in-the-loop, not airframe.
+
+**±0.05 rudder is too small to characterise the yaw axis.** Peak sideslip of 0.6
+and 3.1 degrees is near the noise floor and the 63.6% asymmetry between them
+measures almost nothing. The yaw axis is effectively still unexercised; a larger
+input is needed before anything can be claimed about it.
+
+**One point excluded.** `roll +0.05` entered at +124 fpm against a ±120 fpm
+tolerance — missed by 4 fpm, and recorded as not attributable rather than
+argued over. The gate is either the criterion or it is decoration. The other
+nine entered on-condition.
+
+**What the run says about the control laws** fixed across runs 1-5: the slew
+limiter bound on **148 of 16,377 surface commands (0.90%)**, so it is a safety
+net at transitions rather than a filter distorting normal operation; **zero**
+samples were flown with degraded body rates, so no result rests on a silently
+zeroed channel; autotrim stayed between -0.020 and -0.203 with no runaway; and
+the elevator touched its limit in exactly **1 sample out of 5,460**.
+
+Separately demonstrated in recovery: from 131.4 KIAS descending 4,438 fpm the
+backend returned the aircraft to 100.8 KIAS, 4,545 ft, wings level in 48
+seconds, with the commanded elevator equal to the demanded elevator on every
+tick — the tuned loop does not demand steps in the first place, so the limiter
+never had to clamp. The dive was caused by an ad-hoc hand-flown stabilization
+loop written for this session that wrote yoke ratios directly at 0.5 Hz,
+bypassing the backend entirely; the pilot spotted the instantaneous pitch inputs
+from the cockpit before the telemetry made it obvious. Removed in favour of
+engaging the real backend. The lesson is the one run 1 already taught, relearned
+in a throwaway script: **anything that writes a control surface goes through the
+rate limiter, or it is not a control input, it is a step.**
+
+**Limits.** One run, at 2,718 lb rather than the performance card's 3,100 lb,
+with the altitude and heading loops active by design. Controller-in-the-loop
+handling numbers, not open-loop airframe characterisation, and not to be quoted
+as one. H0 has no published pass/fail criterion; nothing here is recorded as
+either, and none of it closes A-1.
+
+Full reduction in `docs/C182T_H0_CONTROL_LAW_FINDINGS.md` §8;
+`docs/C182T_HANDLING_TEST_MATRIX.md` updated.
+
+
 ## 2026-09-17 — MO station gets a mission equipment master switch and CB panel
 
 The SAR mission kit (DF head, TDFM-136B, GMA 1347/MFD feed) was drawing power

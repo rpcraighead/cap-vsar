@@ -16,17 +16,22 @@ off San Nicolas Island (33.76 N, 119.08 W). Controller:
 
 ## Headline
 
-**Card H0 has been attempted five times and has not yet produced a single valid
-data point.** It has never reached its first control input from a stabilized
-reference condition.
+**Card H0 was flown on 2026-09-17, on the sixth attempt.** Nine of its ten
+points are attributable to a stabilized 100 KIAS reference condition. Run 6 is
+recorded in §8.
 
-That is not a failure of the card. Each of the five attempts terminated on a
-different, real defect in the controller, and all five are now fixed and locked
-by offline tests. The card found every one of them; none was caught by the 53
-offline tests that existed before the first run.
+The five preceding attempts produced no valid data point: none of them reached
+a first control input from a stabilized reference. That was not a failure of
+the card. Each terminated on a different, real defect in the controller, all
+five are fixed and locked by offline tests, and the card found every one of
+them — none was caught by the 53 offline tests that existed before the first
+run. Those five are documented in §1 and are kept here deliberately, because
+the defects are the reason run 6 worked.
 
-**No handling point is recorded as pass or fail. Nothing here validates the
-aircraft, and nothing here closes A-1.**
+**No handling point is recorded as a pass or a fail against a published
+criterion, because H0 has no such criterion — it is a control and trim
+confidence card. Nothing here validates the aircraft, and nothing here closes
+A-1.**
 
 ---
 
@@ -348,11 +353,9 @@ start from.
 
 ## 7. Status and what is next
 
-**Card H0: UNFLOWN.** Five attempts, five defects found and fixed, and the card
-has yet to reach its first input from a stabilized reference.
-
-Immediate next step is run 6, which needs the aircraft back above 90 KIAS and
-roughly level before the gate will allow a start.
+**Card H0: FLOWN, run 6, 2026-09-17.** Results in §8. Five attempts before it
+produced no attributable data; the sixth reached a stabilized reference in 12
+seconds and flew all ten points.
 
 Open, and unchanged by this work:
 
@@ -370,6 +373,91 @@ Open, and unchanged by this work:
   still applies to every airframe card. H0 is flown *with* the loop by design
   (it is a controller-confidence card); the airframe cards are not, and that
   needs an explicit hold-off path before they are flown.
+
+---
+
+## 8. Run 6 — the card, flown
+
+**2026-09-17.** CAP 487, clean, **2,718 lb**, over the Pacific about 9 NM west
+of KNZY on a 12 NM final line for runway 11, entered by `set_air_start.py` at
+4,500 ft so that AGL and indicated altitude coincide. Reference: 100 KIAS
+level. Trace `~/.cache/capvsar/flight-tests/H0_run6_20260917-192836.jsonl`,
+5,460 samples over 4.6 minutes.
+
+**Reference condition reached in 12 s**, inside every tolerance — 0.4 KIAS,
+17.4 ft, 45.6 fpm, 0.7 deg of bank against limits of 2.0 / 60 / 120 / 2.0. The
+five previous runs never got here at all.
+
+| Point | on-cond | recovered | peak rate | t-to-peak | peak deviation | recovery |
+|---|---|---|---|---|---|---|
+| pitch +0.05 | yes | yes | 3.10 deg/s | 1.2 s | +1,031 fpm | 29 s |
+| pitch −0.05 | yes | yes | 2.45 deg/s | 1.1 s | −782 fpm | 33 s |
+| pitch +0.10 | yes | yes | 5.96 deg/s | 1.2 s | +1,592 fpm | 42 s |
+| pitch −0.10 | yes | **NO** | 4.59 deg/s | 1.2 s | −1,459 fpm | >45 s |
+| roll +0.05 | **no** | yes | 2.71 deg/s | 3.1 s | +7.8 deg | 15 s |
+| roll −0.05 | yes | yes | 2.32 deg/s | 3.1 s | −7.2 deg | 13 s |
+| roll +0.10 | yes | yes | 5.23 deg/s | 3.1 s | +15.8 deg | 17 s |
+| roll −0.10 | yes | yes | 4.82 deg/s | 3.1 s | −14.1 deg | 16 s |
+| yaw +0.05 | yes | yes | 1.40 deg/s | 1.7 s | 0.6 deg beta | 7 s |
+| yaw −0.05 | yes | yes | 3.15 deg/s | 0.8 s | 3.1 deg beta | 7 s |
+
+Control response is correctly signed on all three axes. No reversal, no
+divergence, no sustained saturation: the elevator touched its limit in exactly
+**1 sample out of 5,460**.
+
+### Roll is the clean axis
+
+Linearity is near exact — doubling the input gives **2.05x** right and **1.97x**
+left. Time-to-peak is **3.1 s on all four roll points**, identical across both
+magnitude and direction, which is what a well-behaved roll axis should do.
+Asymmetry is 8-12%, the expected size for the left-turning tendency rather than
+anything structural.
+
+### Pitch is the finding
+
+Two things, and they may be the same thing:
+
+* **Non-linear.** Doubling the input yields only **1.54x** nose-up and **1.86x**
+  nose-down, where roll gives ~2x. Pitch response compresses at larger inputs.
+* **Slow, asymmetric recovery.** 29 / 42 s nose-up against 33 / >45 s nose-down,
+  and **pitch −0.10 never recovered inside the 45 s window** — the run's one
+  flagged failure.
+
+The small-input asymmetry is **20.9%** at ±0.05 but only **4.5%** at ±0.10. A
+power-on pitch coupling would grow with excursion size, not shrink. The
+likeliest reading is that the altitude-hold loop still authors part of the
+small-input response — precisely the interference the card warns about — so the
+±0.05 pitch numbers should be treated as controller-in-the-loop, not airframe.
+
+### Yaw inputs were too small to characterise the axis
+
+Peak deviations of 0.6 and 3.1 degrees of sideslip are near the noise floor, and
+the 63.6% "asymmetry" between them is measuring almost nothing. **±0.05 rudder
+is not a useful test input on this airframe**; a larger magnitude is needed
+before the yaw axis can be said to have been exercised at all.
+
+### One point is not attributable
+
+`roll +0.05` entered at **+124 fpm against a ±120 fpm tolerance** — missed
+by 4 fpm. It is excluded rather than argued over; the gate is either the
+criterion or it is decoration. The other nine points entered on-condition.
+
+### What the run says about the controller
+
+* The **slew limiter bound on 148 of 16,377 surface commands, 0.90%**. It is a
+  safety net at transitions, not a filter distorting normal operation — which is
+  what §1's run-3 fix intended.
+* **Zero samples were flown with degraded body rates**, so the rate-damping
+  terms were live throughout and no result rests on a silently zeroed channel.
+* **Autotrim stayed modest**, −0.020 to −0.203, with no runaway — and the
+  aircraft it inherited had been hand-flown into a dive moments earlier.
+
+### Limits on all of the above
+
+One run, at **2,718 lb — not the 3,100 lb** the performance card uses, and with
+the **altitude and heading loops active by design**. These are
+controller-in-the-loop handling numbers. They are not an open-loop airframe
+characterisation and must not be quoted as one.
 
 ---
 

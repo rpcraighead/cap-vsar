@@ -72,7 +72,7 @@ Enforced: **90–140 KIAS, 3,000–6,000 ft indicated, ≥1,000 ft AGL, ≤35° 
 
 | Card | Needs | Verdict |
 |---|---|---|
-| H0 control/trim confidence | discrete single-axis inputs, trim | **UNBLOCKED 2026-09-11**, still unflown — see §6 |
+| H0 control/trim confidence | discrete single-axis inputs, trim | **FLOWN 2026-09-17**, run 6 — see §6 and `C182T_H0_CONTROL_LAW_FINDINGS.md` §8 |
 | H1 speed ladder | 80–120 KIAS, trim/power-required | **BLOCKED at 80 KIAS** (gate floor 90); speed-on-pitch and trim now exist, the floor does not move |
 | H2 bank ladder | commanded 15/30/45° bank at 80–110 KIAS | **UNBLOCKED for 90–110 KIAS** (`select_bank`); **BLOCKED at 80 KIAS**, below the floor |
 | H3 climb/descent | Vy climb (speed-on-pitch) | **UNBLOCKED** — `select_airspeed(kias, throttle=...)` holds speed on pitch with throttle as the independent variable |
@@ -187,5 +187,24 @@ response. Traces now log the pre-rate-limit demand next to the command, the trim
 position and rate, both integrator states, and the age of every auxiliary
 channel.
 
-**H0 remains unflown.** The card has yet to reach its first input from a
-stabilized reference condition. Nothing here is a pass or a fail.
+**H0 was flown on 2026-09-17, run 6.** It reached a stabilized reference
+condition in 12 seconds and flew all ten points; nine are attributable to that
+reference, one (`roll +0.05`) entered 4 fpm outside the vertical-speed
+tolerance and is excluded. Full reduction in
+`docs/C182T_H0_CONTROL_LAW_FINDINGS.md` §8.
+
+Nothing there is a pass or a fail: H0 has no published criterion, being a
+control and trim confidence card. What it produced is a characterisation, and
+three things in it are worth carrying forward. Roll is linear to within 3% on a
+doubled input with an identical 3.1 s time-to-peak on all four points. Pitch is
+not — 1.54x and 1.86x for a doubled input, with recovery up to 45 s and one
+point (`pitch -0.10`) that did not recover inside the window. And **±0.05
+rudder is too small an input to characterise the yaw axis**: both yaw points
+sit near the noise floor, so that axis is effectively still unexercised.
+
+The run was flown at **2,718 lb with the altitude and heading loops active**.
+These are controller-in-the-loop numbers, not open-loop airframe
+characterisation, and the pitch small-input asymmetry (20.9% at ±0.05 against
+4.5% at ±0.10) is most likely the altitude loop still authoring part of the
+response — the interference this document's §2 and the card itself both warn
+about.
