@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 101 items, 4 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 107 items, 7 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -10,16 +10,16 @@ IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split ou
 
 | | critical | high | medium | low | total |
 |---|---|---|---|---|---|
-| by severity | 12 | 31 | 38 | 20 | 101 |
+| by severity | 13 | 34 | 40 | 20 | 107 |
 
 | P0 | P1 | P2 | P3 |
 |---|---|---|---|
-| 15 | 31 | 38 | 17 |
+| 16 | 34 | 40 | 17 |
 
 | Component | Items |
 |---|---|
+| Deployment / infrastructure | 24 |
 | Air Manager instruments | 19 |
-| Deployment / infrastructure | 18 |
 | Exercise console (backend) | 17 |
 | Flight planner | 16 |
 | Exercise console (frontend) | 12 |
@@ -40,7 +40,7 @@ _Wave dates track the illustrative calendar in docs/USE_CASE_SAREX_REHEARSAL.md 
 - **Wave 0** (8 items) — Now — make the work safe to do at all.
 - **Wave 1** (11 items) — Before session 1 (base stand-up). Nothing flies; base, planner and comms must work.
 - **Wave 2** (20 items) — Before session 2 (full mission, three aircraft, injected effects).
-- **Wave 3** (41 items) — Before session 3 (dress rehearsal) and the live SAREX.
+- **Wave 3** (47 items) — Before session 3 (dress rehearsal) and the live SAREX.
 - **Wave 4** (21 items) — After the SAREX — architecture, tooling, CalTopo phase 2.
 
 ## Clusters
@@ -63,7 +63,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | C12 | Instrument runtime | I-1, I-2, O-7b, I-10, I-3, I-4, I-5, I-6, I-11, I-14, I-12, I-13, I-15, I-17 | Gemini — instruments/** outright, including the DF heads |
 | C13 | Instrument tooling & shared libs | I-8, I-9a, I-7, I-9c | Gemini — instrument tooling; I-9a Lua harness is its first task |
 | C14 | Contract & documentation truth | D-1, D-2, D-3, D-4, D-5, P-10, I-9b | docs only, safe in parallel |
-| C15 | Service boundaries (architecture) | AI-1, AI-2, AI-3, AI-5, AI-6, AI-4, C15-1, P-11, C15-2 | unassigned — after C2 and C7 settle |
+| C15 | Service boundaries (architecture) | AI-22, AI-1, AI-2, AI-21, AI-23, AI-24, AI-3, AI-5, AI-6, AI-20, AI-4, V2-8, C15-1, P-11, C15-2 | unassigned — after C2 and C7 settle |
 | C16 | Aircraft package fidelity | A-1 | Claude — actively correcting the CAP 487 C182 model; visual and flight-model acceptance remain open |
 | C17 | Identity, single sign-on & service front door | AI-7, L-15, X-10, X-11, X-12, X-13, X-14, O-8 | Gemini - console and deck auth; Codex - planner deputy (L-15) |
 
@@ -127,14 +127,19 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 | ID | Pri | Sev | Title | Component | Cluster | Effort | Depends on | Status |
 |---|---|---|---|---|---|---|---|---|
+| [AI-22](#ai-22) | P0 | critical | fly_arduplane_backend: a refused gate.acquire() left SITL flying the aircraft | infra | C15 | S | AI-21 | fixed |
 | [A-1](#a-1) | P0 | high | CAP 487 retains the stock C172S airframe geometry and exterior | infra | C16 | L | — | open |
 | [AI-1](#ai-1) | P1 | high | Legacy AI pilot entrypoints bypass maneuver validation | infra | C15 | M | — | fixed |
 | [AI-2](#ai-2) | P1 | high | Complete live CAP 487 maneuver-controller acceptance | infra | C15 | M | AI-1 | open |
+| [AI-21](#ai-21) | P1 | high | ArduPlane backend: release-to-MANUAL and the SITL attach window are unsafe per the Plane-4.7.1 source | infra | C15 | M | — | fixed |
+| [AI-23](#ai-23) | P1 | high | ArduPlane boots into RTL with a default Home 8000 miles away and banks hard on attach | infra | C15 | M | AI-21 | fixed |
+| [AI-24](#ai-24) | P1 | high | ArduPlane ACKs GUIDED_CHANGE_HEADING/ALTITUDE then ignores them and keeps loitering | infra | C15 | M | AI-23 | open |
 | [AI-3](#ai-3) | P1 | high | Live RREF comma header discarded by AI pilot receiver | infra | C15 | S | — | fixed |
 | [AI-5](#ai-5) | P1 | high | Live altitude selection does not establish commanded climb | infra | C15 | M | — | fixed |
 | [AI-6](#ai-6) | P1 | high | Controller shutdown pause request does not pause live X-Plane | infra | C15 | M | — | fixed |
 | [O-5](#o-5) | P1 | high | Mumble server has no per-role ACLs and images float | infra | C5 | M | X-2, O-4 | fixed |
 | [O-7a](#o-7a) | P1 | high | Air Manager seat count for three MO stations unconfirmed | infra | C5 | S | — | resolved |
+| [AI-20](#ai-20) | P2 | medium | ArduPlane backend bounded SITL trial (CONOPS gate G) | infra | C15 | M | AI-2 | open |
 | [AI-4](#ai-4) | P2 | medium | Installed exercise aircraft predates CAP 487 identity and has prop lever load error | infra | C15 | M | — | fixed |
 | [D-1](#d-1) | P2 | medium | CHANGELOG entries contradict the code they describe | docs | C14 | S | — | fixed |
 | [D-2](#d-2) | P2 | medium | README and website contradict the code | docs | C14 | M | — | fixed |
@@ -161,6 +166,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [P-6](#p-6) | P2 | medium | 121.5 beacons produce a COSPAS-SARSAT decode | plugin | C3 | S | — | fixed |
 | [P-7](#p-7) | P2 | medium | Signal bar stays lit between 406 bursts | plugin | C3 | S | — | fixed |
 | [P-8](#p-8) | P2 | medium | Terrain masking is only -12 dB | plugin | C3 | S | P-1 | fixed |
+| [V2-8](#v2-8) | P2 | medium | set_air_start.py does not zero body rates, so a recovered aircraft re-departs | infra | C15 | S | — | open |
 | [X-6](#x-6) | P2 | medium | Untyped request bodies mutate scenario definitions | console-api | C7 | M | — | fixed |
 | [X-8](#x-8) | P2 | medium | Console operational hygiene: retention, logging, health, shutdown, root | console-api | C7 | M | — | fixed |
 | [X-9](#x-9) | P2 | medium | One Mumble client per browser socket, 16 max | console-api | C9 | M | — | fixed |
@@ -638,6 +644,18 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Done when:** Load an exported pattern in X-Plane 12 and read the leg names on the G1000 flight plan page.
 - **Depends on:** L-1
 
+### AI-22
+
+**fly_arduplane_backend: a refused gate.acquire() left SITL flying the aircraft**
+
+`P0` · `critical` · `bug` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort S · wave 3 · **fixed**
+
+- **Files:** `scripts/fly_arduplane_backend.py`
+- **Problem:** gate.acquire() sat OUTSIDE the try/finally that calls cleanup(). On the first live attach (2026-09-17) ArduPlane booted into RTL and banked the aircraft to 80 degrees before acquire() ran; the gate correctly refused with 'Aircraft outside the configured airborne exercise envelope', the ValueError propagated out of main(), and cleanup() never ran - so SITL kept the X-Plane joystick/throttle override and kept flying CAP 487 into a spiral dive (4474 ft -> 1825 ft, 183 KIAS) until the process was killed by hand. Same class as AI-21: a path where SITL outlives its supervisor.
+- **Fix:** acquire() and submit() moved inside the try, with a ValueError handler that records the refusal as the cleanup reason. Every path after the SITL process starts now reaches cleanup(), which parks ArduPlane, stops SITL, clears both overrides and re-engages the GFC 700. Verified by dry run; 73 offline tests pass.
+- **Done when:** A refused acquire (aircraft outside the envelope) stops SITL, clears override_joystick/override_throttles to 0 and hands the aircraft to the GFC 700.
+- **Depends on:** AI-21
+
 ### A-1
 
 **CAP 487 retains the stock C172S airframe geometry and exterior**
@@ -671,6 +689,41 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Fix:** 2026-09-11: live heading capture (12.742 s), FLC altitude capture (50.555 s), out-of-block command refusal, pilot takeover, old-lease refusal and shutdown pause verified. User confirmed FLC-to-ALT, AP disconnect and shutdown pause. Corrected telemetry-loss trial dropped 48 packets for 5.007 s: stale telemetry revoked lease in 1.900 s after drop began, pause_on passed through, direct pause readback=1. Telemetry recovered without reacquisition and old lease returned HTTP 400. Controller/relay stopped and subscriptions cancelled. Initial loss trial was invalid due to old direct subscriptions and remains documented. AI-2 stays open for installed CAP 487 package verification (AI-4); manual recovery verified by user report and four seconds of live pause=0, altitude 4199.636 ft, 122.422 KIAS, bank 0.576 degrees and VVI -0.224 ft/min. Explicit visual confirmation of the latest automatic fault pause has not been supplied; direct telemetry proved pause=1. AI-4 package has now been corrected and installed with static validation; fresh X-Plane load and visual cockpit verification remain pending. Direct surface-control backend and card H0 campaign 2026-09-11: added services/ai_pilot/direct_backend.py (XPlaneDirectBackend), which flies the primary flight controls rather than the GFC 700 and so covers aircraft with no autopilot, implemented against the EXISTING maneuvers.FlightBackend protocol so the lease, sequence, envelope and capture detection all still apply; maneuvers.py was NOT modified and the gate was never bypassed. Extended along the axes the handling cards need: apply_test_input (H0, bounded/ramped/self-expiring single-axis inputs), select_bank (H2), select_airspeed for speed-on-pitch (H1/H3), set_flaps (H4) and elevator trim. Card H0 (control and trim confidence, 100 KIAS clean) was attempted FIVE times and remains UNFLOWN - it has not yet reached its first control input from a stabilized reference condition. Each attempt terminated on a different real control-law defect, all five now fixed and locked by offline tests, none of which the pre-existing 53 offline tests caught: (1) step test inputs and no turn coordination, fixed with a trapezoidal ramp and sideslip PI; (2a) throttle bang-bang 0.150-1.000 swinging speed 94.7-108.8 about a 100 target, caused by a PURE INTEGRATOR at 0.1 throttle/sec/knot, fixed with PI; (2b) a standing sideslip through the climb that the heading loop masked by holding +1.6 deg of right bank, fixed with a right-rudder feedforward scaling with throttle and inversely with dynamic pressure; (3) an abrupt roll that was NOT the input - the ramp was verified correct on the trace, climbing 0.0077 to 0.1000 over exactly 1.0 s with the aileron tracking to four decimals - but a STEP IN THE RECOVERY, where the heading loop commanded the aileron limit in a single 100 ms tick the instant the input expired, held it saturated 1.2 s, reached 14.3 deg/s and overshot from -20.7 to +9.2 deg; fixed with rate damping on both inner loops and a slew-rate limiter on all three surfaces applied last before the wire (a ramped input passes through untouched at 0.10/s against a 0.40 limit). Run 3 was ALSO not a valid test point: it entered 22 knots fast, the throttle went to the idle stop and the integral wound to its -0.35 limit for ten seconds where integrating could not change the output, then had to unwind off the stop, so speed sailed through the target to 94.1 KIAS in a 274 fpm descent - the condition the first input was flown from; fixed with conditional integration, since clamping the integral TERM is not anti-windup. (4) Added a criteria-based stabilization gate to scripts/fly_card_h0.py (kias +/-2, alt +/-60 ft, vs +/-120 fpm, bank +/-2 deg, held 4 s continuous, 120 s timeout, exit 3 on failure, --force stamps the run as invalid), which immediately caught the aircraft sitting 107 ft low for two full minutes at 100.0 KIAS, -3 fpm and -0.2 deg bank, correcting none of it: a pure proportional cascade reaches equilibrium the moment pitch equals its command, which it can do at a standing altitude error because the pitch the VS loop asks for at that error is also the attitude that flies level - every loop satisfied with the aircraft in the wrong place; fixed with a bounded, conditionally-integrated altitude trim term, without which the card's reference condition is not reachable and the card cannot be flown at all. (5) The backend engaged on an aircraft the autopilot had left trimmed to +0.432 nose-up and held full nose-DOWN elevator saturated at -0.400 for seven seconds while the aircraft pitched UP to 11.5 deg and climbed at 1,533 fpm, terminating on the gate's own 90 KIAS floor; nothing in the control law was wrong, it had no trim authority and no way to know it was out-trimmed, because a saturated surface and a slow one look identical from the response alone. docs/C182T_HANDLING_TEST_MATRIX.md had listed 'no trim' as a BLOCKED reason for H0 before any of this was flown. Fixed with an autotrim loop that adopts the aircraft's real trim by readback and WILL NOT WRITE TRIM IT HAS NOT FIRST MEASURED, frozen during a pitch test input, and kept out of CONTROL_DREFS so release leaves the aircraft trimmed rather than slamming trim to neutral. CORRECTION to the pre-flight assessment: the matrix named capture rate as the instrumentation risk; it was not. The real gap was that a saturated surface and a slow one are indistinguishable from the response alone, so three of the five defects were invisible until COMMANDED SURFACE POSITIONS were logged beside the response. Traces now record the pre-rate-limit demand next to each issued command, trim position and trim RATE, all integrator states, and body_rate_age_s (inf when the damping terms were flown as zero for want of data) so a zero meaning 'not rolling' and a zero meaning 'no data' never look alike. Body rates and trim are auxiliary datarefs held OUTSIDE the freshness gate, so losing a damping channel degrades the damping rather than neutralizing the controls on an airborne aircraft. After run 5 the aircraft was left at 77 KIAS at full power out of trim; recovered by direct write to 81.4 KIAS at 3,908 ft and the pilot paused the simulator. Procedural finding: run 5 engaged during a transient left by the previous run's release, and the entry check tested envelope compliance only, not steadiness. Handling cards now: H0 unblocked but UNFLOWN, H2 unblocked 90-110 KIAS and blocked at 80, H3 and H4 unblocked and unflown, H1 and H5-H7 still BLOCKED on the gate's 90 KIAS floor - which is the specific guard against an autonomous system flying to the stall and is NOT recommended for removal. services/ai_pilot/tests/test_direct_backend.py is now 80 offline tests (from 53), the ai_pilot suite 150, none requiring X-Plane. NOTHING here is recorded as a handling pass or fail, no gain is validated, and none of it validates the aircraft or closes A-1. Full findings with trace evidence in docs/C182T_H0_CONTROL_LAW_FINDINGS.md.
 - **Done when:** Observe and record representative heading and altitude capture, command rejection outside the envelope, pilot takeover, pause, and disconnect behavior in X-Plane 12; confirm the cockpit annunciations agree with controller state and that only one process owns the controls.
 - **Depends on:** AI-1
+
+### AI-21
+
+**ArduPlane backend: release-to-MANUAL and the SITL attach window are unsafe per the Plane-4.7.1 source**
+
+`P1` · `high` · `bug` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort M · wave 3 · **fixed**
+
+- **Files:** `services/ai_pilot/arduplane_backend.py`, `scripts/fly_arduplane_backend.py`, `services/ai_pilot/tests/test_arduplane_backend.py`, `xplane/ardupilot/cap487.parm`, `docs/ARDUPLANE_TRIAL.md`
+- **Problem:** Source review of ArduPilot Plane-4.7.1 (docs/ARDUPLANE_TRIAL.md, 2026-09-17 handoff design review) found three defects in the backend as built. (1) release() sets MANUAL: ModeManual passes raw stick to the surfaces with no limits (mode_manual.cpp:4-15); with the rig's joystick axes unmapped, the SITL X-Plane backend turns an axis reading 0 into PWM ~667 and the inverted throttle axis into ~2333 (SIM_XPlane.cpp:497-498, AP_RCProtocol_FDM.cpp:39), which clamp to full aileron and full throttle; with no joystick row at all RC is never valid and throttle is 0 (reverse_thrust.cpp:132-137). MANUAL is only safe with a proven RC map. (2) SITL writes ENGN_thro_use and the yoke datarefs every frame in every mode from its first DATA packet (SIM_XPlane.cpp:684-688, :621-627); it boots MANUAL with no valid RC, so the engine goes to idle the moment SITL attaches, until select() puts it in GUIDED. (3) SITL re-sends override_joystick=1/override_throttles=1 every frame and has no exit hook, so after it is stopped the override stays latched with the last yoke values; the launcher does not own the SITL process and never clears them on a normal detach (only the lost-heartbeat path does). Verified correct: ARMING_REQUIRE 0 suffices (AP_Arming.cpp:306), guided heading is true (mode_guided.cpp:52), COMMAND_INT with explicit frame is required (GCS_Common.cpp:5294,5340), param3 of GUIDED_CHANGE_HEADING is m/s^2 with a 0.05 floor (GCS_MAVLink_Plane.cpp:745), z==0/-1 is DENIED (:685), all cap487.parm names exist.
+- **Fix:** 2026-09-17. (1) release() no longer uses MANUAL. _hand_back() parks ArduPlane in LOITER - the only mode that flies itself with no RC - or FBWA when a valid centred RC position was measured at engagement (_rc_rest is not None); last_commands['hand_back_mode'] records which. (2) New services/ai_pilot/sitl_lifecycle.py owns the SITL process: SitlProcess.start/wait_for_mavlink/stop (SIGTERM then SIGKILL), clear_overrides(), park_on_gfc700() which presses g1000n1_ap only when servos_on is 0 and g1000n1_hdg only when heading mode is not already set, and detach() which enforces the one safe order - release, stop SITL, clear both overrides, engage the GFC 700. scripts/fly_arduplane_backend.py now starts and stops SITL itself (--no-sitl to attach to an external one), waits for heartbeat + GLOBAL_POSITION_INT + 2.5 s after the first heartbeat before commanding (SITL decodes gyros with the XP11 convention until its 1 Hz version query is answered), and routes every exit and refusal through a single cleanup(). (3) _command_altitude refuses a z of 0 or -1 before sending, which ArduPlane answers DENIED to. (4) preflight() reports the HEARTBEAT armed bit and the launcher refuses with exit 5 when disarmed. Tests: test_arduplane_backend 35->41 (HandBackModeTests: FBWA with proven RC, LOITER without, never MANUAL across four RC shapes, heading accel never 0, altitude 0 refused, armed bit), test_mavlink_min 17->18, new test_sitl_lifecycle 14 (detach ordering asserted: overrides cleared only after SITL stops, GFC 700 only after that, no toggle of a live AP). ai_pilot suite 206->227. Offline only - NOT flown; Leg 3 and AI-20 remain open.
+- **Done when:** release() chooses LOITER unless a valid centred RC position was measured at engagement (then FBWA), with tests; the launcher starts SITL, waits for heartbeat + GLOBAL_POSITION_INT + the version RREF, calls select() at once, and on detach parks in LOITER, stops SITL, writes both overrides to 0, then engages the GFC 700 HDG+ALT via the g1000n1_* commands; guided_change_altitude refuses z in {0,-1}; a test asserts heading accel is never sent as 0; preflight asserts the HEARTBEAT armed bit. Then Leg 3 (AI-20) can be attempted.
+
+### AI-23
+
+**ArduPlane boots into RTL with a default Home 8000 miles away and banks hard on attach**
+
+`P1` · `high` · `bug` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort M · wave 3 · **fixed**
+
+- **Files:** `xplane/ardupilot/cap487.parm`, `services/ai_pilot/arduplane_backend.py`, `scripts/fly_arduplane_backend.py`, `docs/ARDUPLANE_TRIAL.md`
+- **Problem:** First successful live attach (2026-09-17): SITL connected correctly - heartbeat 0.07 s, ARMED, GLOBAL_POSITION_INT agreeing with X-Plane true altitude to within 2 ft - but the pre-flight block reported ArduPilot in mode 11 (RTL), not MANUAL/FBWA. SITL's log shows 'Home: -35.363262 149.165237' (Canberra, its built-in default), so on taking the joystick/throttle override it immediately banked toward a home point on the other side of the planet: roll went to -80 deg and vertical speed to -4370 fpm within seconds of attach. The launcher only WARNED about the unexpected mode and continued. cap487.parm does not set INITIAL_MODE, and nothing sets or validates Home.
+- **Fix:** 2026-09-17. secure_on_attach() added to ArduPlaneBackend: sends DO_SET_HOME (param1=1, use current location) and forces LOITER the moment SITL is reachable, before the pre-flight checks and long before gate.acquire(); raises if the mode is refused so the launcher detaches instead of continuing. cap487.parm sets INITIAL_MODE 12. The launcher now REFUSES (exit 6) rather than warning when the reported mode is outside LOITER/GUIDED/FBWA/MANUAL. Also found and fixed in the same pass: WP_LOITER_RAD defaulted to 60 m, which at 110 KIAS demands atan(v^2/rg) = 80 degrees of bank - LOITER was obediently flying an impossible circle; set to 800 m (~22 deg, inside ROLL_LIMIT_DEG 25). Verified live on 2026-09-17: SITL secured into LOITER with no departure and bank stayed within -22 to -30 degrees for the whole flight. 77 offline tests pass.
+- **Done when:** cap487.parm sets INITIAL_MODE to a mode that holds attitude without RC; the launcher refuses to proceed (not merely warns) when the reported mode is not an expected one, and forces a known mode before the aircraft can depart; Home is either set from the X-Plane position or the mode is one that does not use it. Re-run Leg 3 and confirm roll stays inside the gate's limit through the attach window.
+- **Depends on:** AI-21
+
+### AI-24
+
+**ArduPlane ACKs GUIDED_CHANGE_HEADING/ALTITUDE then ignores them and keeps loitering**
+
+`P1` · `high` · `bug` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort M · wave 3 · **open**
+
+- **Files:** `xplane/ardupilot/cap487.parm`, `services/ai_pilot/arduplane_backend.py`, `docs/ARDUPLANE_TRIAL.md`, `docs/bugs/AI-24_ARDUPLANE_GUIDED_TUNING.md`
+- **Problem:** Leg 3 flew on 2026-09-17 (trace arduplane_backend_20260917-230653.jsonl): ArduPlane was in GUIDED, the gate accepted, and 33 samples of 'executing' ran with no fault - but the aircraft flew a continuous left circle (heading 261 -> 178 through a full 360 and onward) and descended 4,616 -> 2,974 ft, tracking neither the commanded heading 300 nor altitude 4,500. Both MAV_CMD_GUIDED_CHANGE_HEADING and _ALTITUDE were ACKed MAV_RESULT_ACCEPTED - select() raises otherwise - so ArduPilot accepted the commands and did not act on them; the behaviour is ModeGuided's default loiter. Prime suspect is the GUIDED_* heading controller: cap487.parm sets GUIDED_P 5000 / GUIDED_I 0 / GUIDED_D 0, values invented as placeholders with no knowledge of the correct scale for that AC_PID. TECS is equally unvalidated - the descent was never arrested. Entry condition was benign: stable GFC 700 handoff at 4,677 ft, 110 KIAS, wings level, no terrain or weather factor.
+- **Fix:** 
+- **Done when:** From a stable handoff, a commanded heading is captured within 3 degrees and held, and a commanded altitude within 100 ft with VS under 150 fpm, for 3 s - i.e. the gate emits 'achieved' (trial cases T1 and T2). Bank stays inside ROLL_LIMIT_DEG throughout and the aircraft stays in the 3,000-6,000 ft block.
+- **Depends on:** AI-23
 
 ### AI-3
 
@@ -727,6 +780,18 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Problem:** The containerization entry says to confirm spare AM4 licences against AM4_COMPAT.md, which does not exist. Three MO seats are assumed, not verified — a blocker discovered on exercise day would be expensive.
 - **Fix:** WRONG FINDING, corrected 2026-09-08. docs/AM4_COMPAT.md exists in the canonical repo and records the licence position: spare AM4 licences cover the DF heads and MO COM panel, and it explicitly distinguishes Air Manager from Air Player seats (sold separately) for crew stations that only display. The CHANGELOG citation resolved all along.
 - **Done when:** Three MO stations activate simultaneously in a rehearsal.
+
+### AI-20
+
+**ArduPlane backend bounded SITL trial (CONOPS gate G)**
+
+`P2` · `medium` · `task` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort M · wave 3 · **open**
+
+- **Files:** `services/ai_pilot/arduplane_backend.py`, `services/ai_pilot/mavlink_min.py`, `scripts/fly_arduplane_backend.py`, `scripts/setup_ardupilot_sitl.sh`, `xplane/ardupilot/xplane_plane_cap487.json`, `xplane/ardupilot/cap487.parm`, `docs/ARDUPLANE_TRIAL.md`
+- **Problem:** The ArduPlane FlightBackend is built and tested offline (2026-09-17: 29 backend tests, 14 MAVLink codec tests) but has never flown. The AI Mission Pilot CONOPS gate G requires a bounded SITL trial that either demonstrates X-Plane 12 compatibility, CAP 487 tuning and coherent takeover, or records why the X-Plane autopilot remains the backend. Two things are unverified and rig-specific: the joystick axis indices in xplane_plane_cap487.json, and whether SITL re-asserts sim/operation/override/override_joystick after a MANUAL-mode release (trial case T4). The `--backend arduplane` switch on maneuver_server is deliberately deferred until the trial has flown.
+- **Fix:** 2026-09-17 handoff session (Ron authorized): SITL built at Plane-4.7.1 (dbe7921) but NEVER ATTACHED to the aircraft - no ArduPlane leg was flown and gate G is undecided. Two other legs flew and captured through the real gate: XPlaneAutopilotBackend commanded 210/4500 captured 209.3/4500 roll +0.8 VS -0; XPlaneDirectBackend commanded 240/3600 captured 240.6/3603 at 110.0 KIAS roll -0.6 VS +1 fpm (trace direct_backend_20260917-211851.jsonl), taking the aircraft directly from a live GFC 700. Handoff findings, which are the part of gate G the CONOPS calls coherent takeover: (1) the aircraft does not hold itself between controllers - a ~30 s gap after releasing the autopilot departed CAP 487 twice, 70 deg bank/-3700 fpm and then inverted, so handoffs must be OVERLAPPED and each backend must disengage the incumbent itself via servos_off_any; this also means the ArduPlane handoff is a process lifecycle, not a mode change, because SITL seizes override_joystick on attach and cannot coexist with the GFC 700. (2) The gate fault path fired for real at AGL 999 against the 1000 ft floor, revoking the lease and pausing the sim - it presents as frozen telemetry. (3) The 3000-6000 ft block is tight over terrain east of Ramona; fly west over the coastal plain. (4) pymavlink will not install on this workstation, validating the stdlib codec. See docs/ARDUPLANE_TRIAL.md trial log for the full record.
+- **Done when:** docs/ARDUPLANE_TRIAL.md pre-checks P1-P9 pass and cases T1-T8 are recorded with trace filenames, the parameters actually used, and the gate G decision in the CONOPS's own words (adopt / X-Plane autopilot remains because ...), written by the person who flew it. Authorizing the trial is the technical lead's decision with Mission Pilot validators.
+- **Depends on:** AI-2
 
 ### AI-4
 
@@ -1019,6 +1084,17 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Fix:** Deepen the loss to a realistic knife-edge range and recheck the existing masking tests.
 - **Done when:** Masked beacon at 2 NM drops below squelch.
 - **Depends on:** P-1
+
+### V2-8
+
+**set_air_start.py does not zero body rates, so a recovered aircraft re-departs**
+
+`P2` · `medium` · `bug` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort S · wave 3 · **open**
+
+- **Files:** `scripts/set_air_start.py`, `tests/test_air_start.py`
+- **Problem:** Repositioning writes position, velocity and attitude but leaves the angular rates sim/flightmodel/position/{P,Q,R,Prad,Qrad,Rrad} untouched, so placing an aircraft that is tumbling hands it back its rotation and it departs again within a second. Observed three consecutive times during the 2026-09-17 ArduPlane handoff session: each placement produced an immediate upset (roll to -75 deg, then inverted at +121 deg with 24 KIAS). Holding all six rate datarefs at zero for about 2.5 s across the placement transient produced stable flight every time afterwards. Secondary, smaller trap in the same tool: it does not touch the throttle or propeller controls, so the aircraft was placed at altitude with the throttle closed and the prop lever back and flew as a glider - the tool's warning covers the engine running but not the power lever state.
+- **Fix:** 
+- **Done when:** Place the aircraft while it is tumbling and confirm it settles to stable level flight without an upset; assert in tests/test_air_start.py that the placement writes the six rate datarefs to zero, and report the throttle and prop positions found at placement.
 
 ### X-6
 

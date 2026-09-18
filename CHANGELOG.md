@@ -3,6 +3,249 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-17 — LEG 3 FLOWN: ArduPlane commanded CAP 487 in X-Plane. No capture
+
+**ArduPlane flew the aircraft.** First time ArduPilot has commanded CAP 487
+through the real gate. Trace `arduplane_backend_20260917-230653.jsonl`; full
+record in `docs/ARDUPLANE_TRIAL.md`, hand-off in
+`docs/bugs/AI-24_ARDUPLANE_GUIDED_TUNING.md`.
+
+Commanded heading 300 / 4,500 ft from a stable GFC 700 handoff at 4,677 ft and
+110 KIAS. SITL secured into LOITER on attach, the gate accepted, ArduPilot held
+GUIDED for 33 samples of `executing` with **no fault**, bank stayed −22° to −30°
+(inside the gate's 35°) and airspeed 97–114 KIAS (inside 90–140). The run ended
+on "flight complete" and detached cleanly: SITL stopped, both X-Plane overrides
+cleared to 0, GFC 700 re-engaged, parked in LOITER. The entire safety chain ran
+end to end on a live aircraft with no runaway and no manual intervention.
+
+**It did not capture.** The aircraft flew a continuous left circle — heading
+261 → 178 through a full 360° and onward — and descended 4,616 → 2,974 ft,
+tracking neither commanded value. Both guided commands were ACKed ACCEPTED, so
+ArduPilot took them and did not act on them; what it did instead is ModeGuided's
+default loiter. Prime suspect is the `GUIDED_*` heading PID, whose values in
+`cap487.parm` were placeholders invented without knowledge of the correct scale.
+TECS is equally unvalidated — the descent was never arrested. Open as **AI-24**.
+
+Three defects were found and fixed to get this far, all live-verified:
+
+* **AI-23 (fixed).** SITL attached in **RTL** with ArduPilot's built-in Home
+  (Canberra) and banked to 80° within seconds of taking the override — Ron saw
+  the cockpit yoke go hard right. `secure_on_attach()` now sends `DO_SET_HOME`
+  (use current location) and forces LOITER before anything else runs, and the
+  launcher refuses rather than warns on an unexpected mode. Also found in the
+  same pass: `WP_LOITER_RAD` defaulted to **60 m**, which at 110 KIAS demands
+  `atan(v²/rg)` = **80° of bank** — LOITER was flying an impossible circle.
+  Set to 800 m (~22°).
+* **AI-22 (fixed).** `gate.acquire()` sat outside the launcher's try/finally. On
+  the first attach the gate correctly refused an aircraft at 80° of bank, the
+  exception escaped, `cleanup()` never ran, and SITL kept flying CAP 487 down
+  from 4,474 to 1,825 ft until the process was killed by hand. Every path after
+  the SITL process starts now reaches `cleanup()`.
+* **Air start left a glider.** The reset now does a ground
+  `sim/operation/quick_start` and verifies rpm **with the simulator running** —
+  an engine cannot spin up with the clock frozen, and rpm reads 0 regardless of
+  its real state, which confounded several diagnoses.
+
+The X-Plane networking recipe that finally let SITL see the aircraft is recorded
+in the trial log: rows 20 + 136 network-ticked, destination on the **Data
+Output** tab, and — the one that mattered — `Network → "Port we send from
+(legacy)"` moved off **49001**, which X-Plane binds itself, so its own socket
+was eating the data output. That change needs an X-Plane restart.
+
+Offline coverage 77 tests across `test_arduplane_backend`, `test_mavlink_min`
+and `test_sitl_lifecycle`; ai_pilot suite 227. Gate G remains **undecided** and
+cases T1–T8 remain unflown.
+
+## 2026-09-17 — AI-21 fixed: ArduPlane parks in LOITER, launcher owns SITL
+
+The three defects the source review found are closed. Still **offline only,
+not flown**; Leg 3 and AI-20 remain open.
+
+**Hand-back no longer uses MANUAL.** `_hand_back()` parks ArduPlane in
+**LOITER** — the only one of the three modes that flies itself with no RC —
+or in **FBWA** when a valid, centred RC position was measured at engagement.
+MANUAL passes the raw stick to the surfaces, and with this rig's joystick
+axes unmapped an axis reading 0 becomes full aileron and the inverted
+throttle axis full throttle, so it is never a default. `last_commands`
+records which mode was used. This reverses the release design chosen earlier
+in the day, on the strength of the ArduPilot source.
+
+**New `services/ai_pilot/sitl_lifecycle.py` owns the SITL process and the
+detach order.** `SitlProcess` starts it, waits for MAVLink, and stops it with
+SIGTERM then SIGKILL; `park_on_gfc700()` presses `g1000n1_ap` only when
+`servos_on` is 0 and `g1000n1_hdg` only when heading mode is not already set,
+because `_ap` is a toggle and pressing it on a live autopilot switches it off
+— the mistake that dropped the aircraft into a 1,200 fpm descent during the
+handoff session. `detach()` enforces the one safe order: release, stop SITL,
+clear both X-Plane overrides, engage the GFC 700. Nothing else is safe,
+because SITL re-asserts the overrides every frame while it lives and clears
+nothing when it dies.
+
+`scripts/fly_arduplane_backend.py` now starts and stops SITL itself
+(`--no-sitl` to attach to one started elsewhere), waits for heartbeat +
+`GLOBAL_POSITION_INT` + 2.5 s past the first heartbeat before commanding
+(SITL decodes gyros with the X-Plane 11 convention until its 1 Hz version
+query is answered), refuses with exit 5 when ArduPlane reports disarmed, and
+routes every exit and every refusal through a single `cleanup()` so SITL can
+never outlive the launcher. `_command_altitude` refuses a `z` of 0 or −1
+before sending, which ArduPlane answers DENIED to.
+
+Tests: `test_arduplane_backend` 35 → 41, `test_mavlink_min` 17 → 18, new
+`test_sitl_lifecycle` 14 — the detach ordering is asserted directly
+(overrides cleared only after SITL stops, GFC 700 only after that, a live
+autopilot never toggled). ai_pilot suite 206 → 227, with the one pre-existing
+`test_maneuvers` pytest-import error unchanged.
+
+## 2026-09-17 — handoff design review against the Plane-4.7.1 source; AI-21 opened
+
+Ron stopped the Leg 3 attempt and asked for a review of the three controllers,
+the ArduPlane design, how they hand off, and the ArduPilot fixed-wing logic —
+verified against the checked-out source (`~/.cache/capvsar/ardupilot`,
+`dbe7921`), not docs. Full matrix in `docs/ARDUPLANE_TRIAL.md`.
+
+The handoff finding generalises: a "free" aircraft departs in seconds, and
+the only handoff that works is a successor taking the aircraft from a
+controller still flying it. GFC 700 → test pilot does that (Leg 2). Test
+pilot → GFC 700 does not (its release neutralises), and every ArduPlane
+handoff is worse than assumed, because SITL writes the throttle and yoke
+datarefs **every frame in every mode, armed or not**, holds
+`override_joystick/throttles=1` by re-sending them each frame, and has no
+exit hook — stopping it leaves the override latched with the last yoke.
+
+Three defects in the ArduPlane backend as built, now **AI-21** (P1): (1)
+`release()` → MANUAL is unsafe unless the RC map is proven — MANUAL passes raw
+stick to the surfaces, and an unmapped axis reading 0 becomes ~667 µs (full
+aileron) with the inverted throttle axis at ~2333 µs (full throttle); with no
+joystick at all RC is never valid and throttle is 0. Default must be LOITER,
+the only mode that flies itself with no RC. (2) Attaching SITL chops the
+engine to idle immediately (boot MANUAL, no RC → throttle 0 written every
+frame) until `select()` reaches GUIDED; the launcher must own the SITL
+process and select within ~2 s. (3) Normal detach must park in LOITER, stop
+SITL, clear both overrides, then engage the GFC 700 — the crash path already
+does the clear; the normal path never did. T4 is answered from source.
+
+Confirmed correct: `ARMING_REQUIRE 0` suffices (`is_armed()` returns true
+when arming is not required), guided heading is true-north, COMMAND_INT with
+an explicit frame is required (COMMAND_LONG converts to RELATIVE_ALT),
+`param3` of `GUIDED_CHANGE_HEADING` is centripetal m/s² with a 0.05 floor,
+`z ∈ {0,−1}` is DENIED, heartbeat at 5 Hz is honoured, `GLOBAL_POSITION_INT.alt`
+is EKF AMSL mm, every `cap487.parm` name exists in 4.7.1 (`ARMING_CHECK` is
+gone, `ARMING_SKIPCHK` replaces it; unused). Also recorded: SITL USELs any
+X-Plane Data Output row it did not request, and decodes gyros with the XP11
+convention until its 1 Hz version RREF answers.
+
+## 2026-09-17 — controller handoff flown: X-Plane AP and test pilot captured; ArduPlane NOT flown
+
+Ron authorized the gate G trial and asked for a handoff chain beginning with
+the X-Plane autopilot. Two of the three legs flew and captured; **ArduPlane
+was never attached to the aircraft, so gate G is still open and no ArduPlane
+result is claimed.** Full log in `docs/ARDUPLANE_TRIAL.md`.
+
+Flown: **Leg 1**, `XPlaneAutopilotBackend` through `maneuver_server --live` —
+commanded heading 210 / 4,500 ft, captured 209.3 / 4,500, roll +0.8, VS −0,
+event trail `control_acquired → accepted → executing → achieved`. **Leg 2**,
+`XPlaneDirectBackend` through `scripts/fly_direct_backend.py` — commanded
+heading 240 / 3,600 ft, captured 240.6 / 3,594→3,603 holding 110.0 KIAS,
+roll −0.6, VS +1 fpm (trace `direct_backend_20260917-211851.jsonl`). Leg 2
+took the aircraft directly from a live GFC 700 and was the tighter capture.
+ArduPilot `Plane-4.7.1` (`dbe7921`) was built to
+`~/.cache/capvsar/ardupilot/build/sitl/bin/arduplane` but never run.
+
+The findings are the deliverable, and most concern the handoff itself — the
+part of gate G the CONOPS calls coherent takeover.
+
+**The aircraft does not hold itself between controllers.** Releasing the
+autopilot and *then* starting the next tool left a ~30 s gap; CAP 487 departed
+within seconds, 70° bank and −3,700 fpm the first time, fully inverted the
+second, both needing a pause and a recovery. Handoffs must be overlapped:
+every backend already disengages the incumbent itself via `servos_off_any`,
+and Leg 2 done that way was seamless. This binds any future `--backend` switch
+on the deck, and it constrains the ArduPlane leg especially, because SITL
+seizes `override_joystick` on attach and therefore cannot coexist with the
+GFC 700 — that handoff is a process lifecycle, not a mode change.
+
+**The gate's fault path fired for real**: AGL touched 999 ft against the
+1,000 ft floor, the lease was revoked and `pause_on` sent. It presents as
+frozen telemetry. The 3,000–6,000 ft block plus the AGL floor is tight over
+the terrain east of Ramona; fly the trial west over the coastal plain.
+
+**`scripts/set_air_start.py` does not zero body rates**, which is why a
+recovered aircraft re-departs: repositioning hands a tumbling aeroplane back
+its rotation. Three placements departed on the spot; holding P/Q/R/Prad/Qrad/Rrad
+at zero for ~2.5 s through the transient produced stable flight every time
+after. It also leaves the throttle and prop lever alone, so the aircraft was
+placed as a glider. Tracked as V2-8.
+
+**Engage G1000 modes with the commands, not `autopilot_state` bits** — bit
+writes left the GFC 700 in ROL/PIT, which Ron identified from the cockpit
+annunciation and which explained a circling climb that ignored the heading
+bug. `sim/GPS/g1000n1_ap` toggles, so pressing it on an already-engaged
+autopilot switched it off into a 1,200 fpm descent. The shipped backend
+already uses the command form for FLC; only ad-hoc setup code was at fault.
+
+**pymavlink cannot be installed here** (C extension, no Python headers), which
+retroactively validates the stdlib codec: a pymavlink dependency would have
+made this backend unrunnable on the workstation. `setup_ardupilot_sitl.sh` now
+treats pymavlink/MAVProxy as optional.
+
+Scope finding recorded against a question about flying the KMYF ILS 28R from
+BAKEL: ArduPilot has no localizer or glideslope receiver, so an ArduPlane
+"ILS" is a GPS overlay of the procedure, not the approach. The fix and
+facility are real in the navdata; the right instrument is the aircraft's own
+GFC 700 coupled approach. Autonomous landing stays outside the initial
+release per the CONOPS.
+
+## 2026-09-17 — ArduPlane backend built and tested offline; NOT flown
+
+The third `maneuvers.FlightBackend`, the one every document since the module
+was written has named as the intended direction. `services/ai_pilot/arduplane_backend.py`
+puts an ArduPilot ArduPlane SITL (DRef-based `--model xplane`, X-Plane 11/12)
+into GUIDED and sends `MAV_CMD_GUIDED_CHANGE_ALTITUDE` / `_HEADING` as
+COMMAND_INT; ArduPilot flies the surfaces, this backend never writes one.
+`maneuvers.py` was not modified; `maneuver_server.py` was not modified (Codex's
+AI-2 lane) — the launcher is `scripts/fly_arduplane_backend.py`, through the
+real gate, holding the deck's controller lock so two writers cannot coexist.
+
+MAVLink is a stdlib codec, `services/ai_pilot/mavlink_min.py` (seven
+messages, v1+v2 decode, v2 encode, signed frames rejected). Its bytes are
+pinned to pymavlink 2.4.49's in `tests/test_mavlink_min.py`; the dialect was
+generated once in a scratch directory to produce the fixtures and is not a
+dependency. Decisions taken with Ron before building: stdlib codec, adapter +
+offline tests + trial kit, standalone launcher, release = MANUAL + yoke-motion
+auto-release.
+
+Two frame reconciliations are measured rather than assumed: magnetic (gate)
+vs true (ArduPilot) heading from `psi − mag_psi`; indicated (gate) vs true
+MSL (SITL's synthesised baro) altitude from `elevation − altitude_ft_pilot`,
+re-issued if the aircraft levels >40 ft short. Fail-closed rules, each a named
+test: autopilot disengaged before the first MAVLink write; every command must
+be ACKed ACCEPTED or `select` raises and the gate faults; yoke movement (RC
+channels or raw X-Plane axes, independently) releases to MANUAL; lost
+heartbeat pauses AND clears `override_joystick`/`override_throttles`, because
+SITL's mapping holds the override and a dead SITL would otherwise leave a dead
+yoke; `pause` never changes ArduPilot mode; envelope faults pause, takeovers
+release. An independent review pass (the builder/reviewer split) then
+caught four things the tests had not: a fault-pause cleared the engaged flag
+so the pilot's explicit hand-back afterwards sent nothing, leaving ArduPlane
+in GUIDED holding the joystick override; the parm file used pre-4.5 parameter
+names a 4.7 build silently ignores (`AIRSPEED_MAX` would have stayed at
+22 m/s); the RC takeover detector assumed a 1500 µs centre the shipped axis
+map does not produce; and GUIDED confirmation raced the 1 Hz heartbeat. All
+fixed with tests (heartbeats now requested at 5 Hz; RC rest measured at
+engagement; `GUIDED_CHANGE_HEADING` param3 is centripetal m/s², not deg/s).
+35 backend tests, 17 codec tests; ai_pilot suite 153 → 206, the one
+pre-existing `test_maneuvers.py` pytest-import error unchanged.
+
+Trial kit: `scripts/setup_ardupilot_sitl.sh` (pinned Plane-4.7.1, builds under
+`~/.cache/capvsar`), `xplane/ardupilot/xplane_plane_cap487.json` (stock
+Skyhawk mapping, single engine; joystick axis indices are rig-specific and
+unverified), `xplane/ardupilot/cap487.parm` (failsafes off, 110 KIAS, roll
+limit 25 inside the gate's 35, 2.5 m/s climb — all provisional), and
+`docs/ARDUPLANE_TRIAL.md`, CONOPS gate G as pre-checks P1–P9 and cases T1–T8.
+Tracker AI-20 holds the trial. **No X-Plane 12 compatibility, CAP 487 tuning
+or takeover behaviour is claimed; the trial has not been run and starting it
+is Ron's decision.**
+
 ## 2026-09-17 — card H0 FLOWN on the sixth attempt; roll is linear, pitch is not
 
 Card H0 (control and trim confidence, 100 KIAS clean) produced its first valid
