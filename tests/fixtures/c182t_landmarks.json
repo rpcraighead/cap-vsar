@@ -136,6 +136,31 @@
       ],
       "scale": 0.99678,
       "vertices": 436
+    },
+    {
+      "closes": "main_wheel_track",
+      "id": "main_wheel_track_to_poh",
+      "objects": [
+        "MainStrut.L",
+        "MainStrut.R",
+        "MainWheel.L",
+        "MainWheel.R",
+        "WheelFairing.L",
+        "WheelFairing.R"
+      ],
+      "scale": 0.06359999999999988,
+      "vertices": 2214
+    },
+    {
+      "closes": "horizontal_tail_span",
+      "id": "horizontal_tail_span_to_poh",
+      "objects": [
+        "Airframe",
+        "Elevator",
+        "ElevatorTrim"
+      ],
+      "scale": 0.9706062461726883,
+      "vertices": 594
     }
   ],
   "donor_archive_sha256": "d81628fff8489af41d312c0e0bc14e1de2ac10a50d6c0c75f937441f81343fbe",
@@ -169,7 +194,7 @@
     "main_left_axle": {
       "object": "MainWheel.L",
       "point_m": [
-        -1.307995,
+        -1.371595,
         -0.8327950000000001,
         1.37306
       ],
@@ -178,7 +203,7 @@
     "main_left_contact": {
       "object": "MainWheel.L",
       "point_m": [
-        -1.307995,
+        -1.371595,
         -1.05553,
         1.37306
       ],
@@ -187,7 +212,7 @@
     "main_right_axle": {
       "object": "MainWheel.R",
       "point_m": [
-        1.307995,
+        1.371595,
         -0.832795,
         1.37306
       ],
@@ -196,7 +221,7 @@
     "main_right_contact": {
       "object": "MainWheel.R",
       "point_m": [
-        1.307995,
+        1.371595,
         -1.05508,
         1.37306
       ],
@@ -268,7 +293,7 @@
     "tail_left": {
       "object": "Airframe",
       "point_m": [
-        -1.81643,
+        -1.7780291181873853,
         0.41969,
         5.36872
       ],
@@ -277,7 +302,7 @@
     "tail_right": {
       "object": "Airframe",
       "point_m": [
-        1.81644,
+        1.778038824249847,
         0.41969,
         5.36872
       ],

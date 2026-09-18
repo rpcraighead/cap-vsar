@@ -338,3 +338,47 @@ The Technisonic TDFM-136B airborne FM transceiver (`instruments/cap-fm-tdfm-136b
 | `cap_fm_audio_selected` | BOOL | false | GMA 1347 | TDFM-136B, Headset Audio | COM3 audio monitor enabled. When false, observer headset is muted for FM, but squelch LEDs still illuminate on receive. |
 | `cap_fm_mic_selected` | BOOL | false | GMA 1347 | TDFM-136B | COM3 MIC transmitter selected. Interlocks TDFM transmission (PTT will not key unless true). |
 
+---
+
+## Part 6 — Mission Equipment Master Switch and Circuit Breaker Panel
+
+The SAR mission kit (DF head, TDFM-136B, GMA 1347/MFD feed) is supplemental
+equipment fed off the airframe bus, not part of the C182T's own BAT/ALT/
+AVIONICS electrical system. `instruments/cap-mission-master-switch/` and
+`instruments/cap-mission-cb-panel/` add the guarded master switch and the
+per-system pull breakers that real mission-kit installations wire in for
+exactly this reason: killing mission power, or shedding one system's load,
+without touching the aircraft's own masters or buses.
+
+| Variable | Type | Default | Producer | Consumers | Description |
+|---|---|---|---|---|---|
+| `cap_mission_master_on` | BOOL | true | Mission Master Switch | DF heads, TDFM-136B, GMA 1347 | Guarded master switch for all mission equipment. Guard must be lifted in the instrument before the switch answers a click. |
+| `cap_mission_cb_df_in` | BOOL | true | CB Panel | Becker SAR-DF 517, RHOTHETA RT-600 | DF head breaker. `false` when pulled. |
+| `cap_mission_cb_fm_in` | BOOL | true | CB Panel | TDFM-136B | FM radio breaker. `false` when pulled. |
+| `cap_mission_cb_audio_in` | BOOL | true | CB Panel | GMA 1347 | Audio panel / MFD mission feed breaker. `false` when pulled. |
+
+All four default `true`, so an MO station panel that has not added these two
+instruments sees no behaviour change — every consumer only tightens its
+existing power gate.
+
+**How each consumer applies it.** The DF heads, TDFM-136B and GMA 1347 already
+gated their own power on the airframe avionics master and bus voltage
+(`avionics_switch_on and bus_volts >= MIN_BUS_VOLTS`, one `update_bus_power()`/
+`update_power()` per instrument). Both mission variables are simply ANDed into
+that same expression:
+
+```
+powered = avionics_switch_on and (bus_volts >= MIN_BUS_VOLTS)
+          and mission_master_on and mission_cb_in
+```
+
+So the mission master switch or a pulled breaker can take a system down, but
+neither can substitute for a dead aircraft bus — the airframe check still
+gates everything, exactly as before this part existed.
+
+**What this does not do.** The breakers are a crew-operable load-shedding
+control, not a simulated overcurrent fault — pulling one does not model a
+short or a failing component, only the same "pull it to shed the load" action
+the POH itself describes (and warns not to use as a routine switch) for the
+airframe's own breakers.
+

@@ -5,7 +5,7 @@ the project-wide release identifier; Air Manager's integer instrument revision
 fields remain independent.
 
 Instrument layer for the CAP V-SAR training simulator (Implementation Plan
-v0.8, `~/Documents/CAP_V-SAR_Implementation_Plan_v0.8.docx`). Four instruments
+v0.8, `~/Documents/CAP_V-SAR_Implementation_Plan_v0.8.docx`). Six instruments
 targeting Air Manager 4.2 and forward-compatible with Air Manager 5, plus the
 documentation they were built from.
 
@@ -15,10 +15,12 @@ documentation they were built from.
 | [`instruments/rhotheta-rt-600/`](instruments/rhotheta-rt-600/) | §6.2.2 | RHOTHETA RT-600, the fleet replacement |
 | [`instruments/cap-fm-tdfm-136b/`](instruments/cap-fm-tdfm-136b/) | §6.7 | Technisonic TDFM-136B CAP mission radio, MO station |
 | [`instruments/mo-audio-panel-gma1347/`](instruments/mo-audio-panel-gma1347/) | §6.7 | Garmin GMA 1347 audio panel, MO station |
+| [`instruments/cap-mission-master-switch/`](instruments/cap-mission-master-switch/) | — | Guarded master switch for the whole SAR mission kit |
+| [`instruments/cap-mission-cb-panel/`](instruments/cap-mission-cb-panel/) | — | Observer-side circuit breaker panel, one pull breaker per mission system |
 
 | Panel | Use Case | What it is |
 |---|---|---|
-| [`panels/cap-c182t-mo-station/`](panels/cap-c182t-mo-station/) | MO Station | Dedicated Cessna 182T Mission Observer panel (MFD + GMA 1347 + Becker 517 / RT-600 + TDFM-136B) for multi-monitor or Air Player streaming |
+| [`panels/cap-c182t-mo-station/`](panels/cap-c182t-mo-station/) | MO Station | Dedicated Cessna 182T Mission Observer panel (MFD + GMA 1347 + Becker 517 / RT-600 + TDFM-136B + mission master switch + CB panel) for multi-monitor or Air Player streaming |
 
 | Aircraft Package | Location | What it is |
 |---|---|---|

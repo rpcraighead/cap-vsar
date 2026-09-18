@@ -16,6 +16,7 @@ sys.path.insert(0, str(REPO / "scripts"))
 
 from build_c182t_package import ACF_PATCHES  # noqa: E402
 import fetch_flightgear_c182 as donor_fetch  # noqa: E402
+import convert_flightgear_c182  # noqa: E402
 from convert_flightgear_c182 import (  # noqa: E402
     DELIBERATELY_EXCLUDED,
     KNOWN_UNCONVERTED,
@@ -210,3 +211,86 @@ class DonorValidationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LiveryTests(unittest.TestCase):
+    """The approved CAP scheme, CAPP 130-2 line drawing A (4 October 2021).
+
+    The colour is decided from the 3D POSITION and rasterised through the
+    mesh's own UVs. Painting rectangles into the atlas only worked where a
+    region unwraps as an axis-aligned band: the fuselage sides do, the belly
+    and wings do not, so rectangles left the belly white.
+    """
+
+    cv = convert_flightgear_c182
+
+    def test_white_above_the_division_and_blue_below(self):
+        z = 1.0
+        div = self.cv.DIV_Y_AT[1] + self.cv.DIV_SLOPE * (z - self.cv.DIV_Y_AT[0])
+        self.assertEqual(self.cv.scheme_colour(0.6, div + 0.3, z), self.cv.CAP_WHITE)
+        self.assertEqual(self.cv.scheme_colour(0.6, div - 0.3, z), self.cv.CAP_BLUE)
+
+    def test_the_belly_is_blue(self):
+        # The whole point of model space: a rectangle painter left this white.
+        self.assertEqual(self.cv.scheme_colour(0.0, -0.9, 1.0), self.cv.CAP_BLUE)
+
+    def test_the_vertical_tail_is_red(self):
+        self.assertEqual(self.cv.scheme_colour(0.0, 1.5, 6.0), self.cv.CAP_RED)
+
+    def test_the_stripe_band_sits_on_the_division_in_the_right_order(self):
+        # CAPP 130-2: 2 in gray, 1 in space, 1.75 in red, reading downward.
+        z = 1.0
+        div = self.cv.DIV_Y_AT[1] + self.cv.DIV_SLOPE * (z - self.cv.DIV_Y_AT[0])
+        inch = 0.0254
+        self.assertEqual(self.cv.scheme_colour(0.6, div - 1.0 * inch, z), self.cv.CAP_GRAY)
+        self.assertEqual(self.cv.scheme_colour(0.6, div - 2.5 * inch, z), self.cv.CAP_WHITE)
+        self.assertEqual(self.cv.scheme_colour(0.6, div - 4.0 * inch, z), self.cv.CAP_RED)
+        self.assertEqual(self.cv.scheme_colour(0.6, div - 6.0 * inch, z), self.cv.CAP_BLUE)
+
+    def test_the_division_sweeps_upward_going_aft(self):
+        # A level division is not the scheme; the drawing sweeps it up to the tail.
+        def div(z):
+            return self.cv.DIV_Y_AT[1] + self.cv.DIV_SLOPE * (z - self.cv.DIV_Y_AT[0])
+        self.assertGreater(div(5.0), div(0.0))
+
+    def test_a_straddling_triangle_is_split_rather_than_flat_filled(self):
+        # A two-inch stripe is thinner than a fuselage triangle. Without
+        # subdivision the stripe simply vanishes into whichever colour the
+        # first vertex happened to be.
+        self.assertGreaterEqual(self.cv.PAINT_MAX_DEPTH, 3)
+
+    def test_the_two_side_panels_do_not_overlap(self):
+        # Lettering still uses these; text needs a flat rectangle.
+        port, stbd = self.cv.SIDE_PANEL_PORT, self.cv.SIDE_PANEL_STBD
+        self.assertLess(port[3], stbd[1])
+
+    def test_starboard_lettering_is_the_port_tile_rotated_180(self):
+        # Not flipped. Viewed from outside starboard the nose is to the
+        # viewer's right, so u runs leftward AND v is inverted - both axes
+        # reverse. A vertical flip alone leaves the horizontal mirror that was
+        # actually reported.
+        from PIL import Image, ImageChops
+        marks = self.cv.side_markings(600, 200)
+        twice = marks.transpose(Image.ROTATE_180).transpose(Image.ROTATE_180)
+        self.assertIsNone(ImageChops.difference(marks, twice).getbbox())
+        flipped = marks.transpose(Image.FLIP_TOP_BOTTOM)
+        self.assertIsNotNone(
+            ImageChops.difference(marks.transpose(Image.ROTATE_180), flipped).getbbox())
+
+    def test_the_registration_is_white(self):
+        marks = self.cv.side_markings(1368, 452)
+        colours = {c[1][:3] for c in marks.getcolors(1 << 20)}
+        self.assertIn(self.cv.CAP_WHITE[:3], colours)
+
+    def test_the_scheme_is_drawn_not_traced(self):
+        # CAPP 130-2: "ALL DECALS PROVIDED BY CAP". The roundel, the wing
+        # lettering and the vertical fin titles are insignia rather than paint
+        # and are deliberately absent; CAPR 130-2 15.2 separately forbids wing
+        # logos and tail flashes. Checked by asserting the drawing functions
+        # open no file, not by looking for a word - the source names those
+        # decals in prose precisely to record why they are missing.
+        import inspect
+        for fn in (self.cv.scheme_colour, self.cv.paint_scheme, self.cv.side_markings):
+            self.assertNotIn("Image.open", inspect.getsource(fn), fn.__name__)
+
+

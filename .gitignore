@@ -46,6 +46,8 @@ docs/TDFM136*.pdf
 docs/GMA1347_*.pdf
 docs/gma.txt
 
+# Generated documentation site (scripts/build_docs_site.py)
+build/
 # D-5. Page extracts from those same manuals and decks - the -pNN- in each name
 # is the source page. Untracking the manuals (D-4) closed only half the
 # question; these images are the same copyrighted pages, just cropped. They

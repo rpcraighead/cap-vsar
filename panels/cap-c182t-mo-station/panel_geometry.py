@@ -60,6 +60,16 @@ KNOWN_INSTRUMENTS = {
         "name": "CAP FM Radio (TDFM-136B)",
         "property_meta": {},
     },
+    "d285e0f7-b787-42c7-85fd-ec8990f6db33": {
+        "short_name": "MissionMaster",
+        "name": "CAP Mission Equipment Master Switch",
+        "property_meta": {},
+    },
+    "aa9851bc-5ba6-4f5e-a465-d456403fbfc8": {
+        "short_name": "MissionCBPanel",
+        "name": "CAP Mission Equipment Circuit Breaker Panel",
+        "property_meta": {},
+    },
 }
 
 

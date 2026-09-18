@@ -16,6 +16,8 @@ INSTRUMENTS = {
     "rhotheta-rt-600": "d783d409-9bfa-49f2-ad5d-883af29848d6",
     "cap-fm-tdfm-136b": "26df5da8-8ce7-4255-bb0e-520453134609",
     "mo-audio-panel-gma1347": "1337420b-7420-4843-80eb-9d10c57a97d1",
+    "cap-mission-master-switch": "d285e0f7-b787-42c7-85fd-ec8990f6db33",
+    "cap-mission-cb-panel": "aa9851bc-5ba6-4f5e-a465-d456403fbfc8",
 }
 
 SHARED_TO_INSTRUMENTS = {

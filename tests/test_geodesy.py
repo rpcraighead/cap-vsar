@@ -19,6 +19,7 @@ import json
 import math
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -167,13 +168,20 @@ browser_block = re.search(
     r"// BEGIN F-8 PURE GEODESY\n(.*?)// END F-8 PURE GEODESY",
     base_js, re.S)
 check("base.js provides executable bearing-cut geodesy", browser_block is not None)
-if browser_block is not None:
+# node runs the browser half. It is present on the laptop and not on every
+# workstation, and a missing interpreter used to raise FileNotFoundError at
+# IMPORT time, which aborts collection for the entire suite rather than
+# skipping one check. Absent node, say so and keep going.
+_NODE = shutil.which("node") or shutil.which("nodejs")
+if browser_block is not None and _NODE is None:
+    print("  SKIP browser bearing-cut checks: node is not installed")
+if browser_block is not None and _NODE is not None:
     node_script = browser_block.group(1) + "\nconsole.log(JSON.stringify({" \
         "cut:bearingCutPolygon(" + json.dumps(HAND_PLOT) + ")," \
         "destination:bearingDestination(33.17,-117.08,90,40)," \
         "callsigns:bearingCallsignChoices([" \
         "{callsign:'CAP-2'},{callsign:'CAP-1'},{callsign:'CAP-2'}])}));"
-    node = subprocess.run(["node", "-e", node_script], capture_output=True,
+    node = subprocess.run([_NODE, "-e", node_script], capture_output=True,
                           text=True, timeout=10)
     check("browser bearing-cut functions execute", node.returncode == 0,
           node.stderr.strip())
@@ -205,7 +213,12 @@ check("only app/geo.py names the earth radius inside the console",
       "3440.065" not in prop_src and "3440.065" not in mock_src)
 
 print("\n" + ("ALL PASS" if not FAILED else "FAILURES: " + ", ".join(FAILED)))
+
+
+def test_geodesy_checks_pass():
+    """The checks above run at import time; this reports them to pytest."""
+    assert not FAILED, "FAILURES: " + ", ".join(FAILED)
+
+
 if __name__ == "__main__":
     sys.exit(1 if FAILED else 0)
-if FAILED:
-    raise AssertionError("geodesy checks failed: " + ", ".join(FAILED))

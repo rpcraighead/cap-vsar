@@ -47,6 +47,7 @@ DREFS = {
     "m_fuel2": "sim/flightmodel/weight/m_fuel2",
     "cg_offset_z": "sim/flightmodel2/misc/cg_offset_z",
     "kias": "sim/flightmodel/position/indicated_airspeed",
+    "paused": "sim/time/paused",
 }
 
 # Payload stations. Writing cg_offset_z does NOT stick - X-Plane recomputes CG
@@ -255,6 +256,21 @@ def main() -> int:
         report(before, "current condition")
         if args.show or (args.weight_lb is None and args.cg_station_in is None):
             return 0
+
+        # X-Plane does not recompute m_total while the simulator is PAUSED.
+        # Every mass figure here is derived from it - empty weight is
+        # m_total minus payload minus fuel - so a stale reading poisons the
+        # whole calculation and the read-back confirms the wrong number.
+        # Observed: paused at 1,924 lb, the empty weight came out 1,124 lb
+        # instead of 1,924, and chasing a 3,100 lb target loaded 1,735 lb of
+        # payload. On unpause m_total recomputed to 3,900 lb - 800 lb over
+        # max gross - on a card whose every figure is AT max gross.
+        if before["paused"]:
+            print("\n   REFUSING: the simulator is PAUSED, and X-Plane does not recompute")
+            print("   m_total while paused. Every mass figure here derives from it, so the")
+            print("   numbers above are stale and any correction computed from them would")
+            print("   be wrong while reporting success. Unpause, then run this again.")
+            return 4
 
         if before["kias"] and before["kias"] > 40:
             print("\n   note: the aircraft is flying. Set conditions BETWEEN test points,")

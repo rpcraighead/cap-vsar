@@ -17,7 +17,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFont
+
+try:                                  # DejaVu is not guaranteed on every host
+    ImageFont.truetype("DejaVuSans-Bold.ttf", 12)
+    _HAS_DEJAVU = True
+except OSError:
+    _HAS_DEJAVU = False
 
 from fetch_flightgear_c182 import (
     DONOR_ARCHIVE_SHA256,
@@ -462,30 +468,236 @@ def write_blank_obj(destination: Path) -> None:
     destination.write_text("A\n800\nOBJ\n\nPOINT_COUNTS 0 0 0 0\n")
 
 
-def create_cap_texture(source: Path, destination: Path) -> None:
+# Fuselage side panels in the 4096x2048 atlas, measured from the converted mesh
+# by selecting every vertex with a strongly lateral normal at fuselage
+# half-width. Both sides share a u range and are separated by v.
+ATLAS_SIZE = (4096, 2048)
+SIDE_PANEL_PORT = (111, 442, 1479, 894)     # corr(u, aft) +1.00, corr(v, up) +1.00
+SIDE_PANEL_STBD = (107, 1161, 1478, 1538)   # corr(u, aft) +1.00, corr(v, up) -1.00
+
+# The approved CAP corporate scheme, from CAPP 130-2 "CAP Aircraft Painting and
+# Marking" (4 October 2021), whose line drawing "A" is a SKYLANE - this exact
+# aircraft. SHA-256 8aead1f9ca5f60793c879359e7b77ff134a26b8f50d4131fc1f20fbea6932f0b.
+# Mandated by CAPR 130-2 15.2, which also forbids wing logos and tail flashes.
+#
+#   white upper fuselage, BLUE lower fuselage, RED vertical tail
+#   a thin gray/red stripe band on the division line
+#   registration in WHITE 12-inch vertical block on the blue, aft
+#   "UNITED STATES AIR FORCE AUXILIARY" along the aft fuselage (CAPR 130-2 15.5)
+#
+# Colours are sampled from that drawing's own paint legend rather than guessed;
+# the codes are the authority and these are the drawing's rendering of them.
+CAP_WHITE = (245, 246, 240, 255)     # Matterhorn White, AF3102
+CAP_BLUE = (62, 74, 124, 255)        # Blue, 753046
+CAP_GRAY = (178, 194, 207, 255)      # Gray, 753048
+CAP_RED = (217, 69, 67, 255)         # CAP Red, A07313 Acry Glo
+CAP_OUTLINE = (245, 246, 240, 255)
+CAP_LABEL = "CAP 487"
+CAP_TITLES = "UNITED STATES AIR FORCE AUXILIARY"
+
+# The fuselage side is about 48 inches tall on a 182, so panel pixels can be
+# sized in the inches CAPP 130-2 actually specifies.
+SIDE_HEIGHT_IN = 48.0
+
+# Luminance of clean donor skin. Detail darker than this survives a repaint.
+SKIN_WHITE_LEVEL = 210
+# Below this the donor pixel is not skin - a different UV island inside the
+# same bounding box - and is left alone.
+SKIN_MIN_LEVEL = 70
+
+
+
+def _fit_font(draw, text, max_w, max_h):
+    size = max_h
+    while size > 8:
+        f = (ImageFont.truetype("DejaVuSans-Bold.ttf", size) if _HAS_DEJAVU
+             else ImageFont.load_default(size=size))
+        l, t, r, b = draw.textbbox((0, 0), text, font=f, stroke_width=3)
+        if r - l <= max_w and b - t <= max_h:
+            return f, (r - l, b - t, l, t)
+        size -= 2
+    return f, draw.textbbox((0, 0), text, font=f, stroke_width=3)[:4]
+
+def side_markings(w: int, h: int, label: str = CAP_LABEL) -> Image.Image:
+    """Lettering, drawn ON the paint. Kept out of side_artwork because the base
+    colours are modulated by the skin's own shading and the lettering must not
+    be - a dark mark under the registration would show through the paint."""
+    tile = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(tile)
+    inch = h / SIDE_HEIGHT_IN
+    split = int(h * 0.52)
+    band_h = (max(2, round(2.00 * inch)) + max(1, round(1.00 * inch))
+              + max(2, round(1.75 * inch)))
+
+    # Registration: 12 inch vertical block, WHITE, on the blue, aft.
+    reg_h = round(12.0 * inch)
+    f, (rw, rh, rlx, rly) = _fit_font(d, label, int(w * 0.30), reg_h)
+    d.text((w - int(w * 0.05) - rw - rlx,
+            split + band_h + int(h * 0.06) - rly),
+           label, font=f, fill=CAP_WHITE)
+
+    # United States Air Force Auxiliary, small, along the aft fuselage just
+    # under the stripe band (CAPR 130-2 15.5 calls for the graphic; this is the
+    # lettering only).
+    aux_h = max(6, round(2.2 * inch))
+    f2, (aw, ah, alx, aly) = _fit_font(d, CAP_TITLES, int(w * 0.34), aux_h)
+    d.text((int(w * 0.40) - alx, split - ah - int(0.8 * inch) - aly),
+           CAP_TITLES, font=f2, fill=CAP_BLUE)
+    return tile
+
+
+
+def _keep_detail(art: Image.Image, under: Image.Image) -> Image.Image:
+    """Repaint the skin without erasing what is moulded into it.
+
+    A flat fill covers the donor's window frames, door outlines, panel lines
+    and rivets, which are baked into the texture rather than modelled. Real
+    paint does not do that. Multiplying the new colour by the old luminance -
+    normalised so clean white skin passes through unchanged - keeps every dark
+    detail and shades the new colour with the old shading.
+    """
+    lum = under.convert("L")
+    detail = lum.point(lambda v: min(255, int(v * 255 / SKIN_WHITE_LEVEL)))
+    shaded = ImageChops.multiply(art.convert("RGB"), Image.merge("RGB", (detail,) * 3))
+    # Paint only where there is skin. A panel's bounding box also contains
+    # unrelated atlas islands, and filling those repaints parts of the
+    # aeroplane the scheme says nothing about.
+    skin = lum.point(lambda v: 255 if v >= SKIN_MIN_LEVEL else 0)
+    shaded.putalpha(ImageChops.multiply(art.getchannel("A"), skin))
+    return shaded
+
+
+
+# ---------------------------------------------------------------------------
+# The scheme in MODEL space.
+#
+# Painting rectangles into the atlas only works where a region unwraps as an
+# axis-aligned band. The fuselage sides do (corr +/-1.00 on both axes); the
+# belly and the wings emphatically do not (0.01 to 0.37), so no arrangement of
+# rectangles puts a stripe in the right place on them. Deciding the colour from
+# the 3D position instead and rasterising through the mesh's own UVs handles
+# every surface at once, wrap included, and needs no hand-measured panels.
+# ---------------------------------------------------------------------------
+
+# Division between white above and blue below, as a line that sweeps up aft -
+# CAPP 130-2 drawing A. Metres, in the converted model's frame.
+DIV_Y_AT = (-1.2, -0.10)        # (z, y) at the nose
+DIV_SLOPE = 0.1125              # y per metre aft
+
+IN_M = 0.0254
+STRIPE_GRAY_M = 2.00 * IN_M
+STRIPE_SPACE_M = 1.00 * IN_M
+STRIPE_RED_M = 1.75 * IN_M
+
+# The vertical tail is red. Measured: fin vertices are |x| < 0.30, y > 1.02,
+# z > 5.24.
+FIN_Z_START = 5.10
+FIN_Y_START = 0.95
+
+# Triangles that straddle a colour boundary are split until they do not. Four
+# levels turn one triangle into at most 256, which resolves a two-inch stripe
+# on the coarsest fuselage triangle.
+PAINT_MAX_DEPTH = 4
+
+
+def scheme_colour(x: float, y: float, z: float):
+    """The approved colour at a point on the airframe, or None to leave it."""
+    if z >= FIN_Z_START and y >= FIN_Y_START and abs(x) < 0.45:
+        return CAP_RED
+    t = y - (DIV_Y_AT[1] + DIV_SLOPE * (z - DIV_Y_AT[0]))
+    if t > 0.0:
+        return CAP_WHITE
+    if t > -STRIPE_GRAY_M:
+        return CAP_GRAY
+    if t > -(STRIPE_GRAY_M + STRIPE_SPACE_M):
+        return CAP_WHITE
+    if t > -(STRIPE_GRAY_M + STRIPE_SPACE_M + STRIPE_RED_M):
+        return CAP_RED
+    return CAP_BLUE
+
+
+def _mid(a, b):
+    return tuple((p + q) / 2.0 for p, q in zip(a, b))
+
+
+def _paint_triangle(draw, uv, xyz, size, depth=0):
+    c = [scheme_colour(*p) for p in xyz]
+    if c[0] is c[1] is c[2] or depth >= PAINT_MAX_DEPTH:
+        w, h = size
+        draw.polygon([(u * w, (1.0 - v) * h) for u, v in uv], fill=c[0])
+        return
+    # Split on the edge midpoints: four sub-triangles, each closer to uniform.
+    m_uv = (_mid(uv[0], uv[1]), _mid(uv[1], uv[2]), _mid(uv[2], uv[0]))
+    m_xyz = (_mid(xyz[0], xyz[1]), _mid(xyz[1], xyz[2]), _mid(xyz[2], xyz[0]))
+    for sub_uv, sub_xyz in (
+        ((uv[0], m_uv[0], m_uv[2]), (xyz[0], m_xyz[0], m_xyz[2])),
+        ((m_uv[0], uv[1], m_uv[1]), (m_xyz[0], xyz[1], m_xyz[1])),
+        ((m_uv[2], m_uv[1], uv[2]), (m_xyz[2], m_xyz[1], xyz[2])),
+        (m_uv, m_xyz),
+    ):
+        _paint_triangle(draw, sub_uv, sub_xyz, size, depth + 1)
+
+
+def paint_scheme(objects, size) -> Image.Image:
+    """Rasterise the scheme through the mesh's own UVs."""
+    layer = Image.new("RGBA", size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    for obj in objects:
+        positions = [ac_to_xplane(v) for v in obj.vertices]
+        for surface in obj.surfaces:
+            for tri in _triangles(surface):
+                _paint_triangle(
+                    draw,
+                    tuple((r.u, r.v) for r in tri),
+                    tuple(positions[r.vertex] for r in tri),
+                    size,
+                )
+    return layer
+
+
+def create_cap_texture(source: Path, destination: Path, objects) -> None:
     """Create a restrained CAP 487 prototype marking on the donor's blank livery."""
     image = Image.open(source).convert("RGBA")
-    draw = ImageDraw.Draw(image)
-    try:
-        font = ImageFont.truetype("DejaVuSans-Bold.ttf", 138)
-    except OSError:
-        font = ImageFont.load_default(size=138)
     fill = (13, 36, 77, 255)
     stroke = (235, 240, 246, 255)
     label = "CAP 487"
 
-    # The pinned donor's UV atlas gives each fuselage side its own region, so the
-    # label is stamped twice rather than shared. Measured from the donor's Door.L
-    # and Door.R UVs: both sides run aft with increasing u, but the right side's v
-    # axis is inverted (up is LOWER v) while the left side's is not. The right-hand
-    # stamp therefore needs a vertical flip only. Using rotate(180) here would also
-    # flip it horizontally and render the registration mirrored on that side.
-    draw.text((1590, 505), label, font=font, fill=fill, stroke_width=4, stroke_fill=stroke)
-    flipped = Image.new("RGBA", (950, 210), (0, 0, 0, 0))
-    flipped_draw = ImageDraw.Draw(flipped)
-    flipped_draw.text((10, 10), label, font=font, fill=fill, stroke_width=4, stroke_fill=stroke)
-    flipped = flipped.transpose(Image.FLIP_TOP_BOTTOM)
-    image.alpha_composite(flipped, (1530, 1120))
+    # WHERE THE SIDES ACTUALLY LIVE IN THE ATLAS, measured from the converted
+    # mesh rather than inferred from two door panels - the earlier derivation
+    # from Door.L/Door.R was wrong twice. Selecting every vertex whose normal is
+    # strongly lateral, at fuselage half-width, gives two clean bands that share
+    # a u range and are separated by v:
+    #
+    #   port       texels x 111..1479, y  442.. 894   corr(u,aft) +1.00  corr(v,up) +1.00
+    #   starboard  texels x 107..1478, y 1161..1538   corr(u,aft) +1.00  corr(v,up) -1.00
+    #
+    # Both stamps used to sit at x >= 1530, past the panel's aft edge at 1479,
+    # so the registration was painted onto the tailcone and ran off into the
+    # belly curve. That is the placement half of the bug.
+    #
+    # The orientation half: viewed from OUTSIDE the port side the nose is to the
+    # viewer's left, so increasing u (aft) runs rightward and increasing v (up)
+    # runs up - the panel shows the atlas exactly as drawn, and port needs no
+    # transform. Viewed from outside the STARBOARD side the nose is to the
+    # viewer's right, so increasing u runs LEFTWARD; v is inverted there as
+    # well, so image-up runs downward. Both axes reverse, which is a 180-degree
+    # ROTATION. The previous comment argued that rotate(180) would mirror the
+    # registration and used FLIP_TOP_BOTTOM instead; that reasoning had it
+    # backwards - a vertical flip alone leaves exactly the horizontal mirror
+    # that was observed.
+
+    paint = paint_scheme(objects, image.size)
+    image.alpha_composite(_keep_detail(paint, image.copy()), (0, 0))
+
+    # Lettering still goes on the measured side panels: text needs a flat
+    # rectangle, and the sides are the one region that genuinely is one.
+    for panel, rotate in ((SIDE_PANEL_PORT, False), (SIDE_PANEL_STBD, True)):
+        x0, y0, x1, y1 = panel
+        marks = side_markings(x1 - x0, y1 - y0, label)
+        if rotate:
+            marks = marks.transpose(Image.ROTATE_180)
+        image.alpha_composite(marks, (x0, y0))
+
     image.save(destination)
 
 
@@ -647,7 +859,7 @@ def build_flightgear_objects(donor: Path, target_aircraft: Path) -> dict[str, ob
         raise ValueError(f"Donor selections unexpectedly empty: {', '.join(missing)}")
 
     texture = objects_dir / "flightgear_c182t.png"
-    create_cap_texture(donor / "Models/Liveries/Default.png", texture)
+    create_cap_texture(donor / "Models/Liveries/Default.png", texture, main)
     shutil.copy2(donor / "Models/PropBlur.png", objects_dir / "flightgear_c182t_prop.png")
     shutil.copy2(donor / "Models/Lights.png", objects_dir / "flightgear_c182t_lights.png")
     Image.new("RGBA", (16, 16), (125, 170, 195, 72)).save(

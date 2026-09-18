@@ -135,4 +135,12 @@ check("the synthetic marker reaches the client",
       '"synthetic": True' in main_src)
 
 print("\n" + ("ALL PASS" if not FAILED else "FAILURES: " + ", ".join(FAILED)))
-sys.exit(1 if FAILED else 0)
+
+
+def test_propagation_checks_pass():
+    """The checks above run at import time; this reports them to pytest."""
+    assert not FAILED, "FAILURES: " + ", ".join(FAILED)
+
+
+if __name__ == "__main__":
+    sys.exit(1 if FAILED else 0)

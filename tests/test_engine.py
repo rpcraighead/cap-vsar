@@ -21,10 +21,18 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import xp  # the stub
 
-PLUGIN = (sys.argv[1] if len(sys.argv) > 1 else os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "xplane", "PI_capvsar_df.py")))
+# The argv override is for running this file directly against another plugin
+# copy. Under pytest, argv holds pytest's own flags, so only honour it as a
+# script.
+_OVERRIDE = sys.argv[1] if (__name__ == "__main__" and len(sys.argv) > 1) else None
+PLUGIN = _OVERRIDE or os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "xplane", "PI_capvsar_df.py"))
 if not os.path.exists(PLUGIN):
-    sys.exit("engine plugin not found: %s" % PLUGIN)
+    if __name__ == "__main__":
+        sys.exit("engine plugin not found: %s" % PLUGIN)
+    # SystemExit during import aborts collection for the entire run; a normal
+    # exception fails just this module.
+    raise FileNotFoundError("engine plugin not found: %s" % PLUGIN)
 spec = importlib.util.spec_from_file_location("PI_capvsar_df", PLUGIN)
 mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
@@ -978,4 +986,12 @@ check("the contract describes spread as peak to peak",
       "peak to peak" in contract)
 
 print("\n" + ("ALL PASS" if not FAILED else "FAILURES: " + ", ".join(FAILED)))
-sys.exit(1 if FAILED else 0)
+
+
+def test_engine_checks_pass():
+    """The checks above run at import time; this reports them to pytest."""
+    assert not FAILED, "FAILURES: " + ", ".join(FAILED)
+
+
+if __name__ == "__main__":
+    sys.exit(1 if FAILED else 0)

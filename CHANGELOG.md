@@ -3,6 +3,127 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-17 — card H0 FLOWN on the sixth attempt; roll is linear, pitch is not
+
+Card H0 (control and trim confidence, 100 KIAS clean) produced its first valid
+data. Five earlier attempts never reached a control input from a stabilized
+reference; run 6 reached one in **12 seconds** and flew all ten points.
+
+**Simulator engineering validation only.** Flown through the existing authorized
+`ManeuverGate`; `services/ai_pilot/maneuvers.py` unmodified, no second
+controller, no bypass.
+
+Conditions: CAP 487 clean at **2,718 lb**, over the Pacific ~9 NM west of KNZY
+at 4,500 ft so AGL and indicated altitude coincide, placed by `set_air_start.py`
+(0 ft and 0.00 nm from the requested point on the first attempt). Reference
+condition met to 0.4 KIAS, 17.4 ft, 45.6 fpm and 0.7 deg of bank against
+tolerances of 2.0 / 60 / 120 / 2.0. Trace
+`~/.cache/capvsar/flight-tests/H0_run6_20260917-192836.jsonl`, 5,460 samples
+over 4.6 minutes.
+
+**Roll is the clean axis.** Doubling the input gives 2.05x right and 1.97x left,
+and time-to-peak is 3.1 s on all four roll points — identical across magnitude
+and direction. Asymmetry 8-12%, the expected size for the left-turning tendency.
+
+**Pitch is the finding.** Doubling the input gives only 1.54x nose-up and 1.86x
+nose-down, so the response compresses where roll does not. Recovery ran 29-42 s
+nose-up and 33 s to beyond the 45 s window nose-down, and `pitch -0.10` is the
+run's one point that **did not recover in time**. The small-input asymmetry is
+20.9% at ±0.05 but only 4.5% at ±0.10 — a power-on pitch coupling would grow
+with excursion size, not shrink, so the likeliest reading is the altitude-hold
+loop still authoring part of the small-input response. That is exactly the
+interference the card warns about, and it means the ±0.05 pitch numbers are
+controller-in-the-loop, not airframe.
+
+**±0.05 rudder is too small to characterise the yaw axis.** Peak sideslip of 0.6
+and 3.1 degrees is near the noise floor and the 63.6% asymmetry between them
+measures almost nothing. The yaw axis is effectively still unexercised; a larger
+input is needed before anything can be claimed about it.
+
+**One point excluded.** `roll +0.05` entered at +124 fpm against a ±120 fpm
+tolerance — missed by 4 fpm, and recorded as not attributable rather than
+argued over. The gate is either the criterion or it is decoration. The other
+nine entered on-condition.
+
+**What the run says about the control laws** fixed across runs 1-5: the slew
+limiter bound on **148 of 16,377 surface commands (0.90%)**, so it is a safety
+net at transitions rather than a filter distorting normal operation; **zero**
+samples were flown with degraded body rates, so no result rests on a silently
+zeroed channel; autotrim stayed between -0.020 and -0.203 with no runaway; and
+the elevator touched its limit in exactly **1 sample out of 5,460**.
+
+Separately demonstrated in recovery: from 131.4 KIAS descending 4,438 fpm the
+backend returned the aircraft to 100.8 KIAS, 4,545 ft, wings level in 48
+seconds, with the commanded elevator equal to the demanded elevator on every
+tick — the tuned loop does not demand steps in the first place, so the limiter
+never had to clamp. The dive was caused by an ad-hoc hand-flown stabilization
+loop written for this session that wrote yoke ratios directly at 0.5 Hz,
+bypassing the backend entirely; the pilot spotted the instantaneous pitch inputs
+from the cockpit before the telemetry made it obvious. Removed in favour of
+engaging the real backend. The lesson is the one run 1 already taught, relearned
+in a throwaway script: **anything that writes a control surface goes through the
+rate limiter, or it is not a control input, it is a step.**
+
+**Limits.** One run, at 2,718 lb rather than the performance card's 3,100 lb,
+with the altitude and heading loops active by design. Controller-in-the-loop
+handling numbers, not open-loop airframe characterisation, and not to be quoted
+as one. H0 has no published pass/fail criterion; nothing here is recorded as
+either, and none of it closes A-1.
+
+Full reduction in `docs/C182T_H0_CONTROL_LAW_FINDINGS.md` §8;
+`docs/C182T_HANDLING_TEST_MATRIX.md` updated.
+
+
+## 2026-09-17 — MO station gets a mission equipment master switch and CB panel
+
+The SAR mission kit (DF head, TDFM-136B, GMA 1347/MFD feed) was drawing power
+straight off the aircraft avionics master with no way to cut it as a unit or
+shed one system's load, unlike the real mission-kit wiring it replicates.
+Added `instruments/cap-mission-master-switch/` (a guarded rocker switch — the
+guard must be lifted before the switch answers) and
+`instruments/cap-mission-cb-panel/` (one pull breaker each for DF, FM radio
+and audio/MFD), both canvas-drawn, no image assets. Published contract in
+`docs/DATAREF_CONTRACT.md` Part 6: `cap_mission_master_on`,
+`cap_mission_cb_df_in`, `cap_mission_cb_fm_in`, `cap_mission_cb_audio_in`, all
+defaulting `true` so an MO station panel without these two instruments is
+unaffected.
+
+Patched the four existing consumer instruments (`becker-sar-df-517`,
+`rhotheta-rt-600`, `cap-fm-tdfm-136b`, `mo-audio-panel-gma1347`) to AND the new
+variables into the `avionics_switch_on and bus_volts >= MIN_BUS_VOLTS` gate
+each already had, so the mission switch/breakers can cut power but can never
+substitute for a dead aircraft bus. Added both instruments to the MO station's
+two layouts in the panel's unused bottom strip (y:900-1050), to
+`panel_geometry.py`'s `KNOWN_INSTRUMENTS`, and to
+`scripts/deploy_df_instruments.py`. Regenerated panel assets and deployed.
+
+12 new tests in `tests/test_mission_power.py` (guard interlock, per-breaker
+independence, gating never overriding a dead bus) plus updates to
+`tests/test_panel.py`'s hardcoded instrument count. Full suite passes; the 6
+pre-existing `pytest`-import errors are unrelated (module not installed in
+this environment).
+
+## 2026-09-17 — A-1: first isolated flight-model calibration experiment staged
+
+The installed CAP 487 ACF and a clean rebuild from the pinned donor are
+byte-identical (SHA-256 `eaae3c83…958b6dd`). The inherited fuselage Plane Maker
+drag coefficient is 0.200000003. The X-Plane Plane Maker manual describes this
+coefficient as frontal-area based and gives 0.1 for an average fuselage; that
+example is not a sourced C182T value. The project POH confirms C1's 150 KTAS
+sea-level and B1's 924 FPM targets, with fairings and standard conditions.
+
+Added `scripts/c182t_flight_model_experiment.py` to create an isolated ACF with
+one explicit fuselage Cd perturbation. It refuses overwriting the source ACF,
+an existing output, a non-CAP-487 aircraft and a previously altered baseline.
+Built separate local baseline and Cd=0.100 candidates under `/tmp`. Directory
+comparison finds exactly one differing file, the ACF, whose diff is exactly one
+record. The builder default and installed aircraft were not changed. The
+candidate has not flown; it is not a calibration result and A-1 stays open.
+See `docs/C182T_FLIGHT_MODEL_CALIBRATION.md` for hashes, source conditions and
+the matched B1/C1 acceptance sequence. The 4 experiment-safety tests and 14
+existing flight-model tests pass; 65 converter/measurement/correction tests pass
+with one optional live-donor skip.
+
 ## 2026-09-15 — Red team of the AI pilot: 13 findings, executable, tracked as AI-9…AI-19
 
 An adversarial review of `services/ai_pilot`, the two yoke-writing scripts, the
@@ -93,6 +214,698 @@ airport surface graph or live clearance source is implemented; taxi, takeoff,
 landing, control handoff, and return-to-start have not been exercised in SITL or
 the simulator. AI-8 remains open for that work.
 
+## 2026-09-15 — D-8: aircraft fidelity forks from exercise-system development
+
+**Ron's decision.** The aircraft work stops gating the exercise system. A-1 and
+the 182 become a fidelity track with their own timeline; the SAREX path no
+longer waits on them. His reason: the flight-test work is bogging down system
+development, which is what the last several hours demonstrate.
+
+Recorded here and in A-1. The vault decisions entry and the board announcement
+are Ron's, as D-6 and D-7 were - the board is owned by the service and this
+session holds no engineering credential for it.
+
+### Why the fork is available at all
+
+The exercise system barely touches the aircraft. Counting references to the
+182T outside the aircraft-build lane:
+
+    xplane/        0     the DF engine is a GLOBAL plugin, fully aircraft-agnostic
+    instruments/   7
+    panels/        6
+    services/     47     almost all in services/ai_pilot, the autonomy lane
+
+The DF propagation engine, its 38 datarefs, terrain masking, 406 burst cadence
+and cone of confusion live in `Resources/plugins`, not in the aircraft. The MO
+panels are Air Manager. The radio, Mumble nets, console and planner are separate
+services. The Becker and the RT-600 are already not fitted to the 182 - they
+would work against any airframe unchanged.
+
+A-1 is currently the ONLY open P0, and it gates nothing the exercise needs.
+Session 1 - mission base stands up, seats connect, radios work, nothing flies -
+runs today with the aeroplane exactly as it is.
+
+### The options this leaves open, and their costs
+
+Not decided yet; recorded so the next reader does not have to reconstruct them.
+
+**1. Re-scope only.** The 182 stays as it is, A-1 leaves the critical path. Zero
+engineering. The aeroplane keeps its identity, livery and the planner coupling,
+and continues to fly like a 172 - which is now a recorded, understood defect
+rather than a mystery.
+
+**2. Switch the exercise aircraft to the stock `Cessna_172SP_G1000.acf`.** An
+honest flight model out of the box, because Laminar calibrated it, and it
+deletes A-1, the Plane Maker calibration, the GPL donor dependency and D-7's
+whole subject. CAP flies plenty of 172s, so it is authentic rather than a fudge.
+THE COST IS THE PLANNER: `services/flightplanner/app.py` carries a real C182T
+POH performance model - `get_cruise(alt, rpm, manifold_pressure)` from Figures
+5-6 and 5-12 - driving fuel flow, endurance and reserves. Flying a 172 while the
+planner plans a 182 recreates exactly the L-7a defect fixed this morning, where
+planner and simulator disagreed about the aeroplane. Either the planner is
+re-sourced to 172 performance, or the inconsistency is accepted knowingly.
+
+**3. Chase the POH.** See the correction below; A-1 may be far less blocked than
+this session has been assuming.
+
+### A correction that changes option 3
+
+Earlier today, settling the main wheel track, this session recorded that nobody
+on the project has the POH and declined to fetch one on D-5 grounds. **Both
+halves of that were wrong.** `services/flightplanner/app.py` line 124 carries a
+PUBLIC URL to the C182T NAV III POH and the planner already uses it as its cited
+performance source, and `docs/C182T_DIMENSION_MASTER.md` records a SHA-256 for
+the approved AFM, which means someone here has held the document. Consulting a
+source is not redistributing it; D-5 is about manufacturer page images being
+shipped in the tree.
+
+Two consequences. The Plane Maker calibration's nine recorded "unknowns" may be
+sourceable after all, so A-1's flight-model half may be fixable rather than
+merely diagnosed. And **the main wheel track correction rests on a premise that
+is now false**: it was settled as centre-to-centre by convergent inference
+explicitly BECAUSE the drawing could not be consulted. The inference may well be
+right - the POH's own note measures the companion gear dimension to the wheel
+centre line, and the arithmetic favoured it strongly - but it should now be
+checked against the figure rather than left standing on a reason that no longer
+holds. That is recorded against the correction itself, not quietly fixed.
+
+## 2026-09-15 — why CAP 487 is slow: aerodynamically it is still a Cessna 172
+
+The flight-test misses are explained, and the explanation is checkable without
+flying anything.
+
+### The ACF's aerodynamic definition is the stock C172SP's
+
+Diffing `Cessna_182T_G1000.acf` against the Laminar `Cessna_172SP.acf` it was
+copied from, restricted to the parameters that define aerodynamics:
+
+    _wing/   16,228 parameters, exactly 2 differ
+             _wing/8/_semilen_SEG and _wing/9/_semilen_SEG, both 5.53333
+    _body/    7,356 parameters, ZERO differ
+
+Those two are the horizontal stabiliser half-span, corrected on 2026-09-11.
+Every other aerodynamic parameter - wing area, chord, airfoil, sweep, dihedral,
+and all 7,356 fuselage cross-section values that set parasite drag - is
+byte-identical to the 172.
+
+A-1 has recorded since the beginning that "0 of 40 ACF patches touch wing, body,
+gear or tail geometry" and that the Plane Maker aerodynamic geometry was never
+converted. That was a statement about what had not been done. This is the first
+measurement of what it COSTS.
+
+### The flight test agrees, to 2.5%
+
+At the C1 condition the engine makes 214.0 HP. Scaling published max speeds by
+the cube root of power:
+
+    C172 airframe at 214 HP    126 x (214/180)^(1/3) = 133.5 KTAS
+    C182T airframe at 214 HP   150 x (214/230)^(1/3) = 146.4 KTAS
+    measured                                           130.1 KTAS
+
+The measurement sits 2.5% from the C172 prediction and 11.2% from the C182T
+one. The aeroplane is performing as a C172 airframe carrying a 182 engine,
+because that is what it is.
+
+B1 is consistent by the same reasoning. Climb rate is excess power divided by
+weight, and this airframe is being asked to lift 3,100 lb - well beyond the
+172's 2,550 lb maximum - on 172 aerodynamics, so the climb shortfall and the
+speed shortfall have one cause, not two.
+
+### What this retires
+
+The card's guidance for a low B1 says "engine or propeller modelling, not
+geometry". For this aircraft that is wrong, and the engine data says so
+directly: 2400.002 RPM against a rated 2400, 29.3 inHg at full throttle, 214.0
+HP of a rated 230. The propeller governor holds rated RPM exactly. The 93% power
+figure is a real but minor second finding; it cannot produce a 13.3% speed
+shortfall, because power required goes as the cube of speed.
+
+A correction to the C1 entry above: it said the result "corroborates" A-1's note
+about the Plane Maker geometry. At the time that was an inference from a single
+number. The cube-root comparison and this diff are what actually support it, and
+they are much stronger than what was written then.
+
+### What this does NOT license
+
+Editing drag parameters to make the numbers come out. The defect is that an
+entire aerodynamic definition was never converted, and the fix is the Plane
+Maker calibration against the 182T POH that A-1 has always listed - wing, body,
+gear and tail geometry, not a fudge factor. Two flight-test points and a diff
+locate the work; they do not substitute for it.
+
+A-1 stays open, with its flight-model half now diagnosed rather than merely
+suspected.
+
+## 2026-09-15 — C1 flown: a second MISS, and it moves the diagnosis off the engine
+
+**Card C1, max speed at sea level, full power, level. MISS by 13.3%.**
+
+    KTAS         130.1 mean over 60.0 s, 1139 samples, spread 0.0, drift +0.0
+    altitude     556 ft MSL, level at +1 fpm mean
+    target       150 KTAS +/-5  =  145..155
+    error        -19.9 KTAS  (-13.3%)   MISS
+
+A clean measurement: fully stabilised, no drift across the window, so the
+"still accelerating reads low" caveat does not apply. Conditions: 3,100 lb at
+start and 3,092 lb at end, CG FS 44.4 in (31.4% MAC, aft), flaps 0, standard
+day, full power throttle/prop/mixture. Flown on the aircraft's own autopilot in
+ALTITUDE HOLD so that speed was the dependent variable - level change would have
+commanded a speed and measured nothing.
+
+### Two misses in the same direction, and what separates them
+
+    B1  rate of climb   -10.7%
+    C1  max speed       -13.3%
+
+Both low by a similar margin, which is why C1 was flown: it discriminates. The
+card's guidance for a low B1 says "engine or propeller modelling, not geometry".
+The engine data says otherwise.
+
+At the C1 condition the engine is at **2400.002 RPM against a rated 2400**, MAP
+29.3 inHg at full throttle, producing **214.0 HP against a rated 230 - 93%**.
+The propeller lever reads 0.30 but the governor is holding rated RPM exactly, so
+the propeller is not the constraint.
+
+A 7% power shortfall does not explain a 13.3% speed shortfall. In level flight
+power required goes as the cube of speed, so 93% power costs about 2.4% of
+speed, not 13%. Working backwards from the measurement:
+
+    (130.1/150)^3 = 0.652   power-equivalent of the speed shortfall
+    actual power  = 0.930
+    implied       = 1.43x   more drag, or that much less propulsive efficiency
+
+So the airframe is absorbing roughly 43% more power at speed than it should.
+That is DRAG or PROPELLER EFFICIENCY, and both are Plane Maker parameters rather
+than mesh geometry. It corroborates A-1's own outstanding item: the Plane Maker
+aerodynamic geometry is still inherited from the C172 and has never been
+calibrated against the 182T POH. Today's exterior corrections cannot have caused
+this - X-Plane takes drag from the ACF, not from the OBJ.
+
+The 7% power shortfall is a second, smaller finding worth its own look.
+
+### A reading that nearly became a false conclusion
+
+`ENGN_power`, `ENGN_MPR` and `prop_speed_rpm` are ARRAY datarefs. Read without
+an index they returned 0.0, and the first engine check therefore reported 0 RPM,
+0 inHg and 0 HP - which reads as an engine producing nothing at full throttle.
+With `[0]` the same three read 2400 RPM, 29.3 inHg and 214 HP.
+
+This is exactly the failure `scripts/capture_flight_test.py` validates against
+in its own docstring: "X-Plane replies 0.0 to an unrecognised name, so an
+unvalidated name produces silent zeros that look exactly like measurements."
+The capture tool was right; the ad-hoc check bypassed it and was caught only
+because a dead engine at full throttle is not a believable reading.
+
+### Recorded
+
+`scripts/reduce_cruise_point.py` reduces cruise points: steadiest 60-second
+window, KTAS with the altitude band, and an explicit drift figure, because a
+max-speed point that has not stopped accelerating reads low and the reader has
+to be able to see that.
+
+Two of the card's points are now flown and both MISS. C2 and Group D remain, and
+Group A stays blocked behind the 90 KIAS gate floor.
+
+## 2026-09-15 — B1 flown: the first recorded flight-test data point, and it is a MISS
+
+**Card B1, rate of climb at sea level, full power, Vy. MISS by 10.7%.**
+
+The first point on `docs/C182T_FLIGHT_TEST_CARD.md` ever to produce a number.
+Five H0 runs across the handling matrix had produced none.
+
+**Simulator engineering validation only. Not approved instruction for a real
+aircraft.**
+
+### Result
+
+    measured        800 fpm at 720 ft MSL mean, 599 samples over 30.0 s
+    sea level       825 fpm, extrapolated
+    target          924 fpm +/-10%  =  832..1016
+    error           -99 fpm  (-10.7%)   MISS, by 7 fpm below the lower bound
+
+The sea-level figure is a linear fit of climb rate against altitude over 2,602
+stabilised samples spanning 451-2,120 ft: `ROC(h) = 824.9 - 0.0428h` fpm, a
+decay of 42.8 fpm per 1,000 ft, which is physically sensible for a
+normally-aspirated piston. Extrapolation runs about 450 ft below the lowest
+sample. Both the raw measurement and the corrected figure are recorded; the raw
+one misses by 13.4% and the corrected one by 10.7%, so the verdict does not
+depend on the correction.
+
+### Conditions, achieved rather than targeted
+
+    weight      3,099.8 lb at start, 3,094 lb at end (fuel burn) - max gross
+    CG          FS 44.5 in, 31.5% MAC, AFT-ish
+                certificated envelope at 3,100 lb is FS 40.9-46.0 (TCDS 3A13)
+    airspeed    79.9 KIAS mean over the window (Vy target 80.0)
+    weather     OAT 10.0 C at 2,514 ft vs ISA 10.0 C; density ratio 0.9285 vs
+                ISA 0.9284; wind 0.0 kt - a standard day, confirmed
+    flaps       0.000 throughout
+    trace       B1_run2_20260915-224521.jsonl, 2,795 samples, 20.0 Hz, 0 gaps
+
+The aft CG matters for reading this: an aft CG reduces tail download and if
+anything FLATTERS climb performance, so it does not explain a shortfall. The
+card's own guidance for a low B1 points at engine or propeller modelling rather
+than geometry, noting that power, RPM limit and blade count were already correct
+before the geometry work. Nothing in today's exterior corrections touches
+thrust.
+
+### Three defects found before the number was
+
+**The card cannot be flown paused, and the mass tool did not know it.**
+X-Plane does not recompute `m_total` while paused, so `set_test_condition.py`
+read a stale 1,924 lb, derived an empty weight of 1,124 lb instead of 1,924,
+and loaded 1,735 lb of payload chasing 3,100. On unpause that recomputed to
+3,900 lb - 800 lb over max gross, on a card whose every figure is AT max gross.
+Its read-back confirmed the wrong number because it re-read the same stale
+dataref. It now refuses while paused.
+
+**B1 run 1 was 150 seconds of a paused simulator, and every quality signal said
+it was good.** 2,995 samples, 20.0 Hz effective, zero gaps, weight confirmed -
+and identical min and max on every channel. X-Plane keeps answering RREF while
+paused, so a paused capture is indistinguishable from a beautifully stable test
+point. `capture_flight_test.py` now says NOT A RUN when three or more of
+airspeed, altitude, alpha and Nz never change.
+
+**Engaging autopilot level change SYNCS the speed dial to current airspeed.**
+The dial was set to Vy 80 and then the mode engaged, so the command silently
+overwrote it and the first climb flew 78.3 KIAS while the commanded value was
+believed to be 80. Setting the dial AFTER the mode fixes it, verified by reading
+it back as 80.0. Run 2 held 79.9 mean.
+
+### How it was flown
+
+The card says "Who flies it: **Not the agent**", reserving live control for
+`maneuver_server` and its gate. Ron overrode that for this point. The maneuver
+server could not have flown it regardless: Vy is 80 KIAS and the gate floor is
+90, so it would have refused.
+
+It was flown on the AIRCRAFT'S OWN autopilot - full power set through the
+throttle, propeller and mixture actuators, then level-change holding speed on
+pitch. No second controller, `services/ai_pilot/maneuvers.py` untouched, the
+gate not involved. That is recorded in the trace's own note field so the data
+point carries how it was produced.
+
+### What this does not say
+
+One point at one weight, one CG and one altitude band. It is not a verdict on
+the flight model, and it does not close A-1. C1, C2 and Group D remain unflown,
+and Group A - the stalls, and the highest-value set - stays blocked by the same
+90 KIAS gate floor that stops an autonomous system flying to the stall.
+
+## 2026-09-15 — D-7: the production licence route leaves A-1's scope
+
+**Ron's decision.** A-1 stops carrying the production licensing route as
+outstanding work. The prototype stays local and the exterior continues on
+technical merit. Recorded in `docs/FLIGHTGEAR_C182_GPL_PLAN.md` and in A-1;
+full reasoning belongs in the vault decisions file, and the board announcement
+is Ron's to post, as D-6 was.
+
+His reasoning: the exterior is converging on the real C182T shape, so the result
+is progressively less like the HHS81 donor's model and closer to what Cessna
+designed — the question moves away from the GPL donor rather than being resolved
+in its favour.
+
+That is right about the direction of travel. Three things it does not change are
+recorded with it, so the next reader does not re-derive them:
+
+**No percentage clears derivation.** The corrections are parametric transforms
+applied to the donor mesh at load time, and `scripts/build_c182t_package.py`
+refuses to run without the pinned donor cache — it fails with "donor is
+incomplete". Every entry in `c182t_corrections.json` is a transform *of* that
+mesh. A build that cannot run without the GPL input stays derivative however far
+the vertices move; there is no threshold in copyright that says otherwise. This
+needs no action, because the architecture already handles it: donor outside the
+repository, GPL text and provenance manifest inside the generated package,
+repository itself Apache.
+
+**The binding constraint on redistributing the built package is Laminar.** The
+plan already says so twice — the package is a Laminar Research C172 carrying our
+exterior, with Laminar's cockpit and systems inside it. That does not move with
+mesh accuracy, because it is not about the mesh. If redistribution is ever
+contemplated, that is the thing to resolve first, and it is unrelated to both
+the donor and Cessna.
+
+**The repository mirror is unaffected.** Donor assets and Laminar files are
+already excluded from the repo, so the public mirror D-6 refers to is not gated
+on any of this.
+
+On Cessna: design patents on a 1956-origin airframe are long expired. What
+remains live is trademark and trade dress — the Cessna and Skylane word marks,
+the tail script — none of which this package applies. It wears CAP markings,
+governed separately by CAPR 130-2, drawn from CAPP 130-2 rather than traced.
+
+A scope decision about a local prototype, not legal advice. A-1's remaining
+outstanding work is now Plane Maker aerodynamic geometry, full X-Plane visual
+acceptance of the corrected exterior, and the registration's aft-fuselage
+placement.
+
+## 2026-09-15 — A-1 stage 3: main wheel track, and a reading settled without the drawing
+
+The last blocked dimension. It had been held deliberately, and correctly: the
+POH three-view does not annotate whether its wheel-track dimension lines mark
+the wheel centre or the tyre outer face, and the two readings flip the SIGN -
+centre-to-centre says the gear is 4.64% too NARROW, tyre outer face says it is
+1.34% too WIDE. Correcting before settling that would have been actively wrong
+in one direction or the other.
+
+Nobody on this project has the POH, so it was settled by research and inference
+rather than by looking, and the record says so in those words.
+
+**Sources checked and found silent.** EASA/FAA TCDS 3A13 confirms the datum
+("lower portion of front face of firewall") and levelling means (139.65 in) this
+project already uses, and gives the main tyre size as 6.00 x 6 - but carries no
+tread figure. Cessna's own Specification and Description, Skylane 182T, December
+2015 Revision C - the document A-1 already cites - lists overall height, length,
+span, cabin and doors, and no wheel track at all. FAA-H-8083-31B uses "tread"
+for the TYRE's rubber crown rather than the gear track, which is very likely
+where the original doubt came from.
+
+**Three converging grounds.** The POH's own NOTE, for the companion gear
+dimension on the same three-view, measures wheel base to the main wheel CENTRE
+LINE; a drawing that annotates one gear dimension to the centreline is not
+measuring the other to the tyre faces. The dimension master had already conceded
+the point, assigning track a +/-1.0% band because its "endpoint convention
+[is] slightly unannotated". And the arithmetic: overall length -2.48%, overall
+height -2.78% and wheel base -3.64% are all undersized, so centre-to-centre
+makes the gear uniformly small like the rest of the airframe, while the
+outer-face reading makes track the only OVERSIZED dimension on the model and has
+it 1.34% too wide while its own wheelbase is 3.64% too short. That is not a
+plausible mesh.
+
+**The transform is not a scale.** Each wheel moves outboard 0.0636 m (2.5 in),
+1.3080 to 1.3716 m half-track. Scaling about an inboard root would widen the
+TYRE as well as move it - the donor's 164 mm wheel would come out 193 mm - so
+`MainWheel` and `WheelFairing` translate rigidly, keeping their own dimensions,
+and only `MainStrut` ramps, with its inboard attachment at |x| = 0.938 m held
+fixed and its outboard end taking the full delta. That is the spring leg flexing
+outward rather than growing.
+
+Verified rather than assumed: tyre width unchanged to 1e-9 at 0.1641 m, fairing
+width unchanged at 0.2366 m, strut attachment moved 0.000000 m, wheel centre
+1.3080 to 1.3716 m. Harness: `main_wheel_track` -4.637% to -0.000%, measured
+107.9996 in against a 108.0 in target, every other dimension unchanged. Seen in
+X-Plane after rebuild and reload, gear intact and no tear at the strut.
+
+**All three stage-3 dimensions are now corrected and nothing in the profile is
+blocked.** A test that asserted blocked work EXISTS was rewritten to drive the
+inert-while-blocked behaviour with a synthetic entry instead, because a test
+that fails on the day the last blocker clears is giving the wrong signal.
+
+This is the MESH, not the ACF flight model's gear geometry - the same
+distinction that now applies to the horizontal tail span.
+
+A-1 stays open. Plane Maker aerodynamic geometry, full X-Plane visual acceptance
+of the corrected exterior, the registration's aft-fuselage placement (blocked by
+a degenerate donor UV column) and the production license route are untouched.
+Suite 597 passed, 1 skipped, 52 subtests.
+
+## 2026-09-15 — AI-4 closed, and node stops being a reason not to check things
+
+Two items that had been handed to a human because nobody had tried doing
+them, and both turned out to be doable here.
+
+### node, without sudo
+
+Eleven tests had been failing all session for one reason: `node` is not
+installed on this workstation, and the browser halves of the console and radio
+suites shell out to it. `tests/test_geodesy.py` did worse - it called node at
+IMPORT time, so a missing interpreter raised FileNotFoundError during
+collection and took the whole suite down rather than skipping one check.
+
+This did not need a package manager or root. `~/.local/bin` is already on PATH,
+so node v22.11.0 went in as the official linux-x64 tarball under
+`~/.local/lib`, with `node`, `npm` and `npx` symlinked. The tarball's SHA-256
+was checked against nodejs.org's own SHASUMS256.txt before it was unpacked:
+`83bf07dd343002a26211cf1fcd46a9d9534219aad42ee02847816940bf610a72`.
+
+**The suite is green for the first time today: 571 passed, 1 skipped, 52
+subtests, nothing failing.** It had been 560 passed and 11 failed for hours,
+which is exactly long enough for a standing red to start reading as normal.
+
+### AI-4: both halves, and neither of them by eye
+
+AI-4's fix was built and installed on 2026-09-11 - the builder's IDX10
+remainder encoding corrected, the prop texture resampled 194x87 -> 256x128 -
+and the item stayed open only because neither had been confirmed against a
+fresh X-Plane load.
+
+**The log half is now a script rather than a reading.** `scripts/check_xplane_log.py`
+fails on exactly two things: an IDX10 or index-out-of-range line that NAMES
+prop_lever.obj, and a non-power-of-two texture warning that NAMES
+prop_lever.png. Requiring the file to be named matters - a bare "index out of
+range" from some other object is not this defect, and failing on it would train
+whoever runs the check to ignore its output. Two traps met by hand during this
+work are pinned by tests: a grep for "power of two" matches the
+`GL_ARB_texture_non_power_of_two` extension string that appears in every log,
+and X-Plane appends to Log.txt across reloads, so a log can be clean purely
+because it predates the package being tested. `--require-aircraft` refuses that
+second case. Against the live 501-line log after a fresh load: clean, rc 0.
+
+**The visual half was done by screenshot, not by a human.** The brief said to
+hand it over "if you cannot see the cockpit yourself"; the exterior livery had
+already been verified this way earlier in the session, so the condition did not
+apply. Entered the 3D cockpit over UDP, pitched the pilot's head to -45 degrees
+to bring the pedestal into frame, drove
+`sim/cockpit2/engine/actuators/prop_ratio_all` from 1.00 to 0.00 with readback
+confirming both, and captured a frame at each.
+
+The lever renders and it moves. Differencing the two quadrant crops leaves a
+narrow vertical band of strong change at x 261-344, y 158-384 - 0.35 percent of
+the crop. That shape is a lever travelling in its slot; a lighting or camera
+shift would have changed the whole frame.
+
+A clean log was explicitly not treated as sufficient on its own, and the tool
+prints that caveat on every clean run so the next reader cannot mistake one for
+the other. AI-4 is closed. Four items remain open: O-7b, D-5, AI-2 and A-1.
+
+## 2026-09-15 — A-1: the exterior gets a sourced livery and its second corrected dimension
+
+Two strands of A-1 in one session, both of which began with a wrong belief that
+survived because nobody had checked it.
+
+**Simulator engineering only. Not approved instruction for a real aircraft.**
+
+### The registration, and then the whole scheme
+
+The CAP 487 registration rendered mirrored and ran off the fuselage into the
+belly curve. Two earlier attempts derived the atlas mapping from the Door.L and
+Door.R UVs and both got it wrong, so this measured it from the whole converted
+mesh instead - every vertex with a strongly lateral normal at fuselage
+half-width. That gives two clean bands sharing a `u` range, separated by `v`:
+
+    port       x  111..1479, y  442.. 894   corr(u,aft) +1.00  corr(v,up) +1.00
+    starboard  x  107..1478, y 1161..1538   corr(u,aft) +1.00  corr(v,up) -1.00
+
+Two faults, not one. **Placement**: both stamps sat at x >= 1530 while the
+panels end at 1479, so the registration was painted onto the tailcone, 831 and
+1002 px past the aft edge. **Orientation**: viewed from outside the starboard
+side the nose is to the viewer's right, so increasing `u` runs LEFTWARD, and
+`v` is inverted there as well - both axes reverse, which is a 180-degree
+rotation. The old comment argued that `rotate(180)` would mirror the
+registration and used `FLIP_TOP_BOTTOM`; that had it backwards, and a vertical
+flip alone leaves exactly the horizontal mirror that was reported.
+
+Asked whether anyone had looked at what a CAP aircraft is actually painted
+like, the answer was no - the first scheme was invented from an impression, in
+a repository that cites TCDS pages and POH revisions for every other dimension.
+
+The authority is **CAPP 130-2, "CAP Aircraft Painting and Marking", 4 October
+2021**, SHA-256 `8aead1f9ca5f60793c879359e7b77ff134a26b8f50d4131fc1f20fbea6932f0b`,
+mandated by CAPR 130-2 15.2. Its line drawing A is a SKYLANE - this aircraft.
+White upper fuselage, BLUE lower fuselage, RED vertical tail, thin gray and red
+stripes on the division, registration in WHITE 12-inch vertical block on the
+blue, and UNITED STATES AIR FORCE AUXILIARY along the aft fuselage (15.5).
+Colours are sampled from that drawing's own paint legend rather than guessed:
+Matterhorn White AF3102, Blue 753046, Gray 753048, CAP Red A07313.
+
+Everything is generated from rectangles and text, and now for a sourced reason
+rather than a general nervousness: CAPP 130-2 says ALL DECALS PROVIDED BY CAP,
+so the roundel, the wing lettering and the vertical fin titles are insignia
+rather than paint and are deliberately absent. CAPR 130-2 15.2 separately
+forbids wing logos and tail flashes.
+
+### Why rectangles had to go
+
+Painting rectangles into the atlas only works where a region unwraps as an
+axis-aligned band. Measured, the fuselage sides do and nothing else does:
+
+    belly bands   corr(u,aft) +0.07..+0.29   corr(v,up) -0.37..+0.27
+    wing bands    corr(u,aft) +0.01..+0.90   corr(v,up) -0.66..+0.85
+
+No arrangement of rectangles puts a stripe in the right place on those, which
+is why the belly stayed white and the fin got a red band instead of a red fin.
+`scheme_colour()` now decides from the 3D POSITION and `paint_scheme()`
+rasterises it through the mesh's own UVs, so the wrap, the belly, the gear
+fairings and the fin all follow one rule and the hand-measured panel constants
+are deleted rather than multiplied. A two-inch stripe is thinner than a
+fuselage triangle, so triangles whose three corners disagree are split at the
+edge midpoints and recursed to four levels - only where a boundary actually
+crosses, which keeps a full repaint at 3 seconds.
+
+Two further faults found on the way: a flat fill erased the donor's window
+frames, door outlines and rivets, which are baked into the texture and which
+real paint does not touch, so the new colour is multiplied by the old
+luminance; and a panel's bounding box also contains unrelated atlas islands, so
+the repaint is masked to actual skin rather than filling the box.
+
+Seen in X-Plane after rebuild and reload. **Outstanding:** the registration
+sits on the cabin rather than the aft fuselage where a 182 wears it, and that
+is a DONOR limitation rather than a choice - the aft fuselage side maps to a
+degenerate single column at x=2204, with no width to paint a 12-inch
+registration into. Re-UV-ing it is mesh work.
+
+### Horizontal tail span, and a blocking reason that was wrong
+
+**This is the MESH, not the flight model.** The 2026-09-11 entry titled
+"horizontal tail span corrected" changed `_wing/8` and `_wing/9` in the ACF.
+This is a different correction, to the exterior geometry, closing the same
+published dimension by a different mechanism. The A-1 entry's caution about not
+conflating the two now cuts both ways: both exist.
+
+The correction had been recorded as blocked, on the grounds that the stabiliser
+has no object of its own - that it lives inside `Airframe` alongside the wings,
+so a spanwise scale would shrink the WINGS, making it Blender work rather than
+a parametric scale. `Airframe` does not carry the stabiliser. At z 4.8-6.3 it
+holds 738 vertices at |x| <= 0.2, the tailcone and fin, and 156 at
+|x| 1.600-1.816 with nothing in between: those are the tip caps. The surface
+itself is the `Elevator` object, 427 vertices spanning |x| 0.510-1.821, plus
+`ElevatorTrim`.
+
+So the transform never has to touch `Airframe` broadly. It selects the tail by
+a z-window, and that window is safe for a checked reason rather than a hoped
+one: the wings sit at z 0.548-1.815, three metres forward, and zero wing
+vertices fall inside it. That was verified before the transform was written and
+is pinned by a test that feeds a wingtip to the selector and requires it to be
+rejected.
+
+`region_scale_with_root_blend` anchors at the root station |x| = 0.51 m, where
+the elevator meets the fuselage. That station is a fixed point and everything
+outboard closes proportionally, so the junction cannot tear - a scale about the
+CENTRELINE would have dragged the root inboard and opened the skin there, which
+is what the original note was right to worry about, just for the wrong object.
+`Elevator` and `ElevatorTrim` take the same transform whole, being entirely
+tail, which preserves the donor's 0.189 in per side elevator overhang instead
+of silently flushing it.
+
+Measured by the harness rather than asserted: `horizontal_tail_span` error goes
+from 3.026 in (+2.162%) to 0.003 in (+0.002%), inside the 138.6-141.4 in
+bounds. Every other dimension is unchanged, `wing_span` still -0.374% - the
+claim the old rationale worried about, now checked rather than argued.
+
+`tests/fixtures/c182t_landmarks.json` was regenerated. It still carried the old
+1.8164 m half-span, so the replay tests were passing, self-consistent, against
+geometry the converter no longer emits - a measurement that looks fine and is
+not, which is the failure class this project keeps meeting. The measurements
+test asserted this dimension FAILS; it no longer does.
+
+Package rebuilt: 436 vertices corrected for the propeller, 594 for the tail.
+Suite 560 passed, 1 skipped, 52 subtests. Eleven failures are unrelated and
+unchanged - `node` is not installed on this workstation, and the browser halves
+of the console and radio suites need it.
+
+### A-1 remains open
+
+`main_wheel_track` is still blocked, deliberately. The POH drawing does not
+annotate whether its dimension lines mark wheel centre or tyre outer face, and
+the two readings put the gear 4.64% too narrow or 1.34% too wide. The ambiguity
+flips the SIGN of the correction, so it is a reading of the source and not a
+measurement. Also outstanding: Plane Maker aerodynamic geometry, X-Plane visual
+acceptance of the corrected exterior, and the production license route.
+
+## 2026-09-15 — air start: one tool, six surprises, none of them the maths
+
+`scripts/set_air_start.py` places CAP 487 airborne on a named runway's final
+approach, flying, so the panels have live data without anyone hand-flying the
+simulator. It was written and tested entirely offline, then flown for the first
+time. **Every offline test passed and the tool was correct. The live run found
+six things anyway, and only the last one was a defect in the tool's own
+reasoning.** Recording the sequence because, as with card H0, the sequence is
+the useful part.
+
+Simulator engineering only. The tool writes position, attitude and velocity. It
+touches no flight control, no lease and no gate; `services/ai_pilot/maneuvers.py`
+was not modified and `maneuver_server` was never involved.
+
+### 1 — The sim will not start itself
+
+X-Plane launched, loaded, and then sat on the Quick Flight menu waiting for a
+human. It answers **no UDP at all** until a flight is loaded, so the readiness
+watcher stayed silent and looked identical to "still booting". The cause is the
+preference `_show_qfl_on_start 1`. `--help` documents `--pref:<key>=<value>`, so
+`--pref:_show_qfl_on_start=0` should boot straight into the last flight. The
+binary also carries an undocumented `--load_llah=` (lat/lon/alt/heading) and
+`--start_running`, neither in the public help; together they would put the
+aircraft airborne from the command line and make the reposition unnecessary.
+Unproven, and not yet in `scripts/launch_xplane_cap_vsar.sh`.
+
+### 2 — The prefs said KNTD. The flight was in Austria.
+
+"Resume last flight" restored 47.80 N, 13.00 E — on the ground, engine running.
+`_apt_id_str KNTD` in the preferences describes where a NEW flight would start,
+not what a resumed one restores. Worth knowing before trusting that field again.
+
+### 3 — Four point seven million feet
+
+The first reposition put the aeroplane at **4,699,505 ft, descending through
+36,000 fpm and accelerating**, tumbling, at 0 KIAS. The latitude and longitude
+were correct to five decimals. Paused it before anything else.
+
+### 4 — The instrument lied about the instrument
+
+Diagnosis went sideways for one round because `sim/flightmodel/position/elevation`
+read back as **33.06** — the latitude. X-Plane keeps streaming RREF subscriptions
+to the receive port after a client exits, and every new client restarts its
+dataref IDs at zero, so a second client's IDs collide with the first's still-live
+stream and values arrive under the wrong names. Every reading in this entry was
+re-taken on a fresh receive port. Any tool that subscribes on the default 49005
+inherits this.
+
+### 5 — The teleport, not the arithmetic
+
+Root cause of the 4.7 million feet: distance. Austria to California is about
+9,500 km, and `VEHS` re-centres the horizontal origin but leaves the vertical
+referenced to the old scenery origin — `local_x` and `local_z` came back small
+while `local_y` was 1,423,499 m. **Running the identical command a second time
+was exact**: 33.0663, -117.0994, 1310.64 m = 4300 ft MSL, the requested figures
+to the digit.
+
+So the tool has a real limitation, found only by flying it: *the first
+application after a long-distance jump produces a garbage altitude.* The fix is
+to read the achieved altitude back and re-apply when it is wrong — the same
+discipline `scripts/set_test_condition.py` already follows, and for the same
+reason. NOT YET IMPLEMENTED.
+
+### 6 — What actually worked
+
+The velocity write, which was the half that could not be verified offline.
+Airspeed went **0 to 91 KIAS the instant physics resumed**: the aeroplane flew
+rather than fell. That was the whole reason the tool exists — `VEHS` relocates
+"without resetting flight dynamics" and therefore sets no airspeed, and nothing
+in the tree wrote velocity before this.
+
+Left alone it then wandered — idle throttle, out of trim, rolling off to 20
+degrees of bank and descending. That is exactly what the docstring claims and
+had never been demonstrated. Stabilised with **X-Plane's own autopilot** (throttle
+0.70, HDG 090 M, altitude hold), which settled to 3,291 ft MSL, 95.7 KIAS, wings
+level at 1.1 degrees, vertical speed zero, tracking 100.2 true — the runway 09
+heading — 7.75 nm from the threshold. Unattended and steady, which was the point.
+
+### Standing notes
+
+* The ManeuverGate's envelope (3,000-6,000 ft indicated, 1,000 ft AGL, 90-140
+  KIAS, 35 degrees bank) permits the outer half of a 9 nm final and refuses from
+  4.0 nm in, and approach speed is under its 90 kt floor throughout. The gate's
+  grammar accepts heading and altitude only — there is no glidepath verb. It
+  cannot fly an approach, by design, and the tool now prints that verdict before
+  the flight rather than discovering it during one.
+* Runway geometry is read from X-Plane's own `apt.dat`. KRNM 09 measures 100.0
+  degrees true, not 090; the 27 threshold in that file agrees to seven decimals
+  with `KRNM_27_THRESHOLD` in `services/ai_pilot/flight_controller.py`, derived
+  independently.
+* Air Manager was not started. Panels remain untested against this condition.
+
+Offline coverage: 46 tests in `tests/test_air_start.py`; full suite 273 passed,
+1 skipped, 23 subtests. None of them would have caught items 1 through 5.
 ## 2026-09-15 — F-12 per-radio MON / open squelch
 
 The EFJohnson control head's labelled MON key now has a hit region matching its

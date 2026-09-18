@@ -25,9 +25,9 @@
     {
       "id": "main_wheel_track_to_poh",
       "closes": "main_wheel_track",
-      "status": "blocked",
+      "status": "active",
       "blocked_on": "Which endpoints the POH three-view's wheel-track dimension actually marks. Ron or an SME, not a model.",
-      "type": "spanwise_ramp_about_centreline",
+      "type": "gear_track_widen",
       "objects": [
         "MainStrut.L",
         "MainStrut.R",
@@ -39,25 +39,47 @@
       "measured_centre_to_centre_in": 102.99,
       "measured_tyre_outer_face_in": 109.45,
       "target_in": 108.0,
-      "rationale": "DO NOT CORRECT THIS UNTIL THE READING IS SETTLED - the ambiguity flips the SIGN of the required correction. The dimension master already records that the POH drawing's dimension lines drop from the wheels and do not annotate whether they mark wheel centre or tyre outer face, and calls centre-to-centre the conventional reading. Measured both ways on a 6.46 in tyre: centre-to-centre is 102.99 in (-4.64%), tyre outer face is 109.45 in (+1.34%). One reading says the gear is nearly five inches too NARROW; the other says it is an inch and a half too WIDE. Widening the track to make centre-to-centre 108.0 would put the outer faces at about 115.9 in, roughly 7% too wide if the outer-face reading is the right one. That is inventing a coordinate, which section 1 of the resume doc forbids: mark it unknown and stop. The transform and object list above are ready to apply once the endpoint is sourced.",
-      "source": "POH p.1-3, Figure 1-1 Sheet 1 (front view); ambiguity recorded in c182t_dimension_master.json"
+      "rationale": "READING SETTLED 2026-09-15 as CENTRE-TO-CENTRE, by convergent inference rather than by reading POH Fig 1-1 Sheet 1 - nobody involved has the POH. The ambiguity flips the SIGN (centre-to-centre 102.99 in, -4.64%, too NARROW; tyre outer face 109.45 in, +1.34%, too WIDE), so the grounds matter. (1) THE POH'S OWN NOTE, on the companion gear dimension of the same three-view, measures wheel base 'nose wheel axle -> main wheel CENTRE LINE' (dimension master line 96, sourced POH Fig 1-1 Sheet 2 NOTE). A drawing that annotates one gear dimension to the wheel centreline is not measuring the other to the tyre faces. (2) CONSISTENCY, which is arithmetic rather than opinion: every other donor dimension is undersized - overall length -2.48%, overall height -2.78%, wheel base -3.64% - so the centre-to-centre reading makes the gear uniformly small like the rest of the airframe, while the outer-face reading makes the track the ONLY oversized dimension on the model and has it 1.34% too wide while its own wheelbase is 3.64% too short, which is not a plausible mesh. (3) Standard aeronautical convention measures landing gear track centre to centre; note that FAA-H-8083-31B uses 'tread' for the TYRE's rubber crown, which is the likely source of the original doubt. SOURCES CHECKED AND FOUND SILENT: EASA/FAA TCDS 3A13 gives the datum, levelling means and 6.00x6 main tyre size but no tread; Cessna's Specification and Description Skylane 182T Dec 2015 Rev C lists height, length, span, cabin and doors but no wheel track at all. THE TRANSFORM: each wheel moves outboard 0.0636 m (2.5 in), 1.3080 -> 1.3716 m half-track. A single spanwise scale would be wrong - scaling the wheel about an inboard root widens the TYRE too, taking the donor's 164 mm wheel to 193 mm - so MainWheel and WheelFairing TRANSLATE rigidly, keeping their own dimensions, and only MainStrut ramps, with its inboard attachment at |x|=0.938 m fixed and its outboard end taking the full delta. That is the spring leg flexing outward rather than growing. This is the MESH, not the ACF flight model's gear positions.",
+      "source": "POH p.1-3, Figure 1-1 Sheet 1 (front view); ambiguity recorded in c182t_dimension_master.json",
+      "rigid_objects": [
+        "MainWheel.L",
+        "MainWheel.R",
+        "WheelFairing.L",
+        "WheelFairing.R"
+      ],
+      "root_abs_x": 0.938,
+      "ramp_tip_abs_x": 1.235,
+      "measured_track_m": 2.616,
+      "target_track_m": 2.7432,
+      "reading": "main wheel centre to centre",
+      "evidence_strength": "INFERRED, not read off the drawing. Weaker than the propeller (a certification bound) or the horizontal tail span (a direct measurement), and recorded as such. RE-OPENED AS A QUESTION 2026-09-15 by decision D-8: the premise for inferring rather than reading - that the POH was unobtainable - was WRONG. services/flightplanner/app.py line 124 carries a public URL to the C182T NAV III POH and the planner already cites it as its performance source. Check the figure before trusting this correction. The centre-to-centre reading may well be right, but it should now rest on the drawing rather than on an argument from the drawing being unavailable."
     },
     {
       "id": "horizontal_tail_span_to_poh",
       "closes": "horizontal_tail_span",
-      "status": "blocked",
-      "blocked_on": "Needs a region transform inside a shared object with a blended root - Blender work, not a parametric scale.",
+      "status": "active",
       "type": "region_scale_with_root_blend",
       "objects": [
-        "Airframe (aft outboard region only)",
+        "Airframe",
         "Elevator",
         "ElevatorTrim"
       ],
       "measured_in": 143.03,
       "target_in": 140.0,
-      "rationale": "The measurement is sound - verified independently, not assumed. The aft_outboard window selects 156 vertices spanning exactly +/-1.8164 m in a thin horizontal band at z 5.09-5.61, symmetric to 1e-4, so it is genuinely the stabiliser and not a stray feature. The +2.16% is a real mesh error. What blocks the correction is decomposition, not measurement: the stabiliser has no object of its own - it lives inside Airframe, which also carries the fuselage and the wings (max |x| 5.4558 m is a wingtip). A spanwise scale on Airframe would shrink the WINGS. Correcting the tail therefore needs a region-selected transform with a blend at the fuselage junction, or the skin tears where the stabiliser meets the tailcone. This is the case the resume doc's Blender preference is actually for, unlike the propeller, which was a scale about a known axis and exactly expressible as a number.",
-      "also_found": "The master's ambiguity note for this target says the stabiliser and elevator tips 'are flush on this airframe'. In this donor they are not: the stabiliser half-span is 1.8164 m and the Elevator object reaches 1.8212 m, 0.189 in further per side. It does not change the verdict - both readings are about 3 in over the 140.0 in target - but the note should be corrected so the next reader does not treat the two as interchangeable.",
-      "source": "POH p.1-3, Figure 1-1 Sheet 1 (top view)"
+      "rationale": "CORRECTED 2026-09-15, and the earlier blocking reason was wrong about the decomposition. It said the stabiliser lives inside Airframe with the wings, so a spanwise scale would shrink the WINGS. Airframe carries only the stabiliser TIP CAPS: at z 4.8-6.3 it has 738 vertices at |x| <= 0.2 (tailcone and fin) and 156 at |x| 1.600-1.816, with nothing in between. The surface itself is the Elevator object (427 vertices, |x| 0.510-1.821) plus ElevatorTrim. The wings sit at z 0.548-1.815, so a z-window of 4.8-6.3 provably selects zero wing vertices - checked, not assumed. Airframe is therefore region-selected and the two elevator objects are transformed whole, since they are entirely tail. The transform anchors at the root station |x| = 0.51 m, where the elevator meets the fuselage, so that junction is a fixed point and the skin cannot tear; everything outboard closes proportionally. The measured 1.8164 m half-span (143.03 in) goes to 1.778 m (140.0 in).",
+      "also_found": "The master's ambiguity note for this target says the stabiliser and elevator tips 'are flush on this airframe'. In this donor they are not: the stabiliser half-span is 1.8164 m and the Elevator object reaches 1.8212 m, 0.189 in further per side. It does not change the verdict - both readings are about 3 in over the 140.0 in target - but the note should be corrected so the next reader does not treat the two as interchangeable. The same proportional transform is applied to the Elevator, so its 0.189 in per side overhang beyond the stabiliser is preserved rather than silently flushed - the donor's relationship is kept, not invented.",
+      "source": "POH p.1-3, Figure 1-1 Sheet 1 (top view)",
+      "region_objects": [
+        "Airframe"
+      ],
+      "region": {
+        "z_min": 4.8,
+        "z_max": 6.3,
+        "abs_x_min": 0.5
+      },
+      "root_abs_x": 0.51,
+      "measured_half_span_m": 1.8164,
+      "target_half_span_m": 1.778
     }
   ]
 }

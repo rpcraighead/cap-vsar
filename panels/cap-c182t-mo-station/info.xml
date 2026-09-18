@@ -84,6 +84,22 @@
               <height>294</height>
               <properties />
             </instrument>
+            <instrument>
+              <uuid>d285e0f7-b787-42c7-85fd-ec8990f6db33</uuid>
+              <x>40</x>
+              <y>900</y>
+              <width>300</width>
+              <height>150</height>
+              <properties />
+            </instrument>
+            <instrument>
+              <uuid>aa9851bc-5ba6-4f5e-a465-d456403fbfc8</uuid>
+              <x>380</x>
+              <y>900</y>
+              <width>520</width>
+              <height>150</height>
+              <properties />
+            </instrument>
           </instruments>
         </layout>
         <layout>
@@ -147,6 +163,22 @@
               <y>580</y>
               <width>560</width>
               <height>294</height>
+              <properties />
+            </instrument>
+            <instrument>
+              <uuid>d285e0f7-b787-42c7-85fd-ec8990f6db33</uuid>
+              <x>40</x>
+              <y>900</y>
+              <width>300</width>
+              <height>150</height>
+              <properties />
+            </instrument>
+            <instrument>
+              <uuid>aa9851bc-5ba6-4f5e-a465-d456403fbfc8</uuid>
+              <x>380</x>
+              <y>900</y>
+              <width>520</width>
+              <height>150</height>
               <properties />
             </instrument>
           </instruments>

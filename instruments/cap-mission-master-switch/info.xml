@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<pluginstrument>
+  <aircraft>Cessna 182T</aircraft>
+  <type>CAP Mission Equipment Master Switch</type>
+  <uuid>d285e0f7-b787-42c7-85fd-ec8990f6db33</uuid>
+  <author>CAP V-SAR</author>
+  <description>Guarded master switch for the Mission Observer station's SAR mission kit (DF head, TDFM-136B FM radio, GMA 1347 audio panel/MFD feed). Lift the guard, then flip the switch to cut all mission equipment at once without touching the aircraft's own BAT/ALT/AVIONICS masters, matching how the mission kit is wired as supplemental equipment on the airframe bus.</description>
+  <compatibleFSX>false</compatibleFSX>
+  <compatibleP3D>false</compatibleP3D>
+  <compatibleXPL>true</compatibleXPL>
+  <compatibleFS2>false</compatibleFS2>
+  <compatibleFS2020>false</compatibleFS2020>
+  <version>1</version>
+  <configVersion>1</configVersion>
+  <pluginInterfaceVersion>100</pluginInterfaceVersion>
+  <prefWidth>300</prefWidth>
+  <prefHeight>150</prefHeight>
+  <source>PERSONAL</source>
+  <platforms>
+    <platform>WINDOWS</platform>
+    <platform>MAC</platform>
+    <platform>LINUX</platform>
+    <platform>RASPBERRY_PI</platform>
+  </platforms>
+  <tiers>
+    <tier>HOME_USE_STANDARD</tier>
+  </tiers>
+</pluginstrument>
