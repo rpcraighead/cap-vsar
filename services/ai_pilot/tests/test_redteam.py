@@ -170,8 +170,10 @@ def test_rt2_context_the_controller_and_the_live_deck_default_to_one_port():
 # RT-3  The recorder writes defaults as data; the live deck never subscribes.  HIGH
 # =============================================================================
 
-@defect("RT-3", "FlightDataRecorder.sample_current_frame reads a never-invalidated cache "
-                "with 0.0 defaults and a wall-clock fallback for sim time")
+# FIXED 2026-09-18 by AI-11. Marker removed per this module's own rule, so
+# this test is now the regression guard for that fix rather than a finding.
+# RT-3 was: FlightDataRecorder.sample_current_frame reads a never-invalidated cache with
+#   0.0 defaults and a wall-clock fallback for sim time
 def test_rt3a_a_frame_with_no_telemetry_is_not_recorded_as_position_zero():
     """SRC fdr.py:226-270 and xplane_udp.get_dref. A recorder whose link is dead
     writes lat 0, lon 0, 0 KIAS, DF power ON, 121.500 selected, and stamps the
@@ -181,11 +183,19 @@ def test_rt3a_a_frame_with_no_telemetry_is_not_recorded_as_position_zero():
     frame = FlightDataRecorder(XPlaneUDPClient(mock=True)).sample_current_frame().to_dict()
     for key in ("lat", "lon", "kias", "heading_true"):
         assert frame[key] != 0.0, f"{key} recorded as 0.0 with no telemetry ever received"
-    assert abs(frame["sim_time_s"] - time.time()) > 60, "sim time is the wall clock"
+    sim_time = frame["sim_time_s"]
+    # NaN is the honest answer when no sim time was ever received, and it
+    # satisfies this check's intent. Written explicitly because every NaN
+    # comparison is False, so the original `abs(sim_time - now) > 60` reported
+    # "this IS the wall clock" for a value that is not a time at all.
+    assert sim_time != sim_time or abs(sim_time - time.time()) > 60, \
+        "sim time is the wall clock"
 
 
-@defect("RT-3", "run_web_server never subscribes a dataref; in --live mode the deck and "
-                "the FDR see only what a hand-configured legacy Data Output happens to send")
+# FIXED 2026-09-18 by AI-11. Marker removed per this module's own rule, so
+# this test is now the regression guard for that fix rather than a finding.
+# RT-3 was: run_web_server never subscribes a dataref; in --live mode the deck and the
+#   FDR see only what a hand-configured legacy Data Output happens to send
 def test_rt3b_the_live_deck_subscribes_the_telemetry_it_displays_and_records():
     """SRC web_server.run_web_server builds XPlaneUDPClient, FlightController,
     LightweightAgent and FlightDataRecorder and never calls subscribe_dref, nor
@@ -201,8 +211,10 @@ def test_rt3b_the_live_deck_subscribes_the_telemetry_it_displays_and_records():
     assert client._dref_to_id, "the live deck registers no RREF subscriptions at all"
 
 
-@defect("RT-3", "diagnostics duration clamps to 0.0 when the first frame carries the "
-                "wall-clock fallback and a later one carries real sim time")
+# FIXED 2026-09-18 by AI-11. Marker removed per this module's own rule, so
+# this test is now the regression guard for that fix rather than a finding.
+# RT-3 was: diagnostics duration clamps to 0.0 when the first frame carries the
+#   wall-clock fallback and a later one carries real sim time
 def test_rt3c_duration_survives_a_wall_clock_first_frame():
     engine = FlightDiagnosticEngine()
     base = {"lat": 32.8, "lon": -116.9, "df_valid": 0, "scenario_active": 1}
@@ -212,8 +224,10 @@ def test_rt3c_duration_survives_a_wall_clock_first_frame():
     assert duration is None or duration > 0.0, "a real flight graded as zero seconds long"
 
 
-@defect("RT-3", "an all-defaults recording is graded as a DF coverage failure instead of "
-                "being recognised as a dead telemetry link")
+# FIXED 2026-09-18 by AI-11. Marker removed per this module's own rule, so
+# this test is now the regression guard for that fix rather than a finding.
+# RT-3 was: an all-defaults recording is graded as a DF coverage failure instead of
+#   being recognised as a dead telemetry link
 def test_rt3d_a_dead_link_is_reported_as_a_dead_link_not_a_flight_result():
     recorder = FlightDataRecorder(XPlaneUDPClient(mock=True))
     frames = [recorder.sample_current_frame().to_dict() for _ in range(50)]

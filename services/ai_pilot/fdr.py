@@ -28,6 +28,85 @@ logger = logging.getLogger("ai_pilot.fdr")
 DEFAULT_RECORDS_DIR = Path(__file__).resolve().parent.parent.parent / "logs" / "fdr"
 
 
+RECORDED_DATAREFS = (
+    "cap/df/active_freq_hz",
+    "cap/df/airframe_attenuation_db",
+    "cap/df/airframe_shadowed",
+    "cap/df/band",
+    "cap/df/bearing_rel",
+    "cap/df/bearing_true",
+    "cap/df/blocked",
+    "cap/df/cs_country",
+    "cap/df/cs_has_position",
+    "cap/df/cs_lat",
+    "cap/df/cs_lon",
+    "cap/df/cs_msg_age_sec",
+    "cap/df/cs_protocol",
+    "cap/df/cs_sync",
+    "cap/df/distance_nm",
+    "cap/df/error_code",
+    "cap/df/head_type",
+    "cap/df/in_cone",
+    "cap/df/mode",
+    "cap/df/mounting",
+    "cap/df/offset_deg",
+    "cap/df/power",
+    "cap/df/rx_open",
+    "cap/df/rx_span_hz",
+    "cap/df/scan_enable",
+    "cap/df/signal",
+    "cap/df/spread",
+    "cap/df/squelch",
+    "cap/df/timehold_sec",
+    "cap/df/valid",
+    "cap/scenario/active",
+    "cap/scenario/beacon_elev",
+    "cap/scenario/beacon_lat",
+    "cap/scenario/beacon_lon",
+    "cap_fm_audio_selected",
+    "cap_fm_channel",
+    "cap_fm_frequency_hz",
+    "cap_fm_guard_frequency_hz",
+    "cap_fm_high_power",
+    "cap_fm_mic_selected",
+    "cap_fm_power_on",
+    "cap_fm_transmitting",
+    "sim/cockpit2/radios/actuators/audio_com_listen",
+    "sim/cockpit2/radios/actuators/audio_com_mic",
+    "sim/cockpit2/radios/actuators/audio_panel_copilot_ptt",
+    "sim/cockpit2/radios/actuators/com1_frequency_hz_833",
+    "sim/cockpit2/radios/actuators/com2_frequency_hz_833",
+    "sim/cockpit2/radios/actuators/transponder_code",
+    "sim/flightmodel/position/elevation",
+    "sim/flightmodel/position/groundspeed",
+    "sim/flightmodel/position/indicated_airspeed",
+    "sim/flightmodel/position/latitude",
+    "sim/flightmodel/position/longitude",
+    "sim/flightmodel/position/mag_psi",
+    "sim/flightmodel/position/phi",
+    "sim/flightmodel/position/psi",
+    "sim/flightmodel/position/theta",
+    "sim/flightmodel/position/vh_ind_fpm",
+    "sim/flightmodel/position/y_agl",
+    "sim/time/total_flight_time_sec",
+)
+"""Every dataref sample_current_frame reads.
+
+AI-11: nothing used to subscribe these. In --live mode only legacy DATA
+packets (indices 3 and 20, off by default in X-Plane) populated anything, so
+speed and position arrived if the operator had hand-configured a Data Output
+the README never mentioned, and heading, attitude, AGL, VVI, engine and every
+cap/df/* dataref stayed at their defaults forever. The recorder subscribes
+what it records, because it is the component that knows what that is.
+"""
+
+
+STALE_AFTER_S = 2.0
+"""Seconds a dataref may go unheard before the recorder stops treating it as
+measured. AI-11: past this the reading is NaN, which records "not known"
+rather than a number nobody observed."""
+
+
 @dataclass
 class FDRFrame:
     """Synchronous frame capturing complete aircraft and avionics state."""
@@ -116,6 +195,12 @@ class FDRFrame:
     cap_fm_audio_selected: bool
     cap_fm_mic_selected: bool
 
+    # AI-11. 1 while the simulator is actually reporting telemetry, 0 when
+    # nothing has ever arrived or the link has gone quiet. Without this a
+    # recording of silence is indistinguishable from a recording of an
+    # aeroplane parked at 0N 0E, and the debrief engine grades it as a flight.
+    link_established: int = 1
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
@@ -134,6 +219,14 @@ class FlightDataRecorder:
         self.output_dir = output_dir or DEFAULT_RECORDS_DIR
         self.ring_buffer_size = ring_buffer_size
         self.rate_hz = rate_hz
+        # AI-11: how long a dataref may go unheard before it stops counting as
+        # a measurement. Generous next to the 4 Hz default record rate.
+        self.stale_after_s = STALE_AFTER_S
+
+        # AI-11: subscribe what we record. Without this the cache is only ever
+        # populated by whatever legacy Data Output the operator happened to
+        # enable, and every other field is a default masquerading as data.
+        self.subscribe_recorded_datarefs()
 
         self._lock = threading.Lock()
         self._recording = False
@@ -223,32 +316,62 @@ class FlightDataRecorder:
                 line = json.dumps(frame.to_dict()) + "\n"
                 self._file_handle.write(line)
 
+    def subscribe_recorded_datarefs(self, freq_hz: int = 10) -> int:
+        """Ask the simulator to stream every dataref this recorder writes.
+
+        Returns the number subscribed. Safe to call again; subscribe_dref
+        reuses the existing id for a dataref already registered.
+        """
+        count = 0
+        for dataref in RECORDED_DATAREFS:
+            try:
+                self.client.subscribe_dref(dataref, freq_hz=freq_hz)
+                count += 1
+            except Exception as exc:                      # pragma: no cover
+                logger.warning("Could not subscribe %s: %s", dataref, exc)
+        logger.info("FDR subscribed %d datarefs at %d Hz", count, freq_hz)
+        return count
+
+    def _measured(self, dataref: str) -> float:
+        """A float the simulator actually reported recently, else NaN.
+
+        AI-11: the alternative is a 0.0 default, which writes a stationary
+        aeroplane at 0N 0E and a powered DF into the record and lets the
+        debrief engine grade a flight that never happened. NaN propagates
+        honestly - it is not a position, not a speed, and not zero.
+        """
+        return self.client.get_dref(
+            dataref, default=float("nan"), max_age_s=self.stale_after_s
+        )
+
     def sample_current_frame(self, phase: str = "IN_FLIGHT") -> FDRFrame:
         """Sample a complete FDRFrame from the client cache."""
         c = self.client
         now_utc = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        sim_time = c.get_dref("sim/time/total_flight_time_sec", default=time.time())
+        sim_time = self._measured("sim/time/total_flight_time_sec")
 
         # Kinematics
-        lat = c.get_dref("sim/flightmodel/position/latitude", 0.0)
-        lon = c.get_dref("sim/flightmodel/position/longitude", 0.0)
-        ele_m = c.get_dref("sim/flightmodel/position/elevation", 0.0)
+        lat = self._measured("sim/flightmodel/position/latitude")
+        lon = self._measured("sim/flightmodel/position/longitude")
+        ele_m = self._measured("sim/flightmodel/position/elevation")
         alt_msl_ft = ele_m * 3.28084
-        alt_agl_ft = c.get_dref("sim/flightmodel/position/y_agl", 0.0) * 3.28084
-        roll = c.get_dref("sim/flightmodel/position/phi", 0.0)
-        pitch = c.get_dref("sim/flightmodel/position/theta", 0.0)
-        hdg_true = c.get_dref("sim/flightmodel/position/psi", 0.0)
-        hdg_mag = c.get_dref("sim/flightmodel/position/mag_psi", hdg_true)
-        kias = c.get_dref("sim/flightmodel/position/indicated_airspeed", 0.0)
-        gs = c.get_dref("sim/flightmodel/position/groundspeed", 0.0) * 1.94384
-        vvi = c.get_dref("sim/flightmodel/position/vh_ind_fpm", 0.0)
+        alt_agl_ft = self._measured("sim/flightmodel/position/y_agl") * 3.28084
+        roll = self._measured("sim/flightmodel/position/phi")
+        pitch = self._measured("sim/flightmodel/position/theta")
+        hdg_true = self._measured("sim/flightmodel/position/psi")
+        hdg_mag = self._measured("sim/flightmodel/position/mag_psi")
+        if hdg_mag != hdg_mag:
+            hdg_mag = hdg_true
+        kias = self._measured("sim/flightmodel/position/indicated_airspeed")
+        gs = self._measured("sim/flightmodel/position/groundspeed") * 1.94384
+        vvi = self._measured("sim/flightmodel/position/vh_ind_fpm")
 
         # DF State
         df_valid = int(c.get_dref("cap/df/valid", 0.0))
-        df_bearing_rel = c.get_dref("cap/df/bearing_rel", 0.0)
-        df_bearing_true = c.get_dref("cap/df/bearing_true", 0.0)
-        df_signal = c.get_dref("cap/df/signal", 0.0)
-        df_distance_nm = c.get_dref("cap/df/distance_nm", 0.0)
+        df_bearing_rel = self._measured("cap/df/bearing_rel")
+        df_bearing_true = self._measured("cap/df/bearing_true")
+        df_signal = self._measured("cap/df/signal")
+        df_distance_nm = self._measured("cap/df/distance_nm")
         df_in_cone = int(c.get_dref("cap/df/in_cone", 0.0))
         df_blocked = int(c.get_dref("cap/df/blocked", 0.0))
         df_shadowed = int(c.get_dref("cap/df/airframe_shadowed", 0.0))
@@ -321,6 +444,7 @@ class FlightDataRecorder:
             groundspeed_kts=gs,
             vvi_fpm=vvi,
             flight_phase=phase,
+            link_established=int(self.client.link_established()),
             df_valid=df_valid,
             df_bearing_rel=df_bearing_rel,
             df_bearing_true=df_bearing_true,

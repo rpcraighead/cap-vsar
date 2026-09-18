@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 113 items, 16 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 113 items, 15 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -128,7 +128,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | ID | Pri | Sev | Title | Component | Cluster | Effort | Depends on | Status |
 |---|---|---|---|---|---|---|---|---|
 | [A-1](#a-1) | P0 | high | CAP 487 retains the stock C172S airframe geometry and exterior | infra | C16 | L | — | open |
-| [AI-11](#ai-11) | P0 | high | FDR records defaults as data and the live deck never subscribes a dataref (V2-7, red team RT-3) | infra | C15 | M | — | open |
+| [AI-11](#ai-11) | P0 | high | FDR records defaults as data and the live deck never subscribes a dataref (V2-7, red team RT-3) | infra | C15 | M | — | fixed |
 | [AI-1](#ai-1) | P1 | high | Legacy AI pilot entrypoints bypass maneuver validation | infra | C15 | M | — | fixed |
 | [AI-10](#ai-10) | P1 | high | Controller and live deck silently share UDP receive port 49005 (V2-6, red team RT-2) | infra | C15 | M | — | open |
 | [AI-12](#ai-12) | P1 | high | Direct backend: no human-input arbitration, and its own fault path never pauses (D-3, red team RT-4) | infra | C15 | M | — | open |
@@ -665,12 +665,12 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **FDR records defaults as data and the live deck never subscribes a dataref (V2-7, red team RT-3)**
 
-`P0` · `high` · `bug` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort M · wave 3 · **open**
+`P0` · `high` · `bug` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort M · wave 3 · **fixed**
 
 - **Files:** `services/ai_pilot/fdr.py:sample_current_frame`, `services/ai_pilot/xplane_udp.py:get_dref`, `services/ai_pilot/web_server.py:run_web_server`, `services/ai_pilot/diagnostics.py:evaluate_frames`
 - **Problem:** Three defects that compound. (1) get_dref returns a never-invalidated cache with 0.0 defaults, so a dead link records lat 0, lon 0, 0 KIAS, DF power on, 121.500 selected, and stamps sim_time_s with the WALL CLOCK (default=time.time()). (2) run_web_server constructs the client, controller, agent and recorder and none of them ever calls subscribe_dref; in --live mode only legacy DATA packets (indices 3/20, off by default in X-Plane) populate anything, so heading, attitude, AGL, VVI, engine and every cap/df/* dataref are defaults forever. (3) The diagnostic engine then grades the recording as a DF coverage FAIL rather than a dead link, and its duration clamps to 0.0 if a real sim time ever follows a wall-clock frame. The README's 'read telemetry from live X-Plane 12' is speed and position at best, and only if the operator configures a Data Output the README never mentions. HANDOFF-claude-fixes-2026-09-13 called V2-7 'a debrief graded on fabricated telemetry'; that is exactly what this produces.
 - **Fix:** Subscribe every dataref the deck displays and the FDR records; carry per-dataref receive timestamps and record NaN/None past a staleness window; make sim_time_s NaN rather than wall clock; have the engine emit a 'telemetry link not established' finding and refuse to grade when position/DF validity never arrived.
-- **Done when:** services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt3a..test_rt3d and the test must pass; it then guards the fix.
+- **Done when:** DONE 2026-09-18. The four RT-3 xfail(strict) markers in services/ai_pilot/tests/test_redteam.py are removed and the tests pass, so they are now the regression guard. (1) xplane_udp stamps every genuine observation on the monotonic clock and exposes get_dref(max_age_s=), get_dref_age_s, is_dref_fresh, observed_datarefs and link_established; send_dref's optimistic echo of an OUTGOING command is deliberately not stamped, with a test for that. (2) FlightDataRecorder subscribes all 60 datarefs it records at construction, so the live deck no longer depends on a hand-configured legacy Data Output; float readings past a 2 s staleness window are NaN rather than 0.0; sim_time_s is NaN rather than the wall clock; each frame carries link_established. (3) The engine reports 'Telemetry link not established' and refuses to grade, on positive evidence only (all link flags down, or every recorded position NaN) so partial frames in its own unit tests still grade; duration is None rather than a clamped 0.0 when sim times are unknown or do not share a clock. web_server.py was NOT touched, avoiding the open AI-7 job in that file. Suites: services/ai_pilot 220 passed / 22 xfailed (was 209/26); root 434 passed with only the known environmental test_panel failure.
 
 ### AI-1
 

@@ -3,6 +3,62 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-18 — AI-11 closed: the recorder can tell silence from data
+
+A P0 from the 2026-09-12 review (V2-7) and the 09-15 red team (RT-3). Three
+defects that compounded into a recorder that documented flights which did not
+happen, and a debrief engine that graded them.
+
+**The cache could not distinguish "the simulator says 0.0" from "nothing ever
+arrived."** `get_dref` returned a never-invalidated cache with 0.0 defaults, so
+a dead link recorded the aeroplane stationary at 0N 0E, 0 KIAS, DF powered on,
+121.500 selected, and stamped `sim_time_s` with the WALL CLOCK because the
+default was `time.time()`. `xplane_udp` now stamps every genuine observation on
+the monotonic clock and offers `get_dref(max_age_s=)`, `get_dref_age_s`,
+`is_dref_fresh`, `observed_datarefs` and `link_established`. Monotonic so a
+clock step cannot fake freshness. `get_dref_age_s` returns None only when a
+dataref was NEVER observed, which is the distinction the engine needs to say
+"link down" instead of "coverage failure".
+
+Only genuine observations are stamped. The six cache write sites are not
+equivalent: RREF ingest, legacy DATA packets and the mock injections are
+evidence the simulator reported something; `send_dref`'s optimistic echo of an
+OUTGOING command is not. Stamping it would let commanding a value make a dead
+link look live — the same error class AI-11 is about. A test covers it.
+
+**Nothing subscribed anything.** In `--live` mode only legacy DATA packets
+(indices 3 and 20, off by default in X-Plane) populated the cache, so speed and
+position arrived if the operator had hand-configured a Data Output the README
+never mentioned, and heading, attitude, AGL, VVI, engine and every `cap/df/*`
+dataref stayed at their defaults forever. `FlightDataRecorder` now subscribes
+all 60 datarefs it records, at construction — the recorder is the component
+that knows what it records. `web_server.py` needed no change, which also keeps
+this clear of the open AI-7 job in that file.
+
+**Readings past a 2 s staleness window are NaN, not 0.0**, and `sim_time_s` is
+NaN rather than the wall clock. Every frame carries `link_established`.
+
+**The engine refuses to grade a recording of silence.** It emits "Telemetry
+link not established" and returns, rather than producing a DF coverage FAIL
+against an aeroplane never reported to have moved. It fires on positive
+evidence only — all link flags down, or every recorded position NaN — because
+absence of a position key means a partial frame, which the engine's own unit
+tests build, not a dead link. Duration is None rather than a clamped 0.0 when
+sim times are unknown or do not share one clock; the old `max(0.0, last-first)`
+reported a real flight as zero seconds long whenever a wall-clock first frame
+preceded a real sim time.
+
+**One acceptance test was amended, deliberately and visibly.** RT-3a asserted
+`abs(sim_time_s - time.time()) > 60`. Every NaN comparison is False, so that
+check reports "this IS the wall clock" for a value that is not a time at all.
+The assertion now accepts NaN as satisfying its own intent. Flagged because
+adjusting the test you are graded by deserves to be seen.
+
+All four RT-3 `xfail(strict)` markers are removed per that module's own rule,
+so those tests are now the regression guard. Suites: `services/ai_pilot` 220
+passed / 22 xfailed (was 209 / 26); root 434 passed, unchanged apart from the
+known environmental `test_panel` failure. A-1 is now the only open P0.
+
 ## 2026-09-17 — card H0 FLOWN on the sixth attempt; roll is linear, pitch is not
 
 Card H0 (control and trim confidence, 100 KIAS clean) produced its first valid

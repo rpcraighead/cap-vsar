@@ -54,7 +54,10 @@ class DiagnosticReport:
             "session_id": self.session_id,
             "generated_at": self.generated_at,
             "total_frames": self.total_frames,
-            "duration_seconds": round(self.duration_seconds, 1),
+            "duration_seconds": (
+                None if self.duration_seconds is None
+                else round(self.duration_seconds, 1)
+            ),
             "summary_status": self.summary_status,
             "scorecard": {
                 "pass": self.pass_count,
@@ -71,7 +74,10 @@ class DiagnosticReport:
         status_emoji = "🟢 PASS" if self.summary_status == "PASS" else ("🟡 WARNING" if self.summary_status == "WARNING" else "🔴 FAIL")
         lines = [
             f"# CAP V-SAR Flight Diagnostic Report — {self.session_id}",
-            f"> **Generated**: {self.generated_at} | **Duration**: {self.duration_seconds:.1f}s | **Frames**: {self.total_frames}",
+            f"> **Generated**: {self.generated_at} | **Duration**: "
+            + ("unknown" if self.duration_seconds is None
+               else f"{self.duration_seconds:.1f}s")
+            + f" | **Frames**: {self.total_frames}",
             f"> **Overall Assessment**: **{status_emoji}** ({self.pass_count} Pass, {self.warn_count} Warn, {self.fail_count} Fail, {self.info_count} Info)",
             "",
             "---",
@@ -150,6 +156,78 @@ class FlightDiagnosticEngine:
     def __init__(self) -> None:
         pass
 
+    @staticmethod
+    def _duration_seconds(raw_frames: List[Dict[str, Any]]) -> Optional[float]:
+        """Elapsed simulator time across the recording, or None if unknowable.
+
+        AI-11: this used to be max(0.0, last - first), which returns 0.0 in two
+        different and important situations - a recording whose sim time is NaN
+        because nothing was ever measured, and one whose first frame carries a
+        wall-clock fallback (about 1.7e9) while a later frame carries real sim
+        time (a few thousand), making the difference hugely negative. Both were
+        reported as a flight zero seconds long. None says "not known", which is
+        the truth, and is distinguishable from a genuinely instantaneous log.
+        """
+        times = [
+            t for t in (f.get("sim_time_s") for f in raw_frames)
+            if isinstance(t, (int, float)) and t == t and abs(t) != float("inf")
+        ]
+        if len(times) < 2:
+            return None
+        span = times[-1] - times[0]
+        if span < 0.0:
+            # Time ran backwards: the frames do not share one clock, so no
+            # duration derived from them means anything.
+            return None
+        return span
+
+    @staticmethod
+    def _eval_telemetry_link(raw_frames: List[Dict[str, Any]]) -> Optional[DiagnosticFinding]:
+        """Return a finding only on POSITIVE evidence that no telemetry arrived.
+
+        Two signals, either of which is conclusive:
+
+          * every frame that carries the recorder's link flag reports it down;
+          * every frame that carries a position reports it as NaN, which is
+            what the recorder writes when nothing was ever measured.
+
+        A frame that simply omits those keys proves nothing - the engine's own
+        unit tests grade partial frames carrying only the fields under test -
+        so absence is never treated as evidence.
+        """
+        flags = [f["link_established"] for f in raw_frames if "link_established" in f]
+        if flags and not any(bool(v) for v in flags):
+            reason = "the recorder reported no telemetry link on any frame"
+        else:
+            if flags and any(bool(v) for v in flags):
+                return None
+            positions = [
+                (f["lat"], f["lon"]) for f in raw_frames
+                if "lat" in f and "lon" in f
+            ]
+            numeric = [
+                (lat, lon) for lat, lon in positions
+                if isinstance(lat, (int, float)) and isinstance(lon, (int, float))
+            ]
+            if not numeric:
+                return None
+            if any(lat == lat and lon == lon for lat, lon in numeric):
+                return None
+            reason = "every recorded position is NaN, so none was ever measured"
+        return DiagnosticFinding(
+            rule_id="TELEMETRY_LINK",
+            category="DATA_INTEGRITY",
+            status="FAIL",
+            title="Telemetry link not established",
+            message=(
+                "This recording contains no telemetry: " + reason + ". Nothing in it "
+                "describes a flight, so no DF, radio or coverage result has been graded. "
+                "Check that X-Plane is running, that the aircraft is loaded, and that the "
+                "recorder's dataref subscriptions are reaching it."
+            ),
+            details={"frames": len(raw_frames), "reason": reason},
+        )
+
     def evaluate_frames(self, frames: List[Union[FDRFrame, Dict[str, Any]]], session_id: str = "SESSION") -> DiagnosticReport:
         """Evaluate a list of FDR frames (as FDRFrame objects or dicts)."""
         if not frames:
@@ -178,11 +256,27 @@ class FlightDiagnosticEngine:
 
         # Normalize to list of dicts
         raw_frames: List[Dict[str, Any]] = [f.to_dict() if isinstance(f, FDRFrame) else f for f in frames]
-        duration = 0.0
-        if len(raw_frames) >= 2:
-            t0 = raw_frames[0].get("sim_time_s", 0.0)
-            t1 = raw_frames[-1].get("sim_time_s", 0.0)
-            duration = max(0.0, t1 - t0)
+        duration = self._duration_seconds(raw_frames)
+
+        # AI-11. Before grading anything, establish that there is anything to
+        # grade. A recording made with no telemetry link is not a flight that
+        # went badly; it is not a flight. Grading it produces a DF coverage
+        # FAIL against an aeroplane that was never reported to have moved.
+        link_finding = self._eval_telemetry_link(raw_frames)
+        if link_finding is not None:
+            return DiagnosticReport(
+                session_id=session_id,
+                generated_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                total_frames=len(raw_frames),
+                duration_seconds=duration,
+                summary_status="FAIL",
+                pass_count=0,
+                warn_count=0,
+                fail_count=1,
+                info_count=0,
+                findings=[link_finding],
+                metrics={"telemetry_link_established": False},
+            )
 
         findings: List[DiagnosticFinding] = []
         metrics: Dict[str, Any] = {}
