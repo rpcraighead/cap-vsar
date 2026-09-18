@@ -121,3 +121,65 @@ class TestUDPProtocol(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDatarefFreshness(unittest.TestCase):
+    """AI-11 foundation: the cache cannot tell 'the sim says 0.0' from 'nothing
+    ever arrived'. These cover the receipt tracking that makes that separable.
+    """
+
+    REF = "sim/flightmodel/position/indicated_airspeed"
+
+    def test_a_dataref_never_observed_has_no_age_and_no_link(self):
+        client = XPlaneUDPClient(mock=True)
+        self.assertIsNone(client.get_dref_age_s(self.REF))
+        self.assertFalse(client.is_dref_fresh(self.REF))
+        self.assertFalse(client.link_established())
+        self.assertEqual(client.observed_datarefs(), {})
+
+    def test_sending_a_dataref_is_not_evidence_the_sim_reported_one(self):
+        """The defect this guards: send_dref writes the read cache, so an
+        outgoing command would otherwise make a dead link look live."""
+        client = XPlaneUDPClient(mock=True)
+        client.send_dref(self.REF, 95.0)
+        self.assertEqual(client.get_dref(self.REF), 95.0)      # cache unchanged
+        self.assertIsNone(client.get_dref_age_s(self.REF))     # but not observed
+        self.assertFalse(client.link_established())
+
+    def test_an_observed_dataref_is_fresh_and_has_an_age(self):
+        client = XPlaneUDPClient(mock=True)
+        client.set_mock_dref(self.REF, 101.0)
+        age = client.get_dref_age_s(self.REF)
+        self.assertIsNotNone(age)
+        self.assertLess(age, 1.0)
+        self.assertTrue(client.is_dref_fresh(self.REF))
+        self.assertTrue(client.link_established())
+        self.assertIn(self.REF, client.observed_datarefs())
+
+    def test_max_age_returns_the_default_rather_than_a_stale_reading(self):
+        client = XPlaneUDPClient(mock=True)
+        client.set_mock_dref(self.REF, 101.0)
+        # Fresh: the real value.
+        self.assertEqual(client.get_dref(self.REF, max_age_s=60.0), 101.0)
+        # Aged out: the default, not the last value it happened to hold.
+        self.assertEqual(client.get_dref(self.REF, default=-1.0, max_age_s=-0.001), -1.0)
+
+    def test_never_observed_with_max_age_yields_nan_for_the_recorder(self):
+        """The recorder's intended use: NaN records 'unknown', where 0.0 would
+        record a stationary aeroplane at 0N 0E as though it were measured."""
+        client = XPlaneUDPClient(mock=True)
+        value = client.get_dref("cap/df/valid", default=float("nan"), max_age_s=2.0)
+        self.assertNotEqual(value, value)  # NaN
+
+    def test_existing_callers_are_unaffected_without_max_age(self):
+        client = XPlaneUDPClient(mock=True)
+        self.assertEqual(client.get_dref(self.REF), 0.0)
+        self.assertEqual(client.get_dref(self.REF, 7.5), 7.5)
+
+    def test_rref_ingest_counts_as_an_observation(self):
+        client = XPlaneUDPClient(mock=True)
+        sub_id = client.subscribe_dref(self.REF)
+        client._parse_rref(struct.pack("<if", sub_id, 103.5))
+        self.assertEqual(client.get_dref(self.REF), 103.5)
+        self.assertTrue(client.is_dref_fresh(self.REF))
+        self.assertTrue(client.link_established())

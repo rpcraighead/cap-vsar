@@ -44,6 +44,14 @@ class XPlaneUDPClient:
         self._dref_to_id: Dict[str, int] = {}
         self._id_to_dref: Dict[int, str] = {}
         self._cache: Dict[str, float] = {}
+        # When each dataref was last OBSERVED, on the monotonic clock. AI-11:
+        # the cache alone cannot distinguish "the sim says 0.0" from "nothing
+        # ever arrived", so a dead link reads as a stationary aeroplane at
+        # 0N 0E. Only genuine observations are stamped here -- send_dref's
+        # optimistic echo of an outgoing command deliberately is not, because
+        # commanding a value is not evidence the simulator reported one.
+        # Monotonic, not wall clock, so a clock step cannot fake freshness.
+        self._dref_rx_ts: Dict[str, float] = {}
         self._callbacks: Dict[str, list[Callable[[str, float], None]]] = {}
         self._lock = threading.Lock()
 
@@ -247,12 +255,12 @@ class XPlaneUDPClient:
         """Relocate aircraft to specified coordinates and heading."""
         if self.mock:
             with self._lock:
-                self._cache["sim/flightmodel/position/latitude"] = lat_deg
-                self._cache["sim/flightmodel/position/longitude"] = lon_deg
-                self._cache["sim/flightmodel/position/elevation"] = ele_m
-                self._cache["sim/flightmodel/position/psi"] = heading_true
-                self._cache["sim/flightmodel/position/theta"] = pitch_deg
-                self._cache["sim/flightmodel/position/phi"] = roll_deg
+                self._observe_locked("sim/flightmodel/position/latitude", lat_deg)
+                self._observe_locked("sim/flightmodel/position/longitude", lon_deg)
+                self._observe_locked("sim/flightmodel/position/elevation", ele_m)
+                self._observe_locked("sim/flightmodel/position/psi", heading_true)
+                self._observe_locked("sim/flightmodel/position/theta", pitch_deg)
+                self._observe_locked("sim/flightmodel/position/phi", roll_deg)
             return
 
         packet = self.pack_vehs(
@@ -288,10 +296,61 @@ class XPlaneUDPClient:
     # Telemetry Cache Access
     # --------------------------------------------------------------------------
 
-    def get_dref(self, dataref: str, default: float = 0.0) -> float:
-        """Get the latest cached value for a dataref."""
+    def _observe_locked(self, dataref: str, value: float) -> None:
+        """Record a value genuinely observed from the simulator. Caller holds the lock."""
+        self._cache[dataref] = float(value)
+        self._dref_rx_ts[dataref] = time.monotonic()
+
+    def get_dref(
+        self,
+        dataref: str,
+        default: float = 0.0,
+        max_age_s: Optional[float] = None,
+    ) -> float:
+        """Get the latest cached value for a dataref.
+
+        With `max_age_s`, a value that was never observed, or was last observed
+        longer ago than that, returns `default` instead of a stale reading. The
+        parameter is optional so existing callers are unaffected; callers that
+        must not mistake silence for data (the recorder, the debrief engine)
+        should pass it and pass a `default` of `float("nan")`.
+        """
         with self._lock:
+            if max_age_s is not None:
+                ts = self._dref_rx_ts.get(dataref)
+                if ts is None or (time.monotonic() - ts) > max_age_s:
+                    return default
             return self._cache.get(dataref, default)
+
+    def get_dref_age_s(self, dataref: str) -> Optional[float]:
+        """Seconds since this dataref was last observed, or None if it never was.
+
+        None is the answer that matters: it separates a link that has gone quiet
+        from one that was never established.
+        """
+        with self._lock:
+            ts = self._dref_rx_ts.get(dataref)
+        return None if ts is None else time.monotonic() - ts
+
+    def is_dref_fresh(self, dataref: str, max_age_s: float = 2.0) -> bool:
+        """True only if this dataref was observed within `max_age_s`."""
+        age = self.get_dref_age_s(dataref)
+        return age is not None and age <= max_age_s
+
+    def observed_datarefs(self) -> Dict[str, float]:
+        """Every dataref ever observed, mapped to its age in seconds."""
+        now = time.monotonic()
+        with self._lock:
+            return {name: now - ts for name, ts in self._dref_rx_ts.items()}
+
+    def link_established(self) -> bool:
+        """True once any dataref has ever been observed from the simulator.
+
+        False means no telemetry has ever arrived, which is a different and more
+        serious condition than stale data, and is what AI-11 records as flight.
+        """
+        with self._lock:
+            return bool(self._dref_rx_ts)
 
     def get_all_cached(self) -> Dict[str, float]:
         """Return a copy of all cached datarefs."""
@@ -301,7 +360,7 @@ class XPlaneUDPClient:
     def set_mock_dref(self, dataref: str, value: float) -> None:
         """Directly inject a dataref value (primarily for testing and mock runs)."""
         with self._lock:
-            self._cache[dataref] = float(value)
+            self._observe_locked(dataref, float(value))
             cbs = list(self._callbacks.get(dataref, []))
         for cb in cbs:
             try:
@@ -347,7 +406,7 @@ class XPlaneUDPClient:
                 dref_id, val = struct.unpack("<if", chunk)
                 dref_name = self._id_to_dref.get(dref_id)
                 if dref_name:
-                    self._cache[dref_name] = val
+                    self._observe_locked(dref_name, val)
                     cbs = self._callbacks.get(dref_name)
                     if cbs:
                         updates.append((dref_name, val, list(cbs)))
@@ -372,12 +431,12 @@ class XPlaneUDPClient:
             # Index 3: speeds (kias = values[0], ktas = values[2], groundspeed = values[3])
             if idx == 3:
                 with self._lock:
-                    self._cache["sim/flightmodel/position/indicated_airspeed"] = values[0]
-                    self._cache["sim/flightmodel/position/true_airspeed"] = values[2]
-                    self._cache["sim/flightmodel/position/groundspeed"] = values[3]
+                    self._observe_locked("sim/flightmodel/position/indicated_airspeed", values[0])
+                    self._observe_locked("sim/flightmodel/position/true_airspeed", values[2])
+                    self._observe_locked("sim/flightmodel/position/groundspeed", values[3])
             # Index 20: position (lat = values[0], lon = values[1], alt_ft = values[2])
             elif idx == 20:
                 with self._lock:
-                    self._cache["sim/flightmodel/position/latitude"] = values[0]
-                    self._cache["sim/flightmodel/position/longitude"] = values[1]
-                    self._cache["sim/flightmodel/position/elevation"] = values[2] * 0.3048
+                    self._observe_locked("sim/flightmodel/position/latitude", values[0])
+                    self._observe_locked("sim/flightmodel/position/longitude", values[1])
+                    self._observe_locked("sim/flightmodel/position/elevation", values[2] * 0.3048)
