@@ -3,6 +3,97 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-18 — A-1: the exterior was finally looked at, and it does not fit the cockpit
+
+A-1's acceptance item 4 - load CAP 487 and inspect it - had never been done.
+Done now, by the AI-4 method: about forty screenshots driven over UDP, with
+every camera and lighting change read back before the shutter. Exterior orbit
+from all four quarters plus overhead and close, full control deflection against
+a neutral reference, night with every switch on, and the pilot's seat. The
+aircraft was parked and unpowered throughout; the sim was left as found, with
+the head position, field of view, time of day, joystick override and the
+landing-light switch all restored to the values read at the start.
+
+**The findings are not a livery problem.** The livery is the part that came out
+well. What is wrong is that the donor exterior is drawn into the cockpit view
+with no rule about what the pilot should be able to see. Ron saw it first from
+the left seat and described it exactly: a handle floating over the cowl.
+
+That handle is real geometry and it is exterior, not cockpit: a 395-triangle
+probe in the `Airframe` group of `flightgear_c182t.obj` spanning x 0.514-0.562,
+y 0.330-0.384, z -0.051-0.067, with a mirror twin to port. It is close, not
+scenery - it shows strong parallax against the background for a 0.5 m lateral
+head move.
+
+Two candidate mechanisms were tested and one survived. **Disproved:** that the
+C182 skin sits offset from the C172 interior. Measured station by station, the
+exterior encloses the interior everywhere - 8 to 20 cm of roof clearance along
+the whole cabin, and the exterior half-width exceeds the interior's at every
+station from the firewall aft. The donor windscreen (z 0.01-2.85) and Laminar's
+exterior glass (z 0.07-2.75) agree to within 10 cm. There is no gross
+misregistration, and an earlier guess that the windscreen base sat a metre
+forward of the eye point is wrong. **Survives:** the probe is correctly mounted
+in the donor - 24 skin vertices lie within 3 cm of its base and 37 above its top -
+but the exterior object is emitted single-sided, because `write_obj8()` sets
+`ATTR_no_cull` only in `glass` mode. Seen from the left seat, the cowl and
+windscreen-frame skin that would anchor the probe is back-facing and culled,
+while the probe, a closed solid, still presents its far side. So a correctly
+placed fitting is drawn into the cockpit view with everything that gives it
+context removed.
+
+The same single-sided emission explains the rest: the translucent white sheets
+across the windscreen and over the MFD are the exterior glazing, which DOES carry
+`ATTR_no_cull` and therefore renders from inside; the black fringes around the
+window apertures are the culled skin edges; and both wing struts show livery
+colour because they are closed solids outside the glass.
+
+Three further sheets come from a different fault: `PlaneX`, `Plane.002X` and
+`Plane.003X` are 1.8 m light-halo billboard quads that the donor draws facing
+the camera, and the converter's texture-bucket selection swept them into
+`flightgear_c182t_lights.obj` because they carry `Lights.png`. They sit on the
+centreline and pass straight through the cabin.
+
+**What is right.** The silhouette reads as a 182. The CAPP 130-2 scheme is
+correct in colour and layout. The three-blade propeller, its disc, the wheel
+fairings and the donor's baked door outlines and rivets all survived the
+repaint. Elevator, rudder and both ailerons animate: datarefs read 21, 24, 15
+and -20 degrees under full deflection, and differencing the deflected frame
+against the neutral one lights up the elevator, the rudder and both aileron
+trailing edges and nothing else. The harness agrees with the three dimensions
+stage 3 corrected - span 35 ft 10.4 in, main wheel track 108.0 in, propeller
+79.0 in, horizontal tail 11 ft 8 in, propeller ground clearance 11.4 in.
+
+**What is wrong, beyond the fit.** The lights do not light: the lights object
+carries only `ATTR_light_level`, which makes a texture emissive, and no
+`LIGHT_NAMED` or `LIGHT_PARAM` point light, so nothing glows or casts at night.
+Worse, the built object has no beacon and no strobe group at all - `BeaconOff`
+and `Strobe` are in `KNOWN_UNCONVERTED`, where they serve as dimension landmarks
+for height and span and are then never emitted. The fin's red is crossed by the
+donor's black decal stripe, because `paint_scheme()` multiplies new colour by
+donor luminance and nothing masks that decal. The red/white boundary on the
+tailcone is a visible sawtooth where the mesh triangles are larger than the
+four-level subdivision resolves. The registration and the USAF AUXILIARY titles
+remain on the cabin rather than the aft fuselage, which is the known degenerate
+UV column and is mesh work.
+
+Three measured dimensions are still outside their bands and the harness says so:
+overall length 28 ft 3.4 in against 29 ft 0 in, overall height 9 ft 0.9 in
+against 9 ft 4 in, wheel base 64.4 in against 66.5 in.
+
+**Not verified, and named so rather than assumed.** Flap travel and panel night
+lighting were not checked: both need the battery on, and this pass deliberately
+did not power the aircraft.
+
+Two mechanics worth recording for the next visual pass, both found the hard way.
+Writing any `sim/graphics/view/pilots_head_*` dataref snaps X-Plane back into
+the 3-D cockpit; in an external view only view COMMANDS survive, so an orbit has
+to be driven by `sim/general/left`, at roughly 0.8 degrees per press.
+`sim/general/rot_*` pans the camera in place and does not orbit it. And a
+screenshot file appears on disk before it is complete - `Image.load()` raises
+"image file is truncated" if it is read too early, so the reader has to retry.
+
+No repository file changed in the inspection itself. A-1 stays open.
+
 ## 2026-09-17 — LEG 3 FLOWN: ArduPlane commanded CAP 487 in X-Plane. No capture
 
 **ArduPlane flew the aircraft.** First time ArduPilot has commanded CAP 487
