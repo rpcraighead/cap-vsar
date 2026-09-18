@@ -3,7 +3,76 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
-## 2026-09-18 — A-1: the exterior was finally looked at, and it does not fit the cockpit
+## 2026-09-18 — A-1: the cabin is clear and the aeroplane has lights
+
+First two fixes from this morning's visual acceptance run, both in
+`scripts/convert_flightgear_c182.py`, both verified in the running simulator
+rather than by reading the output.
+
+**The pale wedges across the windscreen were the light-halo billboards, not the
+glazing.** The entry below attributed them to the exterior glass, and that was
+wrong; a before-and-after from the same seat settles it. `PlaneX`,
+`Plane.002X` and `Plane.003X` are flat two-triangle quads, 0.90 m and 1.79 m
+square, all three centred on the model origin - which in OBJ8 space is the
+firewall, so they stood square across the windscreen and over the MFD.
+FlightGear turns them to face the camera at run time; X-Plane has no such effect
+and drew them flat. They reached the lights object only because they carry
+`Lights.png` and the bucket selects on texture, so the exclusion had to be
+applied to the bucket as well - a name in `DELIBERATELY_EXCLUDED` that nothing
+consults does nothing, and there is now a test for exactly that. With them gone
+the pilot's forward view is clear. The exterior glazing does still render from
+inside, because it carries `ATTR_no_cull`, but it reads as a faint tint and is
+left alone.
+
+**The aeroplane now has point lights.** It had none - the lights object carried
+only `ATTR_light_level`, which makes a texture emissive and nothing more, so
+switching everything on at night produced no glow and no cast. `LIGHT_NAMED`
+entries are now emitted for nav left and right, nav tail, both strobes, the
+beacon, and the landing and taxi lights.
+
+Two things kept this honest. The names are from X-Plane 12's own light table,
+`Resources/bitmaps/world/lites/lights.txt`, and only lights whose parameters are
+literal there can be used with `LIGHT_NAMED` at all - each one was checked
+against that file rather than recalled. The positions are measured from the
+donor's own lamp objects after `c182t_corrections` has run, so no coordinate is
+invented; a donor lamp that cannot be found raises rather than defaulting to a
+guess. `Strobe` needed care: it is ONE donor object spanning both wingtips,
+10.93 m across, so its centre would have put a single strobe in the middle of
+the cabin. It yields a light at each span end instead, and that is the property
+the test pins. `BeaconOff` and `Strobe` remain in `KNOWN_UNCONVERTED` and are
+still not emitted as geometry - they are dimension landmarks for published
+height and span - but their positions are now read, which is what a viewer
+actually sees at night.
+
+Verified with the aircraft powered, which the acceptance run had deliberately
+not done: battery on, bus 24.5 V, nav 1.00, beacon cycling 0.00-0.88 as a
+rotating beacon should, landing and taxi 0.79. Photographed at night from three
+quarters - red and green at opposite wingtips, white at the tailcone, red
+flashing at the fin tip. The emitted positions are nav left x -5.451, nav right
++5.457, tail z 6.166, strobes x +/-5.465, beacon y 2.068 z 6.165, landing
+x -3.844, taxi x -3.704.
+
+**Flap travel is no longer unverified.** It needed the same power. The handle
+commanded full deflection and `flap1_deg` read 38.0, matching the animation
+range the converter writes, and returned to 0.0. Both flaps are visibly down in
+the frame.
+
+Only `flightgear_c182t_lights.obj` changed on disk - every other generated
+object is byte-identical to the installed one, which is also a useful check that
+the build is deterministic. The previous file is kept outside the repository
+beside the build.
+
+Tests 36 -> 43 in `tests/test_flightgear_c182.py`. Each new one was run against
+the unfixed code first and observed to fail: without the span-end rule the
+strobe test gets 1 light instead of 2, and without the bucket-level exclusion
+the billboard tests pass an object they should have dropped.
+
+Still open from the acceptance run, untouched here: the windscreen-corner probe
+the pilot can see, the absent beacon and strobe GEOMETRY, the donor decal
+bleeding through the red fin, the aliased tailcone stripe, the registration's
+aft-fuselage placement, and the three dimensions outside their bands.
+
+## 2026-09-18 — A-1: the exterior was finally looked at, and the pilot can see through it
 
 A-1's acceptance item 4 - load CAP 487 and inspect it - had never been done.
 Done now, by the AI-4 method: about forty screenshots driven over UDP, with

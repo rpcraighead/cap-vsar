@@ -174,6 +174,126 @@ class ObjectClassificationTests(unittest.TestCase):
         # installed, so a missing Strobe changes the span measurement.
         self.assertIn("Strobe", KNOWN_UNCONVERTED)
 
+    def test_light_halo_billboards_are_excluded(self):
+        # Flat quads centred on the model origin, which in OBJ8 space is the
+        # firewall, so in X-Plane they stood square across the windscreen and
+        # over the MFD. They reached the lights object only because they carry
+        # Lights.png. Removing them was verified in the simulator.
+        for billboard in ("PlaneX", "Plane.002X", "Plane.003X"):
+            self.assertIn(billboard, DELIBERATELY_EXCLUDED)
+
+    def test_an_excluded_object_is_not_selected_by_its_texture(self):
+        # The lights bucket selects on texture, so exclusion has to be applied
+        # to the bucket as well or a documented exclusion does nothing.
+        objects = [
+            SimpleNamespace(name="NavLightGreen", texture="Lights.png"),
+            SimpleNamespace(name="PlaneX", texture="Lights.png"),
+        ]
+        selected = [
+            obj
+            for obj in objects
+            if obj.texture == "Lights.png" and obj.name not in DELIBERATELY_EXCLUDED
+        ]
+        self.assertEqual([obj.name for obj in selected], ["NavLightGreen"])
+
+
+class NamedLightTests(unittest.TestCase):
+    """Point lights are placed from the donor's own lamps, never guessed.
+
+    Before this the package had no point light at all - only ATTR_light_level,
+    which makes a texture emissive - so nothing glowed or cast at night.
+    """
+
+    @staticmethod
+    def lamp(name, point, size=0.1):
+        """A donor lamp at an AC3D point (longitudinal, vertical, left)."""
+        x, y, z = point
+        half = size / 2
+        return SimpleNamespace(
+            name=name,
+            texture=None,
+            vertices=[
+                (x - half, y - half, z - half),
+                (x + half, y + half, z + half),
+            ],
+        )
+
+    def donor(self):
+        # AC3D z is LEFT, so port is +z and starboard is -z; ac_to_xplane
+        # negates it. These mirror the pinned donor's own lamp positions.
+        return [
+            self.lamp("NavLightRed", (0.85, 0.90, 5.45)),
+            self.lamp("NavLightGreen", (0.85, 0.90, -5.46)),
+            self.lamp("PlaneTailLight", (6.17, 0.47, 0.01)),
+            self.lamp("BeaconOff", (6.16, 2.07, 0.00)),
+            self.lamp("LandingLight", (0.60, 0.88, 3.84)),
+            self.lamp("TaxiLight", (0.59, 0.87, 3.70)),
+            # One object spanning both wingtips, 10.93 m across.
+            SimpleNamespace(
+                name="Strobe",
+                texture=None,
+                vertices=[(0.90, 0.89, -5.46), (0.90, 0.89, 5.47)],
+            ),
+        ]
+
+    def placements(self):
+        return dict(
+            (name, point)
+            for name, point in convert_flightgear_c182.named_light_placements(
+                self.donor()
+            )
+        )
+
+    def test_nav_lights_are_red_to_port_and_green_to_starboard(self):
+        places = self.placements()
+        self.assertLess(places["airplane_nav_left"][0], 0)
+        self.assertGreater(places["airplane_nav_right"][0], 0)
+
+    def test_the_tail_light_is_at_the_back_and_the_beacon_is_above_it(self):
+        places = self.placements()
+        self.assertGreater(places["airplane_nav_tail"][2], 6.0)
+        self.assertGreater(
+            places["airplane_beacon"][1], places["airplane_nav_tail"][1]
+        )
+
+    def test_the_span_spanning_strobe_becomes_one_light_at_each_wingtip(self):
+        # The regression this guards: Strobe is a single donor object 10.93 m
+        # wide, so taking its centre would put one strobe inside the cabin.
+        strobes = [
+            point
+            for name, point in convert_flightgear_c182.named_light_placements(
+                self.donor()
+            )
+            if name == "airplane_strobe"
+        ]
+        self.assertEqual(len(strobes), 2)
+        xs = sorted(point[0] for point in strobes)
+        self.assertLess(xs[0], -5.0)
+        self.assertGreater(xs[1], 5.0)
+
+    def test_a_missing_donor_lamp_is_refused_rather_than_guessed(self):
+        objects = [obj for obj in self.donor() if obj.name != "BeaconOff"]
+        with self.assertRaisesRegex(ValueError, "BeaconOff"):
+            convert_flightgear_c182.named_light_placements(objects)
+
+    def test_light_named_is_emitted_as_a_command_and_takes_no_point_counts_slot(self):
+        objects = flatten(AC3DParser(SIMPLE_AC3D).parse())
+        with tempfile.TemporaryDirectory() as tmp:
+            destination = Path(tmp) / "lights.obj"
+            write_obj8(
+                destination,
+                [obj for obj in objects if obj.kind == "poly"],
+                texture="t.png",
+                mode="lights",
+                named_lights=[("airplane_beacon", (0.0, 2.07, 6.16))],
+            )
+            text = destination.read_text()
+            counts = validate_obj8(destination)
+        self.assertIn("LIGHT_NAMED airplane_beacon 0.000000 2.070000 6.160000", text)
+        # POINT_COUNTS' third field counts VLIGHT entries, of which there are
+        # none; a wrong count here makes X-Plane reject the whole object.
+        self.assertEqual(counts["lights"], 0)
+
 
 class DonorValidationTests(unittest.TestCase):
     def test_extracted_donor_file_hashes_are_enforced(self):

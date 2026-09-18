@@ -380,6 +380,7 @@ def write_obj8(
     mode: str = "opaque",
     propeller: bool = False,
     prop_blur: bool = False,
+    named_lights: Iterable[tuple[str, tuple[float, float, float]]] | None = None,
 ) -> dict[str, object]:
     selected = list(objects)
     vertices, indices, groups = _build_mesh(selected)
@@ -446,6 +447,13 @@ def write_obj8(
         lines.append(f"TRIS {group.start} {group.count}")
         if rotation or prop_blur:
             lines.append("ANIM_end")
+
+    # LIGHT_NAMED is a command, not vertex data, so it belongs here with the
+    # TRIS and takes no POINT_COUNTS slot - that field counts VLIGHT entries,
+    # of which there are none.
+    for light, (x, y, z) in named_lights or ():
+        lines.extend(("", f"LIGHT_NAMED {light} {_fmt(x)} {_fmt(y)} {_fmt(z)}"))
+
     destination.write_text("\n".join(lines) + "\n")
 
     xs = [vertex[0] for vertex in vertices]
@@ -767,6 +775,15 @@ DELIBERATELY_EXCLUDED = {
     "Blade1.001", "Blade2.001", "Blade3.001",
     "SlowProp",           # low-RPM disc; FastProp drives the blurred disc
     "Window.L.001", "Window.R.001",
+    # FlightGear light-halo billboards. Flat two-triangle quads 0.90 m and
+    # 1.79 m square, all three centred on the model origin, which in OBJ8 space
+    # is the firewall - so they stand square across the windscreen and were seen
+    # in X-Plane as pale wedges lying over the panel and the MFD. They carry
+    # Lights.png, which is the only reason texture-bucket selection swept them
+    # into the lights object. FlightGear turns them to face the camera at run
+    # time; X-Plane has no such effect and draws them flat, so there is nothing
+    # to keep. The real glow now comes from LIGHT_NAMED (see NAMED_LIGHTS).
+    "PlaneX", "Plane.002X", "Plane.003X",
 }
 
 # Donor objects that are visible features but are NOT yet converted. These are
@@ -779,6 +796,84 @@ KNOWN_UNCONVERTED = {
     "NavLight.L", "NavLight.R", "NavlightTransp",
     "BeaconOff",
 }
+
+
+# X-Plane named lights, placed at the donor's own lamp geometry.
+#
+# Until this was added the package had no point light of any kind: the lights
+# object carried only ATTR_light_level, which makes a texture emissive and
+# nothing more, so at night nothing glowed and nothing cast. Worse, the beacon
+# and the strobes had no representation at all, because `BeaconOff` and
+# `Strobe` sit in KNOWN_UNCONVERTED above - they are dimension landmarks for
+# published height and span and were never emitted as geometry. They are still
+# not emitted as geometry; their positions are now read for the lights below,
+# which is what a viewer actually sees at night.
+#
+# Names are taken from X-Plane 12's own light table,
+# Resources/bitmaps/world/lites/lights.txt. LIGHT_NAMED can only use a light
+# whose parameters are all literal in that table; each of these is
+# (line numbers at X-Plane 12.2.0): airplane_nav_left 355, airplane_nav_right
+# 356, airplane_nav_tail 354, airplane_strobe 338, airplane_beacon 313,
+# airplane_landing 237, airplane_taxi 259.
+#
+# Port is red and starboard green: the donor names its wingtip lenses by colour
+# and puts NavLightRed at OBJ8 x -5.45 and NavLightGreen at +5.46, which is the
+# correct side for each.
+NAMED_LIGHTS = (
+    ("NavLightRed", "airplane_nav_left", "centre"),
+    ("NavLightGreen", "airplane_nav_right", "centre"),
+    ("PlaneTailLight", "airplane_nav_tail", "centre"),
+    ("Strobe", "airplane_strobe", "span_ends"),
+    ("BeaconOff", "airplane_beacon", "centre"),
+    ("LandingLight", "airplane_landing", "centre"),
+    ("TaxiLight", "airplane_taxi", "centre"),
+)
+
+
+def named_light_placements(
+    objects: Iterable[ACObject],
+) -> list[tuple[str, tuple[float, float, float]]]:
+    """Where each X-Plane named light goes, measured from the donor's lamps.
+
+    The donor models every lamp as its own small object, so the object's centre
+    in OBJ8 space is the lamp position and nothing has to be guessed. `Strobe`
+    is the exception: it is a single object spanning both wingtips (10.93 m
+    across), so its centre would put one strobe in the middle of the cabin. It
+    yields a light at each span end instead.
+
+    Reads the objects AFTER c182t_corrections has been applied, so the lights
+    follow the corrected geometry rather than the raw donor.
+    """
+    by_name = {obj.name: obj for obj in objects}
+    placements: list[tuple[str, tuple[float, float, float]]] = []
+    missing = []
+    for donor_name, light, placement in NAMED_LIGHTS:
+        obj = by_name.get(donor_name)
+        if obj is None or not obj.vertices:
+            missing.append(donor_name)
+            continue
+        points = [ac_to_xplane(vertex) for vertex in obj.vertices]
+        xs = [point[0] for point in points]
+        ys = [point[1] for point in points]
+        zs = [point[2] for point in points]
+        centre = (
+            (min(xs) + max(xs)) / 2,
+            (min(ys) + max(ys)) / 2,
+            (min(zs) + max(zs)) / 2,
+        )
+        if placement == "span_ends":
+            placements.extend(
+                (light, (tip, centre[1], centre[2])) for tip in (min(xs), max(xs))
+            )
+        else:
+            placements.append((light, centre))
+    if missing:
+        raise ValueError(
+            "Donor lamp objects required for named lights are absent: "
+            + ", ".join(sorted(missing))
+            + ". A light must never be emitted at a guessed position."
+        )
+    return placements
 
 
 PROP_NAMES = {"Blade1", "Blade2", "Blade3", "chrome_spinner"}
@@ -844,7 +939,11 @@ def build_flightgear_objects(donor: Path, target_aircraft: Path) -> dict[str, ob
     ]
     prop = [obj for obj in objects if obj.name in prop_names]
     prop_blur = [obj for obj in objects if obj.name == "FastProp"]
-    lights = [obj for obj in objects if obj.texture == "Lights.png"]
+    lights = [
+        obj
+        for obj in objects
+        if obj.texture == "Lights.png" and obj.name not in DELIBERATELY_EXCLUDED
+    ]
     glass = [obj for obj in objects if obj.name in GLASS_NAMES]
 
     selections = {
@@ -891,6 +990,7 @@ def build_flightgear_objects(donor: Path, target_aircraft: Path) -> dict[str, ob
             lights,
             texture="flightgear_c182t_lights.png",
             mode="lights",
+            named_lights=named_light_placements(objects),
         ),
         write_obj8(
             objects_dir / "flightgear_c182t_glass.obj",
