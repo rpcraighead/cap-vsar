@@ -3,6 +3,50 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-09-18 — A-1: the handle over the cowl is gone
+
+The thing Ron actually reported. The donor's windscreen-corner probes are now
+emitted into their own draw group wrapped in
+
+    ANIM_hide 0.000000 0.500000 sim/graphics/view/view_is_external
+
+so they are drawn from outside the aeroplane and hidden from the 3-D cockpit.
+That is the same dataref and the same two values Laminar uses to hide
+`pilot.obj` in this very package, for the same reason: a thing that is right
+from outside and wrong from the seat. Readback confirms the polarity -
+`view_is_external` is 0.0 in the cockpit and 1.0 in the external view, and
+`ANIM_hide` hides across the closed interval, so the group is suppressed
+exactly where the pilot is and nowhere else.
+
+**They are hidden, not deleted.** From outside they are real donor detail that
+belongs on the aeroplane, and the triangle count proves nothing was lost:
+24,908 before and 24,908 after, with `Airframe` going 11,287 -> 10,487 plus 800
+in `Airframe.cockpit_hidden`. The texture is byte-identical, so the hidden
+detail is still painted with the rest of the skin - the split happens after the
+livery is rasterised and before the mesh is written, which is the only order
+that gives both.
+
+The selection rule is worth stating because it is what makes this safe. A
+region captures a CONNECTED COMPONENT, welded by vertex position, and only when
+the whole component lies inside it. The main skin is a single component
+spanning the entire aeroplane, so no small box can ever capture it, however
+badly the box is drawn - the failure mode of "a region accidentally swallows
+the fuselage" is structurally impossible rather than merely unlikely. Welding
+by position matters too: the donor splits seams into separate vertex indices at
+the same point, and treating those as unconnected would shatter one solid into
+shells, some of which might fall inside a region while the rest did not.
+
+The two regions captured 800 triangles, which is exactly the six components
+measured this morning - 2 x 320 and 4 x 40 - and nothing else. A region that
+captures nothing now raises rather than passing quietly: these boxes are
+measured against the CORRECTED donor geometry, so if `c182t_corrections` later
+moves that detail, the build must stop and the boxes be re-measured, not ship an
+aircraft with the fitting visible from the seat again.
+
+Verified in the simulator from the framing that showed the problem: the probe is
+gone from the pilot's forward view and the cowl, coaming, compass and panel are
+unobstructed.
+
 ## 2026-09-18 — A-1: the cabin is clear and the aeroplane has lights
 
 First two fixes from this morning's visual acceptance run, both in

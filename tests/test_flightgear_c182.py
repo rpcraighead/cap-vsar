@@ -18,12 +18,17 @@ from build_c182t_package import ACF_PATCHES  # noqa: E402
 import fetch_flightgear_c182 as donor_fetch  # noqa: E402
 import convert_flightgear_c182  # noqa: E402
 from convert_flightgear_c182 import (  # noqa: E402
+    COCKPIT_HIDDEN_SUFFIX,
     DELIBERATELY_EXCLUDED,
     KNOWN_UNCONVERTED,
     AC3DParser,
+    ACObject,
+    ACRef,
+    ACSurface,
     ac_to_xplane,
     assert_all_objects_classified,
     flatten,
+    split_cockpit_visible_detail,
     unclassified_objects,
     validate_obj8,
     write_obj8,
@@ -195,6 +200,130 @@ class ObjectClassificationTests(unittest.TestCase):
             if obj.texture == "Lights.png" and obj.name not in DELIBERATELY_EXCLUDED
         ]
         self.assertEqual([obj.name for obj in selected], ["NavLightGreen"])
+
+
+class CockpitHiddenDetailTests(unittest.TestCase):
+    """Exterior detail the pilot can see is hidden from the cockpit, not deleted.
+
+    The safety property under test is that a region can only ever take a whole
+    connected component, so the main skin - one component spanning the entire
+    aeroplane - can never be captured however the boxes are drawn.
+    """
+
+    # OBJ8 (x right, y up, z aft) <- AC3D (longitudinal, vertical, left), so an
+    # AC3D point (aft, up, -right) lands where these regions are measured.
+    REGION = ((0.45, 0.25, -0.15), (0.65, 0.45, 0.15))
+
+    @staticmethod
+    def obj(name, triangles):
+        """One AC3D object; each triangle is three AC3D points."""
+        vertices = []
+        surfaces = []
+        for triangle in triangles:
+            refs = []
+            for point in triangle:
+                vertices.append(point)
+                refs.append(ACRef(len(vertices) - 1, 0.0, 0.0))
+            surfaces.append(ACSurface(0x10, 0, tuple(refs)))
+        return ACObject("poly", name, "Default.png", vertices, surfaces)
+
+    @staticmethod
+    def ac(x_right, y_up, z_aft):
+        """An AC3D vertex placed at the given OBJ8 coordinates."""
+        return (z_aft, y_up, -x_right)
+
+    def probe(self, x=0.55):
+        a = self.ac(x, 0.36, 0.00)
+        b = self.ac(x + 0.01, 0.37, 0.05)
+        c = self.ac(x - 0.01, 0.35, -0.04)
+        return [(a, b, c)]
+
+    def skin(self):
+        # One component reaching both wingtips, sharing no vertex with a probe
+        # but with its first corner inside the region - one vertex inside must
+        # not be enough, or a region would take the fuselage with it.
+        a = self.ac(0.50, 0.30, 0.00)
+        b = self.ac(5.46, 0.90, 0.85)
+        c = self.ac(-5.45, 0.90, 0.85)
+        return [(a, b, c)]
+
+    def test_a_component_entirely_inside_a_region_is_moved(self):
+        objects, hidden = split_cockpit_visible_detail(
+            [self.obj("Airframe", self.probe())], regions=(self.REGION,)
+        )
+        self.assertEqual(hidden, {f"Airframe.{COCKPIT_HIDDEN_SUFFIX}"})
+        moved = [obj for obj in objects if obj.name.endswith(COCKPIT_HIDDEN_SUFFIX)]
+        self.assertEqual(len(moved), 1)
+        self.assertEqual(len(moved[0].surfaces), 1)
+
+    def test_a_component_reaching_outside_the_region_is_left_alone(self):
+        # This is the fuselage case in miniature: one vertex inside the box is
+        # not enough, or a region would take the skin with it.
+        objects, hidden = split_cockpit_visible_detail(
+            [self.obj("Airframe", self.probe() + self.skin())],
+            regions=(self.REGION,),
+        )
+        moved = [obj for obj in objects if obj.name.endswith(COCKPIT_HIDDEN_SUFFIX)]
+        kept = [obj for obj in objects if not obj.name.endswith(COCKPIT_HIDDEN_SUFFIX)]
+        self.assertEqual(len(moved[0].surfaces), 1)
+        self.assertEqual(len(kept[0].surfaces), 1)
+
+    def test_geometry_is_conserved_by_the_split(self):
+        source = self.obj("Airframe", self.probe() + self.skin())
+        objects, _ = split_cockpit_visible_detail([source], regions=(self.REGION,))
+        self.assertEqual(
+            sum(len(obj.surfaces) for obj in objects), len(source.surfaces)
+        )
+
+    def test_a_seam_split_into_two_vertex_indices_is_still_one_component(self):
+        # The donor duplicates a vertex index at the same position across a
+        # seam. Welding by index rather than position would shatter one solid
+        # into shells, and a shell could then fall inside a region alone.
+        shared = self.ac(0.50, 0.30, 0.00)
+        seam = [
+            # Wholly inside the region on its own...
+            (shared, self.ac(0.51, 0.31, 0.05), self.ac(0.49, 0.29, -0.04)),
+            # ...but joined to the wingtips through a DUPLICATED position.
+            (shared, self.ac(5.46, 0.90, 0.85), self.ac(-5.45, 0.90, 0.85)),
+        ]
+        objects, _ = split_cockpit_visible_detail(
+            [self.obj("Airframe", self.probe() + seam)], regions=(self.REGION,)
+        )
+        moved = [obj for obj in objects if obj.name.endswith(COCKPIT_HIDDEN_SUFFIX)]
+        # Only the isolated probe moves. Welding by vertex INDEX instead of
+        # position would have made the first seam triangle its own component
+        # and hidden it too, giving 2 here.
+        self.assertEqual(len(moved[0].surfaces), 1)
+
+    def test_a_region_that_captures_nothing_is_an_error(self):
+        with self.assertRaisesRegex(ValueError, "re-measured"):
+            split_cockpit_visible_detail(
+                [self.obj("Airframe", self.skin())], regions=(self.REGION,)
+            )
+
+    def test_the_hidden_group_is_wrapped_in_anim_hide_on_view_is_external(self):
+        objects, hidden = split_cockpit_visible_detail(
+            [self.obj("Airframe", self.probe())], regions=(self.REGION,)
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            destination = Path(tmp) / "main.obj"
+            write_obj8(
+                destination, objects, texture="t.png", hide_in_cockpit=hidden
+            )
+            text = destination.read_text()
+        # view_is_external is 0 in the cockpit and 1 outside, and ANIM_hide
+        # hides across the closed interval, so [0, 0.5] hides in the cockpit.
+        self.assertIn(
+            "ANIM_hide 0.000000 0.500000 sim/graphics/view/view_is_external", text
+        )
+        self.assertIn(f"# Airframe.{COCKPIT_HIDDEN_SUFFIX}", text)
+
+    def test_a_group_that_is_not_hidden_gets_no_animation(self):
+        objects = [self.obj("Airframe", self.probe())]
+        with tempfile.TemporaryDirectory() as tmp:
+            destination = Path(tmp) / "main.obj"
+            write_obj8(destination, objects, texture="t.png")
+            self.assertNotIn("ANIM_hide", destination.read_text())
 
 
 class NamedLightTests(unittest.TestCase):

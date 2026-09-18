@@ -13,7 +13,7 @@ import math
 import shutil
 import shlex
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Iterable
 
@@ -381,6 +381,7 @@ def write_obj8(
     propeller: bool = False,
     prop_blur: bool = False,
     named_lights: Iterable[tuple[str, tuple[float, float, float]]] | None = None,
+    hide_in_cockpit: set[str] | None = None,
 ) -> dict[str, object]:
     selected = list(objects)
     vertices, indices, groups = _build_mesh(selected)
@@ -430,8 +431,16 @@ def write_obj8(
             lines.append(f"ATTR_light_level 0.000000 1.000000 {dataref}")
 
         rotation = PROP_ROTATION if propeller else rotations.get(group.name)
-        if rotation or prop_blur:
+        hidden = group.name in (hide_in_cockpit or ())
+        if rotation or prop_blur or hidden:
             lines.append("ANIM_begin")
+            if hidden:
+                # Drawn from outside, hidden from the 3-D cockpit. Same values
+                # and dataref Laminar uses to hide pilot.obj from his own eyes.
+                lines.append(
+                    "ANIM_hide 0.000000 0.500000 "
+                    "sim/graphics/view/view_is_external"
+                )
             if propeller:
                 lines.append(
                     "ANIM_hide 1.000000 1.000000 "
@@ -445,7 +454,7 @@ def write_obj8(
             if rotation:
                 lines.extend(_animation_lines(rotation))
         lines.append(f"TRIS {group.start} {group.count}")
-        if rotation or prop_blur:
+        if rotation or prop_blur or hidden:
             lines.append("ANIM_end")
 
     # LIGHT_NAMED is a command, not vertex data, so it belongs here with the
@@ -830,6 +839,118 @@ NAMED_LIGHTS = (
 )
 
 
+# Exterior detail the pilot can see from the left seat, and should not.
+#
+# X-Plane draws the aircraft's exterior objects in the 3-D cockpit as well as
+# from outside, and this exterior is emitted single-sided - ATTR_no_cull is set
+# only for glass. So the skin AROUND a fitting is back-facing from inside the
+# cabin and culled away, while the fitting itself, being a closed solid, still
+# presents its far side and is drawn. The donor's windscreen-corner probes are
+# correctly mounted in the mesh (24 skin vertices lie within 3 cm of the base),
+# but with everything that gives them context culled they read from the left
+# seat as a handle floating over the cowl, which is how this was reported.
+#
+# They are HIDDEN, not deleted: from outside they are real donor detail and
+# belong on the aeroplane. ANIM_hide against sim/graphics/view/view_is_external
+# is the mechanism Laminar already uses for pilot.obj in this same package, for
+# the same reason - a thing that is right from outside and wrong from the seat.
+#
+# Regions are OBJ8 metres (x right, y up, z aft). Measured extent of the two
+# probe components: x +/-0.514..0.562, y 0.330..0.384, z -0.051..0.067.
+COCKPIT_HIDDEN_SUFFIX = "cockpit_hidden"
+COCKPIT_HIDDEN_REGIONS = (
+    ((0.45, 0.25, -0.15), (0.65, 0.45, 0.15)),      # starboard windscreen corner
+    ((-0.65, 0.25, -0.15), (-0.45, 0.45, 0.15)),    # port windscreen corner
+)
+
+
+def _welded_components(obj: ACObject) -> list[list[ACSurface]]:
+    """Surfaces grouped into connected components, welded by vertex position.
+
+    Position welding matters: the donor splits a seam into separate vertex
+    indices at the same point, and treating those as unconnected would break
+    one solid into shells.
+    """
+    parent: dict[tuple[float, float, float], tuple[float, float, float]] = {}
+
+    def find(node):
+        while parent.setdefault(node, node) != node:
+            node = parent[node]
+        return node
+
+    def key(index):
+        x, y, z = obj.vertices[index]
+        return (round(x, 5), round(y, 5), round(z, 5))
+
+    for surface in obj.surfaces:
+        if not surface.refs:
+            continue
+        root = find(key(surface.refs[0].vertex))
+        for ref in surface.refs[1:]:
+            parent[find(key(ref.vertex))] = root
+    components: dict[tuple[float, float, float], list[ACSurface]] = {}
+    for surface in obj.surfaces:
+        if not surface.refs:
+            continue
+        components.setdefault(find(key(surface.refs[0].vertex)), []).append(surface)
+    return list(components.values())
+
+
+def split_cockpit_visible_detail(
+    objects: Iterable[ACObject], regions=COCKPIT_HIDDEN_REGIONS
+) -> tuple[list[ACObject], set[str]]:
+    """Move exterior detail lying inside `regions` into its own draw group.
+
+    The split is by CONNECTED COMPONENT and a component moves only when ALL of
+    it lies inside one region. That is the safety property: the main skin is a
+    single component spanning the whole aeroplane, so no small region can ever
+    capture it, however the boxes are drawn.
+
+    A region that captures nothing raises. The donor geometry is corrected by
+    c182t_corrections before this runs, so a region that has silently stopped
+    matching means the correction moved the detail and the aircraft would ship
+    with the fitting visible again - which is the fault this exists to prevent.
+    """
+    result: list[ACObject] = []
+    hidden_names: set[str] = set()
+    captured = 0
+    for obj in objects:
+        inside: list[ACSurface] = []
+        outside: list[ACSurface] = []
+        for component in _welded_components(obj):
+            points = [
+                ac_to_xplane(obj.vertices[ref.vertex])
+                for surface in component
+                for ref in surface.refs
+            ]
+            if any(_inside_region(points, low, high) for low, high in regions):
+                inside.extend(component)
+            else:
+                outside.extend(component)
+        if inside:
+            captured += len(inside)
+            name = f"{obj.name}.{COCKPIT_HIDDEN_SUFFIX}"
+            hidden_names.add(name)
+            result.append(replace(obj, name=name, surfaces=inside))
+            result.append(replace(obj, surfaces=outside))
+        else:
+            result.append(obj)
+    if not captured:
+        raise ValueError(
+            "No exterior detail was captured by any cockpit-hidden region. "
+            "The regions in COCKPIT_HIDDEN_REGIONS are measured against the "
+            "CORRECTED donor geometry; if a correction moved that detail they "
+            "must be re-measured, not dropped."
+        )
+    return result, hidden_names
+
+
+def _inside_region(points, low, high) -> bool:
+    return all(
+        low[axis] <= point[axis] <= high[axis] for point in points for axis in range(3)
+    )
+
+
 def named_light_placements(
     objects: Iterable[ACObject],
 ) -> list[tuple[str, tuple[float, float, float]]]:
@@ -965,12 +1086,18 @@ def build_flightgear_objects(donor: Path, target_aircraft: Path) -> dict[str, ob
         objects_dir / "flightgear_c182t_glass.png"
     )
 
+    # After the texture is painted, so the hidden detail is still painted with
+    # the rest of the skin, and before the mesh is written, which is where the
+    # separate draw group has to exist.
+    main_groups, cockpit_hidden = split_cockpit_visible_detail(main)
+
     reports = [
         write_obj8(
             objects_dir / "flightgear_c182t.obj",
-            main,
+            main_groups,
             texture=texture.name,
             rotations=MAIN_ROTATIONS,
+            hide_in_cockpit=cockpit_hidden,
         ),
         write_obj8(
             objects_dir / "flightgear_c182t_propeller.obj",
