@@ -12,11 +12,13 @@ from pathlib import Path
 import queue
 import socket
 import threading
+import time
 
 import xp
 
 from capvsar_flight_control_core import CHANNELS, ControlBridge
 from capvsar_flight_control_mapping import candidate_prefix
+from capvsar_telemetry import Telemetry
 
 CONFIG = Path(__file__).with_name("capvsar_flight_control_config.json")
 LIVE_PLUGIN_QUALIFIED = False
@@ -25,7 +27,7 @@ NATIVE = {
     "pitch": "sim/joystick/yoke_pitch_ratio",
     "yaw": "sim/joystick/yoke_heading_ratio",
     "throttle": "sim/flightmodel/engine/ENGN_thro_use",
-    "flap": "sim/cockpit2/controls/flap_ratio",
+    "flap": "sim/cockpit2/controls/flap_handle_request_ratio",
     "trim": "sim/cockpit2/controls/elevator_trim",
 }
 
@@ -39,10 +41,11 @@ class XPlaneSink:
         self.ap_mode = xp.findDataRef("sim/cockpit2/autopilot/flight_director_mode")
         self.servos = xp.findDataRef("sim/cockpit2/autopilot/servos_on")
         self.paused = xp.findDataRef("sim/time/paused")
+        self.pause_on = xp.findCommand("sim/operation/pause_on")
         self.off = xp.findCommand("sim/autopilot/servos_off_any")
         self.ap_toggle = xp.findCommand("sim/GPS/g1000n1_ap")
         if not all(self.controls.values()) or not all((self.cockpit_throttle, self.joystick, self.throttles,
-                self.ap_mode, self.servos, self.paused, self.off, self.ap_toggle)):
+                self.ap_mode, self.servos, self.paused, self.pause_on, self.off, self.ap_toggle)):
             raise RuntimeError("Required flight-control dataref/command missing")
 
     def ap_engaged(self):
@@ -90,7 +93,10 @@ class XPlaneSink:
         xp.commandOnce(self.ap_toggle)
 
     def pause(self):
-        xp.setDatai(self.paused, 1)
+        xp.commandOnce(self.pause_on)
+
+    def is_paused(self):
+        return xp.getDatai(self.paused) == 1
 
 
 class PythonInterface:
@@ -98,6 +104,11 @@ class PythonInterface:
         self.accessors = []
         self.core = None
         self.loop = None
+        self.telemetry_loop = None
+        self.telemetry = None
+        self.snapshot = None
+        self.telemetry_error = None
+        self.observe_only = False
         self.config = None
         self.requests = queue.Queue(maxsize=16)
         self.stop_event = threading.Event()
@@ -106,8 +117,9 @@ class PythonInterface:
         self.bound_socket = False
 
     def XPluginStart(self):
-        if CONFIG.is_file() and LIVE_PLUGIN_QUALIFIED:
-            config = json.loads(CONFIG.read_text())
+        config = json.loads(CONFIG.read_text()) if CONFIG.is_file() else None
+        if config and (LIVE_PLUGIN_QUALIFIED or config.get("mode") == "observe"):
+            self.observe_only = config.get("mode") == "observe"
             session = config["session"]
             candidate_prefix(session)
             if not isinstance(config.get("secret"), str) or len(config["secret"]) < 32:
@@ -115,8 +127,11 @@ class PythonInterface:
             if not str(config.get("socket_path", "")).startswith("/tmp/capvsar-flight-control-"):
                 raise ValueError("Flight-control socket path must be task-specific under /tmp")
             self.config = config
-            self.core = ControlBridge(XPlaneSink(), session)
-            self._register_candidates(session)
+            self.core = ControlBridge(XPlaneSink(), session,
+                                      atomic=config.get("protocol") == "atomic-v1")
+            self.telemetry = Telemetry(xp, self.core.sink, session)
+            if not self.observe_only and not self.core.atomic:
+                self._register_candidates(session)
         else:
             xp.log("CAP V-SAR flight control: attended activation unqualified; inactive")
         return "CAP V-SAR Flight Control", "org.cap.vsar.flight_control", "Flight authority boundary"
@@ -139,19 +154,24 @@ class PythonInterface:
         if self.core is None:
             return 1
         self.stop_event.clear()
-        self.loop = xp.createFlightLoop(self.flight_loop, xp.FlightLoop_Phase_AfterFlightModel)
+        self.loop = xp.createFlightLoop(self.flight_loop, xp.FlightLoop_Phase_BeforeFlightModel)
         xp.scheduleFlightLoop(self.loop, -1)
+        self.telemetry_loop = xp.createFlightLoop(self.capture_loop, xp.FlightLoop_Phase_AfterFlightModel)
+        xp.scheduleFlightLoop(self.telemetry_loop, -1)
         self.server_thread = threading.Thread(target=self._serve, daemon=True)
         self.server_thread.start()
         return 1
 
     def XPluginDisable(self):
         self.stop_event.set()
-        if self.core and self.core.state not in ("MANUAL", "PAUSED_FAULT"):
+        if self.core and not self.observe_only and self.core.state not in ("MANUAL", "PAUSED_FAULT", "FAULT_PAUSE_PENDING"):
             self.core.fault_pause("Flight-control plugin disabled")
         if self.loop:
             xp.destroyFlightLoop(self.loop)
             self.loop = None
+        if self.telemetry_loop:
+            xp.destroyFlightLoop(self.telemetry_loop)
+            self.telemetry_loop = None
         if self.server:
             self.server.close()
             self.server = None
@@ -207,23 +227,43 @@ class PythonInterface:
                         if not isinstance(request, dict) or request.pop("secret", None) != self.config["secret"]:
                             raise ValueError("Unauthorized control request")
                         answer = queue.Queue(maxsize=1)
-                        self.requests.put_nowait((request, answer))
+                        self.requests.put_nowait((request, answer, time.monotonic() + 0.20))
                         result = answer.get(timeout=0.25)
                     except (ValueError, queue.Empty, queue.Full, OSError) as error:
                         result = {"error": str(error)}
-                    conn.sendall(json.dumps(result).encode() + b"\n")
+                    try:
+                        conn.sendall(json.dumps(result, allow_nan=False).encode() + b"\n")
+                    except OSError:
+                        pass  # A disconnected client must not kill the server.
         finally:
             server.close()
 
     def flight_loop(self, sinceLast, elapsed, counter, refCon):
         for _ in range(8):
             try:
-                request, answer = self.requests.get_nowait()
+                item = self.requests.get_nowait()
+                request, answer = item[:2]
             except queue.Empty:
                 break
             try:
+                if len(item) == 3 and time.monotonic() >= item[2]:
+                    raise ValueError("Control request expired in queue")
                 action = request.pop("action")
+                if self.observe_only and action not in ("status", "snapshot", "manifest"):
+                    raise ValueError("Observe mode has no control authority")
+                if action in ("snapshot", "manifest"):
+                    if request:
+                        raise ValueError("Unexpected observation arguments")
+                    if action == "manifest":
+                        result = self.telemetry.manifest()
+                    elif self.snapshot is None or self.telemetry_error:
+                        raise ValueError(self.telemetry_error or "Telemetry not ready")
+                    else:
+                        result = {**self.snapshot, "age_s": time.monotonic() - self.snapshot["wall_time_s"]}
+                    answer.put_nowait(result)
+                    continue
                 methods = {"status": self.core.status, "prepare": self.core.prepare,
+                           "submit_frame": self.core.submit_frame,
                            "heartbeat": self.core.heartbeat, "activate": self.core.activate,
                            "transfer_gfc": self.core.transfer_gfc,
                            "set_virtual_aux": self.core.set_virtual_aux,
@@ -237,7 +277,9 @@ class PythonInterface:
                     if new_session in self.core.used_sessions:
                         raise ValueError("Candidate session already retired")
                     result = self.core.renew_session(**request)
-                    self._register_candidates(new_session)
+                    self.telemetry.session = new_session
+                    if not self.core.atomic:
+                        self._register_candidates(new_session)
                     answer.put_nowait(result)
                     continue
                 if action not in methods:
@@ -247,10 +289,23 @@ class PythonInterface:
             except (ValueError, TypeError, KeyError) as error:
                 answer.put_nowait({"error": str(error), "status": self.core.status()})
             except Exception as error:
-                self.core.fault_pause("Bridge action failed: %s" % error)
+                if not self.observe_only:
+                    self.core.fault_pause("Bridge action failed: %s" % error)
                 answer.put_nowait({"error": str(error), "status": self.core.status()})
         try:
-            self.core.tick()
+            if not self.observe_only:
+                self.core.tick()
         except Exception as error:
             self.core.fault_pause("Bridge loop failed: %s" % error)
+        return -1
+
+    def capture_loop(self, sinceLast, elapsed, counter, refCon):
+        try:
+            self.snapshot = self.telemetry.capture(counter)
+            self.telemetry_error = None
+        except Exception as error:
+            self.snapshot = None
+            self.telemetry_error = str(error)
+            if not self.observe_only and self.core.state == "ACTIVE":
+                self.core.fault_pause("Telemetry capture failed: %s" % error)
         return -1

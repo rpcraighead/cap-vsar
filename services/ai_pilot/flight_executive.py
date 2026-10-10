@@ -426,7 +426,7 @@ class FlightExecutive:
                 self.fault_pause("Executive heartbeat rejected by bridge")
                 return self.status()
         bridge = self.bridge.tick()
-        if bridge["state"] == "PAUSED_FAULT":
+        if bridge["state"] in ("PAUSED_FAULT", "FAULT_PAUSE_PENDING"):
             self.fault_pause(bridge["fault"] or "Bridge fault")
             return self.status()
         if self.transfer == TransferState.VERIFYING:

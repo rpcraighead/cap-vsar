@@ -27,7 +27,7 @@ class ControlBridge:
     EXECUTIVE_AGE_S = 0.40
     TRANSFER_TIMEOUT_S = 1.0
 
-    def __init__(self, sink, session: str, clock=time.monotonic):
+    def __init__(self, sink, session: str, clock=time.monotonic, *, atomic=False):
         self.sink, self.session, self.clock = sink, session, clock
         self.prefix = candidate_prefix(session)
         self.generation = 0
@@ -40,8 +40,15 @@ class ControlBridge:
         self.fault_reason = None
         self.trim_hold = None
         self.used_sessions = {session}
+        self.atomic = atomic
+        self.frame_sequence = -1
+        self.frame_deadline = None
+        self.frame_generation = None
+        self.pause_confirmed = False
 
     def candidate(self, session: str, channel: str, value: float) -> None:
+        if self.atomic:
+            return  # Independent packets cannot modify an atomic session.
         if session != self.session or channel not in CHANNELS or self.retired:
             return
         if not isinstance(value, (int, float)) or not math.isfinite(value):
@@ -52,6 +59,36 @@ class ControlBridge:
             self.candidates.pop(channel, None)
             return
         self.candidates[channel] = (float(value), self.clock())
+
+    def submit_frame(self, session, generation, sequence, expires_at, controls):
+        """Accept an entire frame or nothing. Expiry uses host monotonic seconds.
+
+        Both endpoints run on the same host (Unix socket); no remote wall clocks.
+        Validation never extends a lease or changes previously accepted output.
+        A prepare increments generation, requiring a new frame before activation.
+        """
+        now = self.clock()
+        if not self.atomic or self.retired or session != self.session:
+            raise ValueError("Invalid atomic session")
+        if type(generation) is not int or generation != self.generation:
+            raise ValueError("Wrong frame generation")
+        if type(sequence) is not int or sequence <= self.frame_sequence:
+            raise ValueError("Frame sequence must increase")
+        if (type(expires_at) not in (int, float) or not math.isfinite(expires_at)
+                or not now < expires_at <= now + self.CANDIDATE_AGE_S):
+            raise ValueError("Frame expiry outside lease window")
+        if not isinstance(controls, dict) or set(controls) != set(CHANNELS):
+            raise ValueError("Complete actuator frame required")
+        for channel, value in controls.items():
+            low, high = RANGES[channel]
+            if (type(value) not in (int, float) or not math.isfinite(value)
+                    or not low <= value <= high):
+                raise ValueError("Invalid actuator: %s" % channel)
+        self.candidates = {c: (float(controls[c]), now) for c in CHANNELS}
+        self.frame_sequence = sequence
+        self.frame_deadline = expires_at
+        self.frame_generation = generation
+        return self.status()
 
     def renew_session(self, session: str, expected_generation: int) -> dict:
         """Allow a new managed writer only while Garmin alone has authority.
@@ -70,11 +107,19 @@ class ControlBridge:
         self.used_sessions.add(session)
         self.candidates.clear()
         self.retired = False
+        self.frame_sequence = -1
+        self.frame_deadline = None
+        self.frame_generation = None
         self.generation += 1
         self.last_heartbeat = self.clock()
         return self.status()
 
     def _fresh(self):
+        if self.atomic:
+            if self.frame_generation != self.generation:
+                raise ValueError("No frame for current generation")
+            if self.frame_deadline is None or self.clock() >= self.frame_deadline:
+                raise ValueError("Atomic frame expired")
         required = CHANNELS if self.owner == "DIRECT" else ARDUPLANE_CHANNELS
         if not set(required) <= set(self.candidates):
             raise ValueError("Incomplete candidate output")
@@ -228,14 +273,14 @@ class ControlBridge:
         return self.status()
 
     def _fault(self, reason: str):
-        if self.state == "PAUSED_FAULT":
+        if self.state in ("PAUSED_FAULT", "FAULT_PAUSE_PENDING"):
             return
         self.generation += 1
         self.retired = True
         self.candidates.clear()
         self.fault_reason = reason
         self.owner = "FAULT"
-        self.state = "PAUSED_FAULT"
+        self.state = "FAULT_PAUSE_PENDING"
         try:
             self.sink.pause()
         except Exception as error:
@@ -245,9 +290,19 @@ class ControlBridge:
                 self.sink.set_override(False)
             except Exception as error:
                 self.fault_reason += "; override release failed: %s" % error
+        self._confirm_pause()
+
+    def _confirm_pause(self):
+        try:
+            self.pause_confirmed = self.sink.is_paused() is True
+        except Exception:
+            self.pause_confirmed = False
+        self.state = "PAUSED_FAULT" if self.pause_confirmed else "FAULT_PAUSE_PENDING"
 
     def tick(self) -> dict:
         now = self.clock()
+        if self.state in ("FAULT_PAUSE_PENDING", "PAUSED_FAULT"):
+            self._confirm_pause()
         if self.state in ("PREPARING", "WAIT_AP_OFF", "ACTIVE", "WAIT_GFC", "GFC700"):
             if self.last_heartbeat is None or now - self.last_heartbeat > self.EXECUTIVE_AGE_S:
                 self._fault("Executive heartbeat expired")
@@ -294,4 +349,6 @@ class ControlBridge:
     def status(self) -> dict:
         return {"state": self.state, "owner": self.owner,
                 "generation": self.generation, "session": self.session,
-                "retired": self.retired, "fault": self.fault_reason}
+                "retired": self.retired, "fault": self.fault_reason,
+                "atomic": self.atomic, "frame_sequence": self.frame_sequence,
+                "pause_confirmed": self.pause_confirmed}

@@ -14,6 +14,7 @@ SESSION = "d" * 32
 class FakeXP(types.ModuleType):
     Type_Float = 1
     FlightLoop_Phase_AfterFlightModel = 1
+    FlightLoop_Phase_BeforeFlightModel = 0
 
     def __init__(self):
         super().__init__("xp")
@@ -37,11 +38,18 @@ class FakeXP(types.ModuleType):
     def findCommand(self, name): return name
     def getDatai(self, ref): return self.refs.get(ref, 0)
     def getDataf(self, ref): return self.refs.get(ref, 0.0)
+    def getDatad(self, ref): return self.refs.get(ref, 0.0)
+    def getNthAircraftModel(self, index): return ("Cessna_172SP_G1000.acf", "/sim/Cessna_172SP_G1000.acf")
+    def getVersions(self): return (12403, 400, 3)
+    def createFlightLoop(self, callback, phase): return (callback, phase)
+    def scheduleFlightLoop(self, loop, interval): pass
+    def destroyFlightLoop(self, loop): pass
     def getDatavf(self, ref, values, offset, count):
         assert ref in ("sim/flightmodel/engine/ENGN_thro_use", "sim/cockpit2/engine/actuators/throttle_ratio")
         values[:count] = self.refs[ref][offset:offset + count]
         return count
     def setDatai(self, ref, value):
+        assert ref != "sim/time/paused", "Pause is a read-only dataref"
         self.refs[ref] = value
         self.writes.append((ref, value))
     def setDataf(self, ref, value):
@@ -60,6 +68,8 @@ class FakeXP(types.ModuleType):
         elif name == "sim/autopilot/servos_off_any":
             self.refs["sim/cockpit2/autopilot/servos_on"] = 0
             self.refs["sim/cockpit2/autopilot/flight_director_mode"] = 1
+        elif name == "sim/operation/pause_on":
+            self.refs["sim/time/paused"] = 1
     def registerDataAccessor(self, name, kind, writable, **callbacks):
         self.accessors[name] = callbacks
         return name
@@ -67,7 +77,7 @@ class FakeXP(types.ModuleType):
     def log(self, message): pass
 
 
-def load_plugin(monkeypatch, tmp_path, *, activate_fake=True):
+def load_plugin(monkeypatch, tmp_path, *, activate_fake=True, mode=None):
     fake = FakeXP()
     monkeypatch.setitem(sys.modules, "xp", fake)
     monkeypatch.syspath_prepend(str(Path(__file__).parents[3] / "xplane"))
@@ -76,7 +86,7 @@ def load_plugin(monkeypatch, tmp_path, *, activate_fake=True):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     config = tmp_path / "config.json"
-    config.write_text(json.dumps({"session": SESSION, "secret": "s" * 64,
+    config.write_text(json.dumps({"session": SESSION, "secret": "s" * 64, "mode": mode,
                                   "socket_path": f"/tmp/capvsar-flight-control-{SESSION}.sock"}))
     module.CONFIG = config
     if activate_fake:
