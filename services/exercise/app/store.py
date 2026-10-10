@@ -118,6 +118,13 @@ def init_db():
         sortie_cols = {r["name"] for r in c.execute("PRAGMA table_info(sorties)")}
         if "effects" not in sortie_cols:
             c.execute("ALTER TABLE sorties ADD COLUMN effects TEXT")
+        # X2-2: the beacon a sortie flew is a property of the sortie. /track
+        # used to read it back from the scenario row, so a scenario that was
+        # edited or reused after the sortie answered with the wrong beacon,
+        # and a revealed old sortie disclosed the one now being flown.
+        # Sorties that predate the column fall back to the scenario row.
+        if "truth" not in sortie_cols:
+            c.execute("ALTER TABLE sorties ADD COLUMN truth TEXT")
         # V2-5: the recorded track held only where the aircraft was, never what
         # the direction finder was showing at the time. The debrief could
         # therefore score the bearings the crew *reported* but never compare

@@ -16,6 +16,7 @@ from ..hub import hub
 from ..roles import (base_or_instructor, instructor_only, plugin_only,
                      public_scenario)
 from ..settings import log
+from ..roles import any_role
 from ..store import _exec, _fetchone, db, db_call, row_to_scenario
 
 from ..models import ScenarioIn
@@ -23,7 +24,7 @@ from ..models import ScenarioIn
 router = APIRouter()
 
 # ------------------------------------------------------------------- scenarios
-@router.get("/api/scenarios")
+@router.get("/api/scenarios", dependencies=[any_role])
 def list_scenarios(request: Request):
     """Scenario definitions. Beacon positions only for a presented instructor
     token — the picker needs names and notes, not the answer."""

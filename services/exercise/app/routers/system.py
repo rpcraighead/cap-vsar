@@ -16,6 +16,7 @@ from ..hub import hub
 from ..roles import (base_or_instructor, instructor_only, plugin_only,
                      public_scenario)
 from ..settings import log
+from ..roles import any_role
 from ..store import _exec, _fetchone, db, db_call, row_to_scenario
 
 import os
@@ -25,9 +26,9 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 router = APIRouter()
 
-@router.get("/api/state")
-def state():
-    return hub.snapshot()
+@router.get("/api/state", dependencies=[any_role])
+def state(request: Request):
+    return hub.snapshot(include_df=access.is_instructor(request))
 
 
 @router.get("/api/plugin/scenario")
@@ -110,14 +111,27 @@ async def ws(sock: WebSocket):
     if origin and urlsplit(origin).netloc != sock.headers.get("host"):
         await sock.close(code=1008)
         return
-    await sock.accept()
-    hub.clients.add(sock)
+    # D1.3: a live feed of the exercise needs a login, and the login decides
+    # which rendering of the state this socket receives. The handshake carries
+    # the session cookie because the page and the socket share an origin.
     try:
-        await sock.send_text(json.dumps({"type": "state", **hub.snapshot()}))
+        access.enforce_read(sock)
+    except HTTPException:
+        await sock.close(code=1008)
+        return
+    await sock.accept()
+    sees_truth = access.is_instructor(sock)
+    hub.clients.add(sock)
+    if sees_truth:
+        hub.truth_clients.add(sock)
+    try:
+        await sock.send_text(json.dumps(
+            {"type": "state", **hub.snapshot(include_df=sees_truth)}))
         while True:
             await sock.receive_text()
     except WebSocketDisconnect:
         pass
     finally:
         hub.clients.discard(sock)
+        hub.truth_clients.discard(sock)
 

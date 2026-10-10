@@ -438,6 +438,25 @@ def enforce(role: str, request: Request) -> None:
                  f"Send it in the {TOKEN_HEADER} header or log in at /login.")
 
 
+def enforce_read(request: Request) -> None:
+    """Admit any authenticated viewer to a read endpoint (X2-1, D1.3).
+
+    Reads used to need nothing at all, which was tolerable while they carried
+    no truth. They now carry state a participant should only see in redacted
+    form, and "redacted for whom" needs to know who is asking. Any roster
+    session or configured token will do; an open dev console (explicit
+    CAPVSAR_DEV_OPEN) lets everyone in, as it does for writes, and an
+    anonymous dev viewer is shown the redacted form.
+    """
+    if get_session_from_request(request):
+        return
+    if dev_open():
+        return
+    raise HTTPException(
+        403, "Log in at /login (or send a role token in the "
+             f"{TOKEN_HEADER} header) to read exercise state.")
+
+
 def is_instructor(request: Request) -> bool:
     """True for an authenticated instructor session or matching instructor token."""
     sess = get_session_from_request(request)

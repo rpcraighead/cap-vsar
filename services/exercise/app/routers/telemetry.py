@@ -16,6 +16,7 @@ from ..hub import hub
 from ..roles import (base_or_instructor, instructor_only, plugin_only,
                      public_scenario)
 from ..settings import log
+from ..roles import any_role
 from ..store import _exec, _fetchone, db, db_call, row_to_scenario
 
 from .. import propagation
@@ -120,7 +121,7 @@ async def log_bearing(b: BearingIn):
     return {"ok": True}
 
 
-@router.get("/api/bearings")
+@router.get("/api/bearings", dependencies=[any_role])
 def list_bearings(since: float = 0.0):
     """Persisted bearings missed by a reconnecting mission-base console."""
     if not hub.sortie:

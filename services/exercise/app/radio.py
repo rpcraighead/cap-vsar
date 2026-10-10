@@ -20,7 +20,7 @@ from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
 
-from .roles import base_or_instructor
+from .roles import any_role, base_or_instructor
 from . import access
 from .mumble_channels import browser_nets
 
@@ -54,7 +54,7 @@ def radio_key(callsign: str, receiver: str) -> tuple[str, str]:
 CHANNEL_ACTIVITY: dict[str, float] = {}
 
 
-@router.get('/api/radio/config')
+@router.get('/api/radio/config', dependencies=[any_role])
 def config():
     max_sessions = int(os.getenv('CAPVSAR_RADIO_MAX_SESSIONS', '16'))
     return {"channels": CHANNELS, "sampleRate": RATE, "frameSamples": 960,
@@ -464,14 +464,16 @@ async def stream(sock: WebSocket):
         # the real MRO's Mumble client: heard their net, and raced their PTT
         # acks. The exercise console is gated; its voice net has to be too.
         #
-        # The fail-open path is kept deliberately and narrowly: when *no* role
-        # tokens are configured at all the console is in its documented local
-        # mode (access.enforce does the same), and requiring a login there
-        # would make the radio unusable on a laptop with an empty .env.
+        # X2-4: the fallback to a claimed callsign used to apply whenever
+        # CAPVSAR_TOKEN_BASE was unset, which is also what a roster-only
+        # production console looks like, so anyone on the LAN could join as
+        # "MISSION BASE". It now applies only to an explicitly open dev
+        # console (CAPVSAR_DEV_OPEN) with no base credential, the same
+        # condition that opens every other endpoint.
         session = access.get_session_from_request(sock)
         if session and session.get('callsign'):
             name = session['callsign']
-        elif 'base' not in access.unconfigured():
+        elif not (access.dev_open() and 'base' in access.unconfigured()):
             await sock.send_json({
                 "type": "error",
                 "message": "Log in first: open /login and use your participant "

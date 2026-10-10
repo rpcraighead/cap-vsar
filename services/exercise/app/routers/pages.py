@@ -89,7 +89,7 @@ def index(request: Request):
         return FileResponse(STATIC / "index.html")
     if sess and sess.get("role") != "instructor":
         return RedirectResponse("/login?error=instructor_required", status_code=302)
-    if access.token_for("instructor"):
+    if not access.dev_open() or access.token_for("instructor"):
         return RedirectResponse("/login?next=/instructor", status_code=302)
     return FileResponse(STATIC / "index.html")
 
@@ -97,6 +97,8 @@ def index(request: Request):
 @router.get("/debrief")
 def debrief(request: Request):
     """Replay a recorded sortie against beacon truth. The product, per the plan."""
+    if not access.get_session_from_request(request) and not access.dev_open():
+        return RedirectResponse("/login?next=/debrief", status_code=302)
     return FileResponse(STATIC / "debrief.html")
 
 
@@ -107,14 +109,16 @@ def mission_base(request: Request):
     sess = access.get_session_from_request(request)
     if sess and sess.get("role") in ("base", "instructor", "aircrew"):
         return FileResponse(STATIC / "base.html")
-    if access.token_for("base"):
+    if not access.dev_open() or access.token_for("base"):
         return RedirectResponse("/login?next=/base", status_code=302)
     return FileResponse(STATIC / "base.html")
 
 
 @router.get("/radio")
-def base_radio():
+def base_radio(request: Request):
     """Mission base headset radio: APX 4500 / EFJohnson 5300, live Mumble voice."""
+    if not access.get_session_from_request(request) and not access.dev_open():
+        return RedirectResponse("/login?next=/radio", status_code=302)
     return FileResponse(STATIC / "mission-radio.html")
 
 

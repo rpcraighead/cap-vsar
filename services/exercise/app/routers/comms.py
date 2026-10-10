@@ -16,6 +16,7 @@ from ..hub import hub
 from ..roles import (base_or_instructor, instructor_only, plugin_only,
                      public_scenario)
 from ..settings import log
+from ..roles import any_role
 from ..store import _exec, _fetchone, db, db_call, row_to_scenario
 
 from ..models import MessageIn
@@ -55,7 +56,7 @@ async def send_message(m: MessageIn, request: Request):
     return {"ok": True}
 
 
-@router.get("/api/messages")
+@router.get("/api/messages", dependencies=[any_role])
 def list_messages(since: float = 0.0):
     """Persisted messages missed by a reconnecting mission-base console."""
     if not hub.sortie:

@@ -12,7 +12,7 @@ import asyncio
 import json
 import time
 
-from .roles import public_scenario
+from .roles import public_aircraft, public_scenario
 from .settings import log
 
 class Hub:
@@ -25,6 +25,7 @@ class Hub:
         self.sortie: dict | None = None
         self.scenario: dict | None = None
         self.messages: list[dict] = []
+        self.truth_clients: set[WebSocket] = set()   # sockets that logged in as instructor
 
     async def broadcast(self, msg: dict):
         """Send to every console at once, and drop anyone who cannot keep up.
@@ -36,30 +37,60 @@ class Hub:
         if not self.clients:
             return
         text = json.dumps(msg)
+        await self._deliver([(w, text) for w in list(self.clients)])
 
-        async def send(ws):
+    async def _deliver(self, pairs):
+        async def send(ws, text):
             try:
                 await asyncio.wait_for(ws.send_text(text), self.SEND_TIMEOUT_S)
             except Exception:
                 return ws          # dead, wedged, or too slow - same outcome
             return None
 
-        for ws in await asyncio.gather(*(send(w) for w in list(self.clients))):
+        for ws in await asyncio.gather(*(send(w, t) for w, t in pairs)):
             if ws is not None:
                 self.clients.discard(ws)
+                self.truth_clients.discard(ws)
 
-    def snapshot(self, include_truth: bool = False) -> dict:
+    def snapshot(self, include_truth: bool = False, include_df: bool = False) -> dict:
+        """The one place live state becomes something a browser may receive.
+
+        X2-1: aircraft records carry the plugin's whole `df` dictionary, whose
+        bearing_true and distance_nm are a fix on the beacon. They are reduced
+        to receiver state here unless the viewer is allowed truth or the
+        sortie has been revealed, so no caller has to remember to.
+        """
+        revealed = bool(self.sortie and self.sortie.get("revealed"))
+        allow = include_truth or revealed
+        # The map feed never carries the scenario's beacon before reveal, even
+        # for an instructor (they read it from /api/scenarios). Live DF is
+        # different: the instructor console renders it, so an instructor
+        # viewer gets it without the scenario truth.
+        allow_df = allow or include_df
         s = {
             "sortie": self.sortie,
             "scenario": None,
-            "aircraft": list(self.aircraft.values()),
+            "aircraft": [public_aircraft(a, include_truth=allow_df)
+                         for a in self.aircraft.values()],
             "server_time": time.time(),
         }
         if self.scenario:
-            revealed = bool(self.sortie and self.sortie.get("revealed"))
-            s["scenario"] = public_scenario(
-                self.scenario, include_truth=include_truth or revealed)
+            s["scenario"] = public_scenario(self.scenario, include_truth=allow)
         return s
+
+    async def broadcast_state(self):
+        """Send the state frame, one rendering per kind of viewer (X2-1).
+
+        An instructor console shows live DF; everyone else gets the redacted
+        form. Rendering twice (not once per client) keeps the 1 Hz ticker cheap.
+        """
+        if not self.clients:
+            return
+        full = json.dumps({"type": "state", **self.snapshot(include_df=True)})
+        public = json.dumps({"type": "state", **self.snapshot()})
+        pairs = [(w, full if w in self.truth_clients else public)
+                 for w in list(self.clients)]
+        await self._deliver(pairs)
 
 
 hub = Hub()
@@ -75,6 +106,6 @@ async def ticker():
         for k in stale:
             hub.aircraft.pop(k, None)
         if hub.clients:
-            await hub.broadcast({"type": "state", **hub.snapshot()})
+            await hub.broadcast_state()
 
 

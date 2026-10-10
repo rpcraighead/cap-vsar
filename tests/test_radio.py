@@ -50,6 +50,10 @@ def sockets(monkeypatch):
     # collected. A test whose outcome depends on its neighbours is not a test.
     for role in ('INSTRUCTOR', 'BASE', 'PLUGIN'):
         monkeypatch.delenv(f'CAPVSAR_TOKEN_{role}', raising=False)
+    # X2-4: a console with no tokens is an open dev console only when that is
+    # said out loud. Tests that want the production behaviour delenv this.
+    monkeypatch.setenv('CAPVSAR_DEV_OPEN', '1')
+    monkeypatch.delenv('CAPVSAR_ENV', raising=False)
     clients=[]
     async def connect(self, key):
         self.client=Client();clients.append(self.client)
@@ -130,14 +134,27 @@ def test_authenticated_session_callsign_overrides_the_claimed_one(sockets, monke
         os.unlink(db.name)
 
 
+def test_roster_only_console_refuses_a_sessionless_join(sockets, monkeypatch):
+    """X2-4: no CAPVSAR_TOKEN_BASE is also what a production console that
+    authenticates by roster code looks like. Without the explicit dev flag a
+    socket with no session is refused, whatever callsign it claims."""
+    monkeypatch.delenv('CAPVSAR_DEV_OPEN')
+    client, clients = sockets
+    with join(client) as sock:
+        sock.send_json({'action': 'join', 'callsign': 'MISSION BASE', 'channel': 'primary'})
+        reply = sock.receive_json()
+        assert reply['type'] == 'error' and 'Log in' in reply['message']
+        assert not radio.SESSIONS
+
+
 def test_no_session_falls_back_to_the_claimed_callsign(sockets):
-    """With NO role tokens configured at all, the console is in its documented
-    local mode and the radio stays usable without a login.
+    """On an explicitly open dev console (CAPVSAR_DEV_OPEN) the radio stays
+    usable without a login.
 
     FE-4 narrowed this: the fallback used to apply whenever a session happened
     to be absent, including on a console with roles configured, which is what
-    let a stranger join as "MISSION BASE". It now applies only when `base` is
-    unconfigured - the same condition access.enforce() fails open on."""
+    let a stranger join as "MISSION BASE". X2-4 narrowed it again: it applies
+    only to a console that has been opened on purpose."""
     client, clients = sockets
     with join(client) as sock:
         sock.send_json({'action': 'join', 'callsign': 'TEST BASE', 'channel': 'primary'})
