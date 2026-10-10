@@ -1,5 +1,9 @@
 # AI pilot: Sol handoff after the first flight demonstration
 
+The subsequent frozen campaign is complete. See the
+[Sol campaign report](evidence/AI_PILOT_SOL_CAMPAIGN_20261010.md) for the
+20-flight outcome and the activation timing finding.
+
 2026-10-10. Recommended next model: **Sol High**.
 Worktree: `/home/ron/Projects/cap-vsar-ai-pilot`.
 Branch: `feat/ai-pilot-first-cycle`. Remote: Gitea `ron/capvsar`.

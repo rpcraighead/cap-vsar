@@ -3,11 +3,16 @@
 Date: 2026-10-10. Owner: Ron. Repository baseline: `57663ec`.
 Status: agreed direction; the milestones below require implementation and measured simulator acceptance.
 
-Implementation on `feat/ai-pilot-first-cycle` has demonstrated two baseline
-cycles, one disturbed-entry cycle, and airborne loss/takeover probes on the
-stock C172. See the [Sol handoff and next campaign](AI_PILOT_SOL_HANDOFF.md).
+Implementation on `feat/ai-pilot-first-cycle` has passed the frozen stock-C172
+campaign: ten consecutive baseline flights and ten disturbed entries, with
+independent trace replay and confirmed terminal pause in every flight. See the
+[Sol campaign report](evidence/AI_PILOT_SOL_CAMPAIGN_20261010.md) and the
+earlier [Sol handoff](AI_PILOT_SOL_HANDOFF.md). The airborne loss and explicit
+takeover probes passed; two additional takeover attempts failed during startup
+before the takeover step and remain a reliability finding.
 The [first increment](AI_PILOT_FIRST_INCREMENT.md) records the earlier
-observation-only stage. Full repeatability qualification remains outstanding.
+observation-only stage. Broader aircraft and mission qualification remains
+outstanding.
 
 Build an X-Plane pilot that can taxi, take off, cruise, approach, land, and
 return to parking, plus a test pilot that can establish reference conditions,
