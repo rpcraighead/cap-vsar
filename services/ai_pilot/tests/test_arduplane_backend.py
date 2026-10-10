@@ -104,6 +104,24 @@ class Rig:
         self.backend.release()
 
 
+class DiagnosticTests(unittest.TestCase):
+    def test_snapshot_separates_observed_attitude_servo_and_effective_parameters(self):
+        rig = Rig()
+        feed(rig.client, rig.backend, **frame(roll_deg=-10))
+        rig.link.inject(mav.MSG_ATTITUDE, {"time_boot_ms": 1000,
+            "roll": math.radians(-12), "pitch": 0.02, "yaw": 1.0,
+            "rollspeed": 0.01, "pitchspeed": 0, "yawspeed": 0})
+        rig.link.inject(mav.MSG_SERVO_OUTPUT_RAW, {"time_usec": 1000,
+            **{"servo%d_raw" % i: 1500 for i in range(1, 17)}, "port": 0})
+        rig.link.request_param = lambda name: 5000.0 if name == "GUIDED_P" else 0.0
+        report = rig.backend.diagnostic_snapshot(read_effective_parameters=True)
+        self.assertEqual(report["xplane_roll_deg"], -10)
+        self.assertAlmostEqual(report["ardupilot_roll_deg"], -12)
+        self.assertEqual(report["ardupilot_servo_outputs"]["servo1_raw"], 1500)
+        self.assertEqual(report["effective_parameters"]["GUIDED_P"], 5000)
+        self.assertIsNone(report["demanded_bank_deg"])
+
+
 class RefusalTests(unittest.TestCase):
     def test_select_refuses_stale_telemetry(self):
         rig = Rig()

@@ -28,7 +28,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import fcntl
 import json
 import math
 import sys
@@ -41,14 +40,14 @@ sys.path.insert(0, str(REPO))
 from services.ai_pilot import mavlink_min as mav  # noqa: E402
 from services.ai_pilot.arduplane_backend import ArduPlaneBackend, M_PER_FT  # noqa: E402
 from services.ai_pilot.maneuvers import Limits, ManeuverGate  # noqa: E402
-from services.ai_pilot.sitl_lifecycle import SitlProcess, detach  # noqa: E402
+from services.ai_pilot.sitl_lifecycle import SitlProcess, detach, cleanup_startup  # noqa: E402
 from services.ai_pilot.xplane_udp import XPlaneUDPClient  # noqa: E402
+from services.ai_pilot.control_ownership import exclusive_controller, require_legacy_route_qualification  # noqa: E402
 
 TRACE_DIR = Path.home() / ".cache" / "capvsar" / "flight-tests"
 SITL_BIN = Path.home() / ".cache" / "capvsar" / "ardupilot" / "build" / "sitl" / "bin" / "arduplane"
 SITL_CWD = Path.home() / ".cache" / "capvsar" / "arduplane-run"
 PARM = REPO / "xplane" / "ardupilot" / "cap487.parm"
-CONTROLLER_LOCK = "/tmp/cap-vsar-maneuver-controller.lock"
 ALT_AGREEMENT_FT = 100.0
 # Modes that hold the aircraft where it is. Anything else (RTL, AUTO, CIRCLE)
 # is already navigating and must not be taken over from.
@@ -118,6 +117,7 @@ def open_trace(args, report, observation) -> tuple:
     return handle, path
 
 
+@exclusive_controller
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--heading", type=float, help="magnetic heading target")
@@ -138,8 +138,18 @@ def main() -> int:
                              "because X-Plane binds that itself")
     parser.add_argument("--no-sitl", action="store_true",
                         help="attach to a SITL started elsewhere; this launcher will not stop it")
+    parser.add_argument("--candidate-session", help="session registered by the attended flight-control plugin")
     parser.add_argument("--dry-run", action="store_true", help="mock X-Plane and SITL; print the pre-flight block and exit")
     args = parser.parse_args()
+    if not args.dry_run:
+        try:
+            require_legacy_route_qualification()
+        except RuntimeError as error:
+            print(error)
+            return 7
+        if args.no_sitl or not args.candidate_session:
+            print("Live ArduPlane requires a managed, session-specific candidate mapping")
+            return 7
     if not args.dry_run and (args.heading is None or args.altitude is None):
         parser.error("--heading and --altitude are required unless --dry-run")
 
@@ -150,14 +160,6 @@ def main() -> int:
         axes["roll"] = args.axis_roll
     if not axes and not args.dry_run:
         print("WARNING: no --axis-pitch/--axis-roll given; yoke takeover relies on ArduPilot's RC mapping alone")
-
-    # One writer on the surfaces: hold the maneuver deck's lock for the run.
-    ownership = open(CONTROLLER_LOCK, "w")
-    try:
-        fcntl.flock(ownership, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError:
-        print("Refusing to start: the maneuver controller lock is held (is maneuver_server running?)")
-        return 2
 
     if args.dry_run:
         client = XPlaneUDPClient(mock=True)
@@ -181,8 +183,9 @@ def main() -> int:
         assert float(mav.PLANE_MODE_MANUAL) not in modes, "hand-back must never use MANUAL"
         print("dry run detach: %s, SITL %s, GFC 700 %s" % (
             result["hand_back_mode"] or "not engaged",
-            "stopped" if result["sitl_stopped"] else "left running",
-            ", ".join(result["gfc700_commands"]) or "already engaged"))
+            "not managed" if result["sitl_stopped"] is None else
+                ("stopped" if result["sitl_stopped"] else "stop unconfirmed"),
+            ", ".join(result["gfc700_commands"]) or "not requested"))
         print("dry run: %d MAVLink frames before detach, nothing reached a simulator" % sent_before)
         return 0
 
@@ -193,186 +196,227 @@ def main() -> int:
     if not args.no_sitl:
         if not Path(args.sitl_bin).is_file():
             print("no ArduPlane binary at %s - run scripts/setup_ardupilot_sitl.sh" % args.sitl_bin)
-            client.stop()
+            cleanup_startup(client)
             return 1
         sitl = SitlProcess(args.sitl_bin, args.sitl_cwd, args.parm,
                            Path(args.sitl_cwd) / "arduplane.log", mavlink_port=port,
-                           sim_port_in=args.sim_port_in)
+                           sim_port_in=args.sim_port_in,
+                           candidate_session=args.candidate_session)
         print("starting ArduPlane SITL: %s" % " ".join(sitl.command()))
-        sitl.start()
+        try:
+            sitl.start()
+        except (OSError, ValueError) as error:
+            print("SITL startup refused: %s" % error)
+            cleanup_startup(client, sitl)
+            return 1
         if not sitl.wait_for_mavlink(timeout=20.0):
             print("SITL did not open MAVLink on %d; see %s" % (port, sitl.log_path))
-            sitl.stop()
-            client.stop()
+            cleanup_startup(client, sitl)
             return 1
 
     try:
         link = mav.MavlinkLink(host=host, port=port)
     except OSError as error:
         print("cannot reach ArduPilot SITL at %s: %s" % (args.mavlink, error))
-        if sitl is not None:
-            sitl.stop()
-        client.stop()
+        cleanup_startup(client, sitl)
         return 1
-    backend = ArduPlaneBackend(client, link, limits=Limits(), joystick_axes=axes)
-    gate = ManeuverGate(backend, Limits())
+    try:
+        backend = ArduPlaneBackend(client, link, limits=Limits(), joystick_axes=axes)
+        gate = ManeuverGate(backend, Limits())
+    except Exception:
+        cleanup_startup(client, sitl, link)
+        raise
 
     # Read back what the GFC 700 is doing so the hand-back never toggles a live
     # autopilot off: g1000n1_ap is a toggle, not an "on".
     last = {"servos_on": 0, "ap_state": 0}
-    client.subscribe_dref("sim/cockpit2/autopilot/servos_on", freq_hz=5,
-                          callback=lambda ref, value: last.__setitem__("servos_on", value))
-    client.subscribe_dref("sim/cockpit/autopilot/autopilot_state", freq_hz=5,
-                          callback=lambda ref, value: last.__setitem__("ap_state", value))
-
-    trace = None
-
-    def cleanup(reason, released_by_gate=False):
-        observation = backend.observe()
-        heading = observation.heading_mag if math.isfinite(observation.heading_mag) else 0.0
-        altitude = observation.altitude_indicated_ft if math.isfinite(observation.altitude_indicated_ft) else 4000.0
-        result = detach(backend, client, sitl, dict(last), heading, altitude,
-                        release=(lambda: None) if released_by_gate else None)
-        time.sleep(0.5)
-        override, since = backend.readback_after_release()
-        if trace is not None:
-            trace.write(json.dumps({"record": "end", "reason": reason,
-                                    "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                                    "detach": result, "override_joystick_after_release": override,
-                                    "seconds_after_release": since}, allow_nan=True) + "\n")
-            trace.close()
-        link.close()
-        client.stop()
-        fcntl.flock(ownership, fcntl.LOCK_UN)
-        ownership.close()
-        print("released: ArduPlane parked in %s, SITL %s, overrides cleared, GFC 700 %s"
-              % (result["hand_back_mode"] or "not engaged",
-                 "stopped" if result["sitl_stopped"] else "left running",
-                 ", ".join(c.rsplit("_", 1)[-1].upper() for c in result["gfc700_commands"]) or "already engaged"))
-        print("override_joystick reads %s %.1f s after release" % (override, since or 0.0))
-        return result
-
-    print("waiting for X-Plane telemetry, an ArduPilot heartbeat and position ...")
-    first_heartbeat = None
-    deadline = time.time() + 20.0
-    ready = False
-    while time.time() < deadline:
-        _gpi, gpi_age = link.latest(mav.MSG_GLOBAL_POSITION_INT)
-        if first_heartbeat is None and link.heartbeat_age() < 2.0:
-            first_heartbeat = time.time()
-        # SITL decodes gyros with the X-Plane 11 convention until its 1 Hz
-        # version query is answered; give that a full period before commanding.
-        settled = first_heartbeat is not None and time.time() - first_heartbeat >= 2.5
-        if backend.observe().age_seconds < 2.0 and link.heartbeat_age() < 2.0 and gpi_age < 1.0 and settled:
-            ready = True
-            break
-        time.sleep(0.25)
-    if not ready:
-        _gpi, gpi_age = link.latest(mav.MSG_GLOBAL_POSITION_INT)
-        print("not ready (X-Plane age %.1f s, heartbeat age %.1f s, position age %.1f s)"
-              % (backend.observe().age_seconds, link.heartbeat_age(), gpi_age))
-        cleanup("never ready")
+    try:
+        client.subscribe_dref("sim/cockpit2/autopilot/servos_on", freq_hz=5,
+                              callback=lambda ref, value: last.__setitem__("servos_on", value))
+        client.subscribe_dref("sim/cockpit/autopilot/autopilot_state", freq_hz=5,
+                              callback=lambda ref, value: last.__setitem__("ap_state", value))
+    except Exception as error:
+        print("Garmin telemetry subscription failed: %s" % error)
+        cleanup_startup(client, sitl, link)
         return 1
 
-    # Close the attach window before anything else: SITL may have come up in a
-    # navigating mode with its own default Home (AI-23).
-    try:
-        print("securing ArduPlane on attach: Home here, LOITER ...")
-        secured = backend.secure_on_attach()
-        print("  ArduPlane is in %s\n" % mode_name(secured))
-    except (ValueError, OSError) as error:
-        print("could not secure ArduPlane: %s" % error)
-        cleanup("could not secure ArduPlane")
-        return 6
+    trace = None
+    cleaned = False
 
-    report = backend.preflight()
-    observation = backend.observe()
-    print_preflight(report)
-    print("current: " + describe(observation))
-    limits = Limits()
-    if not (limits.min_kias <= observation.kias <= limits.max_kias
-            and observation.agl_ft >= limits.min_agl_ft
-            and limits.min_altitude_ft <= observation.altitude_indicated_ft <= limits.max_altitude_ft):
-        print("\nRefusing to start: the aircraft is outside the exercise envelope\n"
-              "  need %.0f-%.0f KIAS, at least %.0f ft AGL, %.0f-%.0f ft indicated."
-              % (limits.min_kias, limits.max_kias, limits.min_agl_ft, limits.min_altitude_ft, limits.max_altitude_ft))
-        cleanup("outside the envelope")
-        return 2
-    disagreement = report["ardupilot_minus_xplane_true_ft"]
-    if not math.isfinite(disagreement) or abs(disagreement) > ALT_AGREEMENT_FT:
-        print("\nRefusing to start: ArduPilot and X-Plane disagree on true altitude (%s ft). "
-              "SITL is not attached to this aircraft, or not to this X-Plane." % disagreement)
-        cleanup("altitude disagreement")
-        return 4
-    if not report["armed"]:
-        print("\nRefusing to start: ArduPlane reports disarmed (ARMING_REQUIRE 0 not loaded?). "
-              "A disarmed plane has its throttle forced to zero in GUIDED.")
-        cleanup("disarmed")
-        return 5
-    if report["ardupilot_mode"] not in SAFE_ATTACH_MODES:
-        print("\nRefusing to start: ArduPilot is in %s. Only %s are safe to take over from - a "
-              "navigating mode is already flying the aircraft somewhere."
-              % (mode_name(report["ardupilot_mode"]), "/".join(mode_name(m) for m in SAFE_ATTACH_MODES)))
-        cleanup("unsafe ArduPilot mode %s" % mode_name(report["ardupilot_mode"]))
-        return 6
-
-    print("\n*** ArduPlane is about to take the aircraft. It has never flown this airframe. ***")
-    print("*** Move the yoke to take it back at any time; Ctrl-C releases. ***\n")
-
-    trace, trace_path = open_trace(args, report, observation)
-    print("recording trace to %s\n" % trace_path)
-
-    released = False
-    reason = "aborted"
-    try:
-        # acquire() is INSIDE the try: it can refuse (envelope, stale telemetry)
-        # and if it does, SITL is already attached and flying the aircraft.
-        # Anything after the process starts must reach cleanup() (AI-22).
-        grant = gate.acquire()
-        lease, sequence = grant["lease"], grant["next_sequence"]
-        gate.submit(lease, sequence, {"heading_mag": args.heading, "altitude_indicated_ft": args.altitude})
-        print("commanded heading %.0f, altitude %.0f ft\n" % (args.heading, args.altitude))
-        end = time.time() + args.seconds
-        while time.time() < end:
-            gate.tick()
-            status = gate.status()
-            observation = backend.observe()
-            active = status.get("active")
-            phase = active["status"] if active else "captured / idle"
-            fault = backend.last_fault
-            commands = backend.last_commands
-            print("  %-18s %s  mode %s  rc %s%s" % (
-                phase, describe(observation), mode_name(link.custom_mode()),
-                ("%.0f" % commands["rc_deviation_us"]) if math.isfinite(commands.get("rc_deviation_us", float("nan"))) else "n/a",
-                ("  FAULT: %s" % fault) if fault else ""))
-            trace.write(json.dumps({
-                "record": "sample", "t": round(time.time(), 3), "phase": phase, "fault": fault,
-                "observation": {k: getattr(observation, k) for k in
-                                ("heading_mag", "altitude_indicated_ft", "agl_ft", "kias", "roll_deg", "vvi_fpm", "age_seconds")},
-                "mavlink": {"mode": link.custom_mode(), "heartbeat_age_s": link.heartbeat_age()},
-                "commands": commands,
-            }, allow_nan=True) + "\n")
-            trace.flush()
-            if fault or not status.get("owned"):
-                print("\ngate or backend faulted or released; stopping")
-                break
-            time.sleep(2.0)
-        reason = "flight complete"
-    except ValueError as error:
-        print("\nrefused: %s" % error)
-        reason = "gate refused: %s" % error
-    except KeyboardInterrupt:
-        print("\ninterrupted by pilot")
-        reason = "interrupted by pilot"
-    finally:
+    def cleanup(reason, released_by_gate=False):
+        nonlocal cleaned
+        if cleaned:
+            return {"already_cleaned": True}
+        cleaned = True
+        result = None
         try:
-            gate.takeover()          # revokes the lease and calls backend.release()
-            released = True
-        except Exception:
-            pass
-        cleanup(reason, released_by_gate=released)
-        print("trace: %s" % trace_path)
-    return 0
+            try:
+                observation = backend.observe()
+                heading = observation.heading_mag if math.isfinite(observation.heading_mag) else 0.0
+                altitude = observation.altitude_indicated_ft if math.isfinite(observation.altitude_indicated_ft) else 4000.0
+            except Exception as error:
+                print("final observation unavailable during cleanup: %s" % error)
+                heading, altitude = 0.0, 4000.0
+            target = "fault_pause" if (gate.last_terminal or {}).get("status") == "fault" else "human"
+            result = detach(backend, client, sitl, dict(last), heading, altitude,
+                            release=(lambda: None) if released_by_gate else None,
+                            target=target)
+            time.sleep(0.5)
+            override, since = backend.readback_after_release()
+            if trace is not None:
+                trace.write(json.dumps({"record": "end", "reason": reason,
+                    "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "gate_events": gate.status()["events"], "gate_terminal": gate.last_terminal,
+                    "backend_fault": backend.last_fault, "detach": result,
+                    "override_joystick_after_release": override,
+                    "seconds_after_release": since}, allow_nan=True) + "\n")
+            print("release result: %s" % result)
+            return result
+        finally:
+            if trace is not None and not trace.closed:
+                trace.close()
+            link.close()
+            client.stop()
+
+    try:
+        print("waiting for X-Plane telemetry, an ArduPilot heartbeat and position ...")
+        first_heartbeat = None
+        deadline = time.time() + 20.0
+        ready = False
+        while time.time() < deadline:
+            _gpi, gpi_age = link.latest(mav.MSG_GLOBAL_POSITION_INT)
+            if first_heartbeat is None and link.heartbeat_age() < 2.0:
+                first_heartbeat = time.time()
+            # SITL decodes gyros with the X-Plane 11 convention until its 1 Hz
+            # version query is answered; give that a full period before commanding.
+            settled = first_heartbeat is not None and time.time() - first_heartbeat >= 2.5
+            if backend.observe().age_seconds < 2.0 and link.heartbeat_age() < 2.0 and gpi_age < 1.0 and settled:
+                ready = True
+                break
+            time.sleep(0.25)
+        if not ready:
+            _gpi, gpi_age = link.latest(mav.MSG_GLOBAL_POSITION_INT)
+            print("not ready (X-Plane age %.1f s, heartbeat age %.1f s, position age %.1f s)"
+                  % (backend.observe().age_seconds, link.heartbeat_age(), gpi_age))
+            cleanup("never ready")
+            return 1
+
+        # Close the attach window before anything else: SITL may have come up in a
+        # navigating mode with its own default Home (AI-23).
+        try:
+            print("securing ArduPlane on attach: Home here, LOITER ...")
+            secured = backend.secure_on_attach()
+            print("  ArduPlane is in %s\n" % mode_name(secured))
+        except (ValueError, OSError) as error:
+            print("could not secure ArduPlane: %s" % error)
+            cleanup("could not secure ArduPlane")
+            return 6
+
+        report = backend.preflight()
+        observation = backend.observe()
+        print_preflight(report)
+        print("current: " + describe(observation))
+        limits = Limits()
+        if not (limits.min_kias <= observation.kias <= limits.max_kias
+                and observation.agl_ft >= limits.min_agl_ft
+                and limits.min_altitude_ft <= observation.altitude_indicated_ft <= limits.max_altitude_ft):
+            print("\nRefusing to start: the aircraft is outside the exercise envelope\n"
+                  "  need %.0f-%.0f KIAS, at least %.0f ft AGL, %.0f-%.0f ft indicated."
+                  % (limits.min_kias, limits.max_kias, limits.min_agl_ft, limits.min_altitude_ft, limits.max_altitude_ft))
+            cleanup("outside the envelope")
+            return 2
+        disagreement = report["ardupilot_minus_xplane_true_ft"]
+        if not math.isfinite(disagreement) or abs(disagreement) > ALT_AGREEMENT_FT:
+            print("\nRefusing to start: ArduPilot and X-Plane disagree on true altitude (%s ft). "
+                  "SITL is not attached to this aircraft, or not to this X-Plane." % disagreement)
+            cleanup("altitude disagreement")
+            return 4
+        if not report["armed"]:
+            print("\nRefusing to start: ArduPlane reports disarmed (ARMING_REQUIRE 0 not loaded?). "
+                  "A disarmed plane has its throttle forced to zero in GUIDED.")
+            cleanup("disarmed")
+            return 5
+        if report["ardupilot_mode"] not in SAFE_ATTACH_MODES:
+            print("\nRefusing to start: ArduPilot is in %s. Only %s are safe to take over from - a "
+                  "navigating mode is already flying the aircraft somewhere."
+                  % (mode_name(report["ardupilot_mode"]), "/".join(mode_name(m) for m in SAFE_ATTACH_MODES)))
+            cleanup("unsafe ArduPilot mode %s" % mode_name(report["ardupilot_mode"]))
+            return 6
+
+        print("\n*** ArduPlane is about to take the aircraft. It has never flown this airframe. ***")
+        print("*** Move the yoke to take it back at any time; Ctrl-C releases. ***\n")
+
+        trace, trace_path = open_trace(args, report, observation)
+        print("recording trace to %s\n" % trace_path)
+
+        released = False
+        reason = "aborted"
+        exit_status = 1
+        try:
+            # acquire() is INSIDE the try: it can refuse (envelope, stale telemetry)
+            # and if it does, SITL is already attached and flying the aircraft.
+            # Anything after the process starts must reach cleanup() (AI-22).
+            grant = gate.acquire()
+            lease, sequence = grant["lease"], grant["next_sequence"]
+            command = gate.submit(lease, sequence, {"heading_mag": args.heading,
+                                                    "altitude_indicated_ft": args.altitude})
+            command_id = command["command_id"]
+            print("commanded heading %.0f, altitude %.0f ft\n" % (args.heading, args.altitude))
+            end = time.time() + args.seconds
+            while time.time() < end:
+                gate.tick()
+                status = gate.status()
+                observation = backend.observe()
+                active = status.get("active")
+                terminal = next((e for e in reversed(status["events"])
+                                 if e.get("command_id") == command_id
+                                 and e["status"] in ("achieved", "fault", "timed_out", "canceled")), None)
+                phase = active["status"] if active else (terminal["status"] if terminal else "idle")
+                fault = backend.last_fault
+                commands = backend.last_commands
+                print("  %-18s %s  mode %s  rc %s%s" % (
+                    phase, describe(observation), mode_name(link.custom_mode()),
+                    ("%.0f" % commands["rc_deviation_us"]) if math.isfinite(commands.get("rc_deviation_us", float("nan"))) else "n/a",
+                    ("  FAULT: %s" % fault) if fault else ""))
+                trace.write(json.dumps({
+                    "record": "sample", "t": round(time.time(), 3), "phase": phase, "fault": fault,
+                    "gate_terminal": terminal,
+                    "observation": {k: getattr(observation, k) for k in
+                                    ("heading_mag", "altitude_indicated_ft", "agl_ft", "kias", "roll_deg", "vvi_fpm", "age_seconds")},
+                    "mavlink": {"mode": link.custom_mode(), "heartbeat_age_s": link.heartbeat_age()},
+                    "commands": commands,
+                }, allow_nan=True) + "\n")
+                trace.flush()
+                if terminal and terminal["status"] == "achieved":
+                    reason, exit_status = "maneuver achieved", 0
+                    break
+                if fault or not status.get("owned"):
+                    reason = "gate/backend fault: %s" % (fault or (terminal or {}).get("reason", "ownership lost"))
+                    print("\n%s; stopping" % reason)
+                    break
+                time.sleep(2.0)
+            else:
+                gate.timeout()
+                reason = "maneuver timed out without measured capture"
+                exit_status = 3
+        except ValueError as error:
+            print("\nrefused: %s" % error)
+            reason = "gate refused: %s" % error
+        except KeyboardInterrupt:
+            print("\ninterrupted by pilot")
+            reason = "interrupted by pilot"
+            exit_status = 130
+        finally:
+            try:
+                gate.takeover()          # revokes the lease and calls backend.release()
+                released = True
+            except Exception:
+                pass
+            cleanup(reason, released_by_gate=released)
+            print("trace: %s" % trace_path)
+        return exit_status
+    finally:
+        cleanup("launcher resource scope exit")
 
 
 if __name__ == "__main__":

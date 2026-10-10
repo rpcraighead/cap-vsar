@@ -52,6 +52,22 @@ class Limits:
             raise ValueError('Invalid exercise limits')
 
 
+@dataclass(frozen=True)
+class EntryStability:
+    """Ordinary controller transfer readiness, separate from the flight envelope.
+
+    This is an operational transfer policy, not an aircraft performance limit.
+    Recovery from an upset requires a different, explicitly qualified path.
+    """
+    max_abs_vvi_fpm: float = 500.0
+    max_abs_bank_deg: float = 10.0
+
+    def __post_init__(self):
+        if not (math.isfinite(self.max_abs_vvi_fpm) and self.max_abs_vvi_fpm > 0
+                and math.isfinite(self.max_abs_bank_deg) and 0 < self.max_abs_bank_deg < 90):
+            raise ValueError('Invalid transfer stability policy')
+
+
 def parse_maneuver(text: str) -> dict:
     """Small full-match grammar: partial matches, negations and corrections never execute."""
     if not isinstance(text, str):
@@ -68,8 +84,10 @@ def parse_maneuver(text: str) -> dict:
 
 
 class ManeuverGate:
-    def __init__(self, backend: FlightBackend, limits: Limits = Limits(), clock=time.monotonic):
+    def __init__(self, backend: FlightBackend, limits: Limits = Limits(), clock=time.monotonic,
+                 entry_stability: EntryStability = EntryStability()):
         self.backend, self.limits, self.clock = backend, limits, clock
+        self.entry_stability = entry_stability
         self.lock = threading.RLock()
         self.lease = None
         self.sequence = 0
@@ -77,11 +95,28 @@ class ManeuverGate:
         self.active = None
         self.settled_since = None
         self.events = deque(maxlen=200)
+        self.last_terminal = None
 
     def _event(self, status, **fields):
-        entry = {'status': status, 'time': time.time(), **fields}
+        entry = {'event_id': uuid4().hex, 'status': status, 'time': time.time(),
+                 'monotonic_time': self.clock(), 'sequence': self.sequence,
+                 **fields}
+        if 'command_id' in entry:
+            entry['task_id'] = entry['command_id']
+        outcome = {'achieved': 'achieved', 'refused': 'refused',
+                   'canceled': 'canceled', 'fault': 'faulted',
+                   'timed_out': 'timed_out'}.get(status)
+        if outcome:
+            entry['outcome'] = outcome
+        if status in ('achieved', 'refused', 'canceled', 'fault', 'timed_out'):
+            self.last_terminal = dict(entry)
         self.events.append(entry)
         return entry
+
+    def _entry_check(self, o):
+        s = self.entry_stability
+        if abs(o.vvi_fpm) > s.max_abs_vvi_fpm or abs(o.roll_deg) > s.max_abs_bank_deg:
+            raise ValueError('Aircraft not stable for ordinary controller transfer')
 
     def _check(self, o):
         if not all(math.isfinite(v) for v in asdict(o).values()):
@@ -96,10 +131,15 @@ class ManeuverGate:
 
     def acquire(self):
         with self.lock:
-            if self.lease:
-                raise ValueError('Control already acquired; take over before reacquiring')
-            o = self.backend.observe()
-            self._check(o)
+            try:
+                if self.lease:
+                    raise ValueError('Control already acquired; take over before reacquiring')
+                o = self.backend.observe()
+                self._check(o)
+                self._entry_check(o)
+            except ValueError as error:
+                self._event('refused', reason=str(error))
+                raise
             self.lease, self.sequence = uuid4().hex, 0
             self.targets = [o.heading_mag % 360, o.altitude_indicated_ft]
             self._event('control_acquired')
@@ -126,12 +166,12 @@ class ManeuverGate:
                 if o.agl_ft + alt - o.altitude_indicated_ft < self.limits.min_agl_ft:
                     raise ValueError('Target below clearance floor over current terrain')
             except ValueError as error:
-                self._event('refused', reason=str(error))
+                self._event('refused', reason=str(error), command_id=None)
                 raise
             command_id = uuid4().hex
             self.sequence = sequence  # Consume even if a backend partially fails; never replay.
             if self.active:
-                self._event('superseded', command_id=self.active['command_id'])
+                self._event('canceled', command_id=self.active['command_id'], reason='superseded')
             self._event('accepted', command_id=command_id, heading_mag=hdg % 360,
                         altitude_indicated_ft=alt)
             try:
@@ -148,6 +188,8 @@ class ManeuverGate:
 
     def takeover(self):
         with self.lock:
+            if self.active:
+                self._event('canceled', command_id=self.active['command_id'], reason='human takeover')
             self.lease = None
             self.active = None
             self.targets = None
@@ -155,12 +197,21 @@ class ManeuverGate:
             return self._event('released', readback='Control revoked; autopilot disconnect requested. Verify cockpit indications.')
 
     def _fault(self, reason):
+        command_id = self.active['command_id'] if self.active else None
         self.lease = None
         self.active = None
         self.targets = None
-        self._event('fault', reason=reason)
+        self._event('fault', reason=reason, command_id=command_id)
         # Do not blind-climb or disconnect an airborne aircraft on lost telemetry.
         self.backend.pause()
+
+    def timeout(self, reason='Maneuver timed out without measured capture'):
+        with self.lock:
+            if self.active:
+                self._event('timed_out', command_id=self.active['command_id'], reason=reason)
+                self.active = None
+            self.lease = None
+            self.targets = None
 
     def tick(self):
         with self.lock:
@@ -192,7 +243,8 @@ class ManeuverGate:
             o = {k: v if math.isfinite(v) else None for k, v in o.items()}
             return {'owned': bool(self.lease), 'sequence': self.sequence,
                     'observation': o, 'active': self.active,
-                    'limits': asdict(self.limits), 'events': list(self.events)}
+                    'limits': asdict(self.limits), 'entry_stability': asdict(self.entry_stability),
+                    'last_terminal': self.last_terminal, 'events': list(self.events)}
 
 
 class XPlaneAutopilotBackend:

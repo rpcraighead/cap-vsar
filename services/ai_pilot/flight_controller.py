@@ -29,6 +29,7 @@ from .c182t_checklists import (
     get_takeoff_and_climb_checklist,
 )
 from .xplane_udp import XPlaneUDPClient
+from .control_ownership import require_live_qualification
 
 logger = logging.getLogger("ai_pilot.controller")
 
@@ -115,6 +116,8 @@ class FlightController:
     KRNM_27_HEADING_MAG = 273.0
 
     def __init__(self, client: XPlaneUDPClient):
+        if getattr(client, "mock", True) is False:
+            require_live_qualification()
         self.client = client
         self.phase: FlightPhase = FlightPhase.COLD_AND_DARK
         self.telemetry = AircraftTelemetry()

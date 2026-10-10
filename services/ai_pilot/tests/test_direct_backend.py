@@ -61,6 +61,10 @@ def steady_frame(**overrides):
         "roll_rate": 0.0,
         "pitch_rate": 0.0,
         "elevator_trim": 0.0,
+        "aileron_position": 0.0,
+        "elevator_position": 0.0,
+        "rudder_position": 0.0,
+        "throttle_position": 0.55,
     }
     frame.update(overrides)
     return frame
@@ -144,13 +148,14 @@ class EngagementTests(unittest.TestCase):
         backend.pause()
         self.assertEqual(client.writes, [])
 
-    def test_release_after_engaging_does_neutralize(self):
+    def test_release_after_engaging_emits_no_handoff_step(self):
         client = FakeClient()
         backend = XPlaneDirectBackend(client, limits=Limits(), clock=time.monotonic)
         client.feed(backend, **steady_frame())
         backend.select(90.0, 4500.0)
+        before = list(client.writes)
         backend.release()
-        self.assertEqual(client.written(backend.CONTROL_DREFS["aileron"]), 0.0)
+        self.assertEqual(client.writes, before)
 
 
 class ControlLawTests(unittest.TestCase):
@@ -427,10 +432,13 @@ class RightRudderTests(unittest.TestCase):
         rudders = []
         for throttle in (0.2, 1.0):
             client, backend = self._backend(kias=95.0, beta_deg=0.0)
+            backend._start = lambda: None  # isolate the single step from the loop thread
             backend.select_airspeed(95.0, throttle=throttle)
             try:
                 backend._step(backend.observe(), 90.0, 4500.0)
-                rudders.append(client.written(backend.CONTROL_DREFS["rudder"]))
+                # The actual first output now slews from measured rudder, so
+                # compare the control-law demand independent of elapsed clock.
+                rudders.append(backend.last_commands["rudder_demand"])
             finally:
                 backend.release()
         self.assertGreater(rudders[1], rudders[0],
@@ -589,14 +597,13 @@ class FailSafeTests(unittest.TestCase):
         client, backend = self._armed()
         self.assertIsNone(backend._envelope_fault(backend.observe()))
 
-    def test_release_stops_flying_and_neutralizes(self):
+    def test_release_stops_flying_without_forcing_new_surface_positions(self):
         client, backend = self._armed()
         backend.select(90.0, 4500.0)
+        before = len(client.writes)
         backend.release()
         self.assertFalse(backend.flying)
-        self.assertEqual(client.written(backend.CONTROL_DREFS["aileron"]), 0.0)
-        self.assertEqual(client.written(backend.CONTROL_DREFS["elevator"]), 0.0)
-        self.assertEqual(client.written(backend.CONTROL_DREFS["rudder"]), 0.0)
+        self.assertEqual(len(client.writes), before)
 
     def test_pause_stops_flying_and_pauses_the_simulator(self):
         client, backend = self._armed()
@@ -647,6 +654,30 @@ class SlewRateTests(unittest.TestCase):
         backend = XPlaneDirectBackend(client, limits=Limits(), clock=clock)
         client.feed(backend, **steady_frame(**frame))
         return client, backend
+
+    def test_first_wire_output_slews_from_measured_transfer_position(self):
+        clock = self.Clock()
+        client, backend = self._backend(clock, aileron_position=0.2)
+        backend._surface["aileron"] = 0.2
+        backend._surface_t = clock.t
+        clock.t += 0.1
+        backend._step(backend.observe(), 130.0, 4500.0)
+        wire = client.written(backend.CONTROL_DREFS["aileron"])
+        self.assertLessEqual(abs(wire - 0.2), Gains.AILERON_RATE_PER_S * 0.1 + 1e-9)
+        self.assertAlmostEqual(wire, backend.last_commands["aileron"])
+
+    def test_delta_probe_records_and_uses_fixed_control_baseline(self):
+        clock = self.Clock()
+        client, backend = self._backend(clock)
+        backend._targets = (90.0, 4500.0)
+        backend._last_commands = {"aileron": 0.08}
+        backend.apply_test_input(TestInput("roll", 0.10, 4.0, ramp_s=1.0,
+                                           reference="delta"))
+        clock.t += 1.0
+        backend._step(backend.observe(), 90.0, 4500.0)
+        self.assertAlmostEqual(backend.last_commands["aileron_demand"], 0.18)
+        self.assertEqual(backend.last_commands["test_input_reference"], "delta")
+        self.assertAlmostEqual(backend.last_commands["test_input_baseline"], 0.08)
 
     def test_recovery_from_a_banked_upset_does_not_step_the_aileron(self):
         clock = self.Clock()

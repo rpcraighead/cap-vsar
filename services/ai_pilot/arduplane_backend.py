@@ -335,6 +335,34 @@ class ArduPlaneBackend:
             "joystick_axes": axes,
         }
 
+    def diagnostic_snapshot(self, *, read_effective_parameters=False) -> dict:
+        """Compare independent aircraft and ArduPilot state without tuning it."""
+        attitude, attitude_age = self.link.latest(mav.MSG_ATTITUDE)
+        servos, servo_age = self.link.latest(mav.MSG_SERVO_OUTPUT_RAW)
+        version, version_age = self.link.latest(mav.MSG_AUTOPILOT_VERSION)
+        o = self.observe()
+        snapshot = {
+            "xplane_roll_deg": o.roll_deg, "xplane_heading_mag": o.heading_mag,
+            "xplane_vvi_fpm": o.vvi_fpm, "xplane_age_s": o.age_seconds,
+            "ardupilot_attitude": attitude, "attitude_age_s": attitude_age,
+            "ardupilot_roll_deg": math.degrees(attitude["roll"]) if attitude else None,
+            "ardupilot_servo_outputs": servos, "servo_age_s": servo_age,
+            "flight_sw_version": version["flight_sw_version"] if version else None,
+            "flight_custom_version": version["flight_custom_version"].hex() if version else None,
+            "version_age_s": version_age,
+            "command_intent": self.last_commands,
+            "demanded_bank_deg": None,  # no nav-roll telemetry in this codec yet
+            "effective_parameters": {}, "parameter_errors": {},
+        }
+        if read_effective_parameters:
+            for name in ("GUIDED_P", "GUIDED_I", "GUIDED_D", "WP_LOITER_RAD",
+                         "TECS_CLMB_MAX", "TECS_SINK_MAX", "ARMING_REQUIRE"):
+                try:
+                    snapshot["effective_parameters"][name] = self.link.request_param(name)
+                except (OSError, TimeoutError, ValueError) as error:
+                    snapshot["parameter_errors"][name] = str(error)
+        return snapshot
+
     def readback_after_release(self):
         """(override_joystick value, seconds since release) - trial case T4 evidence."""
         with self.lock:

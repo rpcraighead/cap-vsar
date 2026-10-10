@@ -1,0 +1,243 @@
+"""XPPython3 flight-control boundary. Inert until an attended configuration is installed.
+
+The fixed session-specific datarefs accept SITL candidate DREF packets. A local
+Unix control socket carries authenticated, bounded authority requests. Only the
+flight loop touches X-Plane SDK state. This plugin has not been live qualified.
+"""
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import queue
+import socket
+import threading
+
+import xp
+
+from capvsar_flight_control_core import CHANNELS, ControlBridge
+from capvsar_flight_control_mapping import candidate_prefix
+
+CONFIG = Path(__file__).with_name("capvsar_flight_control_config.json")
+LIVE_PLUGIN_QUALIFIED = False
+NATIVE = {
+    "roll": "sim/joystick/yoke_roll_ratio",
+    "pitch": "sim/joystick/yoke_pitch_ratio",
+    "yaw": "sim/joystick/yoke_heading_ratio",
+    "throttle": "sim/flightmodel/engine/ENGN_thro_use[0]",
+    "flap": "sim/cockpit2/controls/flap_ratio",
+    "trim": "sim/cockpit2/controls/elevator_trim",
+}
+
+
+class XPlaneSink:
+    def __init__(self):
+        self.controls = {key: xp.findDataRef(ref) for key, ref in NATIVE.items()}
+        self.joystick = xp.findDataRef("sim/operation/override/override_joystick")
+        self.throttles = xp.findDataRef("sim/operation/override/override_throttles")
+        self.ap_mode = xp.findDataRef("sim/cockpit2/autopilot/flight_director_mode")
+        self.servos = xp.findDataRef("sim/cockpit2/autopilot/servos_on")
+        self.paused = xp.findDataRef("sim/time/paused")
+        self.off = xp.findCommand("sim/autopilot/servos_off_any")
+        self.ap_toggle = xp.findCommand("sim/GPS/g1000n1_ap")
+        if not all(self.controls.values()) or not all((self.joystick, self.throttles,
+                self.ap_mode, self.servos, self.paused, self.off, self.ap_toggle)):
+            raise RuntimeError("Required flight-control dataref/command missing")
+
+    def ap_engaged(self):
+        servos, mode = xp.getDatai(self.servos), xp.getDatai(self.ap_mode)
+        if servos == 1 and mode == 2:
+            return True
+        if servos == 0 and mode in (0, 1):
+            return False
+        return None
+
+    def override_state(self):
+        a, b = xp.getDatai(self.joystick), xp.getDatai(self.throttles)
+        return True if a == b == 1 else False if a == b == 0 else None
+
+    def set_override(self, enabled):
+        value = 1 if enabled else 0
+        xp.setDatai(self.joystick, value)
+        xp.setDatai(self.throttles, value)
+
+    def write_control(self, channel, value):
+        xp.setDataf(self.controls[channel], value)
+
+    def read_trim(self):
+        return xp.getDataf(self.controls["trim"])
+
+    def read_control(self, channel):
+        return xp.getDataf(self.controls[channel])
+
+    def command_ap_off(self):
+        xp.commandOnce(self.off)
+
+    def command_ap_on(self):
+        xp.commandOnce(self.ap_toggle)
+
+    def pause(self):
+        xp.setDatai(self.paused, 1)
+
+
+class PythonInterface:
+    def __init__(self):
+        self.accessors = []
+        self.core = None
+        self.loop = None
+        self.config = None
+        self.requests = queue.Queue(maxsize=16)
+        self.stop_event = threading.Event()
+        self.server = None
+        self.server_thread = None
+        self.bound_socket = False
+
+    def XPluginStart(self):
+        if CONFIG.is_file() and LIVE_PLUGIN_QUALIFIED:
+            config = json.loads(CONFIG.read_text())
+            session = config["session"]
+            candidate_prefix(session)
+            if not isinstance(config.get("secret"), str) or len(config["secret"]) < 32:
+                raise ValueError("Flight-control socket secret missing")
+            if not str(config.get("socket_path", "")).startswith("/tmp/capvsar-flight-control-"):
+                raise ValueError("Flight-control socket path must be task-specific under /tmp")
+            self.config = config
+            self.core = ControlBridge(XPlaneSink(), session)
+            self._register_candidates(session)
+        else:
+            xp.log("CAP V-SAR flight control: attended activation unqualified; inactive")
+        return "CAP V-SAR Flight Control", "org.cap.vsar.flight_control", "Flight authority boundary"
+
+    def _register_candidates(self, session):
+        prefix = candidate_prefix(session)
+        for channel in CHANNELS:
+            name = prefix + channel
+            accessor = xp.registerDataAccessor(
+                name, xp.Type_Float, 1,
+                readFloat=lambda r, c=channel, s=session: (
+                    self.core.candidates.get(c, (0.0,))[0]
+                    if self.core.session == s else 0.0),
+                writeFloat=lambda r, value, c=channel, s=session: self.core.candidate(s, c, value))
+            if accessor is None:
+                raise RuntimeError("Candidate dataref registration failed")
+            self.accessors.append(accessor)
+
+    def XPluginEnable(self):
+        if self.core is None:
+            return 1
+        self.stop_event.clear()
+        self.loop = xp.createFlightLoop(self.flight_loop, xp.FlightLoop_Phase_AfterFlightModel)
+        xp.scheduleFlightLoop(self.loop, -1)
+        self.server_thread = threading.Thread(target=self._serve, daemon=True)
+        self.server_thread.start()
+        return 1
+
+    def XPluginDisable(self):
+        self.stop_event.set()
+        if self.core and self.core.state not in ("MANUAL", "PAUSED_FAULT"):
+            self.core.fault_pause("Flight-control plugin disabled")
+        if self.loop:
+            xp.destroyFlightLoop(self.loop)
+            self.loop = None
+        if self.server:
+            self.server.close()
+            self.server = None
+        if self.server_thread:
+            self.server_thread.join(timeout=0.5)
+            self.server_thread = None
+        if self.config and self.bound_socket:
+            path = self.config["socket_path"]
+            if os.path.exists(path):
+                os.unlink(path)
+            self.bound_socket = False
+
+    def XPluginStop(self):
+        self.XPluginDisable()
+        for accessor in self.accessors:
+            xp.unregisterDataAccessor(accessor)
+        self.accessors.clear()
+
+    def XPluginReceiveMessage(self, inFrom, inMsg, inParam):
+        pass
+
+    def _serve(self):
+        path = self.config["socket_path"]
+        if os.path.exists(path):
+            return
+        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.server = server
+        try:
+            server.bind(path)
+            self.bound_socket = True
+            os.chmod(path, 0o600)
+            server.listen(4)
+            server.settimeout(0.1)
+            while not self.stop_event.is_set():
+                try:
+                    conn, _ = server.accept()
+                except socket.timeout:
+                    continue
+                except OSError:
+                    break
+                with conn:
+                    conn.settimeout(0.25)
+                    try:
+                        raw = bytearray()
+                        while b"\n" not in raw and len(raw) <= 4096:
+                            part = conn.recv(4096)
+                            if not part:
+                                break
+                            raw.extend(part)
+                        if len(raw) > 4096 or b"\n" not in raw:
+                            raise ValueError("Control request too large")
+                        request = json.loads(raw.partition(b"\n")[0])
+                        if not isinstance(request, dict) or request.pop("secret", None) != self.config["secret"]:
+                            raise ValueError("Unauthorized control request")
+                        answer = queue.Queue(maxsize=1)
+                        self.requests.put_nowait((request, answer))
+                        result = answer.get(timeout=0.25)
+                    except (ValueError, queue.Empty, queue.Full, OSError) as error:
+                        result = {"error": str(error)}
+                    conn.sendall(json.dumps(result).encode() + b"\n")
+        finally:
+            server.close()
+
+    def flight_loop(self, sinceLast, elapsed, counter, refCon):
+        for _ in range(8):
+            try:
+                request, answer = self.requests.get_nowait()
+            except queue.Empty:
+                break
+            try:
+                action = request.pop("action")
+                methods = {"status": self.core.status, "prepare": self.core.prepare,
+                           "heartbeat": self.core.heartbeat, "activate": self.core.activate,
+                           "transfer_gfc": self.core.transfer_gfc,
+                           "set_virtual_aux": self.core.set_virtual_aux,
+                           "human_takeover": self.core.human_takeover,
+                           "fault_pause": self.core.fault_pause}
+                if action == "renew_session":
+                    if len(self.core.used_sessions) >= 4:
+                        raise ValueError("Plugin session rotation limit reached")
+                    new_session = request["session"]
+                    candidate_prefix(new_session)
+                    if new_session in self.core.used_sessions:
+                        raise ValueError("Candidate session already retired")
+                    result = self.core.renew_session(**request)
+                    self._register_candidates(new_session)
+                    answer.put_nowait(result)
+                    continue
+                if action not in methods:
+                    raise ValueError("Unknown flight-control action")
+                result = methods[action](**request)
+                answer.put_nowait(result if isinstance(result, dict) else self.core.status())
+            except (ValueError, TypeError, KeyError) as error:
+                answer.put_nowait({"error": str(error), "status": self.core.status()})
+            except Exception as error:
+                self.core.fault_pause("Bridge action failed: %s" % error)
+                answer.put_nowait({"error": str(error), "status": self.core.status()})
+        try:
+            self.core.tick()
+        except Exception as error:
+            self.core.fault_pause("Bridge loop failed: %s" % error)
+        return -1

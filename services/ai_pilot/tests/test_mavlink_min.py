@@ -46,6 +46,36 @@ GOLDEN = [
 
 
 class GoldenTests(unittest.TestCase):
+    def test_added_diagnostic_and_mission_layouts_match_pinned_generated_headers(self):
+        # Length/CRC values checked against Plane-4.7.1 generated MAVLink headers.
+        expected = {
+            mav.MSG_PARAM_REQUEST_READ: (20, 214),
+            mav.MSG_PARAM_VALUE: (25, 220),
+            mav.MSG_ATTITUDE: (28, 39),
+            mav.MSG_SERVO_OUTPUT_RAW: (37, 222),
+            mav.MSG_MISSION_COUNT: (5, 221),
+            mav.MSG_MISSION_REQUEST_INT: (5, 196),
+            mav.MSG_MISSION_ITEM_INT: (38, 38),
+            mav.MSG_MISSION_ACK: (4, 153),
+            mav.MSG_AUTOPILOT_VERSION: (78, 178),
+        }
+        for msgid, (size, crc) in expected.items():
+            with self.subTest(msgid=msgid):
+                self.assertEqual(struct.calcsize(mav.MSG_DEFS[msgid][1]), size)
+                self.assertEqual(mav.MSG_DEFS[msgid][2], crc)
+
+    def test_effective_parameter_read_uses_fresh_matching_param_value(self):
+        class ParamPeer(mav.MockLink):
+            def send(self, msgid, fields):
+                super().send(msgid, fields)
+                if msgid == mav.MSG_PARAM_REQUEST_READ:
+                    self.inject(mav.MSG_PARAM_VALUE, {"param_value": 5000.0,
+                        "param_count": 100, "param_index": 28,
+                        "param_id": fields["param_id"], "param_type": 9})
+        peer = ParamPeer()
+        self.assertEqual(peer.request_param("GUIDED_P"), 5000.0)
+        self.assertEqual(peer.sent_messages[0][1]["param_index"], -1)
+
     def test_every_golden_frame_decodes_and_reencodes_identically(self):
         parser = mav.Parser()
         for label, msgid, hex_frame in GOLDEN:

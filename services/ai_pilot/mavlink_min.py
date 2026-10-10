@@ -1,11 +1,10 @@
 """Minimal MAVLink codec and TCP link for the ArduPlane backend. Stdlib only.
 
-Exactly the seven messages the backend needs, encoded and decoded by hand.
-A full dialect library was rejected on purpose: the maneuver deck runs on the
-system interpreter, which has no pip, and the service's README rule is a
-stdlib-only core. The golden bytes in tests/test_mavlink_min.py were produced
-once with pymavlink and pinned; that is the check that this hand encoding
-matches the real dialect.
+The small backend, mission-transaction, and diagnostic message subset is
+encoded and decoded by hand. A full dialect library was rejected on purpose:
+the service's core remains stdlib only. Golden bytes in the tests were
+produced with pymavlink and pinned to check this hand encoding against the
+MAVLink dialect.
 
 Frames: MAVLink v2 is emitted; v1 and v2 are both decoded. Signed frames are
 rejected (nothing here can verify a signature, so accepting one would be
@@ -16,6 +15,7 @@ failure drops one byte and resyncs.
 from __future__ import annotations
 
 import logging
+from collections import deque
 import socket
 import struct
 import threading
@@ -37,11 +37,17 @@ MAV_MODE_FLAG_SAFETY_ARMED = 128
 MAV_STATE_ACTIVE = 4
 
 MAV_CMD_DO_SET_MODE = 176
+MAV_CMD_DO_SET_MISSION_CURRENT = 224
 MAV_CMD_DO_SET_HOME = 179
 MAV_CMD_SET_MESSAGE_INTERVAL = 511
 MAV_CMD_GUIDED_CHANGE_SPEED = 43000
 MAV_CMD_GUIDED_CHANGE_ALTITUDE = 43001
 MAV_CMD_GUIDED_CHANGE_HEADING = 43002
+MAV_CMD_NAV_WAYPOINT = 16
+MAV_CMD_NAV_LAND = 21
+MAV_CMD_NAV_TAKEOFF = 22
+MAV_CMD_DO_LAND_START = 189
+MAV_CMD_DO_GO_AROUND = 191
 
 MAV_RESULT_ACCEPTED = 0
 MAV_RESULT_TEMPORARILY_REJECTED = 1
@@ -52,6 +58,10 @@ MAV_RESULT_IN_PROGRESS = 5
 
 MAV_FRAME_GLOBAL = 0
 MAV_FRAME_GLOBAL_RELATIVE_ALT = 3
+MAV_FRAME_GLOBAL_INT = 5
+MAV_FRAME_GLOBAL_RELATIVE_ALT_INT = 6
+MAV_MISSION_ACCEPTED = 0
+MAV_MISSION_TYPE_MISSION = 0
 
 HEADING_TYPE_COG = 0
 HEADING_TYPE_HEADING = 1
@@ -62,14 +72,26 @@ PLANE_MODE_FBWA = 5
 PLANE_MODE_RTL = 11
 PLANE_MODE_LOITER = 12
 PLANE_MODE_GUIDED = 15
+PLANE_MODE_AUTO = 10
 
 MSG_HEARTBEAT = 0
+MSG_PARAM_REQUEST_READ = 20
+MSG_PARAM_VALUE = 22
+MSG_ATTITUDE = 30
 MSG_GLOBAL_POSITION_INT = 33
+MSG_SERVO_OUTPUT_RAW = 36
+MSG_MISSION_CURRENT = 42
+MSG_MISSION_COUNT = 44
+MSG_MISSION_ITEM_REACHED = 46
+MSG_MISSION_ACK = 47
+MSG_MISSION_REQUEST_INT = 51
+MSG_MISSION_ITEM_INT = 73
 MSG_RC_CHANNELS = 65
 MSG_VFR_HUD = 74
 MSG_COMMAND_INT = 75
 MSG_COMMAND_LONG = 76
 MSG_COMMAND_ACK = 77
+MSG_AUTOPILOT_VERSION = 148
 
 # ----------------------------------------------------------- definitions ----
 
@@ -82,9 +104,51 @@ MSG_DEFS = {
         "HEARTBEAT", "<IBBBBB", 50,
         ("custom_mode", "type", "autopilot", "base_mode", "system_status", "mavlink_version"),
     ),
+    MSG_PARAM_REQUEST_READ: (
+        "PARAM_REQUEST_READ", "<hBB16s", 214,
+        ("param_index", "target_system", "target_component", "param_id"),
+    ),
+    MSG_PARAM_VALUE: (
+        "PARAM_VALUE", "<fHH16sB", 220,
+        ("param_value", "param_count", "param_index", "param_id", "param_type"),
+    ),
+    MSG_ATTITUDE: (
+        "ATTITUDE", "<Iffffff", 39,
+        ("time_boot_ms", "roll", "pitch", "yaw", "rollspeed", "pitchspeed", "yawspeed"),
+    ),
     MSG_GLOBAL_POSITION_INT: (
         "GLOBAL_POSITION_INT", "<IiiiihhhH", 104,
         ("time_boot_ms", "lat", "lon", "alt", "relative_alt", "vx", "vy", "vz", "hdg"),
+    ),
+    MSG_SERVO_OUTPUT_RAW: (
+        "SERVO_OUTPUT_RAW", "<I8HB8H", 222,
+        ("time_usec",) + tuple("servo%d_raw" % i for i in range(1, 9))
+        + ("port",) + tuple("servo%d_raw" % i for i in range(9, 17)),
+    ),
+    MSG_MISSION_CURRENT: (
+        "MISSION_CURRENT", "<HHBB", 28,
+        ("seq", "total", "mission_state", "mission_mode"),
+    ),
+    MSG_MISSION_COUNT: (
+        "MISSION_COUNT", "<HBBB", 221,
+        ("count", "target_system", "target_component", "mission_type"),
+    ),
+    MSG_MISSION_ITEM_REACHED: (
+        "MISSION_ITEM_REACHED", "<H", 11, ("seq",),
+    ),
+    MSG_MISSION_ACK: (
+        "MISSION_ACK", "<BBBB", 153,
+        ("target_system", "target_component", "type", "mission_type"),
+    ),
+    MSG_MISSION_REQUEST_INT: (
+        "MISSION_REQUEST_INT", "<HBBB", 196,
+        ("seq", "target_system", "target_component", "mission_type"),
+    ),
+    MSG_MISSION_ITEM_INT: (
+        "MISSION_ITEM_INT", "<ffffiifHHBBBBBB", 38,
+        ("param1", "param2", "param3", "param4", "x", "y", "z", "seq",
+         "command", "target_system", "target_component", "frame", "current",
+         "autocontinue", "mission_type"),
     ),
     MSG_RC_CHANNELS: (
         "RC_CHANNELS", "<I18HBB", 118,
@@ -108,6 +172,13 @@ MSG_DEFS = {
         # progress / result_param2 / target_* are MAVLink 2 extensions.
         "COMMAND_ACK", "<HBBiBB", 143,
         ("command", "result", "progress", "result_param2", "target_system", "target_component"),
+    ),
+    MSG_AUTOPILOT_VERSION: (
+        "AUTOPILOT_VERSION", "<QQIIIIHH8s8s8s18s", 178,
+        ("capabilities", "uid", "flight_sw_version", "middleware_sw_version",
+         "os_sw_version", "board_version", "vendor_id", "product_id",
+         "flight_custom_version", "middleware_custom_version",
+         "os_custom_version", "uid2"),
     ),
 }
 
@@ -294,6 +365,16 @@ def guided_change_altitude(alt_m: float, frame: int, rate_m_s: float,
                        frame, param3=float(rate_m_s), z=float(alt_m))
 
 
+def param_request_read(name: str, target_system=1, target_component=1):
+    raw = name.encode("ascii")
+    if not 1 <= len(raw) <= 16:
+        raise ValueError("MAVLink parameter name must be 1–16 ASCII bytes")
+    return MSG_PARAM_REQUEST_READ, {"param_index": -1,
+                                    "target_system": target_system,
+                                    "target_component": target_component,
+                                    "param_id": raw.ljust(16, b"\x00")}
+
+
 # ------------------------------------------------------------------- link ----
 
 class MavlinkLink:
@@ -308,7 +389,8 @@ class MavlinkLink:
     # HEARTBEAT at 5 Hz so a mode change is confirmed within ~200 ms rather
     # than up to a second; the backend's GUIDED confirmation waits on it.
     STREAMS = ((MSG_HEARTBEAT, 5.0), (MSG_RC_CHANNELS, 5.0), (MSG_VFR_HUD, 5.0),
-               (MSG_GLOBAL_POSITION_INT, 5.0))
+               (MSG_GLOBAL_POSITION_INT, 5.0), (MSG_ATTITUDE, 5.0),
+               (MSG_SERVO_OUTPUT_RAW, 5.0))
 
     def __init__(self, host="127.0.0.1", port=5760, clock=time.monotonic,
                  sysid=255, compid=190, target_system=1, target_component=1,
@@ -320,10 +402,13 @@ class MavlinkLink:
         self._sock = None
         self._parser = Parser()
         self._latest = {}
+        self._received = deque(maxlen=300)
+        self._cursor = 0
         self._acks = {}
         self._ack_events = {}
         self._seq = 0
         self._lock = threading.Lock()
+        self._receive_condition = threading.Condition(self._lock)
         self._send_lock = threading.Lock()
         self._running = False
         self._reader = None
@@ -407,6 +492,24 @@ class MavlinkLink:
             return None, float("inf")
         return entry[0], self.clock() - entry[1]
 
+    def message_cursor(self) -> int:
+        with self._lock:
+            return self._cursor
+
+    def wait_message(self, msgids, after_cursor: int, timeout: float):
+        """Wait for a new validated frame, preserving duplicate mission requests."""
+        wanted = set(msgids)
+        deadline = time.monotonic() + timeout
+        with self._receive_condition:
+            while True:
+                for cursor, message in self._received:
+                    if cursor > after_cursor and message.msgid in wanted:
+                        return cursor, message
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return after_cursor, None
+                self._receive_condition.wait(remaining)
+
     def heartbeat_age(self) -> float:
         return self.latest(MSG_HEARTBEAT)[1]
 
@@ -414,13 +517,32 @@ class MavlinkLink:
         fields, _age = self.latest(MSG_HEARTBEAT)
         return None if fields is None else fields["custom_mode"]
 
+    def request_param(self, name: str, timeout=0.4, retries=2):
+        """Return a fresh effective value; a defaults file is not a readback."""
+        msgid, fields = param_request_read(name, self.target_system, self.target_component)
+        for _ in range(retries + 1):
+            cursor = self.message_cursor()
+            self.send(msgid, fields)
+            deadline = time.monotonic() + timeout
+            while time.monotonic() < deadline:
+                cursor, message = self.wait_message(
+                    (MSG_PARAM_VALUE,), cursor, deadline - time.monotonic())
+                if message is None:
+                    break
+                returned = message.fields["param_id"].split(b"\x00", 1)[0]
+                if returned == name.encode("ascii"):
+                    return float(message.fields["param_value"])
+        raise TimeoutError("Effective parameter %s not returned" % name)
+
     # -- threads --
 
     def _deliver(self, message: Message) -> None:
         if message.sysid != self.target_system:
             return      # another GCS, or a companion, on the same link
         now = self.clock()
-        with self._lock:
+        with self._receive_condition:
+            self._cursor += 1
+            self._received.append((self._cursor, message))
             self._latest[message.msgid] = (message.fields, now)
             if message.msgid == MSG_COMMAND_ACK:
                 command = message.fields["command"]
@@ -428,6 +550,7 @@ class MavlinkLink:
                 event = self._ack_events.get(command)
                 if event:
                     event.set()
+            self._receive_condition.notify_all()
 
     def _read_loop(self) -> None:
         while self._running:

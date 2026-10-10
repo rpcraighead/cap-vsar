@@ -207,6 +207,44 @@ screenshot file appears on disk before it is complete - `Image.load()` raises
 
 No repository file changed in the inspection itself. A-1 stays open.
 
+## 2026-09-18 — Flight modes offline implementation; live control disabled
+
+Implemented a typed flight executive with separate authority, phase,
+controller, transfer, and Test Pilot substates; a pure simulator-side
+flight-control arbiter; an inert separate XPPython3 plugin; session-specific
+private ArduPlane candidate mapping with offline-tested fresh-session
+registration for a Garmin return transfer; shared process lock; and an explicit
+live-qualification guard. Added observable Garmin, ArduPlane, and direct-test
+adapters, a real MAVLink mission count/request/item/ACK transaction, a
+deterministic AUTO takeoff/route/approach/landing/rollout workflow with
+go-around, an optional observation-gated Garmin cruise segment, a fresh-link
+ArduPlane mission rejoin transaction and an injected managed-SITL return
+procedure, sourced runway-corridor phase profiles, and a measured-recovery H0
+Test Pilot workflow. Gate outcomes and legacy launcher terminal labels now
+distinguish measured achievement from refusal, timeout, cancellation, and
+fault. The direct backend seeds measured controls and uses its slew-limited
+values; lifecycle cleanup separates human, Garmin, fault, and ground targets.
+Historical raw-control launchers and chat routes have a separate closed guard,
+so enabling the general bridge gate cannot enable them accidentally.
+
+Offline tests exercise protocol and workflow behavior against injected
+observations and stateful fake actuator/AP readbacks. This is **workflow and
+protocol validation, not flight-dynamics validation**. The full suite result
+and remaining work are recorded in `docs/FLIGHT_MODES_IMPLEMENTATION_STATUS.md`.
+No live simulator, SITL, or plugin was operated or installed in this work.
+All unqualified live entrypoints remain disabled. The September 17 GUIDED
+trial remains a real flight without heading or altitude capture. Its final
+2,973.95-ft observation faults the gate on offline replay; its old “flight
+complete” label and broad “no fault” wording are superseded by that finding.
+The pinned GUIDED gains match upstream defaults; loaded values and aircraft
+suitability remain unverified. Garmin transfers, autonomous runway flight,
+virtual-pilot power/configuration, and live plugin behavior need attended
+qualification under `docs/FLIGHT_MODES_ACCEPTANCE.md`. The optional Garmin
+segment and restart procedure have only fake-client/process tests; production
+readiness remains closed. The return worker leaves executive heartbeats in the
+normal tick path; real restart, cancellation latency and aircraft response
+still need attended timing evidence before Garmin-to-ArduPlane qualification.
+
 ## 2026-09-17 — LEG 3 FLOWN: ArduPlane commanded CAP 487 in X-Plane. No capture
 
 **ArduPlane flew the aircraft.** First time ArduPilot has commanded CAP 487
