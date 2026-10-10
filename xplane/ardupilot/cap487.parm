@@ -1,0 +1,58 @@
+# ArduPlane SITL defaults for the CAP 487 (Cessna 182T NAV III) bounded trial.
+# Load with:  arduplane --model xplane --defaults xplane/ardupilot/cap487.parm
+#
+# PROVISIONAL. Every value here is a trial starting point chosen so that
+# ArduPilot's own failsafes and limits do not fight the exercise gate
+# (services/ai_pilot/maneuvers.py Limits: 90-140 KIAS, <=35 deg bank,
+# >=1000 ft AGL). None of it is a POH figure and none of it is validated.
+# See docs/ARDUPLANE_TRIAL.md.
+
+# --- failsafes that would otherwise take the aircraft away mid-trial ---
+# The rig's joystick reaches ArduPilot only through the axis mapping in
+# xplane_plane_cap487.json; until that mapping is verified, an RC failsafe
+# would trip immediately and fly CIRCLE/RTL on its own.
+# Come up holding position, not navigating: the default boot mode plus
+# ArduPilot's built-in Home (Canberra) flew CAP 487 to 80 deg of bank on the
+# first live attach. 12 = LOITER, which holds position and altitude on
+# auto-throttle and does not use Home. The launcher re-asserts this anyway.
+INITIAL_MODE     12
+ARMING_REQUIRE   0
+THR_FAILSAFE     0
+FS_SHORT_ACTN    0
+FS_LONG_ACTN     0
+# Our MAVLink link heartbeats at 1 Hz; if it stops, the backend has already
+# paused X-Plane. Do not let ArduPilot also start an RTL.
+FS_GCS_ENABL     0
+
+# --- speeds: Plane 4.5+ names, all in m/s (the pre-4.5 TRIM_ARSPD_CM /
+#     ARSPD_FBW_* names are silently ignored by a 4.7 build, which would leave
+#     AIRSPEED_MAX at its 22 m/s default and TECS slowing a C182 to the stall) ---
+AIRSPEED_CRUISE  56.6        # 110 KIAS exercise cruise target, same as the other backends
+AIRSPEED_MIN     46.3        # 90 KIAS, the gate's floor
+AIRSPEED_MAX     72.0        # 140 KIAS, the gate's ceiling
+
+# --- loiter geometry ---
+# ArduPlane's default WP_LOITER_RAD is 60 m. At 110 KIAS (57 m/s) a 60 m circle
+# demands atan(v^2/rg) = 80 degrees of bank, which is what LOITER commanded on
+# the first secured attach. 800 m gives about 22 degrees - inside ROLL_LIMIT_DEG
+# and inside the gate's 35.
+WP_LOITER_RAD    800
+RTL_RADIUS       800
+
+# --- attitude limits (degrees), kept INSIDE the gate's so routine flying never trips it ---
+ROLL_LIMIT_DEG   25          # gate faults at 35
+PTCH_LIM_MAX_DEG 15
+PTCH_LIM_MIN_DEG -10
+
+# --- climb/descent: a C182 at cruise, not the 10 m/s ArduPlane default ---
+TECS_CLMB_MAX    2.5
+TECS_SINK_MAX    2.5
+TECS_SINK_MIN    1.0
+
+# --- GUIDED heading control (MAV_CMD_GUIDED_CHANGE_HEADING uses these, not L1) ---
+# Placeholders. Tune during T1 (heading capture); record the values used in the trial log.
+GUIDED_P         5000
+GUIDED_I         0
+GUIDED_D         0
+
+SIM_SPEEDUP      1

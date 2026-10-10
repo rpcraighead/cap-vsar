@@ -1,8 +1,11 @@
 # CAP 487 flight-model validation test card (A-1)
 
-Every C182T flight-model correction made so far has been verified **statically** —
-the right number is in the right ACF record, confirmed by dataref after reload.
-None of it has been verified **in flight**. This card is how that gets closed.
+The individual C182T ACF corrections have been checked statically and by
+dataref after reload. **B1 and C1 have since been flown and both missed their
+POH targets.** Those two points diagnose a model gap; they do not validate the
+flight model. The remaining card points and repeats after any model change are
+needed for acceptance. See `CHANGELOG.md` (2026-09-15) and
+`docs/C182T_FLIGHT_MODEL_CALIBRATION.md`.
 
 Source for every target below: Cessna Model 182T NAV III GFC 700 AFCS POH,
 P/N 182TPHBUS-00/-01, recorded with SHA-256 in
@@ -123,11 +126,14 @@ automatically mean the correction was wrong:
 * **A3 high, A1 correct** — the 38° flap is not doing aerodynamic work. That
   points at flap chord ratio or the `_flap1_cl`/`_flap1_cd` coefficients, none of
   which were touched today.
-* **B1 low** — engine or propeller modelling, not geometry. Power, RPM limit and
-  blade count were already correct before today.
-* **Everything within tolerance** — the flight model is validated at max gross,
-  and A-1's flight-model half can be recorded as passing with the caveat that only
-  the max-gross ISA condition was tested.
+* **B1 low** — compare engine power and propeller state with aerodynamic
+  geometry and drag. The recorded B1/C1 pair showed that the 7% C1 power
+  shortfall alone cannot account for the 13.3% speed shortfall; the ACF body and
+  almost all wing parameters are still inherited from the C172SP.
+* **All recorded points within tolerance** — record a pass only for the tested
+  weight, CG, atmosphere and configuration. A-1 also requires exterior and
+  broader flight-model acceptance; one set of max-gross ISA points cannot close
+  it alone.
 
 Record the actual numbers in `CHANGELOG.md` whatever the outcome, including
 misses. A partial pass with honest numbers is worth more than a selective one.

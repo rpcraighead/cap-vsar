@@ -13,7 +13,7 @@ import math
 import shutil
 import shlex
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Iterable
 
@@ -380,6 +380,8 @@ def write_obj8(
     mode: str = "opaque",
     propeller: bool = False,
     prop_blur: bool = False,
+    named_lights: Iterable[tuple[str, tuple[float, float, float]]] | None = None,
+    hide_in_cockpit: set[str] | None = None,
 ) -> dict[str, object]:
     selected = list(objects)
     vertices, indices, groups = _build_mesh(selected)
@@ -429,8 +431,16 @@ def write_obj8(
             lines.append(f"ATTR_light_level 0.000000 1.000000 {dataref}")
 
         rotation = PROP_ROTATION if propeller else rotations.get(group.name)
-        if rotation or prop_blur:
+        hidden = group.name in (hide_in_cockpit or ())
+        if rotation or prop_blur or hidden:
             lines.append("ANIM_begin")
+            if hidden:
+                # Drawn from outside, hidden from the 3-D cockpit. Same values
+                # and dataref Laminar uses to hide pilot.obj from his own eyes.
+                lines.append(
+                    "ANIM_hide 0.000000 0.500000 "
+                    "sim/graphics/view/view_is_external"
+                )
             if propeller:
                 lines.append(
                     "ANIM_hide 1.000000 1.000000 "
@@ -444,8 +454,15 @@ def write_obj8(
             if rotation:
                 lines.extend(_animation_lines(rotation))
         lines.append(f"TRIS {group.start} {group.count}")
-        if rotation or prop_blur:
+        if rotation or prop_blur or hidden:
             lines.append("ANIM_end")
+
+    # LIGHT_NAMED is a command, not vertex data, so it belongs here with the
+    # TRIS and takes no POINT_COUNTS slot - that field counts VLIGHT entries,
+    # of which there are none.
+    for light, (x, y, z) in named_lights or ():
+        lines.extend(("", f"LIGHT_NAMED {light} {_fmt(x)} {_fmt(y)} {_fmt(z)}"))
+
     destination.write_text("\n".join(lines) + "\n")
 
     xs = [vertex[0] for vertex in vertices]
@@ -767,6 +784,15 @@ DELIBERATELY_EXCLUDED = {
     "Blade1.001", "Blade2.001", "Blade3.001",
     "SlowProp",           # low-RPM disc; FastProp drives the blurred disc
     "Window.L.001", "Window.R.001",
+    # FlightGear light-halo billboards. Flat two-triangle quads 0.90 m and
+    # 1.79 m square, all three centred on the model origin, which in OBJ8 space
+    # is the firewall - so they stand square across the windscreen and were seen
+    # in X-Plane as pale wedges lying over the panel and the MFD. They carry
+    # Lights.png, which is the only reason texture-bucket selection swept them
+    # into the lights object. FlightGear turns them to face the camera at run
+    # time; X-Plane has no such effect and draws them flat, so there is nothing
+    # to keep. The real glow now comes from LIGHT_NAMED (see NAMED_LIGHTS).
+    "PlaneX", "Plane.002X", "Plane.003X",
 }
 
 # Donor objects that are visible features but are NOT yet converted. These are
@@ -779,6 +805,196 @@ KNOWN_UNCONVERTED = {
     "NavLight.L", "NavLight.R", "NavlightTransp",
     "BeaconOff",
 }
+
+
+# X-Plane named lights, placed at the donor's own lamp geometry.
+#
+# Until this was added the package had no point light of any kind: the lights
+# object carried only ATTR_light_level, which makes a texture emissive and
+# nothing more, so at night nothing glowed and nothing cast. Worse, the beacon
+# and the strobes had no representation at all, because `BeaconOff` and
+# `Strobe` sit in KNOWN_UNCONVERTED above - they are dimension landmarks for
+# published height and span and were never emitted as geometry. They are still
+# not emitted as geometry; their positions are now read for the lights below,
+# which is what a viewer actually sees at night.
+#
+# Names are taken from X-Plane 12's own light table,
+# Resources/bitmaps/world/lites/lights.txt. LIGHT_NAMED can only use a light
+# whose parameters are all literal in that table; each of these is
+# (line numbers at X-Plane 12.2.0): airplane_nav_left 355, airplane_nav_right
+# 356, airplane_nav_tail 354, airplane_strobe 338, airplane_beacon 313,
+# airplane_landing 237, airplane_taxi 259.
+#
+# Port is red and starboard green: the donor names its wingtip lenses by colour
+# and puts NavLightRed at OBJ8 x -5.45 and NavLightGreen at +5.46, which is the
+# correct side for each.
+NAMED_LIGHTS = (
+    ("NavLightRed", "airplane_nav_left", "centre"),
+    ("NavLightGreen", "airplane_nav_right", "centre"),
+    ("PlaneTailLight", "airplane_nav_tail", "centre"),
+    ("Strobe", "airplane_strobe", "span_ends"),
+    ("BeaconOff", "airplane_beacon", "centre"),
+    ("LandingLight", "airplane_landing", "centre"),
+    ("TaxiLight", "airplane_taxi", "centre"),
+)
+
+
+# Exterior detail the pilot can see from the left seat, and should not.
+#
+# X-Plane draws the aircraft's exterior objects in the 3-D cockpit as well as
+# from outside, and this exterior is emitted single-sided - ATTR_no_cull is set
+# only for glass. So the skin AROUND a fitting is back-facing from inside the
+# cabin and culled away, while the fitting itself, being a closed solid, still
+# presents its far side and is drawn. The donor's windscreen-corner probes are
+# correctly mounted in the mesh (24 skin vertices lie within 3 cm of the base),
+# but with everything that gives them context culled they read from the left
+# seat as a handle floating over the cowl, which is how this was reported.
+#
+# They are HIDDEN, not deleted: from outside they are real donor detail and
+# belong on the aeroplane. ANIM_hide against sim/graphics/view/view_is_external
+# is the mechanism Laminar already uses for pilot.obj in this same package, for
+# the same reason - a thing that is right from outside and wrong from the seat.
+#
+# Regions are OBJ8 metres (x right, y up, z aft). Measured extent of the two
+# probe components: x +/-0.514..0.562, y 0.330..0.384, z -0.051..0.067.
+COCKPIT_HIDDEN_SUFFIX = "cockpit_hidden"
+COCKPIT_HIDDEN_REGIONS = (
+    ((0.45, 0.25, -0.15), (0.65, 0.45, 0.15)),      # starboard windscreen corner
+    ((-0.65, 0.25, -0.15), (-0.45, 0.45, 0.15)),    # port windscreen corner
+)
+
+
+def _welded_components(obj: ACObject) -> list[list[ACSurface]]:
+    """Surfaces grouped into connected components, welded by vertex position.
+
+    Position welding matters: the donor splits a seam into separate vertex
+    indices at the same point, and treating those as unconnected would break
+    one solid into shells.
+    """
+    parent: dict[tuple[float, float, float], tuple[float, float, float]] = {}
+
+    def find(node):
+        while parent.setdefault(node, node) != node:
+            node = parent[node]
+        return node
+
+    def key(index):
+        x, y, z = obj.vertices[index]
+        return (round(x, 5), round(y, 5), round(z, 5))
+
+    for surface in obj.surfaces:
+        if not surface.refs:
+            continue
+        root = find(key(surface.refs[0].vertex))
+        for ref in surface.refs[1:]:
+            parent[find(key(ref.vertex))] = root
+    components: dict[tuple[float, float, float], list[ACSurface]] = {}
+    for surface in obj.surfaces:
+        if not surface.refs:
+            continue
+        components.setdefault(find(key(surface.refs[0].vertex)), []).append(surface)
+    return list(components.values())
+
+
+def split_cockpit_visible_detail(
+    objects: Iterable[ACObject], regions=COCKPIT_HIDDEN_REGIONS
+) -> tuple[list[ACObject], set[str]]:
+    """Move exterior detail lying inside `regions` into its own draw group.
+
+    The split is by CONNECTED COMPONENT and a component moves only when ALL of
+    it lies inside one region. That is the safety property: the main skin is a
+    single component spanning the whole aeroplane, so no small region can ever
+    capture it, however the boxes are drawn.
+
+    A region that captures nothing raises. The donor geometry is corrected by
+    c182t_corrections before this runs, so a region that has silently stopped
+    matching means the correction moved the detail and the aircraft would ship
+    with the fitting visible again - which is the fault this exists to prevent.
+    """
+    result: list[ACObject] = []
+    hidden_names: set[str] = set()
+    captured = 0
+    for obj in objects:
+        inside: list[ACSurface] = []
+        outside: list[ACSurface] = []
+        for component in _welded_components(obj):
+            points = [
+                ac_to_xplane(obj.vertices[ref.vertex])
+                for surface in component
+                for ref in surface.refs
+            ]
+            if any(_inside_region(points, low, high) for low, high in regions):
+                inside.extend(component)
+            else:
+                outside.extend(component)
+        if inside:
+            captured += len(inside)
+            name = f"{obj.name}.{COCKPIT_HIDDEN_SUFFIX}"
+            hidden_names.add(name)
+            result.append(replace(obj, name=name, surfaces=inside))
+            result.append(replace(obj, surfaces=outside))
+        else:
+            result.append(obj)
+    if not captured:
+        raise ValueError(
+            "No exterior detail was captured by any cockpit-hidden region. "
+            "The regions in COCKPIT_HIDDEN_REGIONS are measured against the "
+            "CORRECTED donor geometry; if a correction moved that detail they "
+            "must be re-measured, not dropped."
+        )
+    return result, hidden_names
+
+
+def _inside_region(points, low, high) -> bool:
+    return all(
+        low[axis] <= point[axis] <= high[axis] for point in points for axis in range(3)
+    )
+
+
+def named_light_placements(
+    objects: Iterable[ACObject],
+) -> list[tuple[str, tuple[float, float, float]]]:
+    """Where each X-Plane named light goes, measured from the donor's lamps.
+
+    The donor models every lamp as its own small object, so the object's centre
+    in OBJ8 space is the lamp position and nothing has to be guessed. `Strobe`
+    is the exception: it is a single object spanning both wingtips (10.93 m
+    across), so its centre would put one strobe in the middle of the cabin. It
+    yields a light at each span end instead.
+
+    Reads the objects AFTER c182t_corrections has been applied, so the lights
+    follow the corrected geometry rather than the raw donor.
+    """
+    by_name = {obj.name: obj for obj in objects}
+    placements: list[tuple[str, tuple[float, float, float]]] = []
+    missing = []
+    for donor_name, light, placement in NAMED_LIGHTS:
+        obj = by_name.get(donor_name)
+        if obj is None or not obj.vertices:
+            missing.append(donor_name)
+            continue
+        points = [ac_to_xplane(vertex) for vertex in obj.vertices]
+        xs = [point[0] for point in points]
+        ys = [point[1] for point in points]
+        zs = [point[2] for point in points]
+        centre = (
+            (min(xs) + max(xs)) / 2,
+            (min(ys) + max(ys)) / 2,
+            (min(zs) + max(zs)) / 2,
+        )
+        if placement == "span_ends":
+            placements.extend(
+                (light, (tip, centre[1], centre[2])) for tip in (min(xs), max(xs))
+            )
+        else:
+            placements.append((light, centre))
+    if missing:
+        raise ValueError(
+            "Donor lamp objects required for named lights are absent: "
+            + ", ".join(sorted(missing))
+            + ". A light must never be emitted at a guessed position."
+        )
+    return placements
 
 
 PROP_NAMES = {"Blade1", "Blade2", "Blade3", "chrome_spinner"}
@@ -844,7 +1060,11 @@ def build_flightgear_objects(donor: Path, target_aircraft: Path) -> dict[str, ob
     ]
     prop = [obj for obj in objects if obj.name in prop_names]
     prop_blur = [obj for obj in objects if obj.name == "FastProp"]
-    lights = [obj for obj in objects if obj.texture == "Lights.png"]
+    lights = [
+        obj
+        for obj in objects
+        if obj.texture == "Lights.png" and obj.name not in DELIBERATELY_EXCLUDED
+    ]
     glass = [obj for obj in objects if obj.name in GLASS_NAMES]
 
     selections = {
@@ -866,12 +1086,18 @@ def build_flightgear_objects(donor: Path, target_aircraft: Path) -> dict[str, ob
         objects_dir / "flightgear_c182t_glass.png"
     )
 
+    # After the texture is painted, so the hidden detail is still painted with
+    # the rest of the skin, and before the mesh is written, which is where the
+    # separate draw group has to exist.
+    main_groups, cockpit_hidden = split_cockpit_visible_detail(main)
+
     reports = [
         write_obj8(
             objects_dir / "flightgear_c182t.obj",
-            main,
+            main_groups,
             texture=texture.name,
             rotations=MAIN_ROTATIONS,
+            hide_in_cockpit=cockpit_hidden,
         ),
         write_obj8(
             objects_dir / "flightgear_c182t_propeller.obj",
@@ -891,6 +1117,7 @@ def build_flightgear_objects(donor: Path, target_aircraft: Path) -> dict[str, ob
             lights,
             texture="flightgear_c182t_lights.png",
             mode="lights",
+            named_lights=named_light_placements(objects),
         ),
         write_obj8(
             objects_dir / "flightgear_c182t_glass.obj",

@@ -1,6 +1,5 @@
 """Isolated airborne training deck: python -m services.ai_pilot.maneuver_server."""
 import argparse
-import fcntl
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import logging
@@ -9,6 +8,7 @@ import threading
 
 from .maneuvers import Limits, ManeuverGate, XPlaneAutopilotBackend, parse_maneuver
 from .xplane_udp import XPlaneUDPClient
+from .control_ownership import ControllerLock, require_legacy_route_qualification
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -71,10 +71,11 @@ def main():
     parser.add_argument('--min-altitude', type=float, default=3000)
     parser.add_argument('--max-altitude', type=float, default=6000)
     args = parser.parse_args()
+    if args.live:
+        require_legacy_route_qualification()
     logging.basicConfig(level=logging.INFO)
     # Prevent duplicate instances of this controller. Legacy clients must remain stopped.
-    with open('/tmp/cap-vsar-maneuver-controller.lock', 'w') as ownership:
-        fcntl.flock(ownership, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    with ControllerLock():
         limits = Limits(min_altitude_ft=args.min_altitude, max_altitude_ft=args.max_altitude)
         client = XPlaneUDPClient(host=args.xp_host, port=args.xp_port, mock=not args.live)
         backend = XPlaneAutopilotBackend(client)

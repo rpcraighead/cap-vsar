@@ -86,6 +86,45 @@ def test_replay_and_parallel_ownership_refused(setup):
     assert len(b.writes) == 1
 
 
+def test_diving_entry_refused_separately_from_envelope():
+    b = Backend()
+    b.o = replace(b.o, vvi_fpm=-3706.5)
+    g = ManeuverGate(b)
+    with pytest.raises(ValueError, match='not stable'):
+        g.acquire()
+    assert g.status()['last_terminal']['status'] == 'refused'
+    assert not b.writes
+
+
+def test_failed_arduplane_trace_final_altitude_is_fault_not_capture(setup):
+    b, g, lease = setup
+    g.submit(lease, 1, {'heading_mag': 300, 'altitude_indicated_ft': 4500})
+    b.o = replace(b.o, altitude_indicated_ft=2973.94824, vvi_fpm=-1567.8)
+    g.tick()
+    terminal = g.status()['last_terminal']
+    assert terminal['status'] == 'fault'
+    assert terminal['outcome'] == 'faulted' and terminal['task_id']
+    assert 'outside the configured airborne exercise envelope' in terminal['reason']
+    assert not g.status()['owned']
+    assert ('pause',) in b.writes
+
+
+def test_timeout_and_takeover_have_distinct_terminal_events(setup):
+    b, g, lease = setup
+    active = g.submit(lease, 1, {'heading_mag': 90})
+    g.timeout()
+    assert g.status()['last_terminal']['status'] == 'timed_out'
+    assert g.status()['last_terminal']['command_id'] == active['command_id']
+    assert not g.status()['owned']
+    assert all('event_id' in e and 'monotonic_time' in e and 'sequence' in e
+               for e in g.status()['events'])
+    grant = g.acquire()
+    g.submit(grant['lease'], 1, {'heading_mag': 180})
+    g.takeover()
+    assert any(e['status'] == 'canceled' and e['reason'] == 'human takeover'
+               for e in g.status()['events'])
+
+
 def test_completion_requires_stable_measured_capture(setup):
     b, g, lease = setup
     clock = [0.0]

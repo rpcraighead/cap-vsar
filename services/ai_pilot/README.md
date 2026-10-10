@@ -221,6 +221,131 @@ were found and fixed in the process; all are recorded with trace evidence in
 Offline coverage: 80 tests in `tests/test_direct_backend.py`, 150 across the
 service, none requiring X-Plane.
 
+## Flight modes: current implementation status (2026-09-18)
+
+The September 17 ArduPlane GUIDED trial **did fly CAP 487**, but neither
+heading nor altitude captured. Offline replay of its final 2,973.95-ft sample
+is a gate altitude-envelope fault, so the old “flight complete” label was not
+a success result. The pinned `GUIDED_P=5000`, `I=0`, `D=0` match upstream
+defaults; their effective loaded values and aircraft suitability are unknown.
+
+The new `flight_executive.py`, `mission_script.py`, `test_pilot_script.py`,
+`arduplane_mission.py`, controller adapters, phase profiles, and isolated
+flight-control plugin implement an **offline workflow and output boundary**.
+The mission runner also accepts an optional planned Garmin cruise segment.
+It requires measured entry and task completion, then a caller-supplied managed
+SITL restart/fresh candidate session and a mission-progress rejoin check.
+`managed_return.py` provides the offline-tested restart sequence with an
+isolated mapping, fresh MAVLink link, mission reupload and observed AUTO/current
+item. Its worker keeps slow restart work off the executive tick path; the
+bridge still times out if executive ticks stop. Its production path remains
+blocked pending attended qualification.
+All live launchers remain disabled by `control_ownership.py`; the plugin has
+not been installed or flown. The legacy launcher paths below are historical
+prototype descriptions and still need full migration to the executive. See
+`docs/FLIGHT_MODES_IMPLEMENTATION_STATUS.md` and
+`docs/FLIGHT_MODES_ACCEPTANCE.md` for gaps and the attended sequence.
+
+The executive keeps role, phase, controller, test substate and transfer state
+as separate typed fields. Its valid role/phase/controller combinations are:
+
+| Role | Phase | Controller | Current capability |
+| --- | --- | --- | --- |
+| HUMAN | Any phase | HUMAN | Explicit takeover, latched until a new request |
+| AI_MISSION | TAKEOFF, CLIMB, TRANSIT, SEARCH, APPROACH, LAND, ROLLOUT | ARDUPLANE | Offline AUTO mission workflow; runway phases need sourced corridors |
+| AI_MISSION | TRANSIT, SEARCH, APPROACH | GFC700 | Explicit observed transfer; requires qualified virtual-pilot power/configuration |
+| AI_TEST | TEST | DIRECT | Offline H0 typed input and recovery workflow |
+| AI_TEST | TEST | GFC700 or ARDUPLANE | Reserved typed combination; tracking card/aircraft qualification not implemented |
+
+Each nonhuman controller gets exactly one allocation per actuator domain.
+ArduPlane owns primary, throttle and configuration while the bridge holds
+measured trim; the human retains ground controls. GFC 700 owns primary and
+trim, while the virtual pilot owns power and configuration. DIRECT owns
+primary, trim, power and configuration during an authorized test. A transfer
+changes the bridge generation and revokes the previous lease. Candidate DREF
+packets are independent and do not contain a source sequence; this remains a
+live qualification limitation.
+
+## ArduPlane backend (historical GUIDED prototype)
+
+`arduplane_backend.ArduPlaneBackend` is the third `maneuvers.FlightBackend`:
+it puts an ArduPilot ArduPlane SITL (attached to X-Plane with the DRef-based
+`--model xplane` backend) into GUIDED and sends `MAV_CMD_GUIDED_CHANGE_ALTITUDE`
+/ `_HEADING`; ArduPilot flies the surfaces. This module never writes a control
+surface. The historical GUIDED launcher uses `ManeuverGate`. The newer
+executive provides typed mission phases through a separate adapter.
+
+MAVLink is spoken by `mavlink_min.py`, a stdlib codec for the backend,
+mission-upload, and diagnostic message subset. No new dependency.
+
+**Historical status:** one bounded GUIDED trial flew without capture; gate G
+remains undecided. The new AUTO runway-to-runway workflow is offline-tested
+only. No X-Plane 12 compatibility, CAP 487 tuning, or autonomous takeoff and
+landing behavior is qualified.
+
+### Yoke authority
+
+SITL's mapping sets `sim/operation/override/override_joystick=1`, so while it
+is attached the physical yoke reaches X-Plane only through ArduPilot's RC
+passthrough. The rules, each a named test:
+
+* moving the yoke releases: ArduPilot's `RC_CHANNELS` ≥40 µs from where they
+  sat at engagement (measured, not assumed to be 1500) for 0.3 s, **or**
+  X-Plane's raw `joystick_axis_values` moving >8 % — either detector alone is
+  enough, so takeover does not depend on the RC map being right; after a
+  takeover `select` is refused until `release()` acknowledges it;
+* `release()` clears the heading hold and parks ArduPlane in **LOITER** — the
+  only mode of the three that flies itself with no RC — or in **FBWA** when a
+  valid, centred RC position was measured at engagement. **MANUAL is never
+  used**: it passes the raw stick to the surfaces, and an unmapped joystick
+  axis reads as full aileron and full throttle (AI-21). `release()` never
+  pauses and never touches X-Plane controls, trim or the override;
+* the launcher owns the SITL process. On exit it parks the aircraft, stops
+  SITL, clears both X-Plane overrides and engages the GFC 700 in HDG+ALT —
+  **in that order**, because SITL re-asserts the overrides every frame while it
+  lives and clears nothing when it dies (`services/ai_pilot/sitl_lifecycle.py`);
+* a lost ArduPilot heartbeat **pauses** and also writes the joystick/throttle
+  overrides back to 0 — a dead SITL must not leave a dead yoke;
+* `pause()` never changes ArduPilot's mode;
+* the aircraft's own autopilot is disengaged before the first MAVLink write,
+  and re-engaging it while ArduPilot is flying releases (one writer, CONOPS §7.2).
+
+### Frames
+
+Heading: the gate is magnetic, ArduPilot's guided heading is true — the
+offset is measured live as `psi − mag_psi`. Altitude: the gate measures
+indicated, SITL flies true MSL — the offset is measured at engagement and the
+target re-issued if the aircraft levels more than 40 ft short. ArduPilot's
+true altitude is also checked against X-Plane's (±100 ft) as a "SITL is
+attached to this aircraft" test.
+
+### Ports
+
+| Link | Port | Owner |
+|---|---|---|
+| X-Plane → SITL data | UDP 49001 (`_snd_port`) | ArduPilot SITL |
+| SITL → X-Plane DREF/RREF | UDP 49000 (`_rcv_port`) | ArduPilot SITL |
+| SITL MAVLink | TCP 127.0.0.1:5760 | `MavlinkLink` |
+| This backend's RREF replies | UDP 49260 | `fly_arduplane_backend.py` |
+
+### Running it
+
+```bash
+scripts/setup_ardupilot_sitl.sh --check       # then without --check to build
+python3 scripts/fly_arduplane_backend.py --dry-run          # starts nothing
+python3 scripts/fly_arduplane_backend.py --heading 120 --altitude 4500 --axis-pitch 1 --axis-roll 0
+python3 scripts/fly_arduplane_backend.py --no-sitl ...     # attach to a SITL you started
+```
+
+The launcher holds the maneuver deck's controller lock for the run and refuses
+to start if it is held, prints a pre-flight block (heartbeat, mode, magnetic
+and altimeter offsets, SITL-vs-X-Plane altitude, joystick axes), and refuses
+if SITL's altitude disagrees with X-Plane's. `--backend arduplane` on
+`maneuver_server` is deliberately not added until the trial has flown.
+
+Offline coverage: 41 tests in `tests/test_arduplane_backend.py`, 18 in
+`tests/test_mavlink_min.py`, 14 in `tests/test_sitl_lifecycle.py`.
+
 ## Legacy scripted prototype
 
 The remaining sections describe the earlier experimental controller. Its live

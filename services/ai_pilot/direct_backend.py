@@ -65,6 +65,7 @@ class TestInput:
     magnitude: float          # signed control ratio, the plateau value
     duration_s: float
     ramp_s: float = 0.5       # rise and fall time
+    reference: str = "absolute"  # "absolute" surface ratio or "delta" from hold output
 
     AXES = ("pitch", "roll", "yaw")
     MAX_MAGNITUDE = 0.25      # well inside the per-axis clamps
@@ -100,6 +101,8 @@ class TestInput:
             raise ValueError("duration must be >0 and <= %.1f s" % self.MAX_DURATION_S)
         if not math.isfinite(self.ramp_s) or self.ramp_s < 0.0:
             raise ValueError("ramp must be finite and non-negative")
+        if self.reference not in ("absolute", "delta"):
+            raise ValueError("test input reference must be absolute or delta")
 
 
 def _wrap180(degrees: float) -> float:
@@ -269,6 +272,10 @@ class XPlaneDirectBackend:
         # before it engages, and trim is exactly the surface someone else will
         # have left somewhere unexpected.
         "elevator_trim": TRIM_DREF,
+        "aileron_position": CONTROL_DREFS["aileron"],
+        "elevator_position": CONTROL_DREFS["elevator"],
+        "rudder_position": CONTROL_DREFS["rudder"],
+        "throttle_position": CONTROL_DREFS["throttle"],
     }
 
     def __init__(self, client, limits=None, target_kias=110.0, clock=time.monotonic):
@@ -298,6 +305,7 @@ class XPlaneDirectBackend:
         self._test_input = None          # active TestInput, or None
         self._test_input_until = 0.0
         self._test_input_started = 0.0
+        self._test_baseline = 0.0
         self._bank_target = None         # commanded bank (card H2), or None
         self._speed_mode = False         # speed-on-pitch (cards H1/H3), or None
         self._speed_target_kias = None
@@ -307,6 +315,7 @@ class XPlaneDirectBackend:
         # engaging starts from the limited value rather than slewing from zero.
         self._surface = {"aileron": None, "elevator": None, "rudder": None}
         self._surface_t = None
+        self._transfer_baseline = None
 
         for name, ref in {**self.DATAREFS, **self.AUX_DATAREFS}.items():
             def received(ref, value, name=name):
@@ -345,6 +354,7 @@ class XPlaneDirectBackend:
         observation = self.observe()
         if not math.isfinite(observation.age_seconds) or observation.age_seconds > self.STALE_AFTER_SECONDS:
             raise ValueError("Refusing to take control without fresh telemetry")
+        self._transfer_baseline = self._measured_controls()
         self._disengage_autopilot()
         with self.lock:
             self._targets = (float(heading_mag) % 360.0, float(altitude_indicated_ft))
@@ -366,6 +376,7 @@ class XPlaneDirectBackend:
         observation = self.observe()
         if not math.isfinite(observation.age_seconds) or observation.age_seconds > self.STALE_AFTER_SECONDS:
             raise ValueError("Refusing to take control without fresh telemetry")
+        self._transfer_baseline = self._measured_controls()
         self._disengage_autopilot()
         with self.lock:
             self._bank_target = float(bank_deg)
@@ -393,6 +404,7 @@ class XPlaneDirectBackend:
         observation = self.observe()
         if not math.isfinite(observation.age_seconds) or observation.age_seconds > self.STALE_AFTER_SECONDS:
             raise ValueError("Refusing to take control without fresh telemetry")
+        self._transfer_baseline = self._measured_controls()
         self._disengage_autopilot()
         with self.lock:
             self._speed_mode = True
@@ -422,6 +434,8 @@ class XPlaneDirectBackend:
         with self.lock:
             if self._targets is None:
                 raise ValueError("take control with select() before applying a test input")
+            axis = {"pitch": "elevator", "roll": "aileron", "yaw": "rudder"}[test_input.axis]
+            self._test_baseline = self._last_commands.get(axis, self._surface.get(axis) or 0.0)
             self._test_input = test_input
             self._test_input_started = self.clock()
             self._test_input_until = self.clock() + test_input.duration_s
@@ -432,11 +446,11 @@ class XPlaneDirectBackend:
             return self._test_input is not None
 
     def release(self) -> None:
-        """Stop flying and hand the controls back neutral."""
+        """Stop emitting controls; the executive/bridge owns the handoff."""
         self._shutdown()
 
     def pause(self) -> None:
-        """Fault path: stop flying, neutralize, then pause the simulator."""
+        """Fault path: stop emitting controls, then request a simulator pause."""
         self._shutdown()
         try:
             self.client.set_paused(True)
@@ -459,12 +473,12 @@ class XPlaneDirectBackend:
         if self._thread and self._thread.is_alive():
             return
         self._stop.clear()
-        # Start the slew limiter from "no previous command" so the first tick
-        # after engaging applies the loop output directly instead of slewing
-        # from a surface position left over from an earlier engagement.
+        # The first demand slews from the measured transfer positions.
         with self.lock:
-            self._surface = {"aileron": None, "elevator": None, "rudder": None}
-            self._surface_t = None
+            self._surface = {k: self._transfer_baseline[k]
+                             for k in ("aileron", "elevator", "rudder")}
+            self._surface_t = self.clock()
+            self._throttle = self._transfer_baseline["throttle"]
         self._thread = threading.Thread(
             target=self._run, name="direct-backend", daemon=True
         )
@@ -491,8 +505,20 @@ class XPlaneDirectBackend:
         # aircraft that was never commanded is not a safe default - it writes the
         # yoke to centre and the throttle to cruise on an aircraft somebody else
         # is flying, which disturbs their trim for no reason.
-        if engaged:
-            self._neutralize()
+        # Revoking the candidate session at the bridge removes native output.
+        # An unconditional centre/0.45 write here would disturb a trimmed handoff.
+
+    def _measured_controls(self):
+        with self.lock:
+            samples = {name: self.samples.get(name)
+                       for name in ("aileron_position", "elevator_position",
+                                    "rudder_position", "throttle_position")}
+        baseline = {}
+        for name, sample in samples.items():
+            if sample is None or self.clock() - sample[1] > 0.5 or not math.isfinite(sample[0]):
+                raise ValueError("Fresh measured control positions required for direct transfer")
+            baseline[name.removesuffix("_position")] = sample[0]
+        return baseline
 
     def _neutralize(self) -> None:
         """Centre the controls and close the throttle to idle-cruise.
@@ -547,14 +573,14 @@ class XPlaneDirectBackend:
             if fault:
                 with self.lock:
                     self._last_fault = fault
-                self._neutralize()
+                self.client.set_paused(True)
                 break
             try:
                 self._step(observation, *targets)
             except Exception as error:  # never let a control loop die noisily mid-air
                 with self.lock:
                     self._last_fault = str(error)
-                self._neutralize()
+                self.client.set_paused(True)
                 break
             time.sleep(period)
 
@@ -698,9 +724,11 @@ class XPlaneDirectBackend:
 
         # H0: superimpose a bounded single-axis input over the loop output.
         if test_axis == "pitch":
-            elevator = _clamp(shaped, -g.MAX_ELEVATOR, g.MAX_ELEVATOR)
+            elevator = _clamp((self._test_baseline if test_input.reference == "delta" else 0.0) + shaped,
+                              -g.MAX_ELEVATOR, g.MAX_ELEVATOR)
         elif test_axis == "roll":
-            aileron = _clamp(shaped, -g.MAX_AILERON, g.MAX_AILERON)
+            aileron = _clamp((self._test_baseline if test_input.reference == "delta" else 0.0) + shaped,
+                             -g.MAX_AILERON, g.MAX_AILERON)
 
         # Turn coordination: adverse-yaw feedforward plus sideslip feedback, so a
         # roll input is measured coordinated rather than sideslipping. Suspended
@@ -710,7 +738,9 @@ class XPlaneDirectBackend:
         if not math.isfinite(beta):
             beta = 0.0
         if test_axis == "yaw":
-            rudder = _clamp(shaped, -g.MAX_RUDDER, g.MAX_RUDDER)
+            rudder = _clamp(self._test_baseline + shaped
+                            if test_input.reference == "delta" else shaped,
+                            -g.MAX_RUDDER, g.MAX_RUDDER)
             self._beta_i = 0.0          # do not wind up against a commanded slip
         else:
             # Right-rudder feedforward for the left-turning tendency, strongest
@@ -773,9 +803,10 @@ class XPlaneDirectBackend:
             self._trim = _clamp(self._trim + trim_rate * dt, -g.MAX_TRIM, g.MAX_TRIM)
             self.client.send_dref(self.TRIM_DREF, self._trim)
 
-        self.client.send_dref(self.CONTROL_DREFS["aileron"], aileron)
-        self.client.send_dref(self.CONTROL_DREFS["elevator"], elevator)
-        self.client.send_dref(self.CONTROL_DREFS["rudder"], rudder)
+        self._surface.update(limited)
+        self.client.send_dref(self.CONTROL_DREFS["aileron"], limited["aileron"])
+        self.client.send_dref(self.CONTROL_DREFS["elevator"], limited["elevator"])
+        self.client.send_dref(self.CONTROL_DREFS["rudder"], limited["rudder"])
         self.client.send_dref(self.CONTROL_DREFS["throttle"], self._throttle)
 
         # Keep the last command set so a caller can record it. Tuning needs the
@@ -783,9 +814,9 @@ class XPlaneDirectBackend:
         # is merely slow look identical from the telemetry alone.
         with self.lock:
             self._last_commands = {
-                "aileron": aileron,
-                "elevator": elevator,
-                "rudder": rudder,
+                "aileron": limited["aileron"],
+                "elevator": limited["elevator"],
+                "rudder": limited["rudder"],
                 "throttle": self._throttle,
                 "bank_command_deg": bank_command,
                 "vs_command_fpm": vs_command,
@@ -797,6 +828,8 @@ class XPlaneDirectBackend:
                 "test_input_axis": test_axis,
                 "test_input_magnitude": test_input.magnitude if test_input else None,
                 "test_input_shaped": shaped if test_input else None,
+                "test_input_reference": test_input.reference if test_input else None,
+                "test_input_baseline": self._test_baseline if test_input else None,
                 "beta_deg": beta,
                 "rudder_ff": None if test_axis == "yaw" else feedforward,
                 "beta_i": self._beta_i,
