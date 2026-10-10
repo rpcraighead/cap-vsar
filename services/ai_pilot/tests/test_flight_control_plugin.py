@@ -23,21 +23,35 @@ class FakeXP(types.ModuleType):
             "sim/cockpit2/autopilot/flight_director_mode": 1,
             "sim/cockpit2/autopilot/servos_on": 0,
             "sim/time/paused": 0,
+            "sim/flightmodel/engine/ENGN_thro_use": [0.0] * 16,
+            "sim/cockpit2/engine/actuators/throttle_ratio": [0.0] * 16,
         }
         self.accessors = {}
         self.writes = []
         self.commands = []
 
-    def findDataRef(self, name): return name
+    def findDataRef(self, name):
+        if name.endswith("ENGN_thro_use[0]"):
+            return None
+        return name
     def findCommand(self, name): return name
     def getDatai(self, ref): return self.refs.get(ref, 0)
     def getDataf(self, ref): return self.refs.get(ref, 0.0)
+    def getDatavf(self, ref, values, offset, count):
+        assert ref in ("sim/flightmodel/engine/ENGN_thro_use", "sim/cockpit2/engine/actuators/throttle_ratio")
+        values[:count] = self.refs[ref][offset:offset + count]
+        return count
     def setDatai(self, ref, value):
         self.refs[ref] = value
         self.writes.append((ref, value))
     def setDataf(self, ref, value):
+        assert ref not in ("sim/flightmodel/engine/ENGN_thro_use", "sim/cockpit2/engine/actuators/throttle_ratio")
         self.refs[ref] = value
         self.writes.append((ref, value))
+    def setDatavf(self, ref, values, offset, count):
+        assert ref in ("sim/flightmodel/engine/ENGN_thro_use", "sim/cockpit2/engine/actuators/throttle_ratio")
+        self.refs[ref][offset:offset + count] = values[:count]
+        self.writes.append((ref, values[0]))
     def commandOnce(self, name):
         self.commands.append(name)
         if name == "sim/GPS/g1000n1_ap":
@@ -137,5 +151,5 @@ def test_plugin_registers_fresh_candidate_namespace_on_verified_garmin_return(mo
                                 "expected_generation": plugin.core.generation}, answer))
     plugin.flight_loop(0, 0, 0, None)
     assert answer.get()["observed"] == 0.45
-    assert fake.refs["sim/flightmodel/engine/ENGN_thro_use[0]"] == 0.45
+    assert fake.refs["sim/cockpit2/engine/actuators/throttle_ratio"][0] == 0.45
     plugin.XPluginStop()

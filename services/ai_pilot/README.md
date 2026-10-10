@@ -218,7 +218,7 @@ reached its first input from a stabilized reference. Five control-law defects
 were found and fixed in the process; all are recorded with trace evidence in
 `docs/C182T_H0_CONTROL_LAW_FINDINGS.md`.
 
-Offline coverage: 82 tests in `tests/test_direct_backend.py`, 150 across the
+Offline coverage: 84 tests in `tests/test_direct_backend.py`, 150 across the
 service, none requiring X-Plane.
 
 ## Flight modes: current implementation status (2026-09-18)

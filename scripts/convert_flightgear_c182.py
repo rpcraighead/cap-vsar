@@ -289,7 +289,7 @@ MAIN_ROTATIONS = {
     ),
     "Aileron.R": Rotation(
         fg_to_xplane((1.656383, 3.900922, 0.892718)),
-        _normal(fg_to_xplane((0.237831, -2.720408, -0.124793))),
+        _normal(fg_to_xplane((-0.237831, 2.720408, 0.124793))),
         -20,
         20,
         -20,
@@ -302,7 +302,7 @@ MAIN_ROTATIONS = {
         0,
         38,
         0,
-        40,
+        38,
         "sim/flightmodel2/wing/flap1_deg[0]",
     ),
     "Flap.R": Rotation(
@@ -311,7 +311,7 @@ MAIN_ROTATIONS = {
         0,
         38,
         0,
-        40,
+        38,
         "sim/flightmodel2/wing/flap1_deg[1]",
     ),
     "Elevator": Rotation(

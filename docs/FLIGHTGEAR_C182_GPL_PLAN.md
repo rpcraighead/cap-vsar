@@ -48,6 +48,11 @@ The builder converts the exterior to OBJ8 without Blender. It replaces the
 stock C172 fuselage, wing, landing-gear, propeller, glass, light and broken-part
 attachments while retaining the locally installed cockpit and systems. The
 primary control surfaces and three-blade propeller use X-Plane datarefs.
+When the downloaded CAP C172 artwork is available in `~/Documents/Civil Air
+Patrol`, the same build remaps it onto the C182 and uses the approved N429CP
+paint as the default; that optional step requires NumPy, SciPy, and Pillow.
+The completed package is staged before replacing a target, and a prior
+installed CAP aircraft is retained under `Output/capvsar-backups`.
 
 ## Production routes
 

@@ -14,7 +14,7 @@ from unittest.mock import patch
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "scripts"))
 
-from build_c182t_package import ACF_PATCHES  # noqa: E402
+from build_c182t_package import ACF_PATCHES, DEFAULT_DONOR_DIR, main as build_main, patch_acf_lines, publish_staged_package  # noqa: E402
 import fetch_flightgear_c182 as donor_fetch  # noqa: E402
 import convert_flightgear_c182  # noqa: E402
 from convert_flightgear_c182 import (  # noqa: E402
@@ -91,6 +91,26 @@ class AC3DConversionTests(unittest.TestCase):
                 validate_obj8(output)
 
 
+class SurfaceAnimationTests(unittest.TestCase):
+    def test_positive_aileron_deflection_moves_both_trailing_edges_down(self):
+        rotations = convert_flightgear_c182.MAIN_ROTATIONS
+        # Actual trailing-edge stations from the pinned donor, converted to OBJ8.
+        edges = {"Aileron.L": (-2.54134, 0.79376, 2.15951),
+                 "Aileron.R": (2.54133, 0.79375, 2.15951)}
+        for name, edge in edges.items():
+            rotation = rotations[name]
+            delta = tuple(edge[i] - rotation.center[i] for i in range(3))
+            up_per_radian = rotation.axis[2] * delta[0] - rotation.axis[0] * delta[2]
+            self.assertLess(up_per_radian, -0.35, name)
+            self.assertIn("aileron1_deg", rotation.dataref)
+
+    def test_flap_full_deflection_uses_acf_38_degrees(self):
+        for name in ("Flap.L", "Flap.R"):
+            rotation = convert_flightgear_c182.MAIN_ROTATIONS[name]
+            self.assertEqual((rotation.angle_min, rotation.angle_max), (0, 38))
+            self.assertEqual((rotation.value_min, rotation.value_max), (0, 38))
+
+
 class AircraftAttachmentTests(unittest.TestCase):
     def test_every_stock_c172_exterior_slot_is_replaced(self):
         replacements = set(ACF_PATCHES.values())
@@ -107,6 +127,42 @@ class AircraftAttachmentTests(unittest.TestCase):
             "P _obja/26/_v10_att_file_stl flightgear_blank.obj",
         }
         self.assertTrue(expected <= replacements)
+
+
+class SafeBuildTests(unittest.TestCase):
+    def test_builder_uses_fetcher_cache(self):
+        self.assertEqual(DEFAULT_DONOR_DIR, donor_fetch.DEFAULT_DONOR)
+
+    def test_source_acf_must_have_every_patch_field_once(self):
+        lines = [pattern.removeprefix("^").removesuffix(".*").rstrip() + " old\n"
+                 for pattern in ACF_PATCHES]
+        self.assertEqual(len(patch_acf_lines(lines)), len(lines))
+        with self.assertRaisesRegex(ValueError, "exactly once"):
+            patch_acf_lines([line for line in lines if not line.startswith("P acf/_ICAO ")])
+        with self.assertRaisesRegex(ValueError, "exactly once"):
+            patch_acf_lines(lines + [next(line for line in lines if line.startswith("P acf/_ICAO "))])
+
+    def test_nested_target_is_rejected_without_touching_source(self):
+        with tempfile.TemporaryDirectory() as root:
+            source = Path(root) / "source"
+            target = source / "installed"
+            target.mkdir(parents=True)
+            marker = target / "keep.txt"
+            marker.write_text("preserve")
+            with self.assertRaisesRegex(ValueError, "overlap"):
+                build_main(["--source-dir", str(source), "--target-dir", str(target)])
+            self.assertEqual(marker.read_text(), "preserve")
+
+    def test_publication_rolls_back_if_stage_rename_fails(self):
+        with tempfile.TemporaryDirectory() as root:
+            target = Path(root) / "aircraft"
+            stage = Path(root) / "stage"
+            target.mkdir(); stage.mkdir()
+            (target / "old").write_text("safe")
+            with patch.object(Path, "rename", autospec=True, side_effect=lambda path, dest: (_ for _ in ()).throw(OSError("publish failed")) if path == stage else Path.replace(path, dest)):
+                with self.assertRaisesRegex(OSError, "publish failed"):
+                    publish_staged_package(stage, target)
+            self.assertEqual((target / "old").read_text(), "safe")
 
 
 class WindingConventionTests(unittest.TestCase):

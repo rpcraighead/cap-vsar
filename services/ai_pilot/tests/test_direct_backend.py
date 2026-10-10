@@ -486,6 +486,17 @@ class CommandedBankTests(unittest.TestCase):
         finally:
             backend.release()
 
+    def test_bank_selection_after_speed_mode_restores_altitude_hold(self):
+        client, backend = self._flying()
+        try:
+            backend.select_airspeed(110.0, throttle=0.8)
+            backend.select_bank(20.0, 4600.0)
+            backend._step(backend.observe(), 90.0, 4600.0)
+            self.assertFalse(backend.last_commands["speed_mode"])
+            self.assertIsNotNone(backend.last_commands["vs_command_fpm"])
+        finally:
+            backend.release()
+
 
 class SpeedOnPitchTests(unittest.TestCase):
     """Cards H1/H3: commanded airspeed held on pitch, throttle independent."""
@@ -1060,6 +1071,23 @@ class ElevatorTrimTests(unittest.TestCase):
         self.assertIsNone(backend._trim)
         self.assertIsNone(client.written(backend.TRIM_DREF))
         self.assertEqual(backend.last_commands["elevator_trim_measured"], None)
+
+    def test_trim_writes_stop_when_feedback_stales_after_adoption(self):
+        clock = SlewRateTests.Clock()
+        client, backend = self._backend(clock, trim=0.2)
+        backend._step(backend.observe(), 90.0, 4500.0)
+        clock.t += 0.1
+        client.feed(backend, **steady_frame(elevator_trim=0.2))
+        backend._step(backend.observe(), 90.0, 4500.0)
+        self.assertIsNotNone(client.written(backend.TRIM_DREF))
+        first_count = sum(ref == backend.TRIM_DREF for ref, _ in client.writes)
+        clock.t += backend.STALE_AFTER_SECONDS + 0.1
+        frame = steady_frame()
+        frame.pop("elevator_trim")
+        client.feed(backend, **frame)
+        backend._step(backend.observe(), 90.0, 4500.0)
+        self.assertEqual(sum(ref == backend.TRIM_DREF for ref, _ in client.writes), first_count)
+        self.assertIsNone(backend._trim)
 
     def test_sustained_nose_up_elevator_trims_nose_up(self):
         clock = SlewRateTests.Clock()

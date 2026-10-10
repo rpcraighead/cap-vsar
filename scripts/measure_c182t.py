@@ -187,6 +187,8 @@ def report(fixture, master):
     stations=[{**s,'target':units(s['fs_m']),'measured':None,'status':'unmeasured',
         'reason':'No validated donor firewall datum and named feature selector; reference station only'} for s in master['stations']['entries']]
     return {'aircraft':'CAP 487','schema_version':1,'donor_archive_sha256':fixture['donor_archive_sha256'],
+        'donor_commit':fixture['donor_commit'],
+        'corrections_applied':list(fixture['corrections_applied']),
         'ground_pose':{'pitch_deg':math.degrees(theta),'pivot_native':vector(pivot),
             'status':'provisional_contact_plane','nose_strut_extension':'unverified',
             'main_contact_residual_m':max(abs(posed[k+'_contact'][1]) for k in ('main_left','main_right'))},
@@ -214,7 +216,7 @@ def write_overlays(result, directory):
                '<rect width="1500" height="1750" fill="#111827"/>',
                '<g fill="#e5e7eb" font-family="monospace" font-size="14">',
                f'<text x="30" y="30">CAP 487 | {view.upper()} | measured landmarks (cyan), bounds listed below | amber=target, cyan=measured | units in JSON</text>',
-               '<text x="30" y="55">Ground pose provisional; no mesh correction. Source FS stations are reference-only, not aligned to donor.</text>']
+               f'<text x="30" y="55">Ground pose provisional; {len(result["corrections_applied"])} mesh corrections applied. Source FS stations are reference-only.</text>']
         # Equal horizontal/vertical metric scale within each orthographic panel.
         coords = [lm['ground_pose'] for lm in result['landmarks'].values()]
         xmin = min(p[axes[0]]['m'] for p in coords)

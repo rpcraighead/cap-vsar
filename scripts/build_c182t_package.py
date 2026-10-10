@@ -22,16 +22,18 @@ which record what was true when written.
 from __future__ import annotations
 
 import argparse
+import atexit
 import colorsys
 import os
 import re
 import shutil
 import sys
+import uuid
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 from convert_flightgear_c182 import build_flightgear_objects
-from fetch_flightgear_c182 import DONOR_COMMIT, validate_donor
+from fetch_flightgear_c182 import DEFAULT_DONOR, DONOR_COMMIT, validate_donor
 
 
 DEFAULT_SOURCE_DIR = Path("/home/ron/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP")
@@ -39,7 +41,7 @@ DEFAULT_TARGET_DIR = Path("/home/ron/X-Plane 12/Aircraft/CAP/Cessna 182T NAV III
 DEFAULT_DONOR_DIR = Path(
     os.environ.get(
         "CAPVSAR_FLIGHTGEAR_C182_SOURCE",
-        str(Path.home() / ".cache" / "cap-vsar" / f"flightgear-c182-{DONOR_COMMIT}"),
+        str(DEFAULT_DONOR),
     )
 )
 
@@ -197,7 +199,8 @@ ACF_PATCHES = {
 }
 
 
-def create_cap_badge_icon(src_icon_path: Path, dst_icon_path: Path, is_thumb: bool = False):
+def create_cap_badge_icon(src_icon_path: Path, dst_icon_path: Path, is_thumb: bool = False,
+                          registration: str = "CAP 487"):
     """Overlay an authentic Civil Air Patrol banner and registration on the selection icon."""
     try:
         with Image.open(src_icon_path) as im:
@@ -218,10 +221,10 @@ def create_cap_badge_icon(src_icon_path: Path, dst_icon_path: Path, is_thumb: bo
             if not is_thumb:
                 draw.text((16, 8), "CIVIL AIR PATROL &bull; USAF AUXILIARY", fill=(255, 255, 255, 255))
                 draw.text((16, banner_h - 22), "CESSNA 182T NAV III &bull; LYCOMING IO-540 (230 HP)", fill=(212, 160, 23, 255))
-                draw.text((w - 140, 10), "CAP 487", fill=(255, 255, 255, 255))
+                draw.text((w - 140, 10), registration, fill=(255, 255, 255, 255))
                 draw.text((16, h - banner_h + 8), "GARMIN G1000 SVT &bull; CONSTANT SPEED &bull; SAR MISSION READY", fill=(200, 220, 245, 255))
             else:
-                draw.text((4, 2), "CAP 487", fill=(255, 255, 255, 255))
+                draw.text((4, 2), registration, fill=(255, 255, 255, 255))
                 draw.text((4, h - banner_h + 2), "C182T G1000", fill=(212, 160, 23, 255))
 
             im.save(dst_icon_path, "PNG")
@@ -424,6 +427,47 @@ def register_prop_lever_obja(acf_path: Path):
     print(f"[+] Registered prop_lever.obj as _obja/{new_index} in {acf_path.name}")
 
 
+def patch_acf_lines(lines: list[str]) -> list[str]:
+    """Require each reviewed source parameter exactly once before changing an ACF."""
+    counts = {pattern: 0 for pattern in ACF_PATCHES}
+    patched = []
+    for line in lines:
+        matches = [pattern for pattern in ACF_PATCHES if re.match(pattern, line.strip())]
+        if len(matches) > 1:
+            raise ValueError(f"Overlapping ACF patches for {line.strip()}")
+        if matches:
+            pattern = matches[0]
+            counts[pattern] += 1
+            patched.append(ACF_PATCHES[pattern] + "\n")
+        else:
+            patched.append(line)
+    wrong = {pattern: count for pattern, count in counts.items() if count != 1}
+    if wrong:
+        raise ValueError(f"ACF patch source fields must occur exactly once: {wrong}")
+    return patched
+
+
+def publish_staged_package(stage: Path, target: Path) -> Path | None:
+    """Replace the installed package only after a complete build; roll back on rename failure."""
+    backup = None
+    if target.exists():
+        # Keep the old aircraft outside Aircraft/ so X-Plane does not list it.
+        if target.parent.name == "CAP" and target.parent.parent.name == "Aircraft":
+            backup_root = target.parents[2] / "Output/capvsar-backups"
+        else:
+            backup_root = target.parent / ".capvsar-build-backups"
+        backup_root.mkdir(parents=True, exist_ok=True)
+        backup = backup_root / f"{target.name}-{uuid.uuid4().hex[:12]}"
+        target.rename(backup)
+    try:
+        stage.rename(target)
+    except Exception:
+        if backup is not None:
+            backup.rename(target)
+        raise
+    return backup
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -444,14 +488,25 @@ def parse_args(argv=None):
         default=DEFAULT_DONOR_DIR,
         help="pinned HHS81 FlightGear C182 source directory",
     )
+    parser.add_argument("--cap-c172-livery", type=Path,
+                        default=Path.home() / "Documents/Civil Air Patrol",
+                        help="local downloaded N429CP CAP C172 paint to remap (when present)")
+    parser.add_argument("--cap-icon-dir", type=Path,
+                        default=DEFAULT_TARGET_DIR / "liveries/Civil Air Patrol (N429CP - C172 Adapted)",
+                        help="approved C182 N429CP icon pair, when present")
     return parser.parse_args(argv)
 
 
 def main(argv=None):
     args = parse_args(argv)
     source_dir = args.source_dir.expanduser().resolve()
-    target_dir = args.target_dir.expanduser().resolve()
+    requested_target = args.target_dir.expanduser()
+    if requested_target.is_symlink():
+        raise ValueError("Target aircraft directory must not be a symlink")
+    target_dir = requested_target.resolve()
     donor_dir = args.flightgear_donor.expanduser().resolve()
+    cap_source = args.cap_c172_livery.expanduser().resolve()
+    cap_icons = args.cap_icon_dir.expanduser().resolve()
 
     print("=" * 78)
     print("CAP V-SAR: Cessna 182T NAV III (G1000) Aircraft Package Builder")
@@ -460,9 +515,17 @@ def main(argv=None):
     if not source_dir.is_dir():
         print(f"[-] Source aircraft directory not found: {source_dir}")
         sys.exit(1)
-    if source_dir == target_dir:
-        print("[-] Source and target aircraft directories must differ")
-        sys.exit(1)
+    for protected in (source_dir, donor_dir):
+        if protected == target_dir or protected in target_dir.parents or target_dir in protected.parents:
+            raise ValueError(f"Target and protected source directories overlap: {target_dir}, {protected}")
+    required = ("Cessna_172SP_G1000.acf", "Cessna_172SP_G1000_cockpit.obj",
+                "Cessna_172SP_G1000_icon11.png", "Cessna_172SP_G1000_icon11_thumb.png",
+                "objects/cockpit_panel_G1000.obj", "objects/cockpit.dds")
+    missing = [name for name in required if not (source_dir / name).is_file()]
+    if missing:
+        raise ValueError(f"Source aircraft is incomplete: {missing}")
+    # A source drift or malformed ACF must fail while the installed target is intact.
+    patch_acf_lines((source_dir / required[0]).read_text(encoding="utf-8", errors="replace").splitlines(keepends=True))
     try:
         validate_donor(donor_dir)
     except ValueError as exc:
@@ -475,12 +538,12 @@ def main(argv=None):
     print(f"[*] GPL exterior donor: {donor_dir} (commit {DONOR_COMMIT})")
     print(f"[*] Target: {target_dir}")
 
-    # 1. Clean / create target directory
-    if target_dir.exists():
-        print(f"[*] Removing existing target directory...")
-        shutil.rmtree(target_dir)
-    target_dir.parent.mkdir(parents=True, exist_ok=True)
+    final_target = target_dir
+    final_target.parent.mkdir(parents=True, exist_ok=True)
+    target_dir = final_target.parent / f".{final_target.name}.staging-{uuid.uuid4().hex[:12]}"
+    atexit.register(shutil.rmtree, target_dir, ignore_errors=True)
 
+    # Build away from the installed aircraft; no existing target is removed here.
     print(f"[*] Cloning base airframe directory tree (~284 MB)...")
     shutil.copytree(source_dir, target_dir)
     print(f"[+] Cloned successfully into {target_dir}")
@@ -534,24 +597,12 @@ def main(argv=None):
     with acf_path.open("r", encoding="utf-8", errors="replace") as f:
         lines = f.readlines()
 
-    patched_lines = []
-    applied_patches = set()
-
-    for line in lines:
-        matched = False
-        for pattern, replacement in ACF_PATCHES.items():
-            if re.match(pattern, line.strip()):
-                patched_lines.append(replacement + "\n")
-                applied_patches.add(pattern)
-                matched = True
-                break
-        if not matched:
-            patched_lines.append(line)
+    patched_lines = patch_acf_lines(lines)
 
     with acf_path.open("w", encoding="utf-8") as f:
         f.writelines(patched_lines)
 
-    print(f"[+] Applied {len(applied_patches)} of {len(ACF_PATCHES)} aircraft parameters.")
+    print(f"[+] Applied all {len(ACF_PATCHES)} aircraft parameters exactly once.")
 
     # 4b. Add a blue constant-speed prop lever to the 3D cockpit (the base C172SP
     # has no prop lever at all, since it's fixed-pitch) and register it in the acf.
@@ -612,6 +663,49 @@ def main(argv=None):
 
     print(f"[+] Civil Air Patrol livery and icons configured.")
 
+    # Keep the approved downloaded artwork in the reproducible build path.
+    # The mapper uses local licensed assets; no Laminar or donor texture enters Git.
+    if cap_source.is_dir():
+        from types import SimpleNamespace
+        from adapt_cap_livery import adapt
+        named = liveries_dir / "Civil Air Patrol (N429CP - C172 Adapted)"
+        if named.exists():
+            shutil.rmtree(named)
+        # The approved adaptation starts from the pinned donor's Default.png;
+        # starting from the generated CAP 487 repaint changes untouched pixels.
+        base_texture = donor_dir / "Models/Liveries/Default.png"
+        adapt(SimpleNamespace(source=cap_source, c172=source_dir, aircraft=target_dir,
+                              base=base_texture, output=named))
+        # The projection diagnostics belong in the output workspace, not an
+        # aircraft livery folder scanned by X-Plane.
+        for diagnostic in named.glob("donor-*.png"):
+            diagnostic.unlink()
+        manifest_path = named / "adaptation.json"
+        manifest_path.write_text(
+            manifest_path.read_text().replace(str(target_dir), str(final_target)))
+        shutil.copy2(named / "objects/flightgear_c182t.png",
+                     target_dir / "objects/flightgear_c182t.png")
+        for icon in ("Cessna_182T_G1000_icon11.png", "Cessna_182T_G1000_icon11_thumb.png"):
+            approved = cap_icons / icon
+            if approved.is_file():
+                shutil.copy2(approved, named / icon)
+            else:
+                stock = source_dir / icon.replace("182T", "172SP")
+                create_cap_badge_icon(stock, named / icon,
+                                      is_thumb=icon.endswith("_thumb.png"), registration="N429CP")
+        for icon in ("Cessna_182T_G1000_icon11.png", "Cessna_182T_G1000_icon11_thumb.png"):
+            shutil.copy2(named / icon, target_dir / icon)
+        readme = cap_icons / "README.txt"
+        if readme.is_file():
+            shutil.copy2(readme, named / "README.txt")
+        else:
+            (named / "README.txt").write_text(
+                "N429CP CAP artwork remapped from the locally downloaded C172 livery.\n"
+                "See adaptation.json for source and texture hashes.\n")
+        print(f"[+] Approved N429CP paint installed as aircraft default and named livery.")
+    else:
+        print(f"[*] No local N429CP source at {cap_source}; retaining CAP 487 paint.")
+
     # 8. Summary Verification
     print("\n" + "=" * 78)
     print("VERIFICATION SUMMARY — CESSNA 182T NAV III (G1000 CAP)")
@@ -639,8 +733,19 @@ def main(argv=None):
         val = m.group(1).strip() if m else "NOT FOUND"
         print(f"    - {label.ljust(26)}: {val}")
 
+    # Validate the staged package immediately before publication.
+    if not (target_dir / "objects/flightgear_c182t.obj").is_file():
+        raise RuntimeError("Staged exterior object missing")
+    if not (target_dir / "objects/flightgear_c182t.png").is_file():
+        raise RuntimeError("Staged exterior texture missing")
+    user_prefs = final_target / "Cessna_182T_G1000_prefs.txt"
+    if user_prefs.is_file():
+        shutil.copy2(user_prefs, target_dir / user_prefs.name)
+    backup = publish_staged_package(target_dir, final_target)
     print("\n[✓] Cessna 182T NAV III CAP package built successfully!")
-    print(f"[✓] Location: {target_dir}")
+    print(f"[✓] Location: {final_target}")
+    if backup:
+        print(f"[✓] Previous aircraft backup: {backup}")
 
 
 if __name__ == "__main__":

@@ -57,8 +57,8 @@ The unified ACF diff has one change, `_body/0/_part_cd` from 0.200000003 to
 0.100000000. No claim is made that 0.100 is the correct value.
 
 To reproduce the clean baseline and candidate without touching the installed
-aircraft, run from the repository root (use new target paths, because the
-builder replaces its target directory):
+aircraft, run from the repository root (the builder stages output and retains
+a backup if it replaces an existing target):
 
 ```sh
 python3 scripts/build_c182t_package.py \

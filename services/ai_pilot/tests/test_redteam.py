@@ -582,10 +582,10 @@ class TestCleared:
             assert method not in deck, f"web deck can reach {method}"
 
     def test_direct_backend_count_claim_is_accurate(self):
-        """README: '82 tests in tests/test_direct_backend.py'."""
+        """README: '84 tests in tests/test_direct_backend.py'."""
         n = sum(1 for line in source(AI_PILOT / "tests/test_direct_backend.py").splitlines()
                 if re.match(r"\s*def test_", line))
-        assert n == 82
+        assert n == 84
 
     def test_the_pause_command_is_the_idempotent_one(self):
         """README: pause uses sim/operation/pause_on, not a toggle."""

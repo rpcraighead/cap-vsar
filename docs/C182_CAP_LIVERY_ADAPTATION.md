@@ -35,10 +35,12 @@ The calibration and source draw ranges are specific to these installed
 models. Recheck all views after changing either model. `adaptation.json`
 records all input hashes, the arguments, and the generated texture hash.
 
-Only `objects/flightgear_c182t.png` is needed as a livery override. Never run
-the full aircraft converter to install this repaint: doing so could replace
-more recent geometry or flight-model changes. The old CAP 487 livery stays
-intact. N429CP is the painted registration; the aircraft's
+Only `objects/flightgear_c182t.png` is needed as a livery override. The
+aircraft builder now runs this mapper as part of a staged rebuild when the
+downloaded C172 artwork is present at `~/Documents/Civil Air Patrol` (or
+supplied with `--cap-c172-livery`). It uses the pinned donor's `Default.png`
+as the base, preserving the approved texture hash below. The old CAP 487
+livery stays intact. N429CP is the painted registration; the aircraft's
 existing CAP 487 identity in the ACF is deliberately unchanged.
 
 ## Visual checks and installation
@@ -84,13 +86,46 @@ Approved `objects/flightgear_c182t.png` SHA-256:
 The three replaced files are `objects/flightgear_c182t.png`,
 `Cessna_182T_G1000_icon11.png`, and `Cessna_182T_G1000_icon11_thumb.png`.
 Their originals are backed up beneath X-Plane's
-`Output/capvsar-backups/cap-livery-default-*/` directory. The aircraft-root
+`Output/capvsar-backups/cap-livery-default-*/` directory. The original
 `cap-livery-default.json` receipt gives the exact backup path and before/after
-hashes. Restore those three files from that backup to restore the previous
-default; selecting the old named livery also restores its appearance.
+hashes; after a full aircraft rebuild, that receipt is retained with the
+backed-up aircraft. Restore those three files from that earlier backup to
+restore the previous default; selecting the old named livery also restores
+its appearance.
 
 Gitea contains the remapping script, renderer, and this installation record.
 Generated textures and simulator assets remain outside Git, consistent with
 the existing local-prototype packaging. The approved output was checked in
 six rendered views and verified by hash after installation. An in-simulator
 load check has not been performed.
+
+## Rebuilding the aircraft
+
+Use a Python interpreter with NumPy, SciPy, and Pillow installed, and build
+to a separate target first:
+
+```bash
+python3 scripts/build_c182t_package.py \
+  --target-dir "$HOME/X-Plane 12/Output/capvsar-c182-review" \
+  --cap-c172-livery "$HOME/Documents/Civil Air Patrol"
+```
+
+The builder checks all 50 source ACF fields before copying, builds in a
+sibling staging directory, and publishes only after conversion and texture
+generation succeed. Replacing an existing target moves its previous version
+to `Output/capvsar-backups` for an installed CAP aircraft. The build keeps
+the named CAP 487 livery and makes the approved N429CP paint the default
+when the C172 artwork is available. Its icon pair is reused from the installed
+approved livery when present; `--cap-icon-dir` selects another icon source.
+The painted registration and CAP 487 ACF identifier remain intentionally
+different.
+
+The 2026-10-10 build with the corrected aileron and flap animations was
+installed at `~/X-Plane 12/Aircraft/CAP/Cessna 182T NAV III`. Its previous
+aircraft is backed up at
+`~/X-Plane 12/Output/capvsar-backups/Cessna 182T NAV III-ca3008d03211`.
+The installed ACF and aircraft preferences match that backup byte for byte;
+the default and named N429CP textures still have the approved SHA-256 above.
+The CAP 487 named livery remains available. The installed OBJ changed only
+its right-aileron axis and the two flap input ranges. X-Plane animation and
+flight behavior still need an attended simulator check.

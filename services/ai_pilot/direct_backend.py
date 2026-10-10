@@ -381,6 +381,7 @@ class XPlaneDirectBackend:
         with self.lock:
             self._bank_target = float(bank_deg)
             self._targets = (observation.heading_mag, float(altitude_indicated_ft))
+            self._speed_mode = False
             self._last_fault = None
             self._engaged = True
         self._ensure_running()
@@ -793,10 +794,12 @@ class XPlaneDirectBackend:
                 "elevator_trim", (float("nan"), -float("inf")))
         trim_fresh = (math.isfinite(trim_value)
                       and now - trim_stamp <= self.STALE_AFTER_SECONDS)
+        if not trim_fresh:
+            self._trim = None
         if self._trim is None and trim_fresh:
             self._trim = _clamp(trim_value, -g.MAX_TRIM, g.MAX_TRIM)
         trim_rate = 0.0
-        if self._trim is not None and dt > 0.0 and test_axis != "pitch":
+        if trim_fresh and self._trim is not None and dt > 0.0 and test_axis != "pitch":
             held = elevator if abs(elevator) > g.TRIM_DEADBAND else 0.0
             trim_rate = _clamp(held * g.ELEVATOR_TO_TRIM,
                                -g.MAX_TRIM_RATE_PER_S, g.MAX_TRIM_RATE_PER_S)

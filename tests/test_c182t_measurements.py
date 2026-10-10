@@ -24,6 +24,8 @@ class Measurements(unittest.TestCase):
 
     def test_fixture_targets_and_hard_prop_bound(self):
         r=self.result();c={x['id']:x for x in r['comparisons']}
+        self.assertEqual(r['donor_commit'], self.f['donor_commit'])
+        self.assertEqual(r['corrections_applied'], self.f['corrections_applied'])
         self.assertEqual(len(c),10)
         # A-1 stage 3: the propeller correction closed this certification bound.
         # It measured 79.255 in at stage 2, outside the TCDS 77.5-79.0 band.
@@ -116,6 +118,7 @@ class Measurements(unittest.TestCase):
             m.write_overlays(self.result(),d)
             self.assertEqual(first,{p.name:p.read_bytes() for p in d.iterdir()})
             self.assertEqual(set(first),{'side.svg','front.svg','top.svg'})
+            self.assertNotIn(b'no mesh correction', first['side.svg'])
 
     @unittest.skipUnless(os.environ.get('CAPVSAR_TEST_LIVE_DONOR'), 'optional explicit live donor comparison')
     def test_fixture_matches_live_donor(self):

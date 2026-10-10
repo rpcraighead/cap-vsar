@@ -24,7 +24,7 @@ NATIVE = {
     "roll": "sim/joystick/yoke_roll_ratio",
     "pitch": "sim/joystick/yoke_pitch_ratio",
     "yaw": "sim/joystick/yoke_heading_ratio",
-    "throttle": "sim/flightmodel/engine/ENGN_thro_use[0]",
+    "throttle": "sim/flightmodel/engine/ENGN_thro_use",
     "flap": "sim/cockpit2/controls/flap_ratio",
     "trim": "sim/cockpit2/controls/elevator_trim",
 }
@@ -33,6 +33,7 @@ NATIVE = {
 class XPlaneSink:
     def __init__(self):
         self.controls = {key: xp.findDataRef(ref) for key, ref in NATIVE.items()}
+        self.cockpit_throttle = xp.findDataRef("sim/cockpit2/engine/actuators/throttle_ratio")
         self.joystick = xp.findDataRef("sim/operation/override/override_joystick")
         self.throttles = xp.findDataRef("sim/operation/override/override_throttles")
         self.ap_mode = xp.findDataRef("sim/cockpit2/autopilot/flight_director_mode")
@@ -40,7 +41,7 @@ class XPlaneSink:
         self.paused = xp.findDataRef("sim/time/paused")
         self.off = xp.findCommand("sim/autopilot/servos_off_any")
         self.ap_toggle = xp.findCommand("sim/GPS/g1000n1_ap")
-        if not all(self.controls.values()) or not all((self.joystick, self.throttles,
+        if not all(self.controls.values()) or not all((self.cockpit_throttle, self.joystick, self.throttles,
                 self.ap_mode, self.servos, self.paused, self.off, self.ap_toggle)):
             raise RuntimeError("Required flight-control dataref/command missing")
 
@@ -62,12 +63,24 @@ class XPlaneSink:
         xp.setDatai(self.throttles, value)
 
     def write_control(self, channel, value):
-        xp.setDataf(self.controls[channel], value)
+        if channel == "throttle":
+            # ENGN_thro_use only drives the engine while override_throttles=1.
+            # Garmin ownership leaves overrides off and moves the cockpit lever.
+            ref = self.controls[channel] if xp.getDatai(self.throttles) else self.cockpit_throttle
+            xp.setDatavf(ref, [value], 0, 1)
+        else:
+            xp.setDataf(self.controls[channel], value)
 
     def read_trim(self):
         return xp.getDataf(self.controls["trim"])
 
     def read_control(self, channel):
+        if channel == "throttle":
+            ref = self.controls[channel] if xp.getDatai(self.throttles) else self.cockpit_throttle
+            values = [0.0]
+            if xp.getDatavf(ref, values, 0, 1) != 1:
+                raise RuntimeError("Throttle readback unavailable")
+            return values[0]
         return xp.getDataf(self.controls[channel])
 
     def command_ap_off(self):
