@@ -3,13 +3,15 @@
 Date: 2026-10-10. Owner: Ron. Repository baseline: `57663ec`.
 Status: agreed direction; the milestones below require implementation and measured simulator acceptance.
 
-Implementation on `feat/ai-pilot-first-cycle` has passed the frozen stock-C172
-campaign: ten consecutive baseline flights and ten disturbed entries, with
-independent trace replay and confirmed terminal pause in every flight. See the
-[Sol campaign report](evidence/AI_PILOT_SOL_CAMPAIGN_20261010.md) and the
-earlier [Sol handoff](AI_PILOT_SOL_HANDOFF.md). The airborne loss and explicit
-takeover probes passed; two additional takeover attempts failed during startup
-before the takeover step and remain a reliability finding.
+Implementation on `feat/ai-pilot-first-cycle` has passed a fresh frozen
+stock-C172 campaign after the activation timing fix: ten consecutive baseline
+flights and ten disturbed entries, with independent trace replay and confirmed
+terminal pause in every flight. See the [requalification report](evidence/AI_PILOT_REQUALIFICATION_20261010.md),
+the [earlier campaign](evidence/AI_PILOT_SOL_CAMPAIGN_20261010.md), and the
+[Sol handoff](AI_PILOT_SOL_HANDOFF.md). The earlier startup failures and one
+intermediate campaign's in-flight frame expiry are preserved as evidence.
+Landing testing is now the next requested flight phase, ahead of taxi and
+takeoff.
 The [first increment](AI_PILOT_FIRST_INCREMENT.md) records the earlier
 observation-only stage. Broader aircraft and mission qualification remains
 outstanding.

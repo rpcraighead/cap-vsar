@@ -2,7 +2,10 @@
 
 The subsequent frozen campaign is complete. See the
 [Sol campaign report](evidence/AI_PILOT_SOL_CAMPAIGN_20261010.md) for the
-20-flight outcome and the activation timing finding.
+20-flight outcome and the activation timing finding. The later
+[requalification report](evidence/AI_PILOT_REQUALIFICATION_20261010.md)
+records the timing fix, an intermediate 19/20 campaign, and a fresh 20/20
+campaign on the fixed build.
 
 2026-10-10. Recommended next model: **Sol High**.
 Worktree: `/home/ron/Projects/cap-vsar-ai-pilot`.

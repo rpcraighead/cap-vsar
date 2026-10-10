@@ -1,0 +1,806 @@
+{
+  "schema": "capvsar.ai-pilot-campaign.v1",
+  "created_utc": "2026-10-10T22:35:15.084614+00:00",
+  "commit": "9e144095713dcbce58981756b83afba690f4a90f",
+  "source_sha256": {
+    "scripts/ai_pilot_campaign.py": "8d895b8b769caa9fded03bfc427d6b3a7bba392c05ea2dcf547f68c376a49439",
+    "scripts/ai_pilot_cycle.py": "655218048d39e28399d85a31ccd98407690a9e9143c555d4607f8e0cbfd0a752",
+    "services/ai_pilot/experiment.py": "28e07cf283ae7b0d97cb47c6d80fb76ccbff6f474554ea329751942c650d2fb9",
+    "services/ai_pilot/snapshot_controller.py": "60f0d06aa83fa2c47c52b160ce7df93e8a0452e44ea31e577431823174c273ca",
+    "services/ai_pilot/direct_backend.py": "726dd68d069b15141145c47f18155a5597f5772704042bca48ae546fc82e0e8c",
+    "services/ai_pilot/qualification_entries.json": "74454d224deb86002eea03b1ac72f7af6944831ba7d7dde1ae017c90e29151d2"
+  },
+  "plan_sha256": "74454d224deb86002eea03b1ac72f7af6944831ba7d7dde1ae017c90e29151d2",
+  "aircraft_path": "/home/ron/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
+  "attempts": [
+    {
+      "name": "baseline_01",
+      "entry": {
+        "name": "baseline_01",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "startup_error": null,
+      "trace": "baseline_01.jsonl",
+      "trace_sha256": "bf028a3308b32a714f2c71c619f40833ed29ca55a90f51f2d5e4d8cfd31ca64c",
+      "independent_score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 684,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 57.06659698486328,
+            "frame": 9078,
+            "stable_since_s": 47.063934326171875
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 77.84955596923828,
+            "frame": 11013,
+            "stable_since_s": 67.80181121826172
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 99.05843353271484,
+            "frame": 12921,
+            "stable_since_s": 88.98414611816406
+          }
+        ],
+        "trace_sha256": "bf028a3308b32a714f2c71c619f40833ed29ca55a90f51f2d5e4d8cfd31ca64c"
+      }
+    },
+    {
+      "name": "baseline_02",
+      "entry": {
+        "name": "baseline_02",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "startup_error": null,
+      "trace": "baseline_02.jsonl",
+      "trace_sha256": "a8503385bba2ba69c46979f13d53a95034a7dc1ee8031378630c6597018c7a57",
+      "independent_score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 670,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 118.51728820800781,
+            "frame": 14758,
+            "stable_since_s": 108.44122314453125
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 139.27037048339844,
+            "frame": 16675,
+            "stable_since_s": 129.2459716796875
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 160.36505126953125,
+            "frame": 18622,
+            "stable_since_s": 150.3639373779297
+          }
+        ],
+        "trace_sha256": "a8503385bba2ba69c46979f13d53a95034a7dc1ee8031378630c6597018c7a57"
+      }
+    },
+    {
+      "name": "baseline_03",
+      "entry": {
+        "name": "baseline_03",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "startup_error": null,
+      "trace": "baseline_03.jsonl",
+      "trace_sha256": "36831131bff521b927fb85c26443dffaff852da68c85924aa24c8f8efd6aa91f",
+      "independent_score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 672,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 179.77867126464844,
+            "frame": 20502,
+            "stable_since_s": 169.77822875976562
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 200.5531768798828,
+            "frame": 22336,
+            "stable_since_s": 190.49977111816406
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 221.6577606201172,
+            "frame": 24277,
+            "stable_since_s": 211.62350463867188
+          }
+        ],
+        "trace_sha256": "36831131bff521b927fb85c26443dffaff852da68c85924aa24c8f8efd6aa91f"
+      }
+    },
+    {
+      "name": "baseline_04",
+      "entry": {
+        "name": "baseline_04",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "startup_error": null,
+      "trace": "baseline_04.jsonl",
+      "trace_sha256": "9e437ada07ba71ab9fed4147902c72a07519218ea9a0a875a5bc2031f7cbac3c",
+      "independent_score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 672,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 241.10720825195312,
+            "frame": 26147,
+            "stable_since_s": 231.03109741210938
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 261.8963928222656,
+            "frame": 28052,
+            "stable_since_s": 251.85635375976562
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 283.0687561035156,
+            "frame": 30010,
+            "stable_since_s": 273.0089111328125
+          }
+        ],
+        "trace_sha256": "9e437ada07ba71ab9fed4147902c72a07519218ea9a0a875a5bc2031f7cbac3c"
+      }
+    },
+    {
+      "name": "baseline_05",
+      "entry": {
+        "name": "baseline_05",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "startup_error": null,
+      "trace": "baseline_05.jsonl",
+      "trace_sha256": "f12a498686f1bc62dc7b3ae66fd1b0636427543fdba4d5271a202ce3d669deca",
+      "independent_score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 672,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 302.53228759765625,
+            "frame": 31879,
+            "stable_since_s": 292.4750671386719
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 323.2898864746094,
+            "frame": 33785,
+            "stable_since_s": 313.2270202636719
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 344.42437744140625,
+            "frame": 35734,
+            "stable_since_s": 334.345703125
+          }
+        ],
+        "trace_sha256": "f12a498686f1bc62dc7b3ae66fd1b0636427543fdba4d5271a202ce3d669deca"
+      }
+    },
+    {
+      "name": "baseline_06",
+      "entry": {
+        "name": "baseline_06",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "startup_error": null,
+      "trace": "baseline_06.jsonl",
+      "trace_sha256": "38e12c0801b4b4500c0b0b4e613dcb32950939cf188af56ff80fd098bf98ca74",
+      "independent_score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 669,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 363.8991394042969,
+            "frame": 37594,
+            "stable_since_s": 353.8431396484375
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 384.65020751953125,
+            "frame": 39485,
+            "stable_since_s": 374.63427734375
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 405.7803955078125,
+            "frame": 41437,
+            "stable_since_s": 395.7791748046875
+          }
+        ],
+        "trace_sha256": "38e12c0801b4b4500c0b0b4e613dcb32950939cf188af56ff80fd098bf98ca74"
+      }
+    },
+    {
+      "name": "baseline_07",
+      "entry": {
+        "name": "baseline_07",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "startup_error": null,
+      "trace": "baseline_07.jsonl",
+      "trace_sha256": "32cf5d3ed923c03eb2bdacdc7d491919a0edd6fd6454ca2879150f96afd41cbb",
+      "independent_score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 672,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 425.197998046875,
+            "frame": 43317,
+            "stable_since_s": 415.1883544921875
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 446.0446472167969,
+            "frame": 45236,
+            "stable_since_s": 435.972412109375
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 467.1564025878906,
+            "frame": 47200,
+            "stable_since_s": 457.1345520019531
+          }
+        ],
+        "trace_sha256": "32cf5d3ed923c03eb2bdacdc7d491919a0edd6fd6454ca2879150f96afd41cbb"
+      }
+    },
+    {
+      "name": "baseline_08",
+      "entry": {
+        "name": "baseline_08",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "startup_error": null,
+      "trace": "baseline_08.jsonl",
+      "trace_sha256": "1afcd748ba178b33bdc94c83823e2c49e6c195e1b7562b7f4fb463af76ef3174",
+      "independent_score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 678,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 486.591796875,
+            "frame": 49073,
+            "stable_since_s": 476.51690673828125
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 507.3530578613281,
+            "frame": 50981,
+            "stable_since_s": 497.3346252441406
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 528.5517578125,
+            "frame": 52882,
+            "stable_since_s": 518.4863891601562
+          }
+        ],
+        "trace_sha256": "1afcd748ba178b33bdc94c83823e2c49e6c195e1b7562b7f4fb463af76ef3174"
+      }
+    },
+    {
+      "name": "baseline_09",
+      "entry": {
+        "name": "baseline_09",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "startup_error": null,
+      "trace": "baseline_09.jsonl",
+      "trace_sha256": "74d98a7857f0c3fc4eb08187d788cf0214a4306d2470d390cf1565210608a676",
+      "independent_score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 681,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 548.0343017578125,
+            "frame": 54665,
+            "stable_since_s": 537.9834594726562
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 568.7938842773438,
+            "frame": 56517,
+            "stable_since_s": 558.7933959960938
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 589.9642333984375,
+            "frame": 58444,
+            "stable_since_s": 579.9246215820312
+          }
+        ],
+        "trace_sha256": "74d98a7857f0c3fc4eb08187d788cf0214a4306d2470d390cf1565210608a676"
+      }
+    },
+    {
+      "name": "baseline_10",
+      "entry": {
+        "name": "baseline_10",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "startup_error": null,
+      "trace": "baseline_10.jsonl",
+      "trace_sha256": "fd230f50fb16db93d3a4c261d65cc660466977730cc2f8c4294a7d6b12c7f656",
+      "independent_score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 686,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 609.4218139648438,
+            "frame": 60259,
+            "stable_since_s": 599.4110717773438
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 630.162841796875,
+            "frame": 62106,
+            "stable_since_s": 620.109130859375
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 651.295166015625,
+            "frame": 63970,
+            "stable_since_s": 641.2947387695312
+          }
+        ],
+        "trace_sha256": "fd230f50fb16db93d3a4c261d65cc660466977730cc2f8c4294a7d6b12c7f656"
+      }
+    },
+    {
+      "name": "heading_left",
+      "entry": {
+        "name": "heading_left",
+        "heading_offset": -10,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "startup_error": null,
+      "trace": "heading_left.jsonl",
+      "trace_sha256": "4426d3d973018ac2341f68815b8517d3a5441dafbfb6eda06e7a826c4bc827ca",
+      "independent_score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 687,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 670.6785278320312,
+            "frame": 65596,
+            "stable_since_s": 660.6510009765625
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 691.5022583007812,
+            "frame": 67433,
+            "stable_since_s": 681.4788818359375
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 712.629150390625,
+            "frame": 69303,
+            "stable_since_s": 702.5826416015625
+          }
+        ],
+        "trace_sha256": "4426d3d973018ac2341f68815b8517d3a5441dafbfb6eda06e7a826c4bc827ca"
+      }
+    },
+    {
+      "name": "heading_right",
+      "entry": {
+        "name": "heading_right",
+        "heading_offset": 10,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "startup_error": null,
+      "trace": "heading_right.jsonl",
+      "trace_sha256": "1070c5894454833edccb59e7f0657f28cbc347a6f543d3eb255ab93c01a61c3c",
+      "independent_score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 678,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 731.9884033203125,
+            "frame": 71082,
+            "stable_since_s": 721.9569091796875
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 752.7631225585938,
+            "frame": 72974,
+            "stable_since_s": 742.6990356445312
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 773.9812622070312,
+            "frame": 74873,
+            "stable_since_s": 763.8992309570312
+          }
+        ],
+        "trace_sha256": "1070c5894454833edccb59e7f0657f28cbc347a6f543d3eb255ab93c01a61c3c"
+      }
+    },
+    {
+      "name": "low",
+      "entry": {
+        "name": "low",
+        "heading_offset": 0,
+        "altitude_offset": -150,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "startup_error": null,
+      "trace": "low.jsonl",
+      "trace_sha256": "aa768a3c778679449020a24b840c45f3765c32c266ae979aba0be4ce1764c433",
+      "independent_score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1038,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 825.4266967773438,
+            "frame": 79701,
+            "stable_since_s": 815.3497924804688
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 846.2094116210938,
+            "frame": 81539,
+            "stable_since_s": 836.1517333984375
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 867.3925170898438,
+            "frame": 83476,
+            "stable_since_s": 857.3425903320312
+          }
+        ],
+        "trace_sha256": "aa768a3c778679449020a24b840c45f3765c32c266ae979aba0be4ce1764c433"
+      }
+    },
+    {
+      "name": "high",
+      "entry": {
+        "name": "high",
+        "heading_offset": 0,
+        "altitude_offset": 150,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "startup_error": null,
+      "trace": "high.jsonl",
+      "trace_sha256": "6d46fad690e9a0e2def3956730d1602e5f04359f70578be3acd5c11fa0ed733d",
+      "independent_score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1151,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 917.8897094726562,
+            "frame": 88088,
+            "stable_since_s": 907.8140869140625
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 939.4927368164062,
+            "frame": 90079,
+            "stable_since_s": 929.404052734375
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 971.1522216796875,
+            "frame": 92974,
+            "stable_since_s": 961.1470336914062
+          }
+        ],
+        "trace_sha256": "6d46fad690e9a0e2def3956730d1602e5f04359f70578be3acd5c11fa0ed733d"
+      }
+    },
+    {
+      "name": "slow",
+      "entry": {
+        "name": "slow",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": -5
+      },
+      "exit_code": 0,
+      "startup_error": null,
+      "trace": "slow.jsonl",
+      "trace_sha256": "ef311b1a7ad0387a7e60c27e18664c000b2a0f73fd6711181c32eb81f6b5a8fd",
+      "independent_score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 692,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 991.505859375,
+            "frame": 94863,
+            "stable_since_s": 981.4661865234375
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 1012.289794921875,
+            "frame": 96727,
+            "stable_since_s": 1002.2412719726562
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 1033.491455078125,
+            "frame": 98654,
+            "stable_since_s": 1023.422119140625
+          }
+        ],
+        "trace_sha256": "ef311b1a7ad0387a7e60c27e18664c000b2a0f73fd6711181c32eb81f6b5a8fd"
+      }
+    },
+    {
+      "name": "fast",
+      "entry": {
+        "name": "fast",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 5
+      },
+      "exit_code": 0,
+      "startup_error": null,
+      "trace": "fast.jsonl",
+      "trace_sha256": "a262ba8cb7da2251d64addb712b0bbcff22dce2251c86bc7a1066e43a4360c93",
+      "independent_score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 729,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 1057.1890869140625,
+            "frame": 100845,
+            "stable_since_s": 1047.1307373046875
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 1078.0107421875,
+            "frame": 102710,
+            "stable_since_s": 1067.9202880859375
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 1099.1778564453125,
+            "frame": 104623,
+            "stable_since_s": 1089.097900390625
+          }
+        ],
+        "trace_sha256": "a262ba8cb7da2251d64addb712b0bbcff22dce2251c86bc7a1066e43a4360c93"
+      }
+    },
+    {
+      "name": "left_high_slow",
+      "entry": {
+        "name": "left_high_slow",
+        "heading_offset": -10,
+        "altitude_offset": 100,
+        "speed_offset": -5
+      },
+      "exit_code": 0,
+      "startup_error": null,
+      "trace": "left_high_slow.jsonl",
+      "trace_sha256": "2645c4d32600c8cc5abc9a064433c8e9995a8dadb3a5cfa885ff13678bf45f60",
+      "independent_score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1060,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 1147.7962646484375,
+            "frame": 109036,
+            "stable_since_s": 1137.7135009765625
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 1168.51806640625,
+            "frame": 110932,
+            "stable_since_s": 1158.462158203125
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 1195.06396484375,
+            "frame": 113379,
+            "stable_since_s": 1184.988525390625
+          }
+        ],
+        "trace_sha256": "2645c4d32600c8cc5abc9a064433c8e9995a8dadb3a5cfa885ff13678bf45f60"
+      }
+    },
+    {
+      "name": "right_low_fast",
+      "entry": {
+        "name": "right_low_fast",
+        "heading_offset": 10,
+        "altitude_offset": -100,
+        "speed_offset": 5
+      },
+      "exit_code": 0,
+      "startup_error": null,
+      "trace": "right_low_fast.jsonl",
+      "trace_sha256": "62a4a756aea14d953808613d1906371dea9f5d3c2304dcb0eff3930524cc4b8b",
+      "independent_score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 954,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 1239.283203125,
+            "frame": 117503,
+            "stable_since_s": 1229.214111328125
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 1260.0596923828125,
+            "frame": 119425,
+            "stable_since_s": 1249.9844970703125
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 1281.19775390625,
+            "frame": 121407,
+            "stable_since_s": 1271.1328125
+          }
+        ],
+        "trace_sha256": "62a4a756aea14d953808613d1906371dea9f5d3c2304dcb0eff3930524cc4b8b"
+      }
+    },
+    {
+      "name": "left_low_fast",
+      "entry": {
+        "name": "left_low_fast",
+        "heading_offset": -10,
+        "altitude_offset": -100,
+        "speed_offset": 5
+      },
+      "exit_code": 0,
+      "startup_error": null,
+      "trace": "left_low_fast.jsonl",
+      "trace_sha256": "ba4a8a6734c0900c17ee0548b8f67f3b10536a8aecaae8e95aa3cb7724c16942",
+      "independent_score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 920,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 1324.75537109375,
+            "frame": 125041,
+            "stable_since_s": 1314.7552490234375
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 1345.53076171875,
+            "frame": 126690,
+            "stable_since_s": 1335.5205078125
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 1366.62939453125,
+            "frame": 128366,
+            "stable_since_s": 1356.5943603515625
+          }
+        ],
+        "trace_sha256": "ba4a8a6734c0900c17ee0548b8f67f3b10536a8aecaae8e95aa3cb7724c16942"
+      }
+    },
+    {
+      "name": "right_high_slow",
+      "entry": {
+        "name": "right_high_slow",
+        "heading_offset": 10,
+        "altitude_offset": 100,
+        "speed_offset": -5
+      },
+      "exit_code": 1,
+      "startup_error": null,
+      "trace": "right_high_slow.jsonl",
+      "trace_sha256": "4d8f2c9221c057bfaa8cc91893c138b8fef6e19a6b3dbf06316c5f3b60afad8c",
+      "independent_score": {
+        "outcome": "FAIL",
+        "reason": "{'error': 'RuntimeError', 'reason': 'Exchange requires active authority'}",
+        "samples": 564,
+        "phase": "maneuver",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 1415.270751953125,
+            "frame": 132278,
+            "stable_since_s": 1405.201904296875
+          }
+        ],
+        "trace_sha256": "4d8f2c9221c057bfaa8cc91893c138b8fef6e19a6b3dbf06316c5f3b60afad8c"
+      }
+    }
+  ],
+  "finished_utc": "2026-10-10T22:59:17.488016+00:00"
+}
