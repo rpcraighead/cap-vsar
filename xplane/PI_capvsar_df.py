@@ -561,6 +561,18 @@ def synth_hex15(lat, lon):
     return h.upper()[:15]
 
 
+def beacon_key(scn):
+    """Identity of the beacon a scenario describes (P2-2).
+
+    Position, channel and the C/S block: anything that makes held receiver
+    state belong to a different transmitter. Effects and power are not part of
+    it; changing those mid-sortie is a tweak, not a new beacon.
+    """
+    return (round(scn.get("lat", 0.0), 6), round(scn.get("lon", 0.0), 6),
+            scn.get("beacon_freq_hz"), scn.get("band"),
+            json.dumps(scn.get("cs") or {}, sort_keys=True, default=str))
+
+
 class PythonInterface:
     def __init__(self):
         self.probe = None
@@ -613,6 +625,10 @@ class PythonInterface:
         self.samples = collections.deque()      # (t, rel, true)
         self.held = None                        # (t, rel, true)
         self.scan_hold_hz = None
+        # P2-2: which beacon the held bearing, averaging store, decoded ident
+        # and scan hold belong to. The scenario dict carries its own key, so the
+        # flight loop sees the key and the beacon it describes in one read.
+        self.applied_beacon_key = None
 
         # EN-5: XPPython3's API is main-thread-only, but the network thread had
         # two paths into xp.log() (truth_note, and now the poll-failure note).
@@ -1056,6 +1072,17 @@ class PythonInterface:
             self.clear_pending = False
 
         s = self.scn
+        key = s.get("beacon_key")
+        if key != self.applied_beacon_key:
+            # P2-2: the console swaps scenarios in one step while `running`
+            # stays true, so nothing else announces that this is a different
+            # beacon. Without this the panel kept the old relative bearing and
+            # the old hex ident (DECODE_HOLD_S = 120 s) while the distance
+            # already read the new one.
+            self.applied_beacon_key = key
+            self.silent()
+            self.clear_decode()
+            self.scan_hold_hz = None
         if not s.get("active"):
             self.silent()
             self.clear_decode()
@@ -1445,6 +1472,7 @@ class PythonInterface:
                 # the honest state: a DF homing on a stale or null position
                 # teaches the crew something false.
                 nxt["active"] = 0
+                nxt["beacon_key"] = None
             else:
                 sc = st.get("scenario") or {}
                 so = st.get("sortie") or {}
@@ -1461,6 +1489,7 @@ class PythonInterface:
                                 "power": as_float(sc.get("power"), 1.0),
                                 "cs": sc.get("cs") or {},
                                 "effects": sc.get("effects") or {}})
+                    nxt["beacon_key"] = beacon_key(nxt)
                 elif running:
                     # Sortie running but no beacon in the payload: the
                     # scenario is incomplete. Effects still apply, but
@@ -1468,9 +1497,11 @@ class PythonInterface:
                     self.truth_note("no-beacon",
                                     "sortie running with no beacon position")
                     nxt["active"] = 0
+                    nxt["beacon_key"] = None
                     nxt["effects"] = sc.get("effects") or nxt.get("effects") or {}
                 else:
                     nxt["active"] = 0
+                    nxt["beacon_key"] = None
             self.scn = nxt                # single atomic rebind
         except Exception as e:
             # Console offline is not an error and stays quiet. A console that

@@ -404,6 +404,14 @@ XML are considered acceptable facts; `test_flightgear_c182.py` has
 
 ## 9. Suggested order of work
 
+**Implementation status (branch `impl-wave-a-2026-10-10`):** wave A is done:
+X2-1, X2-2, X2-4, X2-8 (D1), O2-1, O2-3, O2-4, F2-1, L2-1, L2-4, L2-5, L2-6,
+P2-2, each with a test that fails without the fix. Full suite 912 passed, 0
+failed (baseline 885 passed, 2 failed). Not yet done from wave A's neighbours:
+the instructor console still talks to `/ws` by cookie only, so an instructor
+who authenticates with a pasted token (not a login) sees the redacted live
+feed; F2-5 removes that path.
+
 Wave A, before the next exercise with participants (truth and safety):
 X2-1, X2-2, X2-8 (one `public_state()` serializer plus a leak test that posts
 a position and runs two sorties on one scenario); X2-4; O2-3, O2-4; F2-1;

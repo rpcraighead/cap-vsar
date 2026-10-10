@@ -84,6 +84,17 @@ step (B2-1, now mostly resolved on `origin/main`).
   geometry. `bearing_rel` is deliberately withheld too: with the aircraft's
   heading in the same frame it is `bearing_true` under another name.
 
+### Erratum found while implementing (2026-10-10)
+
+Point 1 does not close X2-2 on its own. A scenario that is reused *unchanged*
+has the same beacon in both sorties, so a snapshot returns the right beacon
+for the old sortie and that is exactly the answer the new crews must not have.
+The implementation therefore also withholds a revealed sortie's beacon and DF
+from non-instructors while a different, unrevealed sortie is running on the
+same beacon (`/track` returns `withheld: true`), and `POST /api/sorties`
+returns a `warning` when the scenario was revealed before. The snapshot still
+matters: it keeps an edited scenario from rewriting history.
+
 ### Not decided here
 
 - Whether aircrew should see other aircraft's positions on `/base`. Today
