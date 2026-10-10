@@ -8,6 +8,13 @@ ROOT="$PWD"
 [ -f .env ] || { echo "ERROR: .env missing. cp .env.example .env and fill it in."; exit 1; }
 set -a; . ./.env; set +a
 
+# O2-3: a blank Mumble password deploys a password-less voice net on the one
+# port the router forwards to the internet. Compose refuses it too; failing
+# here says why before anything is pulled or built.
+for var in MUMBLE_SUPERUSER_PASSWORD MUMBLE_SERVER_PASSWORD; do
+  [ -n "${!var:-}" ] || { echo "ERROR: $var is empty in .env. Set it before deploying."; exit 1; }
+done
+
 # ---------------------------------------------------------------- host paths
 # Every path compose bind-mounts has to exist before it starts, and all of them
 # are runtime state, so all of them are gitignored - which means a fresh clone

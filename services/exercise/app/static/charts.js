@@ -85,12 +85,9 @@ function capvsarCharts(map, opts) {
   return {layers, select, current: () => active};
 }
 
-// Dynamically resolve flight planner navigation link to port 8090 on current host
-document.addEventListener("DOMContentLoaded", () => {
-  document.querySelectorAll("a.nav-planner").forEach(a => {
-    a.href = "//" + (location.hostname || "localhost") + ":8090/";
-  });
-});
+// F2-1: the Flight Planner link used to be rewritten here to port 8090, which
+// the Caddy consolidation stopped publishing. The pages' own href (/planner/)
+// is the front door and is left alone.
 
 // ---------------------------------------------------------------- role token
 // Controlling a sortie, logging a bearing or sending a message needs the role

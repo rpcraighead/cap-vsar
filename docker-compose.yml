@@ -23,8 +23,8 @@ services:
     # mounted config file is silently discarded. Set everything here.
     environment:
       TZ: ${TZ}
-      MUMBLE_SUPERUSER_PASSWORD: ${MUMBLE_SUPERUSER_PASSWORD}
-      MUMBLE_CONFIG_SERVERPASSWORD: ${MUMBLE_SERVER_PASSWORD}
+      MUMBLE_SUPERUSER_PASSWORD: ${MUMBLE_SUPERUSER_PASSWORD:?set MUMBLE_SUPERUSER_PASSWORD in .env}
+      MUMBLE_CONFIG_SERVERPASSWORD: ${MUMBLE_SERVER_PASSWORD:?set MUMBLE_SERVER_PASSWORD in .env}
       MUMBLE_CONFIG_REGISTERNAME: "CAP V-SAR"
       MUMBLE_CONFIG_USERS: "100"
       MUMBLE_CONFIG_BANDWIDTH: "72000"
@@ -72,14 +72,18 @@ services:
       TZ: ${TZ}
       CAPVSAR_DB: /data/exercise.db
       CAPVSAR_MUMBLE_HOST: mumble
-      CAPVSAR_MUMBLE_PASSWORD: ${MUMBLE_SERVER_PASSWORD}
+      CAPVSAR_MUMBLE_PASSWORD: ${MUMBLE_SERVER_PASSWORD:?set MUMBLE_SERVER_PASSWORD in .env}
       CAPVSAR_RADIO_ACCESS_CODE: ${CAPVSAR_RADIO_ACCESS_CODE:-}
       CAPVSAR_RADIO_HTTPS_PORT: "443"
-      # Role tokens. Unset means that role's endpoints accept anyone who can
-      # reach the console, and the service says so loudly at startup - set all
-      # three in .env before an exercise. The plugin key is also what unlocks
-      # /api/plugin/scenario, the only route that serves beacon truth before
-      # the instructor reveals; with no key set that route returns 503.
+      # O2-4: this is a deployed console. CAPVSAR_ENV=production makes the
+      # console refuse CAPVSAR_DEV_OPEN even if one is copied in from a laptop's
+      # .env, and the flag is deliberately not forwarded from here.
+      CAPVSAR_ENV: production
+      # Role tokens. Unset means that role's endpoints answer 503 (X-11), not
+      # that they are open; roster codes (/login) are the participant path.
+      # The plugin key is also what unlocks /api/plugin/scenario, the only
+      # route that serves beacon truth before the instructor reveals; with no
+      # key set that route returns 503.
       CAPVSAR_TOKEN_INSTRUCTOR: ${CAPVSAR_TOKEN_INSTRUCTOR:-}
       CAPVSAR_TOKEN_BASE: ${CAPVSAR_TOKEN_BASE:-}
       CAPVSAR_TOKEN_PLUGIN: ${CAPVSAR_TOKEN_PLUGIN:-}
