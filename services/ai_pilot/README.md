@@ -4,6 +4,12 @@ A supervised airborne maneuver controller for Mission Observer training in the
 Civil Air Patrol Cessna 182T Skylane NAV III (G1000 / CAP 487) in X-Plane 12.
 Earlier full-flight automation remains as an offline test prototype.
 
+The [AI Pilot and Test Pilot development plan](../../docs/AI_PILOT_DEVELOPMENT_PLAN.md)
+sets the next implementation sequence: a measured establish–maneuver–recover
+cycle, followed by ground/runway skills, complete sorties, and deliberate
+flight-test maneuvers. It includes architecture, acceptance criteria, and the
+first implementation assignment.
+
 ## Airborne maneuver controller (2026-09-10)
 
 The new MO-training entrypoint is an isolated, local airborne deck:
@@ -213,10 +219,11 @@ header — a trace you cannot attribute to a tune is not evidence of anything.
 
 **Not validated.** The gains hold a reference condition well enough to take data
 *from*; they are not a flight-model result and say nothing about the airframe.
-Card H0 has been attempted five times and remains **unflown** — it has not yet
-reached its first input from a stabilized reference. Five control-law defects
-were found and fixed in the process; all are recorded with trace evidence in
-`docs/C182T_H0_CONTROL_LAW_FINDINGS.md`.
+Card H0 was flown on its sixth attempt on 2026-09-17, with nine of ten points
+entered on condition. The earlier five attempts exposed control-law defects;
+their fixes and the sixth run are recorded with trace evidence in
+`docs/C182T_H0_CONTROL_LAW_FINDINGS.md`. This limited controller-confidence
+result does not qualify the current live bridge or a complete flight.
 
 Offline coverage: 84 tests in `tests/test_direct_backend.py`, 150 across the
 service, none requiring X-Plane.
