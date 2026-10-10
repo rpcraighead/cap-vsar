@@ -2,8 +2,11 @@
 
 **Status: review only. Nothing in this document has been fixed.** Each
 finding names the file and line it was verified against on `main` at
-62ed4b9 (worktree `cap-vsar-integration`, 52976b0, which is the same tree
-for everything reviewed here). Findings marked **[hand-checked]** were
+52976b0 (worktree `cap-vsar-integration`). `origin/main` had moved to
+62ed4b9 by the time this was written; of its three newer commits, 57663ec
+("Fix C182 build safety", 2026-10-10) resolves B2-1, B2-2 and B2-4 below,
+and the line numbers in section 8 refer to the older file. Those three rows
+are marked **resolved on origin/main**. Findings marked **[hand-checked]** were
 re-verified by the reviewing session itself after the subsystem reviews came
 back; the rest were verified by the subsystem reviewer by reading the code
 path and, where noted, by a reproduction run against a throwaway database or
@@ -57,11 +60,11 @@ The ten things that matter most, in order:
    does not offer. The fake harness in `tests/am.py` accepts any dataref name
    and models the press callback, so the suite is green. (I2-1, I2-2, I2-3)
    [hand-checked against `DataRefs.txt` and the AM 4.2 code snippets]
-4. **The aircraft builder deletes the installed aircraft, including the
-   hand-made CAP livery, before it has built anything.** `rmtree(target)` then
-   convert; a failure mid-build leaves no aircraft. The livery that is in the
-   install today is not produced by the script and will be destroyed on the
-   next run. (B2-1)
+4. **The aircraft builder deleted the installed aircraft before it had built
+   anything.** Resolved on `origin/main` by 57663ec the same day (staged
+   build, backup to `Output/capvsar-backups`, the N429CP livery now generated
+   by the build). Left in the list because the review tree still had it and
+   because the backup directory now needs a retention rule. (B2-1)
 5. **Flight planner: a mistyped datum silently plans the search 10 NM away.**
    Unknown identifiers fall through to a hard-coded default point and return
    `success: true`. Offline, the terrain profile reports 0 ft terrain and a
@@ -369,10 +372,10 @@ excluded object in the pinned donor is untextured, so nothing leaks today
 
 | ID | Sev | Finding | Where |
 |---|---|---|---|
-| B2-1 | high | `shutil.rmtree(target_dir)` runs before conversion and the `.acf` patch; a mid-build failure leaves no aircraft, and the installed `liveries/Civil Air Patrol (N429CP - C172 Adapted)/`, which the script does not create, is destroyed on the next run. Build into a sibling and rename; preserve liveries the source did not supply. | `scripts/build_c182t_package.py:479-481,525,540-552` |
-| B2-2 | medium | Builder default donor path `~/.cache/cap-vsar/flightgear-c182-<commit>` ≠ fetcher default `~/.cache/capvsar/capvsar-flightgear-c182-pinned`; the README recipe cannot run and re-downloads 120 MB into a second cache. | `build_c182t_package.py:39-44`, `fetch_flightgear_c182.py:27-28`, `README.md:258` |
+| B2-1 | **resolved on origin/main** (57663ec) | `shutil.rmtree(target_dir)` runs before conversion and the `.acf` patch; a mid-build failure leaves no aircraft, and the installed `liveries/Civil Air Patrol (N429CP - C172 Adapted)/`, which the script does not create, is destroyed on the next run. Build into a sibling and rename; preserve liveries the source did not supply. | `scripts/build_c182t_package.py:479-481,525,540-552` |
+| B2-2 | **resolved on origin/main** (57663ec: `DEFAULT_DONOR` imported from the fetcher) | Builder default donor path `~/.cache/cap-vsar/flightgear-c182-<commit>` ≠ fetcher default `~/.cache/capvsar/capvsar-flightgear-c182-pinned`; the README recipe cannot run and re-downloads 120 MB into a second cache. | `build_c182t_package.py:39-44`, `fetch_flightgear_c182.py:27-28`, `README.md:258` |
 | B2-3 | low | Selection icon renders the literal text `&bull;` (`ImageDraw.text` does not decode entities); verified on the installed icon, which also still says N499CP. | `build_c182t_package.py:219-222` |
-| B2-4 | medium | "Applied N of 50" patches is printed and never enforced; a typo in a new `ACF_PATCHES` key or a Laminar field rename silently ships the C172 value. `PatchHygieneTests` checks anchoring and uniqueness, not that each matches a line. | `build_c182t_package.py:540-554` |
+| B2-4 | **resolved on origin/main** (57663ec: `patch_acf_lines` raises unless each field occurs exactly once) | "Applied N of 50" patches is printed and never enforced; a typo in a new `ACF_PATCHES` key or a Laminar field rename silently ships the C172 value. `PatchHygieneTests` checks anchoring and uniqueness, not that each matches a line. | `build_c182t_package.py:540-554` |
 | B2-5 | medium | Prop-lever extraction hard-codes TRIS index offsets (19629/534, 19179/450) into Laminar's cockpit OBJ with no validation; any X-Plane re-export builds the lever from arbitrary geometry and prints success. | `build_c182t_package.py:276-277,355-356` |
 | B2-6 | low | Flap animation maps 0→38° over `flap1_deg` 0→40 while the `.acf` patch sets flap travel 38, so the visual flap stops at 36.1°; `ElevatorTrim` is driven by `elevator1_deg` not trim. | `convert_flightgear_c182.py:299-335` |
 | B2-7 | medium | `generate_manual.py` hard-codes `/home/ron/Projects/cap-vsar/docs/...` (a *different* checkout) and embeds `src="/home/ron/..."` into the **tracked** handbook HTML; 8 figures broken for anyone else, inherited by `build_docs_site.py`. `build_radio_reference_doc.py:842` bakes the same path into a tracked `.md`. | `scripts/generate_manual.py:17-18,533,968` |
@@ -408,7 +411,7 @@ L2-1, L2-4, L2-5, L2-6; P2-2.
 
 Wave B, before the next sim session (things a crew will hit): I2-1, I2-2,
 I2-3 with the harness name validation so they stay fixed; I2-4; F2-2, F2-3,
-F2-4; P2-1, P2-3; B2-1, B2-2, B2-4.
+F2-4; P2-1, P2-3; B2-5.
 
 Wave C, hygiene that makes A and B stick: O2-1, O2-2 (dev requirements,
 planner and board suites in the default run, CI on 3.12); L2-3 with the
@@ -417,6 +420,9 @@ planner and board suites in the default run, CI on 3.12); L2-3 with the
 Wave D, when the G1000 pattern work lands: L2-13 conventions document and
 cross-repo fixture; L2-2 after an FMS load test; close the `USER_GUIDE`
 "not yet checked in X-Plane" item with the g1000-sar harness.
+
+Design decisions for the four items that need one are in
+[`DECISIONS_2026-10-10.md`](DECISIONS_2026-10-10.md).
 
 Everything here can be added to `docs/bugs/tracker.json` under the `2`-prefixed
 IDs; that step was deliberately left for the maintainer so wave dates can be
