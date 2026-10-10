@@ -30,7 +30,9 @@ class BridgeClient:
     def request(self, action, **arguments):
         payload = {**arguments, "action": action, "secret": self.config["secret"]}
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
-            conn.settimeout(1.0)
+            # Reset is restricted to paused/released state and may rebuild the
+            # simulator's weather/engine setup. Never extend live-frame leases.
+            conn.settimeout(20.0 if action == "lab_reset" else 1.0)
             conn.connect(self.config["socket_path"])
             conn.sendall(json.dumps(payload, allow_nan=False).encode() + b"\n")
             raw = bytearray()
@@ -219,6 +221,12 @@ def score_trace(path):
                     observer.observe(payload)
                 elif kind == "intervention":
                     observer.fail(str(payload))
+                elif kind in ("setup", "setup_snapshot"):
+                    if observer.samples or finished is not None:
+                        raise ValueError("State setup during a scored trial")
+                elif kind == "command":
+                    if finished is not None:
+                        raise ValueError("Command after trace end")
                 elif kind == "end":
                     if finished is not None:
                         raise ValueError("Duplicate trace end")

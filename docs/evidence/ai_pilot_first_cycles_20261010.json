@@ -1,0 +1,179 @@
+{
+  "status": "development demonstration, not full qualification",
+  "date": "2026-10-10",
+  "cycles": [
+    {
+      "trace": "/home/ron/.cache/capvsar/ai-pilot/20261010-cycle01.jsonl",
+      "sha256": "8b4bf2a56dba8b6f1abbf499ed42c0da01f4adddf423b03fb13acfb2c88ad2a5",
+      "entry": {
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "outcome": "FAIL",
+      "reason": "{'error': 'TimeoutError', 'reason': 'timed out'}",
+      "samples": 0,
+      "end_pause_confirmed": false
+    },
+    {
+      "trace": "/home/ron/.cache/capvsar/ai-pilot/20261010-cycle02.jsonl",
+      "sha256": "0f8812d472fe9535f9847a8f587b476a01860774332bd0ca7fade7d7c28ed055",
+      "entry": {
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "outcome": "FAIL",
+      "reason": "{'error': 'RuntimeError', 'reason': 'Exchange requires active authority'}",
+      "samples": 0,
+      "end_pause_confirmed": true
+    },
+    {
+      "trace": "/home/ron/.cache/capvsar/ai-pilot/20261010-cycle03.jsonl",
+      "sha256": "606ab0c09330dad9ab6fa57aca1bc9a5fe5d92bc341cecbc85740aafd513001c",
+      "entry": {
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "outcome": "PASS",
+      "reason": null,
+      "samples": 704,
+      "end_pause_confirmed": true,
+      "scored_sim_seconds": 61.23400592803955,
+      "transitions": [
+        {
+          "phase": "establish",
+          "sim_time_s": 23.894617080688477,
+          "frame": 2770,
+          "stable_since_s": 13.88015365600586
+        },
+        {
+          "phase": "maneuver",
+          "sim_time_s": 44.656333923339844,
+          "frame": 4888,
+          "stable_since_s": 34.62595748901367
+        },
+        {
+          "phase": "recover",
+          "sim_time_s": 65.82105255126953,
+          "frame": 6857,
+          "stable_since_s": 55.77931213378906
+        }
+      ],
+      "final": {
+        "heading_mag_deg": 90.28253173828125,
+        "altitude_indicated_ft": 4486.23388671875,
+        "kias": 99.63158416748047,
+        "vvi_fpm": 48.98126220703125,
+        "roll_deg": 0.04139867424964905
+      }
+    },
+    {
+      "trace": "/home/ron/.cache/capvsar/ai-pilot/20261010-cycle04.jsonl",
+      "sha256": "2a5f548732b1666b46aefca550c67f147b72f3432f521aea591703cc57bf3125",
+      "entry": {
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "outcome": "PASS",
+      "reason": null,
+      "samples": 701,
+      "end_pause_confirmed": true,
+      "scored_sim_seconds": 61.188819885253906,
+      "transitions": [
+        {
+          "phase": "establish",
+          "sim_time_s": 85.22570037841797,
+          "frame": 11297,
+          "stable_since_s": 75.21116638183594
+        },
+        {
+          "phase": "maneuver",
+          "sim_time_s": 105.9736557006836,
+          "frame": 13399,
+          "stable_since_s": 95.97274017333984
+        },
+        {
+          "phase": "recover",
+          "sim_time_s": 127.08284759521484,
+          "frame": 15524,
+          "stable_since_s": 117.04766845703125
+        }
+      ],
+      "final": {
+        "heading_mag_deg": 90.27944946289062,
+        "altitude_indicated_ft": 4486.82275390625,
+        "kias": 99.63645935058594,
+        "vvi_fpm": 48.418766021728516,
+        "roll_deg": 0.04589589685201645
+      }
+    },
+    {
+      "trace": "/home/ron/.cache/capvsar/ai-pilot/20261010-cycle05.jsonl",
+      "sha256": "7868b9fe98bcfc871fa28bb13b2f010ab5c691618999cecc4e85c070e4b27f73",
+      "entry": {
+        "heading_offset": -10.0,
+        "altitude_offset": 100.0,
+        "speed_offset": -5.0
+      },
+      "outcome": "PASS",
+      "reason": null,
+      "samples": 1091,
+      "end_pause_confirmed": true,
+      "scored_sim_seconds": 95.77313995361328,
+      "transitions": [
+        {
+          "phase": "establish",
+          "sim_time_s": 175.62423706054688,
+          "frame": 21974,
+          "stable_since_s": 165.590087890625
+        },
+        {
+          "phase": "maneuver",
+          "sim_time_s": 196.3922882080078,
+          "frame": 24061,
+          "stable_since_s": 186.33642578125
+        },
+        {
+          "phase": "recover",
+          "sim_time_s": 222.92991638183594,
+          "frame": 26727,
+          "stable_since_s": 212.84133911132812
+        }
+      ],
+      "final": {
+        "heading_mag_deg": 90.54357147216797,
+        "altitude_indicated_ft": 4504.130859375,
+        "kias": 99.78431701660156,
+        "vvi_fpm": 120.4978256225586,
+        "roll_deg": -0.3837546408176422
+      }
+    }
+  ],
+  "fault_probes": [
+    {
+      "probe": "loss",
+      "trace": "/home/ron/.cache/capvsar/ai-pilot/20261010-flight-loss.jsonl",
+      "sha256": "5b847d199b6c42631622253de1b9cbd5e797c43bc3ab22f4c4e911d5595c580c",
+      "outcome": "PROBE_PASS",
+      "observed_state": "PAUSED_FAULT",
+      "retired": true,
+      "override_released": true,
+      "retired_rejection": "Invalid atomic session",
+      "end_pause_confirmed": true
+    },
+    {
+      "probe": "takeover",
+      "trace": "/home/ron/.cache/capvsar/ai-pilot/20261010-flight-takeover.jsonl",
+      "sha256": "9fac39e2a6858f577c9d68835e665f8bd6f302c7db4d816dc6a36a9e7178b259",
+      "outcome": "PROBE_PASS",
+      "observed_state": "MANUAL",
+      "retired": true,
+      "override_released": true,
+      "retired_rejection": "Invalid atomic session",
+      "end_pause_confirmed": true
+    }
+  ]
+}

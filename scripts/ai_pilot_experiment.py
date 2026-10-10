@@ -31,7 +31,7 @@ def inventory(xplane):
         return subprocess.check_output(["git", "-C", str(ROOT), *args], text=True).strip()
     sources = [ROOT / "xplane" / name for name in (
         "PI_capvsar_flight_control.py", "capvsar_flight_control_core.py",
-        "capvsar_flight_control_mapping.py", "capvsar_telemetry.py")]
+        "capvsar_flight_control_mapping.py", "capvsar_telemetry.py", "capvsar_qualification.py")]
     installed = [plugins / path.name for path in sources]
     return {
         "repository": str(ROOT), "commit": git("rev-parse", "HEAD"),
@@ -46,16 +46,24 @@ def inventory(xplane):
     }
 
 
-def stage_observer(destination):
-    """Stage a read-only install bundle; never modify a running simulator."""
+def stage_observer(destination, qualification_aircraft=None):
+    """Stage an explicit observation or expiring laboratory installation."""
+    if qualification_aircraft is not None:
+        from xplane.capvsar_qualification import STOCK_NAME, STOCK_SHA256
+        qualification_aircraft = qualification_aircraft.resolve()
+        if qualification_aircraft.name != STOCK_NAME or digest(qualification_aircraft) != STOCK_SHA256:
+            raise ValueError("Qualification requires the pinned stock C172 G1000")
     destination.mkdir(parents=True, exist_ok=False)
     for name in ("PI_capvsar_flight_control.py", "capvsar_flight_control_core.py",
-                 "capvsar_flight_control_mapping.py", "capvsar_telemetry.py"):
+                 "capvsar_flight_control_mapping.py", "capvsar_telemetry.py", "capvsar_qualification.py"):
         shutil.copy2(ROOT / "xplane" / name, destination / name)
     session = secrets.token_hex(16)
     config = {"mode": "observe", "protocol": "atomic-v1", "session": session,
               "secret": secrets.token_hex(32),
               "socket_path": f"/tmp/capvsar-flight-control-{session}.sock"}
+    if qualification_aircraft is not None:
+        config.update(mode="qualification", aircraft_path=str(qualification_aircraft),
+                      expires_unix_s=time.time() + 3600)
     fd = os.open(destination / "capvsar_flight_control_config.json",
                  os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w") as stream:
@@ -133,6 +141,9 @@ def main():
     score.add_argument("trace", type=Path)
     stage = commands.add_parser("stage-observer")
     stage.add_argument("destination", type=Path)
+    qualify = commands.add_parser("stage-qualification")
+    qualify.add_argument("destination", type=Path)
+    qualify.add_argument("--aircraft", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "observe":
         if not 2 <= args.seconds <= 600:
@@ -143,7 +154,7 @@ def main():
         print(json.dumps(result, indent=2))
         return 0 if result["outcome"] == "PASS" else 1
     else:
-        stage_observer(args.destination)
+        stage_observer(args.destination, args.aircraft if args.command == "stage-qualification" else None)
     return 0
 
 

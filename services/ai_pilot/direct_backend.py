@@ -609,8 +609,14 @@ class XPlaneDirectBackend:
                     age = max(age, sample_age)
         return out, age
 
-    def _step(self, observation, target_heading: float, target_altitude: float) -> None:
+    def _step(self, observation, target_heading: float, target_altitude: float,
+              *, dt_s: float | None = None) -> None:
         g = Gains
+        # The snapshot adapter explicitly supplies elapsed simulation time.
+        # Preserve nominal 10 Hz tuning for the gated historical entrypoints.
+        if dt_s is not None and (not math.isfinite(dt_s) or not 0 < dt_s <= 0.25):
+            raise ValueError("Simulation step must be in (0, 0.25] seconds")
+        integral_scale = 1.0 if dt_s is None else dt_s * self.LOOP_HZ
 
         # Resolve any active test input up front, so the outer loops can see that
         # a deliberate disturbance is in progress rather than integrating against
@@ -668,7 +674,7 @@ class XPlaneDirectBackend:
             # altitude excursion about to be removed.
             if test_axis != "pitch":
                 candidate_alt_i = _clamp(
-                    self._alt_i + altitude_error * g.ALT_TO_PITCH_I,
+                    self._alt_i + altitude_error * g.ALT_TO_PITCH_I * integral_scale,
                     -g.ALT_PITCH_I_LIMIT, g.ALT_PITCH_I_LIMIT)
                 if g.MIN_PITCH_DEG < raw_pitch < g.MAX_PITCH_DEG or (
                         raw_pitch >= g.MAX_PITCH_DEG and candidate_alt_i < self._alt_i) or (
@@ -698,7 +704,7 @@ class XPlaneDirectBackend:
             # proportional term still responds.
             if test_axis != "pitch":
                 candidate = _clamp(
-                    self._throttle_i + speed_error * g.SPEED_TO_THROTTLE_I,
+                    self._throttle_i + speed_error * g.SPEED_TO_THROTTLE_I * integral_scale,
                     -g.THROTTLE_I_LIMIT, g.THROTTLE_I_LIMIT)
                 # Conditional integration. Clamping the integral TERM is not
                 # anti-windup: on card H0 run 3 the aircraft entered 22 knots
@@ -749,7 +755,7 @@ class XPlaneDirectBackend:
             speed_ratio = g.RUDDER_FF_REF_KIAS / max(observation.kias, 40.0)
             feedforward = g.RIGHT_RUDDER_FF * self._throttle * speed_ratio * speed_ratio
             self._beta_i = _clamp(
-                self._beta_i - beta * g.BETA_TO_RUDDER_I, -g.BETA_I_LIMIT, g.BETA_I_LIMIT)
+                self._beta_i - beta * g.BETA_TO_RUDDER_I * integral_scale, -g.BETA_I_LIMIT, g.BETA_I_LIMIT)
             rudder = _clamp(
                 feedforward
                 + aileron * g.AILERON_TO_RUDDER
@@ -766,6 +772,8 @@ class XPlaneDirectBackend:
         # authority limit the instant the input expired.
         now = self.clock()
         dt = 0.0 if self._surface_t is None else max(0.0, now - self._surface_t)
+        if dt_s is not None:
+            dt = dt_s
         self._surface_t = now
         limited = {}
         for axis, value, rate in (

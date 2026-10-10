@@ -3,9 +3,11 @@
 Date: 2026-10-10. Owner: Ron. Repository baseline: `57663ec`.
 Status: agreed direction; the milestones below require implementation and measured simulator acceptance.
 
-Implementation has begun on `feat/ai-pilot-first-cycle`. See the
-[first increment and simulator evidence](AI_PILOT_FIRST_INCREMENT.md) for the
-observation harness, atomic command protocol, validation and remaining work.
+Implementation on `feat/ai-pilot-first-cycle` has demonstrated two baseline
+cycles, one disturbed-entry cycle, and airborne loss/takeover probes on the
+stock C172. See the [Sol handoff and next campaign](AI_PILOT_SOL_HANDOFF.md).
+The [first increment](AI_PILOT_FIRST_INCREMENT.md) records the earlier
+observation-only stage. Full repeatability qualification remains outstanding.
 
 Build an X-Plane pilot that can taxi, take off, cruise, approach, land, and
 return to parking, plus a test pilot that can establish reference conditions,

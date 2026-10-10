@@ -19,6 +19,7 @@ import xp
 from capvsar_flight_control_core import CHANNELS, ControlBridge
 from capvsar_flight_control_mapping import candidate_prefix
 from capvsar_telemetry import Telemetry
+from capvsar_qualification import QualificationLab
 
 CONFIG = Path(__file__).with_name("capvsar_flight_control_config.json")
 LIVE_PLUGIN_QUALIFIED = False
@@ -109,6 +110,8 @@ class PythonInterface:
         self.snapshot = None
         self.telemetry_error = None
         self.observe_only = False
+        self.lab = None
+        self.lab_sessions = set()
         self.config = None
         self.requests = queue.Queue(maxsize=16)
         self.stop_event = threading.Event()
@@ -118,7 +121,7 @@ class PythonInterface:
 
     def XPluginStart(self):
         config = json.loads(CONFIG.read_text()) if CONFIG.is_file() else None
-        if config and (LIVE_PLUGIN_QUALIFIED or config.get("mode") == "observe"):
+        if config and (LIVE_PLUGIN_QUALIFIED or config.get("mode") in ("observe", "qualification")):
             self.observe_only = config.get("mode") == "observe"
             session = config["session"]
             candidate_prefix(session)
@@ -130,6 +133,11 @@ class PythonInterface:
             self.core = ControlBridge(XPlaneSink(), session,
                                       atomic=config.get("protocol") == "atomic-v1")
             self.telemetry = Telemetry(xp, self.core.sink, session)
+            if config.get("mode") == "qualification":
+                if not self.core.atomic:
+                    raise ValueError("Qualification requires atomic-v1 protocol")
+                self.lab = QualificationLab(xp, self.core.sink, config)
+                self.lab_sessions.add(session)
             if not self.observe_only and not self.core.atomic:
                 self._register_candidates(session)
         else:
@@ -227,8 +235,9 @@ class PythonInterface:
                         if not isinstance(request, dict) or request.pop("secret", None) != self.config["secret"]:
                             raise ValueError("Unauthorized control request")
                         answer = queue.Queue(maxsize=1)
+                        reply_timeout = 20.0 if request.get("action") == "lab_reset" else 0.25
                         self.requests.put_nowait((request, answer, time.monotonic() + 0.20))
-                        result = answer.get(timeout=0.25)
+                        result = answer.get(timeout=reply_timeout)
                     except (ValueError, queue.Empty, queue.Full, OSError) as error:
                         result = {"error": str(error)}
                     try:
@@ -251,6 +260,40 @@ class PythonInterface:
                 action = request.pop("action")
                 if self.observe_only and action not in ("status", "snapshot", "manifest"):
                     raise ValueError("Observe mode has no control authority")
+                if self.lab and action not in ("status", "snapshot", "manifest", "lab_reset", "lab_resume",
+                        "submit_frame", "prepare", "activate", "exchange", "fault_pause", "human_takeover"):
+                    raise ValueError("Action unavailable during qualification")
+                if self.lab and action in ("prepare", "activate", "submit_frame", "exchange", "lab_resume"):
+                    self.lab.verify_identity()
+                    if action == "prepare" and request.get("owner") != "DIRECT":
+                        raise ValueError("Qualification only supports DIRECT ownership")
+                    if action in ("submit_frame", "exchange"):
+                        self.lab.validate_controls(request["controls"])
+                if action == "lab_reset" and self.lab:
+                    new_session = request.pop("session")
+                    candidate_prefix(new_session)
+                    if new_session in self.lab_sessions:
+                        raise ValueError("Reset must use a new session")
+                    result = self.lab.reset(self.core, **request)
+                    self.lab_sessions.add(new_session)
+                    self.core = ControlBridge(self.core.sink, new_session, atomic=True)
+                    self.telemetry.session = new_session
+                    self.snapshot = None
+                    answer.put_nowait({**result, "bridge": self.core.status()})
+                    continue
+                if action == "lab_resume" and self.lab:
+                    if request:
+                        raise ValueError("Unexpected resume arguments")
+                    self.lab.resume(self.core)
+                    answer.put_nowait(self.core.status())
+                    continue
+                if action == "exchange":
+                    if self.core.state != "ACTIVE":
+                        raise ValueError("Exchange requires active authority")
+                    self.core.submit_frame(**request)
+                    self.core.heartbeat(request["session"], request["generation"])
+                    answer.put_nowait({"snapshot": self.snapshot, "bridge": self.core.status()})
+                    continue
                 if action in ("snapshot", "manifest"):
                     if request:
                         raise ValueError("Unexpected observation arguments")
@@ -294,6 +337,8 @@ class PythonInterface:
                 answer.put_nowait({"error": str(error), "status": self.core.status()})
         try:
             if not self.observe_only:
+                if self.lab and self.core.state == "ACTIVE":
+                    self.lab.verify_identity()
                 self.core.tick()
         except Exception as error:
             self.core.fault_pause("Bridge loop failed: %s" % error)
@@ -302,6 +347,8 @@ class PythonInterface:
     def capture_loop(self, sinceLast, elapsed, counter, refCon):
         try:
             self.snapshot = self.telemetry.capture(counter)
+            if self.lab:
+                self.lab.check_flight(self.snapshot, self.core)
             self.telemetry_error = None
         except Exception as error:
             self.snapshot = None

@@ -92,7 +92,7 @@ python scripts/ai_pilot_experiment.py stage-observer /tmp/capvsar-observer-bundl
 ```
 
 With X-Plane stopped, preserve any existing flight-control plugin/config before
-installing the five staged files in `Resources/plugins/PythonPlugins/`. Preserve
+installing the staged files in `Resources/plugins/PythonPlugins/`. Preserve
 the config's `0600` permissions and do not commit its secret. Use a new staged
 session for each installation. Launch the stock C172 G1000 with a known scenery
 profile and wait for loading to complete, then run:

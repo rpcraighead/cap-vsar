@@ -45,9 +45,10 @@ class FakeXP(types.ModuleType):
     def scheduleFlightLoop(self, loop, interval): pass
     def destroyFlightLoop(self, loop): pass
     def getDatavf(self, ref, values, offset, count):
-        assert ref in ("sim/flightmodel/engine/ENGN_thro_use", "sim/cockpit2/engine/actuators/throttle_ratio")
-        values[:count] = self.refs[ref][offset:offset + count]
+        values[:count] = self.refs.get(ref, [0.] * 16)[offset:offset + count]
         return count
+    def getDatavi(self, ref, values, offset, count):
+        return self.getDatavf(ref, values, offset, count)
     def setDatai(self, ref, value):
         assert ref != "sim/time/paused", "Pause is a read-only dataref"
         self.refs[ref] = value

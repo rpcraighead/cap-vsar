@@ -22,13 +22,27 @@ FIELDS = {
     "pitch_rate_dps": ("sim/flightmodel/position/Q", "f", "deg/s body pitch"),
     "frame_period_s": ("sim/operation/misc/frame_rate_period", "f", "s"),
     "on_ground": ("sim/flightmodel/failures/onground_any", "i", "boolean"),
+    "mass_kg": ("sim/flightmodel/weight/m_total", "f", "kg"),
+    "payload_kg": ("sim/flightmodel/weight/m_fixed", "f", "kg"),
+    "fuel_kg": ("sim/flightmodel/weight/m_fuel_total", "f", "kg"),
+    "wind_mps": ("sim/weather/aircraft/wind_now_speed_msc", "f", "m/s"),
+    "qnh_pa": ("sim/weather/aircraft/qnh_pas", "f", "Pa"),
+    "sim_speed": ("sim/time/sim_speed", "i", "ratio"),
+    "flap_actual": ("sim/cockpit2/controls/flap_system_deploy_ratio", "f", "ratio"),
+    "local_x_m": ("sim/flightmodel/position/local_x", "d", "m local east"),
+    "local_y_m": ("sim/flightmodel/position/local_y", "d", "m local up"),
+    "local_z_m": ("sim/flightmodel/position/local_z", "d", "m local south"),
+    "tas_mps": ("sim/flightmodel/position/true_airspeed", "f", "m/s true airspeed"),
 }
+ARRAY_FIELDS = {"engine_running": ("sim/flightmodel/engine/ENGN_running", "i", "boolean"),
+                "engine_rpm": ("sim/cockpit2/engine/indicators/engine_speed_rpm", "f", "rpm")}
 
 
 class Telemetry:
     def __init__(self, xp, sink, session, clock=time.monotonic):
         self.xp, self.sink, self.session, self.clock = xp, sink, session, clock
         self.refs = {key: xp.findDataRef(spec[0]) for key, spec in FIELDS.items()}
+        self.array_refs = {key: xp.findDataRef(spec[0]) for key, spec in ARRAY_FIELDS.items()}
         if not all(self.refs.values()):
             raise RuntimeError("Required telemetry dataref missing")
         self.frame = 0
@@ -41,6 +55,11 @@ class Telemetry:
             if not math.isfinite(value):
                 raise ValueError("Nonfinite telemetry: " + key)
             values[key] = value
+        for key, (_, kind, _) in ARRAY_FIELDS.items():
+            buf = [0]
+            if getattr(self.xp, "getDatav" + kind)(self.array_refs[key], buf, 0, 1) != 1 or not math.isfinite(buf[0]):
+                raise ValueError("Engine telemetry unavailable")
+            values[key] = buf[0]
         name, path = self.xp.getNthAircraftModel(0)
         controls = {key: self.sink.read_control(key) for key in self.sink.controls}
         if not all(math.isfinite(value) for value in controls.values()):
@@ -58,7 +77,8 @@ class Telemetry:
         }
 
     def manifest(self):
-        return {"schema": "capvsar.telemetry.v1", "units": {k: v[2] for k, v in FIELDS.items()},
-                "datarefs": {k: v[0] for k, v in FIELDS.items()},
+        all_fields = {**FIELDS, **ARRAY_FIELDS}
+        return {"schema": "capvsar.telemetry.v1", "units": {k: v[2] for k, v in all_fields.items()},
+                "datarefs": {k: v[0] for k, v in all_fields.items()},
                 "sampling": "All channels read in one post-flight-model callback; no cached per-channel values",
                 "versions": self.xp.getVersions()}
