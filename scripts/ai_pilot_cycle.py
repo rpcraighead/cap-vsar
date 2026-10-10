@@ -73,12 +73,13 @@ def run(args):
                 raise ValueError("Reset readiness not established in 15 seconds")
             time.sleep(.1)
         controls = dict(s["controls"])
-        client.request("submit_frame", **frame(controls))
-        prepared = client.request("prepare", owner="DIRECT", session=session, expected_generation=0)
-        generation = prepared["generation"]
-        client.request("submit_frame", **frame(controls))
-        client.request("activate", session=session, generation=generation)
-        client.request("lab_resume")
+        started_bridge = client.request("lab_start", session=session, controls=controls,
+                                        snapshot_frame=s["frame"],
+                                        snapshot_wall_time_s=s["wall_time_s"])
+        if started_bridge["state"] != "ACTIVE":
+            raise ValueError("Qualification activation not confirmed")
+        generation = started_bridge["generation"]
+        seq = started_bridge["frame_sequence"]
         controller = SnapshotController(config["aircraft_path"], session)
         started = time.monotonic()
         deadline = started + scenario.wall_deadline_s

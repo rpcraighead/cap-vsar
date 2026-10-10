@@ -1,4 +1,5 @@
 import hashlib
+import queue
 import time
 import pytest
 
@@ -118,3 +119,62 @@ def test_aircraft_change_stops_writes_before_next_flight_model(monkeypatch, tmp_
     plugin.flight_loop(0, 0, 2, None)
     assert plugin.core.retired and plugin.core.pause_confirmed
     assert [entry for entry in xp.writes if entry[0].startswith("sim/joystick/yoke")] == before
+
+
+def test_lab_start_transfers_and_resumes_in_one_flight_callback(monkeypatch, tmp_path):
+    xp, plugin, _, lab = setup_lab(monkeypatch, tmp_path)
+    plugin.lab = lab
+    plugin.core.atomic = True
+    xp.refs["sim/time/paused"] = 1
+    controls = {"roll": 0., "pitch": 0., "yaw": 0., "throttle": .55, "flap": 0., "trim": 0.}
+    now = time.monotonic()
+    plugin.snapshot = {"frame": 42, "wall_time_s": now}
+    reply = queue.Queue(maxsize=1)
+    plugin.requests.put_nowait(({"action": "lab_start", "session": plugin.core.session,
+                                 "controls": controls, "snapshot_frame": 42,
+                                 "snapshot_wall_time_s": now}, reply))
+    plugin.flight_loop(0, 0, 1, None)
+    status = reply.get_nowait()
+    assert status["state"] == "ACTIVE" and status["generation"] == 1
+    assert status["frame_sequence"] == 2
+    assert xp.refs["sim/operation/override/override_joystick"] == 1
+    assert "sim/operation/pause_off" in xp.commands
+    assert lab.trial_started is not None
+
+
+def test_lab_start_rejects_stale_source_before_ownership(monkeypatch, tmp_path):
+    xp, plugin, _, lab = setup_lab(monkeypatch, tmp_path)
+    plugin.lab = lab
+    plugin.core.atomic = True
+    xp.refs["sim/time/paused"] = 1
+    controls = {"roll": 0., "pitch": 0., "yaw": 0., "throttle": .55, "flap": 0., "trim": 0.}
+    now = time.monotonic()
+    plugin.snapshot = {"frame": 42, "wall_time_s": now}
+    reply = queue.Queue(maxsize=1)
+    plugin.requests.put_nowait(({"action": "lab_start", "session": plugin.core.session,
+                                 "controls": controls, "snapshot_frame": 41,
+                                 "snapshot_wall_time_s": now - .25}, reply))
+    plugin.flight_loop(0, 0, 1, None)
+    assert "Fresh qualification snapshot" in reply.get_nowait()["error"]
+    assert plugin.core.state == "MANUAL"
+    assert xp.refs["sim/operation/override/override_joystick"] == 0
+    assert "sim/operation/pause_off" not in xp.commands
+
+
+def test_lab_start_failure_after_activation_pauses_and_retires(monkeypatch, tmp_path):
+    xp, plugin, _, lab = setup_lab(monkeypatch, tmp_path)
+    plugin.lab = lab
+    plugin.core.atomic = True
+    xp.refs["sim/time/paused"] = 1
+    monkeypatch.setattr(lab, "resume", lambda core: (_ for _ in ()).throw(ValueError("resume failed")))
+    controls = {"roll": 0., "pitch": 0., "yaw": 0., "throttle": .55, "flap": 0., "trim": 0.}
+    now = time.monotonic()
+    plugin.snapshot = {"frame": 42, "wall_time_s": now}
+    reply = queue.Queue(maxsize=1)
+    plugin.requests.put_nowait(({"action": "lab_start", "session": plugin.core.session,
+                                 "controls": controls, "snapshot_frame": 42,
+                                 "snapshot_wall_time_s": now}, reply))
+    plugin.flight_loop(0, 0, 1, None)
+    assert "resume failed" in reply.get_nowait()["error"]
+    assert plugin.core.retired and plugin.core.pause_confirmed
+    assert xp.refs["sim/operation/override/override_joystick"] == 0

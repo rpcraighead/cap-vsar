@@ -261,13 +261,13 @@ class PythonInterface:
                 if self.observe_only and action not in ("status", "snapshot", "manifest"):
                     raise ValueError("Observe mode has no control authority")
                 if self.lab and action not in ("status", "snapshot", "manifest", "lab_reset", "lab_resume",
-                        "submit_frame", "prepare", "activate", "exchange", "fault_pause", "human_takeover"):
+                        "lab_start", "submit_frame", "prepare", "activate", "exchange", "fault_pause", "human_takeover"):
                     raise ValueError("Action unavailable during qualification")
-                if self.lab and action in ("prepare", "activate", "submit_frame", "exchange", "lab_resume"):
+                if self.lab and action in ("prepare", "activate", "submit_frame", "exchange", "lab_resume", "lab_start"):
                     self.lab.verify_identity()
                     if action == "prepare" and request.get("owner") != "DIRECT":
                         raise ValueError("Qualification only supports DIRECT ownership")
-                    if action in ("submit_frame", "exchange"):
+                    if action in ("submit_frame", "exchange", "lab_start"):
                         self.lab.validate_controls(request["controls"])
                 if action == "lab_reset" and self.lab:
                     new_session = request.pop("session")
@@ -285,6 +285,48 @@ class PythonInterface:
                     if request:
                         raise ValueError("Unexpected resume arguments")
                     self.lab.resume(self.core)
+                    answer.put_nowait(self.core.status())
+                    continue
+                if action == "lab_start" and self.lab:
+                    # The first control frame, ownership transfer and unpause
+                    # share one simulator callback. Separate socket round trips
+                    # can consume the 200 ms actuator lease while still paused.
+                    if set(request) != {"session", "controls", "snapshot_frame", "snapshot_wall_time_s"}:
+                        raise ValueError("Unexpected qualification start arguments")
+                    now = time.monotonic()
+                    if (self.snapshot is None or self.telemetry_error
+                            or type(request["snapshot_frame"]) is not int
+                            or request["snapshot_frame"] > self.snapshot["frame"]
+                            or type(request["snapshot_wall_time_s"]) not in (int, float)
+                            or not 0 <= now - request["snapshot_wall_time_s"] <= 0.20
+                            or not 0 <= now - self.snapshot["wall_time_s"] <= 0.20):
+                        raise ValueError("Fresh qualification snapshot required")
+                    if (self.core.state != "MANUAL" or self.core.owner != "HUMAN"
+                            or self.core.retired or self.core.generation != 0
+                            or self.core.frame_sequence != -1
+                            or request["session"] != self.core.session
+                            or self.core.sink.is_paused() is not True
+                            or self.core.sink.override_state() is not False
+                            or self.core.sink.ap_engaged() is not False):
+                        raise ValueError("Qualification start requires paused manual ownership")
+                    started = False
+                    try:
+                        controls = request["controls"]
+                        session = request["session"]
+                        started = True
+                        self.core.submit_frame(session, 0, 1,
+                                               self.core.clock() + .18, controls)
+                        prepared = self.core.prepare("DIRECT", session, 0)
+                        self.core.submit_frame(session, prepared["generation"], 2,
+                                               self.core.clock() + .18, controls)
+                        self.core.activate(session, prepared["generation"])
+                        if self.core.state != "ACTIVE":
+                            raise ValueError("Qualification activation not confirmed")
+                        self.lab.resume(self.core)
+                    except Exception:
+                        if started:
+                            self.core.fault_pause("Qualification start failed")
+                        raise
                     answer.put_nowait(self.core.status())
                     continue
                 if action == "exchange":
