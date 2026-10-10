@@ -1513,6 +1513,14 @@ def calc_route():
         nrst = min(lvls, key=lambda x: abs(x-alt))
         wdir = winds['levels'][nrst]['direction']
         wspd = winds['levels'][nrst]['speed']
+    # L2-5: simulate_winds() invents 15-30 kt from a hash of the position. It
+    # is fine for a briefing placeholder but headings, groundspeeds, times and
+    # fuel for every leg would carry a fictitious wind with nothing on the nav
+    # log saying so. Without real winds the route is planned in still air and
+    # says that it was.
+    winds_available = bool(winds) and 'levels' in winds and not winds.get('simulated', False)
+    if not winds_available:
+        wdir, wspd = 0, 0
     
     segs = []
     tot_dist, tot_time, tot_fuel = 0, 0, 0
@@ -1546,8 +1554,10 @@ def calc_route():
     return jsonify({
         'success': True, 'route_points': coords, 'segments': segs,
         'winds_aloft': {'altitude': alt, 'direction': wdir, 'speed': wspd,
-                        'source': winds.get('station', 'estimated'),
-                        'simulated': winds.get('simulated', True)},
+                        'source': (winds.get('station', 'estimated')
+                                   if winds_available else 'none - planned in still air'),
+                        'simulated': winds.get('simulated', True),
+                        'available': winds_available},
         'aircraft': ac['name'],
         'cruise': dict(cruise, altitude=alt, rpm=rpm),
         'full_fuel_endurance_hours': round(max(0, (ac['usable_fuel'] - taxi - climb['fuel_gallons'] - reserve) / cruise['fuel_flow_gph']) + climb['time_minutes'] / 60, 2),
@@ -1816,9 +1826,11 @@ def terrain_profile():
             if r.status_code == 200:
                 elev = float(r.json().get('value', 0))
                 return idx, max(0, elev) if elev > -1000 else 0
-        except:
+        except Exception:
             pass
-        return idx, 0
+        # L2-4: "could not look it up" is not "sea level". Offline, every
+        # route used to report 0 ft terrain and a green ADEQUATE clearance.
+        return idx, None
 
     # Fetch all elevations with 10 parallel workers
     with ThreadPoolExecutor(max_workers=10) as pool:
@@ -1829,9 +1841,17 @@ def terrain_profile():
             results[idx] = elev
 
     max_elevation = 0
+    unknown_samples = 0
     for i, sample in enumerate(samples):
-        sample['elevation_ft'] = round(results.get(i, 0))
-        max_elevation = max(max_elevation, sample['elevation_ft'])
+        elev = results.get(i)
+        sample['elevation_known'] = elev is not None
+        if elev is None:
+            unknown_samples += 1
+        # Unknown samples keep a numeric 0 so the profile can still be drawn
+        # and the climb computed, but never count towards terrain or clearance.
+        sample['elevation_ft'] = round(elev) if elev is not None else 0
+        if elev is not None:
+            max_elevation = max(max_elevation, sample['elevation_ft'])
 
     # Compute flight path with climb and descent profiles
     ac = AIRCRAFT_DATABASE[DEFAULT_AIRCRAFT]
@@ -1901,20 +1921,29 @@ def terrain_profile():
 
         clearance = sample['flight_alt'] - sample['elevation_ft']
         # Skip departure/destination points for min clearance (on the ground)
-        if dist > 0.5 and dist < cumulative_dist - 0.5:
+        if dist > 0.5 and dist < cumulative_dist - 0.5 and sample['elevation_known']:
             min_clearance = min(min_clearance, clearance)
 
+    terrain_known = unknown_samples == 0
     if min_clearance == float('inf'):
-        min_clearance = cruise_altitude - max_elevation
+        min_clearance = (cruise_altitude - max_elevation
+                         if unknown_samples < len(samples) else None)
 
     return jsonify({
         'success': True,
         'profile': samples,
         'cruise_altitude': cruise_altitude,
-        'max_terrain': round(max_elevation),
-        'min_clearance': round(min_clearance),
-        'vfr_clearance_ok': min_clearance >= 1000,
-        'ifr_mea_margin': min_clearance >= 2000,
+        'terrain_known': terrain_known,
+        'terrain_unknown_samples': unknown_samples,
+        'max_terrain': round(max_elevation) if unknown_samples < len(samples) else None,
+        'min_clearance': round(min_clearance) if min_clearance is not None else None,
+        # None means "cannot say": a failed lookup must not read as adequate.
+        'vfr_clearance_ok': (None if min_clearance is None
+                             else (False if min_clearance < 1000
+                                   else (True if terrain_known else None))),
+        'ifr_mea_margin': (None if min_clearance is None
+                           else (False if min_clearance < 2000
+                                 else (True if terrain_known else None))),
         'total_distance': round(cumulative_dist, 1),
         'climb_distance': round(climb_dist, 1),
         'descent_distance': round(descent_dist, 1),
@@ -1927,23 +1956,57 @@ def terrain_profile():
 # Civil Air Patrol Search and Rescue (SAR) & V-SAR Integration API
 # =============================================================================
 
+def pattern_search_centre(wpts, datum):
+    """Where the search area is centred, for the alert circle and the beacon.
+
+    The expanding square is built around its datum. A parallel track's first
+    waypoint is a lane start half a spacing inside one edge of the box and a
+    creeping line's is the end of its first sweep, so neither is the centre
+    (L2-6). The middle of the bounding box is, to well inside the accuracy a
+    briefing needs for areas of tens of miles.
+    """
+    if not wpts:
+        return {'lat': datum[0], 'lon': datum[1]}
+    if wpts[0].get('identifier') == 'DATUM':
+        return {'lat': wpts[0]['lat'], 'lon': wpts[0]['lon']}
+    lats = [p['lat'] for p in wpts]
+    lons = [p['lon'] for p in wpts]
+    return {'lat': round((min(lats) + max(lats)) / 2, 6),
+            'lon': round((min(lons) + max(lons)) / 2, 6)}
+
+
 @app.route('/api/sar/generate-pattern', methods=['POST'])
 def sar_generate():
     data = request.json or {}
     ptype = data.get('pattern_type', 'expanding_square')
     
     # Resolve datum
-    datum_input = data.get('datum', '').strip()
+    # L2-1: an unresolvable datum used to fall through to a hard-coded point
+    # near KSEE and return success, so a mistyped identifier planned (and
+    # exported, and pushed to the console) a search 10 NM from where the
+    # crew meant. Say so instead.
+    raw_datum = data.get('datum', '')
+    if not isinstance(raw_datum, str):
+        return jsonify({'success': False, 'error': 'datum must be an identifier or @lat,lon'}), 400
+    datum_input = raw_datum.strip()
     datum_coords = None
     if datum_input:
         c = get_coords(datum_input)
-        if c:
-            datum_coords = (c[0], c[1])
-    if not datum_coords:
+        if not c:
+            return jsonify({'success': False, 'error':
+                f'Datum "{datum_input}" was not found. Check the identifier, '
+                f'use @lat,lon, or wait for the aviation database to finish loading.'}), 400
+        datum_coords = (c[0], c[1])
+    elif 'datum_lat' in data and 'datum_lon' in data:
         try:
-            datum_coords = (float(data.get('datum_lat', 33.17)), float(data.get('datum_lon', -117.0792)))
+            datum_coords = (float(data['datum_lat']), float(data['datum_lon']))
         except (ValueError, TypeError):
-            datum_coords = (33.17, -117.0792)
+            return jsonify({'success': False, 'error': 'datum_lat and datum_lon must be numbers'}), 400
+        if not (-90 <= datum_coords[0] <= 90 and -180 <= datum_coords[1] <= 180):
+            return jsonify({'success': False, 'error': 'datum_lat/datum_lon out of range'}), 400
+    else:
+        return jsonify({'success': False, 'error':
+            'A datum is required: an airport, navaid, @lat,lon, or datum_lat and datum_lon.'}), 400
             
     # The UI's <input min/max> only constrains the form; this is a public POST
     # endpoint anyone can call directly, so the same bounds are enforced here.
@@ -2006,6 +2069,7 @@ def sar_generate():
         'pattern_type': ptype,
         'coverage_truncated': coverage_truncated,
         'datum': {'lat': datum_coords[0], 'lon': datum_coords[1]},
+        'search_centre': pattern_search_centre(wpts, datum_coords),
         'waypoints': wpts,
         'total_distance_nm': round(tot_dist, 1),
         'estimated_time_minutes': round(est_time_min, 0),
@@ -2114,10 +2178,20 @@ def sar_export_vsar():
 
     try:
         datum = waypoints[0]
-        datum_lat = float(datum['lat'])
-        datum_lon = float(datum['lon'])
-    except (KeyError, TypeError, ValueError, IndexError):
-        return jsonify({'success': False, 'error': 'waypoints[0] must have numeric lat/lon'}), 400
+        float(datum['lat']); float(datum['lon'])
+        centre = data.get('search_centre')
+        if isinstance(centre, dict):
+            datum_lat, datum_lon = float(centre['lat']), float(centre['lon'])
+        else:
+            c = pattern_search_centre(
+                [{'identifier': w.get('identifier'), 'lat': float(w['lat']),
+                  'lon': float(w['lon'])} for w in waypoints], (0.0, 0.0))
+            datum_lat, datum_lon = c['lat'], c['lon']
+        if not (-90 <= datum_lat <= 90 and -180 <= datum_lon <= 180):
+            raise ValueError('search centre out of range')
+    except (KeyError, TypeError, ValueError, IndexError, AttributeError):
+        return jsonify({'success': False, 'error':
+            'waypoints must have numeric lat/lon (and search_centre, if sent, too)'}), 400
 
     # L-9: the beacon does not sit on the planned datum, and it is not at sea
     # level. Both of those handed the exercise away - the first tells the crew
@@ -2138,9 +2212,10 @@ def sar_export_vsar():
         'band': '121.5',
         'power': 1.0,
         'alert_kind': 'Planned CAP Search Sortie',
-        # The ALERT is the planned datum - that is what the crew is briefed on
-        # and what the search area is drawn around. Only the beacon moves.
-        'alert_text': f"{callsign} search corridor: {len(waypoints)} waypoints. Initial point: {datum_lat}, {datum_lon}.",
+        # The ALERT is the centre of the planned search area - what the crew is
+        # briefed on and what it is drawn around (L2-6: not waypoints[0], which
+        # is a box edge for a parallel track). Only the beacon moves.
+        'alert_text': f"{callsign} search area: {len(waypoints)} waypoints. Centre: {datum_lat:.4f}, {datum_lon:.4f}.",
         'alert_lat': datum_lat,
         'alert_lon': datum_lon,
         'alert_radius_nm': 5.0

@@ -308,6 +308,7 @@ class TestSARRequestBounds(unittest.TestCase):
         for field in ('length_nm', 'width_nm'):
             payload = {
                 'pattern_type': 'parallel_track',
+                'datum': '@33.17,-117.08',
                 'spacing_nm': 1.0,
                 'length_nm': 5.0,
                 'width_nm': 4.0,
@@ -322,6 +323,7 @@ class TestSARRequestBounds(unittest.TestCase):
     def test_parallel_track_rejects_excessive_sweep_count(self):
         payload = {
             'pattern_type': 'parallel_track',
+            'datum': '@33.17,-117.08',
             'spacing_nm': 0.1,
             'length_nm': 5.0,
             'width_nm': 30.0,

@@ -517,7 +517,9 @@ async function calculateRoute(alertOnError = true) {
         document.getElementById('s-dist').textContent  = data.totals.distance_nm;
         document.getElementById('s-time').textContent  = data.totals.time_minutes;
         document.getElementById('s-fuel').textContent  = data.totals.total_fuel;
-        document.getElementById('s-winds').textContent = `${w.direction}°/${w.speed}kt`;
+        // L2-5: say when the route was planned in still air for want of winds.
+        document.getElementById('s-winds').textContent = w.available === false
+            ? 'calm (no winds data)' : `${w.direction}°/${w.speed}kt`;
 
         // Segment table
         document.getElementById('log-tbody').innerHTML = data.segments.map(s => `
@@ -773,11 +775,17 @@ async function fetchTerrainProfile() {
     if (!data.success) return;
     terrainData = data;
 
-    document.getElementById('trn-max').textContent = data.max_terrain.toLocaleString();
-    document.getElementById('trn-clr').textContent = data.min_clearance.toLocaleString();
+    const fmt = v => (v === null || v === undefined) ? '—' : v.toLocaleString();
+    document.getElementById('trn-max').textContent = fmt(data.max_terrain);
+    document.getElementById('trn-clr').textContent = fmt(data.min_clearance);
 
     const badge = document.getElementById('trn-status-badge');
-    if      (data.min_clearance >= 2000) { badge.textContent = 'ADEQUATE';    badge.className = 'ok';     }
+    // L2-4: a failed elevation lookup must never read as a safe route.
+    if (data.terrain_known === false) {
+        badge.textContent = data.min_clearance === null ? 'NO TERRAIN DATA' : 'TERRAIN PARTLY UNKNOWN';
+        badge.className = 'danger';
+    }
+    else if (data.min_clearance >= 2000) { badge.textContent = 'ADEQUATE';    badge.className = 'ok';     }
     else if (data.min_clearance >= 1000) { badge.textContent = 'MIN VFR CLR'; badge.className = 'warn';   }
     else                                 { badge.textContent = 'INSUFFICIENT'; badge.className = 'danger'; }
 
@@ -803,7 +811,8 @@ function drawTerrainProfile() {
     const ctx = canvas.getContext('2d');
     ctx.scale(dpr, dpr);
 
-    const { profile, cruise_altitude: cruiseAlt, total_distance: totalDist, max_terrain: maxTerrain } = terrainData;
+    const { profile, cruise_altitude: cruiseAlt, total_distance: totalDist } = terrainData;
+    const maxTerrain = terrainData.max_terrain ?? 0;
     const yMax = Math.max(cruiseAlt + 800, maxTerrain + 1500);
     const mg   = { top: 18, right: 10, bottom: 28, left: 42 };
     const cW   = W - mg.left - mg.right;
@@ -1218,6 +1227,7 @@ document.getElementById('sar-btn-vsar').addEventListener('click', async () => {
                 // no longer accepted from the client - see sar_export_vsar().
                 pattern_type: pattern.pattern_type,
                 waypoints: pattern.waypoints,
+                search_centre: pattern.search_centre,
                 callsign: 'CAP 487',
                 departure: dep,
                 destination: dest

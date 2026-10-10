@@ -142,8 +142,27 @@ class PushReportsHonestly(unittest.TestCase):
 
         self.assertNotAlmostEqual(sent['beacon_lat'], 33.17, places=4)
         self.assertAlmostEqual(sent['beacon_elev_ft'], 4300.0)
-        # The alert - what the crew is briefed on - stays on the datum.
-        self.assertAlmostEqual(sent['alert_lat'], 33.17, places=6)
+        # The alert - what the crew is briefed on - is the centre of the search
+        # area (L2-6): here the middle of a two-point box, not its first point.
+        self.assertAlmostEqual(sent['alert_lat'], 33.185, places=6)
+
+    def test_an_explicit_search_centre_wins(self):
+        sent = {}
+
+        def fake_post(url, **kw):
+            if '/api/scenarios' in url:
+                sent.update(kw.get('json') or {})
+            return Reply(200, {'id': 'abc'})
+
+        body = dict(self.body, search_centre={'lat': 33.4, 'lon': -117.3})
+        with patch.object(flight_app.requests, 'post', side_effect=fake_post), \
+             patch.object(flight_app.requests, 'get',
+                          side_effect=lambda url, **kw: Reply(200, {'value': 100.0})), \
+             patch.object(flight_app, '_allow_vsar_export', return_value=True), \
+             patch.object(flight_app, '_request_security_error', return_value=None):
+            self.client.post('/api/sar/export-vsar', json=body)
+        self.assertAlmostEqual(sent['alert_lat'], 33.4, places=6)
+        self.assertAlmostEqual(sent['alert_lon'], -117.3, places=6)
 
 
 class DatabaseLivesInADirectory(unittest.TestCase):
