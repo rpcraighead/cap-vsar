@@ -3,6 +3,38 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-10-09 — The workstation and laptop lines reconciled (branch `integration-2026-10-09`)
+
+Status: **implemented on a branch; `main` not moved** (needs Ron's yes).
+
+The workstation's work (`ardu-a1-workstation` plus the flight-modes work that had
+never been committed, now `workstation-flight-modes-wip-2026-10-09`) is merged with
+the laptop's `main` (through f558b80). The bug tracker is merged by issue id and
+`docs/BUG_TRACKER.md` regenerated (119 items). Four commits from the unmerged
+`fix/claude-console-2026-09-13` branch are cherry-picked: S-5 (DF engine
+robustness, V2-8), B1 + V2-9 (untrack the manufacturers' manuals; the kit builder no
+longer deletes arbitrary directories), S-3 (the voice net requires a session when
+roles are configured; server `error` frames reconnect unless a human must fix them)
+and S-2 (input bounds, the 406 channel, DF telemetry in the record).
+
+**Not taken:** that branch's S-1 (c538404). The laptop's O-8/X-10/X-11 work and
+HardenedCredentialTests already cover the same ground more strongly (hashed
+sessions, a CSRF confirm step, no label-only credentials, query-token rejection,
+session revocation on roster change), so S-1 only conflicted with it. Its random
+roster codes (`new_code()`, about 38 bits) are redundant too: `main` appends a
+128-bit random token to every label (`INSTR-1-<32 hex>`).
+
+**Resolutions that follow `main`:** the intercom control is gated by
+`base_or_instructor`, and with no roles configured it is refused unless
+`CAPVSAR_DEV_OPEN` is set (X-11), so the S-3 test that expected it open was
+rewritten. `services/ai_pilot/README.md` and its pinned count now say 82 tests in
+`test_direct_backend.py`.
+
+**Tests:** root + ai_pilot suites, 885 passed, 1 skipped, 22 xfailed, 2 failed. The two
+failures (`test_console.py` routing: `test_the_legacy_console_is_still_routed`,
+`test_the_routes_all_survived_the_split`) also fail on plain `origin/main`. The engine,
+faceplate, geodesy and propagation suites and luacheck were not run.
+
 ## 2026-09-18 — AI-11 closed: the recorder can tell silence from data
 
 A P0 from the 2026-09-12 review (V2-7) and the 09-15 red team (RT-3). Three

@@ -9,15 +9,18 @@ Written when the workstation's copy was reconciled with Gitea. Gitea is
 | --- | --- | --- |
 | `ron/capvsar` | This project | See branches below |
 | `ron/g1000-sar` | The G1000 SAR X-Plane plugin (separate project; reads only published `cap/df/*` observations) | Created 2026-10-09 by pushing `main` (31daf61, 7 commits). Check its visibility in the Gitea UI: it could not be verified from the workstation |
+| `ron/flight-planner-n499cp-v2` | The N499CP flight planner | `master` (5fa79f0, 2026-08-03) is the old line. Branch `workstation-sar-patterns-2026-09-07` adds the SAR search-pattern generators, X-Plane FMS and V-SAR export and `tests/test_sar.py` (7 tests pass); the workstation folder was never a git repo and is now a clone tracking that branch. `feat/identity-platform-auth` (2026-08-13) is separate and not merged with either |
 
 ## `ron/capvsar` branches that matter
 
 | Branch | Holds | Notes |
 | --- | --- | --- |
-| `main` (f558b80, 2026-09-18) | The laptop's line: AI-11 recorder work, the laptop merge, the AI-pilot red team and taxi authority | Newest on `main` |
-| `ardu-a1-workstation` (bed11ac, 2026-09-18) | The workstation's four commits: the ArduPlane backend, Card H0 flown, A-1 exterior fixes | Diverged from `main`: 4 ahead, 5 behind |
-| `workstation-flight-modes-wip-2026-10-09` (this branch) | `ardu-a1-workstation` plus one commit of 19 modified and 32 new files that had never been committed: the flight-modes offline implementation | Unreviewed backup. Merging it into `main` conflicts only in `CHANGELOG.md`, `docs/BUG_TRACKER.md` and `docs/bugs/tracker.json`; nobody has run the suite on the merge |
-| `fix/*`, `feature/board-container-2026-09-14` | Merged or stale; `fix/claude-console-2026-09-13` is 5 commits ahead of `main` and unreviewed | Not touched |
+| `main` (f558b80, 2026-09-18) | The laptop's line: AI-11 recorder work, the AI-pilot red team, taxi authority, the O-8 HTTPS front door | Not moved by the 2026-10-09 reconciliation |
+| `ardu-a1-workstation` (bed11ac) | The workstation's four commits: the ArduPlane backend, Card H0 flown, A-1 exterior fixes | Diverged from `main`: 4 ahead, 5 behind |
+| `workstation-flight-modes-wip-2026-10-09` | `ardu-a1-workstation` plus the 19 modified and 32 new files that had never been committed: the flight-modes offline implementation | Unreviewed backup |
+| **`integration-2026-10-09`** | `main` + the two branches above + four commits from `fix/claude-console-2026-09-13` (S-5, B1/V2-9, S-3, S-2) | **The branch to merge into `main`.** Root and ai_pilot suites: 885 passed, 2 failed, and both failures also fail on plain `main`. Details in its CHANGELOG entry |
+| `fix/claude-console-2026-09-13` | Five security and robustness commits written against the 2026-09-11 base | S-1 (`c538404`) was **not** taken: the laptop's O-8/X-10/X-11 work covers the same ground. The other four are in the integration branch. The branch can be deleted once the integration branch is on `main` |
+| other `fix/*`, `feature/board-container-2026-09-14` | Already contained in `main` | Not touched |
 
 ## Deliberately not in git
 
@@ -31,11 +34,12 @@ Written when the workstation's copy was reconciled with Gitea. Gitea is
 - Older plan versions (v0.3 to v0.7), the SAR Training Simulator plans and the
   Lab Hosted Deployment Plan `.docx` remain only in `~/Documents`. The current
   plan (v0.8), the Handbook and the other deliverables are already under `docs/`.
+- `~/Projects/cv41-midway` and `~/Projects/project-sync` are separate projects.
 
 ## Still to decide
 
-1. Merge the WIP branch with `main` (three doc conflicts), run the suite, then
-   fast-forward `main`.
-2. Whether `~/Projects/flight-planner-n499cp-v2` (a copy exists on Gitea as
-   `ron/flight-planner-n499cp-v2`, but the local folder is not a git repo) belongs
-   to this project.
+1. Fast-forward `main` to `integration-2026-10-09` (Ron's yes).
+2. The engine, faceplate, geodesy and propagation suites and luacheck were not
+   run on the integration branch.
+3. `main` has two failing tests of its own: `tests/test_console.py`
+   `test_the_legacy_console_is_still_routed` and `test_the_routes_all_survived_the_split`.

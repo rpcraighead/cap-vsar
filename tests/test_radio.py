@@ -624,6 +624,8 @@ def test_ics_is_refused_when_no_roles_are_configured_unless_the_console_is_delib
     no roles configured now means refused, and an open console is a deliberate
     CAPVSAR_DEV_OPEN choice."""
     client, _ = sockets
+    for name in ('CAPVSAR_DEV_OPEN', 'CAPVSAR_TOKEN_INSTRUCTOR', 'CAPVSAR_TOKEN_BASE', 'CAPVSAR_TOKEN_PLUGIN'):
+        monkeypatch.delenv(name, raising=False)  # no roles and not open, whatever an earlier test left behind
     try:
         assert client.post('/api/radio/ics', json={'mode': 'PILOT'}).status_code == 503
         monkeypatch.setenv('CAPVSAR_DEV_OPEN', '1')
