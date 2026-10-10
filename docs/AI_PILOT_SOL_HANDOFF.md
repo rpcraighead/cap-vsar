@@ -122,10 +122,13 @@ appropriate Sol work.
 
 ## Running the laboratory session
 
-The test session has ended. Cleanup was interrupted by a separate X-Plane
-instance launched from the desktop (not by the test runner); restoration must
-wait until that instance exits. Check the final handoff status before launching
-another simulator. Original scenery and preferences are preserved under:
+The test session and cleanup are complete. After the separate desktop-launched
+X-Plane instance exited, all backed-up simulator preferences, stock C172
+preferences and the original scenery configuration were restored and verified
+byte-for-byte against the backups. X-Plane is stopped. All six temporary bridge
+and configuration files were removed from the active plugin directory and
+archived in `tested-flight-plugin` under the backup directory; the private
+configuration retains mode 0600. Original scenery and preferences remain under:
 `~/X-Plane 12/Output/capvsar-backups/ai-pilot-flight-20261010/`.
 Start a fresh expiring session rather than reusing its old private config.
 
