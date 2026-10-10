@@ -15,11 +15,11 @@ Written when the workstation's copy was reconciled with Gitea. Gitea is
 
 | Branch | Holds | Notes |
 | --- | --- | --- |
-| `main` (f558b80, 2026-09-18) | The laptop's line: AI-11 recorder work, the AI-pilot red team, taxi authority, the O-8 HTTPS front door | Not moved by the 2026-10-09 reconciliation |
+| `main` (f558b80, 2026-09-18) | The laptop's line: AI-11 recorder work, the AI-pilot red team, taxi authority, the O-8 HTTPS front door | Was f558b80 until 2026-10-10, when it was fast-forwarded to `integration-2026-10-09` (ee09999) |
 | `ardu-a1-workstation` (bed11ac) | The workstation's four commits: the ArduPlane backend, Card H0 flown, A-1 exterior fixes | Diverged from `main`: 4 ahead, 5 behind |
 | `workstation-flight-modes-wip-2026-10-09` | `ardu-a1-workstation` plus the 19 modified and 32 new files that had never been committed: the flight-modes offline implementation | Unreviewed backup |
-| **`integration-2026-10-09`** | `main` + the two branches above + four commits from `fix/claude-console-2026-09-13` (S-5, B1/V2-9, S-3, S-2) | **The branch to merge into `main`.** Root and ai_pilot suites: 885 passed, 2 failed, and both failures also fail on plain `main`. Details in its CHANGELOG entry |
-| `fix/claude-console-2026-09-13` | Five security and robustness commits written against the 2026-09-11 base | S-1 (`c538404`) was **not** taken: the laptop's O-8/X-10/X-11 work covers the same ground. The other four are in the integration branch. The branch can be deleted once the integration branch is on `main` |
+| **`integration-2026-10-09`** | `main` + the two branches above + four commits from `fix/claude-console-2026-09-13` (S-5, B1/V2-9, S-3, S-2) | **Now `main` (fast-forwarded 2026-10-10).** Root and ai_pilot suites: 885 passed, 2 failed, and both failures also fail on plain `main`. Details in its CHANGELOG entry |
+| `fix/claude-console-2026-09-13` | Five security and robustness commits written against the 2026-09-11 base | S-1 (`c538404`) was **not** taken: the laptop's O-8/X-10/X-11 work covers the same ground. The other four are in the integration branch. The integration branch is on `main` now, so this branch can be deleted |
 | other `fix/*`, `feature/board-container-2026-09-14` | Already contained in `main` | Not touched |
 
 ## Deliberately not in git
@@ -38,8 +38,7 @@ Written when the workstation's copy was reconciled with Gitea. Gitea is
 
 ## Still to decide
 
-1. Fast-forward `main` to `integration-2026-10-09` (Ron's yes).
-2. The engine, faceplate, geodesy and propagation suites and luacheck were not
+1. The engine, faceplate, geodesy and propagation suites and luacheck were not
    run on the integration branch.
-3. `main` has two failing tests of its own: `tests/test_console.py`
+2. `main` has two failing tests of its own: `tests/test_console.py`
    `test_the_legacy_console_is_still_routed` and `test_the_routes_all_survived_the_split`.
