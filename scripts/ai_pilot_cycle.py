@@ -131,7 +131,10 @@ def run(args):
             controls = controller.step(s, observer.target, time.monotonic())
             recorder.write("command", {"source_frame": s["frame"], "target": observer.target,
                                         "controls": controls, "diagnostics": controller.backend.last_commands})
-            time.sleep(.055)
+            # Refresh from a new measured snapshot well before the 180 ms
+            # native frame lease. This leaves room for occasional host jitter
+            # without extending authority over stale control output.
+            time.sleep(.020)
         else:
             raise ValueError("Trial wall deadline exceeded")
     except BaseException as error:
