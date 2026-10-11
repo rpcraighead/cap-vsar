@@ -56,9 +56,11 @@ M.state = {
     band_mhz     = 121.5,
 
     -- Derived here because the engine does not publish them. Honest
-    -- approximations, not engine truth.
-    last_signal  = 0,       -- s since valid last went true
-    burst_age    = 0,       -- s since the last 406 acquisition
+    -- approximations, not engine truth. Both are nil until the event they time
+    -- has happened once, and format_timer() draws nil as "--:--": a head that
+    -- has never heard anything has not heard anything for "no time", not 0 s.
+    last_signal  = nil,     -- s since valid last went true
+    burst_age    = nil,     -- s since the last 406 acquisition
 
     -- Engine truth, published since the panel-input revision.
     spread       = 0,       -- deg of scatter before averaging
@@ -261,7 +263,7 @@ function M.tick(dt)
     if not s.valid and last_valid_at then
         s.last_signal = elapsed - last_valid_at
     end
-    if s.band_mhz > 400 then
+    if s.band_mhz > 400 and s.burst_age then
         s.burst_age = s.burst_age + dt
     end
     if math.floor(s.last_signal or 0) ~= (last_snap.last_signal_sec or -1)

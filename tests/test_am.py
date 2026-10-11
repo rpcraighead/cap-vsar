@@ -49,7 +49,10 @@ class TestAirManagerHarness(unittest.TestCase):
         with AirManager() as am:
             with self.assertRaises(RuntimeError) as ctx:
                 am.eval("canvas_draw(1)")
-            self.assertIn("canvas_draw requires callback", str(ctx.exception))
+            self.assertIn("canvas_draw: not enough arguments", str(ctx.exception))
+            with self.assertRaises(RuntimeError) as ctx:
+                am.eval("canvas_draw(1, nil)")
+            self.assertIn("canvas_draw: bad argument #2", str(ctx.exception))
 
     def test_timer_progression(self):
         """timer_start, timer_stop, and step_time fire single-shot and recurring timers."""
@@ -207,9 +210,9 @@ class TestAirManagerHarness(unittest.TestCase):
             self.assertFalse(am.read_si_variable("cap_recorder_playing"))
 
             # COM1 receives a clearance transmission
-            am.write_dataref("sim/cockpit2/radios/indicators/com1_receiving", "INT", 1)
+            am.write_dataref("sim/atc/com1_rx", "INT", 1)
             am.step_time(100)
-            am.write_dataref("sim/cockpit2/radios/indicators/com1_receiving", "INT", 0)
+            am.write_dataref("sim/atc/com1_rx", "INT", 0)
             self.assertEqual(am.read_si_variable("cap_recorder_count"), 1)
 
             # COM3 receives a mission radio message
@@ -288,24 +291,16 @@ class TestAirManagerHarness(unittest.TestCase):
             am.turn_dial_matching(1, x=405, y=15)
             am.turn_dial_matching(1, x=405, y=15)
 
-            # Feed live 406 frame WITHOUT position
-            am.eval("""
-                cap_df.state.cs_sync = 1
-                cap_df.state.cs_protocol = 1
-                cap_df.state.cs_country = 366
-                cap_df.state.cs_has_pos = false
-                cap_df.state.cs_hex15 = "AD4800000000000"
-            """)
+            # Feed live 406 frame WITHOUT position, through the datarefs the
+            # engine publishes (not by poking cap_df.state).
+            am.publish_df(cs_sync=1, cs_protocol=1, cs_country=366,
+                          cs_has_position=0, cs_hex15="AD4800000000000")
 
             # Press STORE (x=234, y=18) to save this positionless frame into st.stored_msg
             am.click_button_matching(x=234, y=18)
 
             # Now update the live stream with a frame that DOES have position
-            am.eval("""
-                cap_df.state.cs_has_pos = true
-                cap_df.state.cs_lat = 33.123
-                cap_df.state.cs_lon = -117.456
-            """)
+            am.publish_df(cs_has_position=1, cs_lat=33.123, cs_lon=-117.456)
 
             # Press REP (x=320, y=18) to display the STORED message (st.shown_msg = st.stored_msg)
             am.eval("_AM.drawn_commands = {}")
@@ -390,7 +385,7 @@ class TestAirManagerHarness(unittest.TestCase):
             am.load_instrument("cap-fm-tdfm-136b")
             self.assertFalse(am.read_si_variable("cap_fm_power_on"))
             # Main encoder press inert on cold bus
-            am.click_dial_matching(x=80, y=202)
+            am.click_at(118, 240)      # knob_push over the main encoder centre
             am.step_time(500)
             self.assertFalse(am.read_si_variable("cap_fm_power_on"))
 

@@ -18,9 +18,14 @@
 --      "[ MFD VIDEO STREAM INTERRUPTED - RE-ARMING ]"
 --      so the crew immediately knows the screen is not live.
 -- 3. Automatic Recovery:
---    - Upon detecting reconnection or frame resumption, video_stream_add() is
---      re-invoked to re-arm the texture pipeline in Air Manager.
+--    - Upon detecting reconnection or frame resumption the stream is re-armed.
+--      Air Manager has no call to remove a node, and every video_stream_add()
+--      stacks a new 2048x1536 node ABOVE everything added before it, so the
+--      instrument creates exactly ONE video node, below the banner and the
+--      click hotspot, and re-arms it by toggling its visibility.
 --    - An interactive click region permits manual re-arm on demand.
+--
+-- Layer order is add order: black plate, video stream, stale banner, hotspot.
 
 local STREAM_WIDTH  = 2048
 local STREAM_HEIGHT = 1536
@@ -49,16 +54,36 @@ canvas_draw(cnv_bg, function()
     _fill("#050505")
 end)
 
--- Stale warning overlay canvas
+--- Arm the video stream. The first call creates the one and only video node;
+--- later calls re-arm it in place (hide, then show) so nothing is stacked over
+--- the banner and the hotspot added below.
+local function arm_video_stream()
+    rearm_counter = rearm_counter + 1
+    si_variable_write(var_rearm_count, rearm_counter)
+
+    if vst_id == nil then
+        local source = user_prop_get(prop_source) or "xpl/G1000_MFD"
+        vst_id = video_stream_add(source, 0, 0, STREAM_WIDTH, STREAM_HEIGHT)
+    else
+        visible(vst_id, false)
+        visible(vst_id, true)
+    end
+end
+
+-- Initial stream arm on startup. Everything added after this sits above it.
+arm_video_stream()
+
+-- Stale warning overlay canvas, above the video.
 local cnv_stale = canvas_add(0, 0, STREAM_WIDTH, STREAM_HEIGHT)
 
 local function update_stale_banner()
     canvas_draw(cnv_stale, function()
         if not is_stale then return end
 
-        -- Semi-transparent dark scrim over frozen frame
+        -- Semi-transparent dark scrim over frozen frame: #RRGGBBAA, 0xBF = 75 %.
+        -- (The CSS rgba(...) form is not an Air Manager colour.)
         _rect(0, 0, STREAM_WIDTH, STREAM_HEIGHT)
-        _fill("rgba(10, 10, 10, 0.75)")
+        _fill("#0A0A0ABF")
 
         -- Prominent warning box in centre
         local bw = 1400
@@ -82,18 +107,6 @@ local function update_stale_banner()
     visible(cnv_stale, is_stale)
 end
 
-local function arm_video_stream()
-    local source = user_prop_get(prop_source) or "xpl/G1000_MFD"
-    rearm_counter = rearm_counter + 1
-    si_variable_write(var_rearm_count, rearm_counter)
-
-    -- In AM 4.2+, calling video_stream_add creates or re-links the video stream texture
-    vst_id = video_stream_add(source, 0, 0, STREAM_WIDTH, STREAM_HEIGHT)
-    if vst_id then
-        visible(vst_id, true)
-    end
-end
-
 local function mark_stale()
     if is_stale then return end
     is_stale = true
@@ -113,7 +126,8 @@ local function force_rearm()
     mark_recovered()
 end
 
--- Interactive click hotspot allows operator to force re-arm manually
+-- Interactive click hotspot allows operator to force re-arm manually. Added
+-- after the video node, so it is on top of it.
 button_add(nil, nil, 0, 0, STREAM_WIDTH, STREAM_HEIGHT, function()
     if is_stale then
         force_rearm()
@@ -165,6 +179,4 @@ timer_start(500, 500, function()
     end
 end)
 
--- Initial stream arm on startup
-arm_video_stream()
 update_stale_banner()
