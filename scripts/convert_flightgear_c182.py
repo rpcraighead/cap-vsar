@@ -120,18 +120,29 @@ class AC3DParser:
                     for _ in range(int(value))
                 ]
             elif key == "numsurf":
-                obj.surfaces = [self._surface() for _ in range(int(value))]
+                obj.surfaces = [self._surface(obj.name) for _ in range(int(value))]
             elif key == "kids":
                 obj.children = [self._object() for _ in range(int(value))]
                 return obj
             else:
                 raise ValueError(f"Unsupported AC3D directive {key!r} on {obj.name!r}")
 
-    def _surface(self) -> ACSurface:
+    def _surface(self, owner: str = "") -> ACSurface:
         line = self._line()
         if not line.startswith("SURF "):
             raise ValueError(f"Expected SURF, got {line!r}")
         flags = int(line.split()[1], 0)
+        # AC3D SURF flags: low nibble 0 polygon, 1 closed line, 2 line; 0x10
+        # smooth shading; 0x20 two-sided. The pinned donor uses only 0x0 and
+        # 0x10. A line has no area and a two-sided face needs a back face the
+        # OBJ8 writer does not emit, so either would be silently mis-drawn:
+        # refuse them by name instead.
+        if flags & 0x0F:
+            raise ValueError(
+                f"Unsupported AC3D line surface (SURF {flags:#x}) on {owner!r}")
+        if flags & 0x20:
+            raise ValueError(
+                f"Unsupported AC3D two-sided surface (SURF {flags:#x}) on {owner!r}")
         material = 0
         while True:
             line = self._line()
@@ -735,6 +746,17 @@ def validate_obj8(path: Path) -> dict[str, object]:
             f"OBJ8 count mismatch in {path}: declared {vertex_count}/{index_count}, "
             f"found {actual_vertices}/{actual_indices}"
         )
+    # Every index has to name a vertex that exists. The count check above can
+    # pass on a file whose indices run past the table, which X-Plane rejects
+    # (or draws as spikes) only at load time.
+    for number, line in enumerate(lines, 1):
+        if line.startswith(("IDX ", "IDX10 ")):
+            for token in line.split()[1:]:
+                if int(token) >= vertex_count or int(token) < 0:
+                    raise ValueError(
+                        f"OBJ8 index {token} out of range for {vertex_count} vertices "
+                        f"in {path}, line {number}"
+                    )
     for line in lines:
         if line.startswith("TRIS "):
             start, count = map(int, line.split()[1:])
@@ -1033,6 +1055,26 @@ def assert_all_objects_classified(objects: Iterable[ACObject]) -> None:
         )
 
 
+def select_buckets(objects: list[ACObject]) -> dict[str, list[ACObject]]:
+    """Sort donor objects into the five emitted OBJ8 files.
+
+    DELIBERATELY_EXCLUDED applies to every bucket. It used to be checked only
+    for `lights`, with `main` carrying its own shorter private list, so an
+    excluded object that gained a texture the main bucket selects would have
+    shipped. Nothing leaks today - every excluded object in the pinned donor is
+    untextured - which is exactly why it is worth stating once, here.
+    """
+    kept = [obj for obj in objects if obj.name not in DELIBERATELY_EXCLUDED]
+    return {
+        "main": [obj for obj in kept
+                 if obj.texture == "Default.png" and obj.name not in PROP_NAMES],
+        "propeller": [obj for obj in kept if obj.name in PROP_NAMES],
+        "prop_blur": [obj for obj in kept if obj.name == PROP_BLUR_NAME],
+        "lights": [obj for obj in kept if obj.texture == "Lights.png"],
+        "glass": [obj for obj in kept if obj.name in GLASS_NAMES],
+    }
+
+
 def build_flightgear_objects(donor: Path, target_aircraft: Path) -> dict[str, object]:
     validate_donor(donor)
     objects_dir = target_aircraft / "objects"
@@ -1044,39 +1086,13 @@ def build_flightgear_objects(donor: Path, target_aircraft: Path) -> dict[str, ob
     import c182t_corrections
     corrections_applied = c182t_corrections.apply_corrections(objects, sys.modules[__name__])
 
-    prop_names = {"Blade1", "Blade2", "Blade3", "chrome_spinner"}
-    excluded_default = prop_names | {
-        "Blade1.001",
-        "Blade2.001",
-        "Blade3.001",
-        "Spinner",
-        "WinterKit",
-    }
     assert_all_objects_classified(objects)
-    main = [
-        obj
-        for obj in objects
-        if obj.texture == "Default.png" and obj.name not in excluded_default
-    ]
-    prop = [obj for obj in objects if obj.name in prop_names]
-    prop_blur = [obj for obj in objects if obj.name == "FastProp"]
-    lights = [
-        obj
-        for obj in objects
-        if obj.texture == "Lights.png" and obj.name not in DELIBERATELY_EXCLUDED
-    ]
-    glass = [obj for obj in objects if obj.name in GLASS_NAMES]
-
-    selections = {
-        "main": main,
-        "propeller": prop,
-        "prop_blur": prop_blur,
-        "lights": lights,
-        "glass": glass,
-    }
+    selections = select_buckets(objects)
     missing = [name for name, selection in selections.items() if not selection]
     if missing:
         raise ValueError(f"Donor selections unexpectedly empty: {', '.join(missing)}")
+    main, prop, prop_blur = selections["main"], selections["propeller"], selections["prop_blur"]
+    lights, glass = selections["lights"], selections["glass"]
 
     texture = objects_dir / "flightgear_c182t.png"
     create_cap_texture(donor / "Models/Liveries/Default.png", texture, main)

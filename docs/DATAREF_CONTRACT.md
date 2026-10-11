@@ -233,9 +233,10 @@ unchanged.
 The engine now averages. Each 250 ms tick takes one un-averaged bearing with
 scatter proportional to how weak the signal is; the published `bearing_rel` is
 the circular mean over a window of roughly two seconds, stretching to six on a
-weak signal, which is what both manuals describe. `spread` is the maximum
-deviation across that window — measured from the un-averaged stream, which is
-precisely why it could not be faked in the faceplate.
+weak signal, which is what both manuals describe. `spread` is the peak-to-peak
+width of that window's un-averaged bearings (highest deviation from the mean minus
+lowest), the same figure the table above defines — measured from the un-averaged
+stream, which is precisely why it could not be faked in the faceplate.
 
 The consequences fall out rather than being written in: a rapid course change
 produces the manuals' drag error, and `cap/df/clear_average` throws the store

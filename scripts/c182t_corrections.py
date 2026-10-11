@@ -179,6 +179,16 @@ def apply_corrections(objects, converter, profile: dict | None = None) -> list[d
                             "vertices": touched})
             continue
 
+        # B2-11: this branch scales about the propeller's rotation axis and
+        # nothing else. The profile names its axis (`axis_from`); anything other
+        # than the one this code implements used to be ignored and the blades
+        # were scaled about PROP_ROTATION regardless. Fail instead.
+        axis_from = correction.get("axis_from")
+        if axis_from != "converter.PROP_ROTATION":
+            raise ValueError(
+                f"Correction {correction['id']}: axis_from {axis_from!r} is not "
+                f"supported; radial_scale_about_axis only scales about "
+                f"'converter.PROP_ROTATION'")
         rotation = converter.PROP_ROTATION
         hub, axis = rotation.center, rotation.axis
         norm = math.sqrt(sum(a * a for a in axis))

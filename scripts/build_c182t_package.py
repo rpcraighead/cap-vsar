@@ -199,6 +199,50 @@ ACF_PATCHES = {
 }
 
 
+BADGE_FONT_CANDIDATES = (
+    "DejaVuSans-Bold.ttf", "DejaVuSans.ttf", "LiberationSans-Bold.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/Library/Fonts/Arial Bold.ttf", "C:/Windows/Fonts/arialbd.ttf",
+)
+
+
+def _glyph_renders(font, ch: str) -> bool:
+    """Whether `font` has a real glyph for ch, not its missing-glyph box.
+
+    Pillow draws an absent character as the font's notdef shape and raises
+    nothing, so the only way to know is to compare against a code point that no
+    font assigns.
+    """
+    def render(c):
+        im = Image.new("L", (40, 40), 0)
+        ImageDraw.Draw(im).text((5, 5), c, fill=255, font=font)
+        return im.tobytes()
+    return render(ch) != render("\ufffe")
+
+
+def badge_font_and_bullet(size: int = 11):
+    """A font for the icon banners and the separator character it can draw.
+
+    B2-3: the banners used an HTML bullet entity as literal text - ImageDraw.text
+    does not decode entities - and Pillow's default font has no U+2022 either, so
+    the real bullet came out as a missing-glyph box. Prefer a TrueType face that
+    has the bullet; failing that, the middle dot, which the default font does
+    draw; failing that, a hyphen.
+    """
+    for name in BADGE_FONT_CANDIDATES:
+        try:
+            font = ImageFont.truetype(name, size)
+        except OSError:
+            continue
+        if _glyph_renders(font, "\u2022"):
+            return font, "\u2022"
+    font = ImageFont.load_default()
+    for ch in ("\u2022", "\u00b7"):
+        if _glyph_renders(font, ch):
+            return font, ch
+    return font, "-"
+
+
 def create_cap_badge_icon(src_icon_path: Path, dst_icon_path: Path, is_thumb: bool = False,
                           registration: str = "CAP 487"):
     """Overlay an authentic Civil Air Patrol banner and registration on the selection icon."""
@@ -207,6 +251,7 @@ def create_cap_badge_icon(src_icon_path: Path, dst_icon_path: Path, is_thumb: bo
             im = im.convert("RGBA")
             w, h = im.size
             draw = ImageDraw.Draw(im)
+            font, dot = badge_font_and_bullet()
 
             banner_h = int(h * 0.16) if not is_thumb else int(h * 0.22)
             # Top Banner: Dark Navy (#00204E) with gold/white text
@@ -219,18 +264,77 @@ def create_cap_badge_icon(src_icon_path: Path, dst_icon_path: Path, is_thumb: bo
             draw.line([(0, h - banner_h), (w, h - banner_h)], fill=(186, 12, 47, 255), width=2 if not is_thumb else 1)
 
             if not is_thumb:
-                draw.text((16, 8), "CIVIL AIR PATROL &bull; USAF AUXILIARY", fill=(255, 255, 255, 255))
-                draw.text((16, banner_h - 22), "CESSNA 182T NAV III &bull; LYCOMING IO-540 (230 HP)", fill=(212, 160, 23, 255))
-                draw.text((w - 140, 10), registration, fill=(255, 255, 255, 255))
-                draw.text((16, h - banner_h + 8), "GARMIN G1000 SVT &bull; CONSTANT SPEED &bull; SAR MISSION READY", fill=(200, 220, 245, 255))
+                draw.text((16, 8), f"CIVIL AIR PATROL {dot} USAF AUXILIARY",
+                          fill=(255, 255, 255, 255), font=font)
+                draw.text((16, banner_h - 22), f"CESSNA 182T NAV III {dot} LYCOMING IO-540 (230 HP)",
+                          fill=(212, 160, 23, 255), font=font)
+                draw.text((w - 140, 10), registration, fill=(255, 255, 255, 255), font=font)
+                draw.text((16, h - banner_h + 8),
+                          f"GARMIN G1000 SVT {dot} CONSTANT SPEED {dot} SAR MISSION READY",
+                          fill=(200, 220, 245, 255), font=font)
             else:
-                draw.text((4, 2), registration, fill=(255, 255, 255, 255))
-                draw.text((4, h - banner_h + 2), "C182T G1000", fill=(212, 160, 23, 255))
+                draw.text((4, 2), registration, fill=(255, 255, 255, 255), font=font)
+                draw.text((4, h - banner_h + 2), "C182T G1000", fill=(212, 160, 23, 255), font=font)
 
             im.save(dst_icon_path, "PNG")
     except Exception as e:
         print(f"    [!] Warning creating custom badge icon: {e}")
         shutil.copy2(src_icon_path, dst_icon_path)
+
+
+class ObjLayoutError(RuntimeError):
+    """The donor cockpit OBJ is not laid out the way the lever extraction needs."""
+
+
+# What the Laminar C172SP G1000 cockpit OBJ holds for the two knobs the prop
+# lever is built from: (ANIM_trans dataref, TRIS vertex-index count). The start
+# offsets are looked up in the file, never hard-coded: any X-Plane re-export
+# shuffles them, and the old fixed offsets then built the lever from whatever
+# geometry sat there while printing success (B2-5). The counts are the
+# fingerprint of the knob mesh itself, so a changed count means different
+# geometry and the build stops.
+THROTTLE_DATAREF = "sim/cockpit2/engine/actuators/throttle_ratio[0]"
+MIXTURE_DATAREF = "sim/cockpit2/engine/actuators/mixture_ratio[0]"
+THROTTLE_TRIS_COUNT = 534
+MIXTURE_TRIS_COUNT = 450
+
+
+def find_knob_tris(lines: list[str], dataref: str, expect_count: int) -> tuple[int, int]:
+    """(start, count) of the TRIS run animated by the ANIM_trans on `dataref`.
+
+    Expects the donor's shape: one ANIM_begin ... ANIM_end block holding a single
+    ANIM_trans on the dataref and a single TRIS. Anything else raises
+    ObjLayoutError naming what was found, rather than guessing.
+    """
+    hits = [i for i, l in enumerate(lines)
+            if l.startswith("ANIM_trans ") and l.split()[-1] == dataref]
+    if len(hits) != 1:
+        raise ObjLayoutError(
+            f"expected exactly one 'ANIM_trans ... {dataref}' line in the cockpit OBJ, "
+            f"found {len(hits)}; the donor layout has changed - re-derive the lever "
+            f"extraction before building")
+    tris = []
+    for j in range(hits[0] + 1, len(lines)):
+        tok = lines[j].split()
+        if not tok:
+            continue
+        if tok[0] == "ANIM_end":
+            break
+        if tok[0] == "ANIM_begin":
+            raise ObjLayoutError(f"{dataref}: block ended without ANIM_end")
+        if tok[0] == "TRIS":
+            tris.append((int(tok[1]), int(tok[2])))
+    else:
+        raise ObjLayoutError(f"{dataref}: no ANIM_end after the ANIM_trans")
+    if len(tris) != 1:
+        raise ObjLayoutError(
+            f"{dataref}: expected one TRIS in its animation block, found {len(tris)}")
+    start, count = tris[0]
+    if count != expect_count:
+        raise ObjLayoutError(
+            f"{dataref}: TRIS run is {count} indices, expected {expect_count} - the "
+            f"donor knob mesh is not the one this extraction was written against")
+    return start, count
 
 
 def add_prop_lever(target_dir: Path):
@@ -258,8 +362,15 @@ def add_prop_lever(target_dir: Path):
     with src_obj_path.open() as f:
         lines = f.read().splitlines()
 
-    pc_idx = next(i for i, l in enumerate(lines) if l.startswith("POINT_COUNTS"))
-    n_vt, _n_lines, _n_lights, n_idx = map(int, lines[pc_idx].split()[1:])
+    pc_idx = next((i for i, l in enumerate(lines) if l.startswith("POINT_COUNTS")), None)
+    if pc_idx is None:
+        raise ObjLayoutError("cockpit OBJ has no POINT_COUNTS line")
+    n_vt, n_lines, n_lights, n_idx = map(int, lines[pc_idx].split()[1:])
+    if n_lines or n_lights:
+        # The reader below walks straight from the VT block to the IDX block.
+        raise ObjLayoutError(
+            f"cockpit OBJ has {n_lines} line and {n_lights} light vertices; "
+            f"the lever extraction assumes none")
     vt_start = pc_idx + 1
     vt = []
     for l in lines[vt_start:vt_start + n_vt]:
@@ -268,19 +379,31 @@ def add_prop_lever(target_dir: Path):
     idx_flat: list[int] = []
     i = vt_start + n_vt
     while len(idx_flat) < n_idx:
-        toks = lines[i].split()
+        toks = lines[i].split() if i < len(lines) else []
+        if not toks or toks[0] not in ("IDX", "IDX10"):
+            raise ObjLayoutError(
+                f"expected IDX/IDX10 at cockpit OBJ line {i + 1} "
+                f"({len(idx_flat)} of {n_idx} indices read), found {lines[i:i + 1]!r}")
         idx_flat.extend(int(t) for t in toks[1:])
         i += 1
     idx_flat = idx_flat[:n_idx]
 
-    # TRIS start/count for the throttle and mixture knobs in cockpit_panel_G1000.obj,
-    # found by inspecting the file's existing ANIM_trans / TRIS blocks for
-    # throttle_ratio[0] and mixture_ratio[0].
-    THROTTLE_START, THROTTLE_COUNT = 19629, 534
-    MIXTURE_START, MIXTURE_COUNT = 19179, 450
+    if len(idx_flat) < n_idx:
+        raise ObjLayoutError(f"cockpit OBJ declares {n_idx} indices but holds {len(idx_flat)}")
+
+    # Start/count of the throttle and mixture knobs, read from the TRIS lines in
+    # the ANIM_trans blocks for throttle_ratio[0] and mixture_ratio[0].
+    THROTTLE_START, THROTTLE_COUNT = find_knob_tris(lines, THROTTLE_DATAREF, THROTTLE_TRIS_COUNT)
+    MIXTURE_START, MIXTURE_COUNT = find_knob_tris(lines, MIXTURE_DATAREF, MIXTURE_TRIS_COUNT)
+    for name, start, count in (("throttle", THROTTLE_START, THROTTLE_COUNT),
+                               ("mixture", MIXTURE_START, MIXTURE_COUNT)):
+        if start < 0 or start + count > n_idx or count % 3:
+            raise ObjLayoutError(f"{name} TRIS {start}+{count} does not fit {n_idx} indices")
 
     throttle_idx = idx_flat[THROTTLE_START:THROTTLE_START + THROTTLE_COUNT]
     mixture_idx = idx_flat[MIXTURE_START:MIXTURE_START + MIXTURE_COUNT]
+    if max(throttle_idx + mixture_idx) >= n_vt:
+        raise ObjLayoutError("knob indices point past the vertex table")
 
     def centroid(idx_list):
         uniq = sorted(set(idx_list))
@@ -299,6 +422,11 @@ def add_prop_lever(target_dir: Path):
     vs = [vt[i][7] for i in throttle_uniq]
     min_u, max_u = min(us), max(us)
     min_v, max_v = min(vs), max(vs)
+    if not (max_u > min_u and max_v > min_v):
+        # The UV rescale below divides by these. A zero span means the knob has
+        # no area on the atlas - the wrong mesh, not a thin one.
+        raise ObjLayoutError(
+            f"throttle knob has a degenerate UV span (u {min_u}..{max_u}, v {min_v}..{max_v})")
 
     atlas = Image.open(atlas_path).convert("RGB")
     W, H = atlas.size

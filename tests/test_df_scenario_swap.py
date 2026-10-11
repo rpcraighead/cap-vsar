@@ -24,6 +24,9 @@ class Clock:
     def time(self):
         return self.now
 
+    def monotonic(self):
+        return self.now
+
 
 def engine():
     xp.REFS.clear()

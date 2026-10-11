@@ -39,12 +39,16 @@ spec.loader.exec_module(mod)
 
 
 class Clock:
-    """The engine only ever asks time for time.time(). Owning it lets a test run
-    a hundred 250 ms ticks without waiting 25 seconds."""
+    """The engine asks `time` for time.monotonic() (every interval and hold, P2-6)
+    and nothing else. Owning it lets a test run a hundred 250 ms ticks without
+    waiting 25 seconds. time() is kept for tests that stamp wall-clock values."""
     def __init__(self):
         self.now = 1_700_000_000.0
 
     def time(self):
+        return self.now
+
+    def monotonic(self):
         return self.now
 
     def advance(self, dt):
@@ -647,7 +651,7 @@ print("\n== per-station config: capvsar_station.ini (O-2) ==")
 import tempfile
 check("no ini on disk falls back to the historical single-station defaults",
       mod._load_station_config("/nonexistent/capvsar_station.ini") ==
-      ("http://192.0.2.151:8700", "CAP-1", os.environ.get("CAPVSAR_TOKEN_PLUGIN", "")))
+      ("https://192.0.2.151", "CAP-1", os.environ.get("CAPVSAR_TOKEN_PLUGIN", "")))
 
 with tempfile.TemporaryDirectory() as d:
     ini = os.path.join(d, "capvsar_station.ini")
@@ -662,7 +666,7 @@ with tempfile.TemporaryDirectory() as d:
         f.write("[station]\ncallsign = CAP-3\n")
     console, callsign, key = mod._load_station_config(ini)
     check("an ini overriding only callsign leaves console at its default",
-          console == "http://192.0.2.151:8700", console)
+          console == "https://192.0.2.151", console)
     check("...and leaves plugin_key at its default too", key == os.environ.get("CAPVSAR_TOKEN_PLUGIN", ""))
 
     old_env = os.environ.get("CAPVSAR_TOKEN_PLUGIN")
