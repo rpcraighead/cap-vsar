@@ -170,8 +170,8 @@ def api_save_setup(payload: SetupPayload, request: Request):
     return access.save_exercise_setup(
         name=payload.name,
         num_aircraft=payload.num_aircraft,
-        aircraft_list=payload.aircraft,
-        staff_list=payload.staff
+        aircraft_list=[a.model_dump(exclude_none=True) for a in payload.aircraft],
+        staff_list=[st.model_dump(exclude_none=True) for st in payload.staff],
     )
 
 

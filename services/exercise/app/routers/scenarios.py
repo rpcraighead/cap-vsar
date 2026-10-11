@@ -54,7 +54,7 @@ def create_scenario(s: ScenarioIn):
              "beacon_lat": s.beacon_lat, "beacon_lon": s.beacon_lon,
              "beacon_elev_ft": s.beacon_elev_ft, "band": s.band,
              "beacon_freq_hz": s.beacon_freq_hz,
-             "power": s.power, "effects": json.dumps(s.effects),
+             "power": s.power, "effects": json.dumps(s.effects.changes(), allow_nan=False),
              "created": time.time(), "alert_kind": s.alert_kind,
              "alert_text": s.alert_text, "alert_lat": s.alert_lat,
              "alert_lon": s.alert_lon, "alert_radius_nm": s.alert_radius_nm})

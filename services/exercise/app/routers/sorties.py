@@ -60,7 +60,7 @@ async def start_sortie(body: SortieIn):
                       " :started, :effects, :truth)",
                       {"id": oid, "scenario_id": sid,
                        "name": body.name or r["name"], "started": started,
-                       "effects": json.dumps(scenario["effects"]),
+                       "effects": json.dumps(scenario["effects"], allow_nan=False),
                        "truth": json.dumps(truth)})
             scenario["_earlier_reveal"] = dict(earlier) if earlier else None
             return oid, scenario
@@ -132,7 +132,7 @@ async def set_effects(body: EffectsIn):
     if not changes:
         return hub.scenario["effects"]
     hub.scenario["effects"].update(changes)
-    effects_json = json.dumps(hub.scenario["effects"])
+    effects_json = json.dumps(hub.scenario["effects"], allow_nan=False)
     await db_call(lambda: _exec("UPDATE sorties SET effects=? WHERE id=?",
                                 (effects_json, hub.sortie["id"])))
     log.info("effects changed on sortie %s: %s", hub.sortie["id"],

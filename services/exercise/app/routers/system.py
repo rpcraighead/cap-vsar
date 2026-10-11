@@ -126,7 +126,8 @@ async def ws(sock: WebSocket):
         hub.truth_clients.add(sock)
     try:
         await sock.send_text(json.dumps(
-            {"type": "state", **hub.snapshot(include_df=sees_truth)}))
+            {"type": "state", **hub.snapshot(include_df=sees_truth)},
+            allow_nan=False))
         while True:
             await sock.receive_text()
     except WebSocketDisconnect:

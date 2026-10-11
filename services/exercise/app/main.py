@@ -41,8 +41,8 @@ from . import access, propagation, radio
 from .settings import (ALERT_COLUMNS, DB, DEFAULT_EFFECTS, LOG_LEVEL,
                        POSITION_RETENTION_SORTIES, SEED, STATIC,
                        TRACK_PAGE_DEFAULT, TRACK_PAGE_MAX, log)
-from .store import (_exec, _fetchone, db, db_call, init_db, prune_positions,
-                    row_to_scenario)
+from .store import (_exec, _fetchone, db, db_call, init_db, load_effects,
+                    prune_positions, row_to_scenario)
 from .roles import (base_or_instructor, instructor_only, plugin_only,
                     public_scenario, role_gate)
 from .hub import Hub, hub, ticker
@@ -75,7 +75,7 @@ def rehydrate():
         sortie_effects = dict(row).get("effects")
         if sortie_effects:
             try:
-                hub.scenario["effects"] = json.loads(sortie_effects)
+                hub.scenario["effects"] = load_effects(sortie_effects)
             except (TypeError, ValueError):
                 pass
         hub.sortie.pop("effects", None)

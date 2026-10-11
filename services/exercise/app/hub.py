@@ -36,7 +36,7 @@ class Hub:
         """
         if not self.clients:
             return
-        text = json.dumps(msg)
+        text = json.dumps(msg, allow_nan=False)
         await self._deliver([(w, text) for w in list(self.clients)])
 
     async def _deliver(self, pairs):
@@ -86,8 +86,14 @@ class Hub:
         """
         if not self.clients:
             return
-        full = json.dumps({"type": "state", **self.snapshot(include_df=True)})
-        public = json.dumps({"type": "state", **self.snapshot()})
+        # X2-3: allow_nan=False. A bare NaN is not JSON, every browser's
+        # JSON.parse rejects the frame, and it was being sent to all of them
+        # once a second. A bad value now raises here, once, where it can be
+        # logged, instead of silently breaking every console.
+        full = json.dumps({"type": "state", **self.snapshot(include_df=True)},
+                          allow_nan=False)
+        public = json.dumps({"type": "state", **self.snapshot()},
+                            allow_nan=False)
         pairs = [(w, full if w in self.truth_clients else public)
                  for w in list(self.clients)]
         await self._deliver(pairs)
@@ -106,6 +112,12 @@ async def ticker():
         for k in stale:
             hub.aircraft.pop(k, None)
         if hub.clients:
-            await hub.broadcast_state()
+            try:
+                await hub.broadcast_state()
+            except ValueError as e:
+                # A value JSON cannot carry (X2-3). Say so every second rather
+                # than let the exception end the ticker, which would also stop
+                # aircraft expiry for the rest of the exercise.
+                log.error("state not broadcast: %s", e)
 
 
