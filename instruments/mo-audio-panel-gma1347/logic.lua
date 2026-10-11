@@ -487,19 +487,10 @@ local function run_self_test()
     end)
 end
 
-local MIN_BUS_VOLTS = 10.0
-local avionics_switch_on = false
-local bus_volts = 0.0
--- Mission-kit gating, independent of the airframe bus — see
--- docs/DATAREF_CONTRACT.md Part 6. Both default true so a panel without the
--- master switch / CB panel instruments behaves exactly as before.
-local mission_master_on = true
-local mission_cb_in = true
-
-local function update_power()
-    local powered = avionics_switch_on and (bus_volts >= MIN_BUS_VOLTS)
-        and mission_master_on and mission_cb_in
-    if powered == st.powered then return end
+-- Bus power: avionics master, bus voltage, mission master and the audio breaker
+-- (lib/cap_power.lua; docs/DATAREF_CONTRACT.md Part 6). The GMA 1347 is powered
+-- by the avionics master (§ON/OFF Operation) and bus voltage.
+local function on_power_change(powered)
     st.powered = powered
     if powered then
         run_self_test()
@@ -518,26 +509,7 @@ local function update_power()
     end
 end
 
--- The GMA 1347 is powered by the avionics master (§ON/OFF Operation) and bus voltage.
-xpl_dataref_subscribe("sim/cockpit2/switches/avionics_power_on", "INT", function(on)
-    avionics_switch_on = (on or 0) ~= 0
-    update_power()
-end)
-
-xpl_dataref_subscribe("sim/cockpit2/electrical/bus_volts", "FLOAT[6]", function(val)
-    bus_volts = type(val) == "table" and (val[1] or 0.0) or (type(val) == "number" and val or 0.0)
-    update_power()
-end)
-
-si_variable_subscribe("cap_mission_master_on", "BOOL", function(v)
-    mission_master_on = v and true or false
-    update_power()
-end)
-
-si_variable_subscribe("cap_mission_cb_audio_in", "BOOL", function(v)
-    mission_cb_in = v and true or false
-    update_power()
-end)
+cap_power.watch("cap_mission_cb_audio_in", on_power_change)
 
 -- Ingest audio events to feed the clearance recorder buffer. sim/atc/com1_rx and
 -- com2_rx are X-Plane's "is this radio receiving an ATC / ATIS / plugin

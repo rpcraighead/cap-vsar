@@ -124,6 +124,45 @@ class TestReloadAndProducerPresentPath(unittest.TestCase):
                     am.close()
 
 
+class TestCapPowerGate(unittest.TestCase):
+    """lib/cap_power.lua: the one bus-power gate the four powered instruments share."""
+
+    def _gate(self, am):
+        from tests.am import ROOT
+        am.eval((ROOT / "instruments/_shared/lib/cap_power.lua").read_text())
+        am.eval("""
+            calls = {}
+            gate = cap_power.watch("cap_mission_cb_df_in", function(p) calls[#calls + 1] = p end)
+        """)
+
+    def test_and_of_four_conditions_reported_on_transitions_only(self):
+        with AirManager() as am:
+            self._gate(am)
+            self.assertFalse(am.eval("return gate.powered()"))
+            am.write_dataref("sim/cockpit2/switches/avionics_power_on", "INT", 1)
+            am.write_dataref("sim/cockpit2/electrical/bus_volts", "FLOAT[6]", 9.9)
+            self.assertEqual(am.eval("return #calls"), 0, "9.9 V is below the 10 V threshold")
+            am.write_dataref("sim/cockpit2/electrical/bus_volts", "FLOAT[6]", 10.0)
+            am.write_dataref("sim/cockpit2/electrical/bus_volts", "FLOAT[6]", 27.0)
+            self.assertEqual(am.eval("return #calls"), 1)
+            self.assertTrue(am.eval("return gate.powered()"))
+            am.write_si_variable("cap_mission_master_on", True)
+            self.assertEqual(am.eval("return #calls"), 1, "no change, no call")
+            am.write_si_variable("cap_mission_cb_df_in", False)
+            self.assertFalse(am.eval("return gate.powered()"))
+            am.write_si_variable("cap_mission_cb_df_in", True)
+            am.write_si_variable("cap_mission_master_on", False)
+            self.assertFalse(am.eval("return gate.powered()"))
+            self.assertEqual(am.eval("return #calls"), 4)
+
+    def test_a_dead_bus_is_never_overridden_by_the_mission_conditions(self):
+        with AirManager() as am:
+            self._gate(am)
+            am.write_si_variable("cap_mission_master_on", True)
+            am.write_si_variable("cap_mission_cb_df_in", True)
+            self.assertFalse(am.eval("return gate.powered()"))
+
+
 class TestMissionCBPanel(unittest.TestCase):
     BREAKER_BUTTONS = {"df": (54, 46), "fm": (228, 46), "audio": (401, 46)}
     VARS = {"df": "cap_mission_cb_df_in", "fm": "cap_mission_cb_fm_in",

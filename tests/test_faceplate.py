@@ -138,6 +138,21 @@ for lib in ("cap_df.lua", "cap_df_audio.lua", "dcu.lua"):
         inst_src = open(os.path.join(ROOT, "instruments", head, "lib", lib), encoding="utf-8").read()
         check("%s: lib/%s matches shared source" % (head, lib), inst_src == shared_src)
 
+# cap_power.lua (the bus-power gate) is shared by all four powered instruments,
+# knob_push.lua by the two with push knobs. The gate lives in one place: no
+# logic.lua carries its own copy of the voltage threshold any more.
+for lib, users in (("cap_power.lua", ("becker-sar-df-517", "rhotheta-rt-600",
+                                      "cap-fm-tdfm-136b", "mo-audio-panel-gma1347")),
+                   ("knob_push.lua", ("cap-fm-tdfm-136b", "mo-audio-panel-gma1347"))):
+    shared_src = open(os.path.join(SHARED_DIR, "lib", lib), encoding="utf-8").read()
+    for inst in users:
+        inst_src = open(os.path.join(ROOT, "instruments", inst, "lib", lib), encoding="utf-8").read()
+        check("%s: lib/%s matches shared source" % (inst, lib), inst_src == shared_src)
+for inst in ("becker-sar-df-517", "rhotheta-rt-600", "cap-fm-tdfm-136b", "mo-audio-panel-gma1347"):
+    logic_src = open(os.path.join(ROOT, "instruments", inst, "logic.lua"), encoding="utf-8").read()
+    check("%s: bus-power gate comes from lib/cap_power.lua" % inst,
+          "cap_power.watch(" in logic_src and "MIN_BUS_VOLTS" not in logic_src)
+
 # Four shared WAV resources across the two DF heads
 for wav in ("elt_analog_clean.wav", "elt_analog_df.wav", "elt_noise.wav", "elt_406_burst.wav"):
     shared_wav = open(os.path.join(SHARED_DIR, "resources", wav), "rb").read()
