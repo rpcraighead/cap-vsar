@@ -41,5 +41,68 @@ class NoStalePorts(unittest.TestCase):
             self.assertNotIn(":8090", f.read_text(), f.name)
 
 
+class StateDirAndBoardProfile(unittest.TestCase):
+    """O2-7 and O2-5, from the compose file alone."""
+
+    def test_every_state_bind_mount_goes_through_capvsar_state_dir(self):
+        for tail in ("/mumble/data:/data", "/services/exercise/data:/data",
+                     "/services/exercise/radio-public:/radio-public:ro",
+                     "/services/flightplanner/data:/app/data",
+                     "/services/flightplanner/data/charts:/app/charts"):
+            self.assertIn("${CAPVSAR_STATE_DIR:-.}" + tail, COMPOSE, tail)
+
+    def test_no_state_mount_is_a_bare_relative_path(self):
+        mounts = re.findall(r"(?m)^\s+- (\./\S+?):/", COMPOSE)
+        self.assertEqual(mounts, ["./services/exercise/Caddyfile"], "only config may be a bare ./ mount")
+
+    def test_board_repo_defaults_under_the_state_dir(self):
+        self.assertIn("${CAPVSAR_BOARD_REPO:-${CAPVSAR_STATE_DIR:-.}/services/board/repo}", COMPOSE)
+
+    def test_the_board_is_an_opt_in_profile_and_nothing_depends_on_it(self):
+        block = COMPOSE[COMPOSE.index("\n  board:"):COMPOSE.index("\n# WireGuard")]
+        self.assertRegex(block, r'profiles:\s*\["board"\]')
+        caddy = COMPOSE[COMPOSE.index("  radio-https:"):COMPOSE.index("  flightplanner:")]
+        self.assertNotRegex(caddy, r"(?m)^\s+- board\s*$")
+
+    def test_env_example_documents_state_dir_and_has_no_dead_mumble_keys(self):
+        env = (ROOT / ".env.example").read_text()
+        self.assertIn("CAPVSAR_STATE_DIR", env)
+        self.assertNotRegex(env, r"(?m)^\s*#?\s*CAPVSAR_MUMBLE_")
+
+    def test_ci_scratch_output_is_ignored(self):
+        self.assertIn(".ci-out/", (ROOT / ".gitignore").read_text().splitlines())
+
+
+class PlannerPort(unittest.TestCase):
+    """O2-10: the planner has listened on 8080 since L-12/O-8."""
+
+    FILES = ("scripts/preflight.py", "scripts/deploy.sh", "infra/ROUTER.md",
+             "docs/WEB_HOSTING_AND_IDENTITY_PLAN.md")
+
+    def test_no_current_file_names_the_old_planner_port(self):
+        for rel in self.FILES:
+            self.assertNotIn("8090", (ROOT / rel).read_text(), rel)
+
+    def test_preflight_probes_the_real_planner_port(self):
+        self.assertIn('(8080, "planner")', (ROOT / "scripts/preflight.py").read_text())
+
+    def test_router_doc_lists_the_listeners_caddy_actually_publishes(self):
+        published = set(re.findall(r'"(\d+):\d+"', COMPOSE[COMPOSE.index("  radio-https:"):COMPOSE.index("  flightplanner:")]))
+        doc = (ROOT / "infra/ROUTER.md").read_text()
+        for port in published:
+            self.assertRegex(doc, rf"\|\s*{port}\s*\|", f"ROUTER.md does not list Caddy's {port}")
+
+
+class DeadWireGuardHelper(unittest.TestCase):
+    """O2-12: the WireGuard container was removed; its helper must not linger."""
+
+    def test_wg_peer_script_is_gone_and_unreferenced_by_live_docs(self):
+        self.assertFalse((ROOT / "scripts" / "wg-peer.sh").exists())
+        for rel in ("README.md", "docs/CONNECT.md", "infra/ROUTER.md", "docker-compose.yml"):
+            p = ROOT / rel
+            if p.exists():
+                self.assertNotIn("wg-peer", p.read_text(), rel)
+
+
 if __name__ == "__main__":
     unittest.main()

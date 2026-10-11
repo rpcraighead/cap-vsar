@@ -1,5 +1,13 @@
 # CAP V-SAR - lab service stack
-# Host: ms01 (192.0.2.151). Bring up with:  docker compose up -d
+# Host: ms01 (192.0.2.151). Bring up with:  scripts/deploy.sh
+# (or `docker compose up -d` once the host paths exist; deploy.sh makes them).
+#
+# O2-7: all runtime state lives in bind mounts under CAPVSAR_STATE_DIR, which
+# defaults to "." (this checkout, the original layout). Point it at a path
+# outside the checkout so `git clean -fdx` or a re-clone cannot take the
+# Mumble database, exercise.db or the planner data with it. The layout under
+# it mirrors the repo: mumble/data, services/exercise/{data,radio-public},
+# services/flightplanner/data, services/board/repo. Nothing is moved for you.
 # Nothing here is reachable from the internet until the router forwards
 # the ports listed in infra/ROUTER.md to this host.
 
@@ -17,7 +25,7 @@ services:
       - "64738:64738/tcp"
       - "64738:64738/udp"
     volumes:
-      - ./mumble/data:/data
+      - ${CAPVSAR_STATE_DIR:-.}/mumble/data:/data
     # This image GENERATES its config from MUMBLE_CONFIG_* variables and
     # overwrites anything mounted at /data/mumble_server_config.ini - a
     # mounted config file is silently discarded. Set everything here.
@@ -66,8 +74,8 @@ services:
     expose:
       - "8700"
     volumes:
-      - ./services/exercise/data:/data
-      - ./services/exercise/radio-public:/radio-public:ro
+      - ${CAPVSAR_STATE_DIR:-.}/services/exercise/data:/data
+      - ${CAPVSAR_STATE_DIR:-.}/services/exercise/radio-public:/radio-public:ro
     environment:
       TZ: ${TZ}
       CAPVSAR_DB: /data/exercise.db
@@ -105,9 +113,11 @@ services:
     image: caddy@sha256:df7f1c2fb114453b951de51a98efc010db1655a92c2e86be6706714e2417a78d
     container_name: capvsar-radio-https
     restart: unless-stopped
+    # The board is deliberately NOT a dependency: it is an opt-in profile
+    # (O2-5), and Caddy resolves board:8770 per request, so the participant
+    # front door must start whether or not the engineering board is deployed.
     depends_on:
       - exercise
-      - board
     ports:
       - "80:80"
       - "443:443"
@@ -163,8 +173,8 @@ services:
       # the journal on a discarded layer. The host file does not move -
       # ./services/flightplanner/data/aviation_data.db is the same path it
       # always was, now reached as /app/data/aviation_data.db.
-      - ./services/flightplanner/data:/app/data
-      - ./services/flightplanner/data/charts:/app/charts
+      - ${CAPVSAR_STATE_DIR:-.}/services/flightplanner/data:/app/data
+      - ${CAPVSAR_STATE_DIR:-.}/services/flightplanner/data/charts:/app/charts
     environment:
       TZ: ${TZ}
       PORT: "8080"
@@ -187,7 +197,15 @@ services:
   # front door on 443. It exists as its own container because the board used
   # to be four routes on the AI Pilot deck, which only runs on the workstation
   # next to X-Plane - so the board could not be opened from anywhere else.
+  #
+  # O2-5: OPT-IN. This service is in the "board" compose profile, so a plain
+  # `docker compose up -d` does not start it. It needs a clone, a deploy key
+  # and a known_hosts that only exist after the one-time setup in
+  # services/board/README.md. scripts/deploy.sh enables the profile itself once
+  # that setup is present; for hand-run compose commands, put
+  # COMPOSE_PROFILES=board in .env (or name the service: `up -d board`).
   board:
+    profiles: ["board"]
     build: ./services/board
     container_name: capvsar-board
     restart: unless-stopped
@@ -197,7 +215,7 @@ services:
       # A git working clone of THIS repository, all of its own. Never point
       # this at an agent's live working tree: the board commits and pushes,
       # and three agents leave work in progress in theirs.
-      - ${CAPVSAR_BOARD_REPO:-./services/board/repo}:/repo
+      - ${CAPVSAR_BOARD_REPO:-${CAPVSAR_STATE_DIR:-.}/services/board/repo}:/repo
       - ${CAPVSAR_BOARD_SSH_KEY:-./services/board/secrets/id_ed25519}:/home/capvsar/.ssh/id_ed25519:ro
       - ${CAPVSAR_BOARD_KNOWN_HOSTS:-./services/board/secrets/known_hosts}:/home/capvsar/.ssh/known_hosts:ro
     environment:
