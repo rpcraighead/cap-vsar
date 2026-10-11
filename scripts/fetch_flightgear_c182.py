@@ -97,6 +97,21 @@ def _extract_archive(archive: Path, destination: Path) -> None:
         shutil.move(str(roots[0]), destination)
 
 
+DOWNLOAD_TIMEOUT_S = 60
+
+
+def _download(url: str, destination: Path, timeout: float = DOWNLOAD_TIMEOUT_S) -> None:
+    """Fetch url into destination, giving up if the server goes quiet.
+
+    urlretrieve has no timeout, so a stalled connection hung the build with no
+    output. `timeout` bounds each socket operation, not the whole transfer, so a
+    slow 120 MB download that keeps moving is fine.
+    """
+    with urllib.request.urlopen(url, timeout=timeout) as response, \
+            destination.open("wb") as out:
+        shutil.copyfileobj(response, out)
+
+
 def fetch_donor(
     destination: Path,
     *,
@@ -105,7 +120,13 @@ def fetch_donor(
 ) -> Path:
     destination = destination.expanduser().resolve()
     if destination.exists() and not force:
-        validate_donor(destination)
+        try:
+            validate_donor(destination)
+        except ValueError as error:
+            raise ValueError(
+                f"{error}. Re-run with --force to replace it with a fresh, "
+                f"checksum-verified copy."
+            ) from error
         return destination
 
     with tempfile.TemporaryDirectory(prefix="capvsar-c182-download-") as temp_name:
@@ -115,7 +136,7 @@ def fetch_donor(
                 shutil.copy2(DEFAULT_ARCHIVE, downloaded)
             else:
                 print(f"[*] Downloading {DONOR_ARCHIVE_URL}")
-                urllib.request.urlretrieve(DONOR_ARCHIVE_URL, downloaded)
+                _download(DONOR_ARCHIVE_URL, downloaded)
         else:
             shutil.copy2(archive, downloaded)
 
