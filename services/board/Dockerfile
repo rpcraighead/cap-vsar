@@ -1,3 +1,9 @@
+# TODO (2026-10-10 review, section 7 improvements): pin this base image by digest, as the Mumble and Caddy
+# images in docker-compose.yml are (O-5): FROM python:3.12-slim@sha256:<digest>.
+# Left as a tag because no digest could be resolved offline (no local image, and
+# resolving one needs a registry round trip). On a machine with network:
+#   docker buildx imagetools inspect python:3.12-slim | head -3
+# Use the SAME digest in all three services/*/Dockerfile.
 FROM python:3.12-slim
 
 # The board is an engineering surface holding the lane locks, the dispatch

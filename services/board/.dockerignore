@@ -1,0 +1,12 @@
+# The build context is this directory. repo/ is a full git clone of the
+# monorepo and secrets/ holds the Gitea deploy key (write access): neither may
+# ever be sent to the Docker daemon or end up in an image layer. The Dockerfile
+# only COPYs requirements.txt and app/.
+repo/
+secrets/
+tests/
+conftest.py
+README.md
+**/__pycache__/
+**/*.pyc
+.pytest_cache/

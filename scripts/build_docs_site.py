@@ -8,7 +8,11 @@ file in the tree, so the tree stays the single source of truth and a stale site
 is fixed by re-running this.
 
 Conversions: .docx via LibreOffice (headless), .md via python-markdown, .html
-copied and re-wrapped in the site template, .pdf copied and linked.
+copied and re-wrapped in the site template, project .pdf files copied and
+linked. Manufacturer manuals are never copied into the site; the index links to
+the public source URLs in docs/SOURCES.md instead (B2-9).
+
+Needs requirements-docs.txt (Markdown) and LibreOffice.
 
     python3 scripts/build_docs_site.py --out build/docs-site
 """
@@ -97,24 +101,52 @@ SECTIONS = [
     ),
 ]
 
-# Reference PDFs. Vendor manuals are third-party documents republished here for
-# internal training use only - see SOURCES.md. They are listed separately from
-# project documents so the distinction stays visible.
+# Reference PDFs we may host: documents written for this project.
 PROJECT_PDFS = [
     ("docs/CAP_V-SAR_AI_Mission_Pilot_CONOPS.pdf", "AI Mission Pilot CONOPS"),
     ("docs/CAP_V-SAR_Radio_Features_and_Use_Cases.pdf", "Radio features and use cases"),
-    ("docs/RT600_CAP_basic_training.pdf", "RT-600 basic training (CAP)"),
-    ("docs/GMA1347_C182T_CAP_audio_panel.pdf", "GMA 1347 audio panel in CAP 487"),
 ]
+
+# B2-9: third-party documents. The manufacturers' manuals (and the CAP wing
+# decks and guides that are republished copies of them) are NOT ours to
+# redistribute: NOTICE and D-4 keep them out of git for exactly this reason, and
+# this site is meant to be served to participants. The build therefore never
+# copies them; it links to the public source URL recorded in docs/SOURCES.md.
+# (A conservative reading of the licensing question, taken without waiting for
+# a decision: a link costs nothing, a republished manual might.)
 VENDOR_PDFS = [
     ("docs/Becker_SARDF517_manual.pdf", "Becker SAR-DF 517 manual"),
     ("docs/Becker_SARDF517_manual_akwg.pdf", "Becker SAR-DF 517 manual (AKWG)"),
     ("docs/RT600_SARDF517_manual.pdf", "RT-600 / SAR-DF 517 manual"),
     ("docs/RT600_america_manual.pdf", "RT-600 manual (America)"),
+    ("docs/RT600_CAP_basic_training.pdf", "RT-600 basic training (CAP)"),
     ("docs/TDFM136B_operating.pdf", "Technisonic TDFM-136B operating"),
     ("docs/TDFM136_install_operating.pdf", "Technisonic TDFM-136 install and operating"),
+    ("docs/GMA1347_C182T_CAP_audio_panel.pdf", "GMA 1347 audio panel in CAP 487"),
     ("docs/GMA1347_garmin_audio_panel_guide.pdf", "Garmin GMA 1347 audio panel guide"),
 ]
+
+
+def source_urls(sources_md: Path) -> dict:
+    """Map file name -> https URL, from the table in docs/SOURCES.md.
+
+    Rows look like  | `file.pdf` | Device | Org - `host/path/file.pdf` |.
+    Rows with no URL (a local file) are skipped.
+    """
+    urls = {}
+    if not sources_md.exists():
+        return urls
+    for line in sources_md.read_text(encoding="utf-8", errors="replace").splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) < 3 or not line.lstrip().startswith("|"):
+            continue
+        name = re.fullmatch(r"`([^`]+)`", cells[0])
+        url = re.search(r"`((?:https?://)?[\w.-]+\.[a-z]{2,}/[^`\s]+)`", cells[2])
+        if name and url:
+            href = url.group(1)
+            urls[name.group(1)] = href if href.startswith("http") else "https://" + href
+    return urls
+
 
 CSS = """
 :root{--bg:#fbfaf8;--fg:#1c1b19;--muted:#5d5a55;--line:#e2ded7;--card:#fff;
@@ -219,6 +251,23 @@ def convert_html(source: Path) -> str:
     return match.group(1) if match else raw
 
 
+def localize_figures(body: str, out_dir: Path) -> str:
+    """Point the handbook's repo-relative figure links at copies inside the site.
+
+    The handbook HTML says ../figures/manual/x.png (right in the tree, wrong in
+    a flat site). Those figures are the project's own redrawn artwork.
+    """
+    def repl(match):
+        name = match.group(1)
+        source = REPO / "docs" / "figures" / "manual" / name
+        if not source.exists():
+            return match.group(0)
+        (out_dir / "figures").mkdir(exist_ok=True)
+        shutil.copy2(source, out_dir / "figures" / name)
+        return f'src="figures/{name}"'
+    return re.sub(r'src="(?:\.\./)+figures/manual/([^"/]+)"', repl, body)
+
+
 def build(out_dir: Path) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     assets = out_dir / "files"
@@ -243,7 +292,7 @@ def build(out_dir: Path) -> int:
                 elif suffix == ".md":
                     body = convert_md(source)
                 elif suffix in {".html", ".htm"}:
-                    body = convert_html(source)
+                    body = localize_figures(convert_html(source), out_dir)
                 else:
                     missing.append(doc.source + " (unsupported)")
                     continue
@@ -309,16 +358,27 @@ def build(out_dir: Path) -> int:
         parts.append('<h2>Project references</h2><p class="sec-blurb">'
                      "Documents written for this project.</p>"
                      f'<ul class="plain">{"".join(project_rows)}</ul>')
-    vendor_rows = pdf_list(VENDOR_PDFS)
+    # B2-9: link, never copy. The label is shown whether or not a local copy
+    # exists, because the point is to send the reader to the manufacturer.
+    urls = source_urls(REPO / "docs" / "SOURCES.md")
+    vendor_rows = []
+    for rel, label in VENDOR_PDFS:
+        href = urls.get(Path(rel).name)
+        if not href:
+            missing.append(f"{rel} (no source URL in docs/SOURCES.md; not linked)")
+            continue
+        vendor_rows.append(
+            f'<li><a href="{html.escape(href)}" rel="noopener noreferrer">{html.escape(label)}</a>'
+            f'<span class="sz">external</span></li>')
     if vendor_rows:
         parts.append(
             '<h2>Equipment manuals</h2><p class="sec-blurb">'
             "Manufacturer documentation for the radios and direction finders the "
             "simulation reproduces.</p>"
-            '<div class="note"><strong>Third-party documents.</strong> These are '
-            "vendor manuals, republished here for internal training reference only. "
-            "They are not project work and are not covered by this project's licence "
-            "&mdash; see Sources and provenance before redistributing any of them."
+            '<div class="note"><strong>Third-party documents, not hosted here.</strong> '
+            "These links go to the public location each manual was published at. "
+            "They are the manufacturers' documents, not project work, and are not "
+            "covered by this project's licence &mdash; see Sources and provenance."
             "</div>"
             f'<ul class="plain">{"".join(vendor_rows)}</ul>')
 

@@ -104,5 +104,66 @@ class DeadWireGuardHelper(unittest.TestCase):
                 self.assertNotIn("wg-peer", p.read_text(), rel)
 
 
+class PymumblePin(unittest.TestCase):
+    """O2-9: the component that holds the Mumble password is pinned by content."""
+
+    PIN = re.compile(r"pymumble @ (https://github\.com/azlux/pymumble/archive/([0-9a-f]{40})\.tar\.gz)")
+
+    def read(self, rel):
+        return (ROOT / rel).read_text()
+
+    def test_the_pinned_url_names_a_full_40_char_commit(self):
+        for rel in ("services/exercise/requirements-pymumble.txt", "requirements-dev.txt"):
+            self.assertRegex(self.read(rel), self.PIN, rel)
+
+    def test_the_image_requirement_carries_a_sha256_and_the_pin_is_not_in_the_main_file(self):
+        self.assertRegex(self.read("services/exercise/requirements-pymumble.txt"),
+                         r"--hash=sha256:[0-9a-f]{64}")
+        self.assertNotIn("pymumble @", self.read("services/exercise/requirements.txt"),
+                         "a hash in requirements.txt would force --require-hashes on every package")
+
+    def test_dev_and_image_install_the_same_commit(self):
+        image = self.PIN.search(self.read("services/exercise/requirements-pymumble.txt")).group(2)
+        dev = self.PIN.search(self.read("requirements-dev.txt")).group(2)
+        self.assertEqual(image, dev)
+
+    def test_dev_requirements_have_no_hash_which_would_force_require_hashes_mode(self):
+        self.assertNotIn("--hash", self.read("requirements-dev.txt"))
+
+    def test_dockerfile_installs_it_hash_checked_and_without_resolving_dependencies(self):
+        dockerfile = self.read("services/exercise/Dockerfile")
+        self.assertRegex(dockerfile, r"pip install[^\n]*--no-deps[^\n]*--require-hashes[^\n]*requirements-pymumble\.txt")
+        self.assertIn("requirements-pymumble.txt", re.search(r"COPY requirements[^\n]*", dockerfile).group(0))
+
+    def test_pymumbles_own_dependencies_stay_pinned_in_the_main_file(self):
+        main = self.read("services/exercise/requirements.txt")
+        self.assertIn("opuslib==3.0.1", main)
+        self.assertIn("protobuf==3.20.3", main)
+
+
+def ignore_patterns(rel):
+    return [l.strip() for l in (ROOT / rel).read_text().splitlines()
+            if l.strip() and not l.lstrip().startswith("#")]
+
+
+class DockerContextHygiene(unittest.TestCase):
+    def test_exercise_and_board_keep_state_and_secrets_out_of_the_build_context(self):
+        ex = ignore_patterns("services/exercise/.dockerignore")
+        self.assertIn("data/", ex)
+        self.assertIn("radio-public/", ex)
+        board = ignore_patterns("services/board/.dockerignore")
+        self.assertIn("repo/", board)
+        self.assertIn("secrets/", board)
+
+    def test_dockerfiles_still_copy_what_the_dockerignore_does_not_exclude(self):
+        """Excluding something the Dockerfile COPYs would break the build."""
+        for svc, copies in (("exercise", ("requirements.txt", "requirements-pymumble.txt", "app")),
+                            ("board", ("requirements.txt", "app"))):
+            ignored = ignore_patterns(f"services/{svc}/.dockerignore")
+            for name in copies:
+                self.assertNotIn(name, ignored)
+                self.assertNotIn(name + "/", ignored)
+
+
 if __name__ == "__main__":
     unittest.main()
