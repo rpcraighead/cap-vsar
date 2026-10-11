@@ -40,6 +40,12 @@ FIELDS = {
     "local_y_m": ("sim/flightmodel/position/local_y", "d", "m local up"),
     "local_z_m": ("sim/flightmodel/position/local_z", "d", "m local south"),
     "tas_mps": ("sim/flightmodel/position/true_airspeed", "f", "m/s true airspeed"),
+    "nav1_frequency_10khz": ("sim/cockpit2/radios/actuators/nav1_frequency_hz", "i", "10 kHz"),
+    "nav1_hdef_dots": ("sim/cockpit2/radios/indicators/nav1_hdef_dots_pilot", "f", "dots"),
+    "nav1_vdef_dots": ("sim/cockpit2/radios/indicators/nav1_vdef_dots_pilot", "f", "dots"),
+    "nav1_lateral_valid": ("sim/cockpit2/radios/indicators/nav1_display_horizontal", "i", "boolean"),
+    "nav1_glideslope_flag": ("sim/cockpit2/radios/indicators/nav1_flag_glideslope_mech", "i", "boolean"),
+    "nav1_dme_nm": ("sim/cockpit2/radios/indicators/nav1_dme_distance_nm", "f", "NM"),
 }
 ARRAY_FIELDS = {"engine_running": ("sim/flightmodel/engine/ENGN_running", "i", "boolean"),
                 "engine_rpm": ("sim/cockpit2/engine/indicators/engine_speed_rpm", "f", "rpm")}

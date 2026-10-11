@@ -1,0 +1,214 @@
+{
+  "date": "2026-10-11",
+  "aircraft": "stock X-Plane 12 Cessna_172SP_G1000.acf",
+  "result": "OBSERVED_LANDING_AND_STOP_WITH_ROLLOUT_BRIDGE_RESTART",
+  "chart_cycle": "FAA 2610",
+  "sim_navigation_cycle": "2406",
+  "authority": "attended direct control; simulated vectors; no live ATC",
+  "departure_climb": {
+    "takeoff_trace": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee_parking_to_takeoff_20261011_trial2.jsonl",
+      "sha256": "dbb6b582cfb321442100013d5e4c2415bdff5f0874792b853d9239c733c27346",
+      "samples": 10788
+    },
+    "distance_to_2000_ft_nm": 2.924,
+    "cumulative_gradient_ft_per_nm": 548.8,
+    "lowest_half_nm_gradient_ft_per_nm": 492.5,
+    "altitude_at_lowest_window_ft": 1798.4,
+    "published_minimum_ft_per_nm": 500,
+    "qualification": "NOT_DEMONSTRATED"
+  },
+  "first_approach": {
+    "MIBBY_sampled_minimum_ft": 4119.7,
+    "MIBBY_crossing_ft": 4192.3,
+    "outcome": "ALTITUDE_CONSTRAINT_MISS_AND_UNSTABLE_ILS_GO_AROUND"
+  },
+  "missed_approach": {
+    "runway_climb_turn_at_ft": 1100.4,
+    "pilot_vector": "direct BAKEL during climb near 3450 ft; level at 5000 ft"
+  },
+  "second_approach": {
+    "BAKEL_crossing_ft": 5000.0,
+    "charted_segment_altitudes": {
+      "MIBBY": {
+        "charted_floor_ft": 4200,
+        "sampled_minimum_ft": 4220.3,
+        "fix_crossing_ft": 4308.8
+      },
+      "NESTY": {
+        "charted_floor_ft": 3600,
+        "sampled_minimum_ft": 3666.6,
+        "fix_crossing_ft": 3716.6
+      },
+      "PENYY": {
+        "charted_floor_ft": 2500,
+        "sampled_minimum_ft": 2557.9,
+        "fix_crossing_ft": 2640.9
+      }
+    },
+    "PENYY_nav1": {
+      "sim_time_s": 3979.42,
+      "altitude_indicated_ft": 2640.4,
+      "kias": 90.1,
+      "localizer_dots": -0.13,
+      "glideslope_dots": 0.17,
+      "dme_nm": 7.28
+    },
+    "ILS_landing_handoff": {
+      "sim_time_s": 4213.8,
+      "altitude_indicated_ft": 926.1,
+      "kias": 73.1,
+      "localizer_dots": -0.1,
+      "glideslope_dots": 0.1,
+      "dme_nm": 2.08
+    }
+  },
+  "landing": {
+    "threshold": {
+      "along_m": 0.3,
+      "cross_m": -1.3,
+      "agl_ft": 36.7,
+      "kias": 64.0
+    },
+    "touchdown": {
+      "along_m": 399.0,
+      "cross_m": -0.1,
+      "kias": 48.2,
+      "vertical_speed_fpm": -124.1,
+      "pre_touch_pitch_deg": 5.4
+    },
+    "stop": {
+      "along_m": 558.0,
+      "cross_m": 0.1,
+      "groundspeed_mps": 0.85,
+      "paused": true,
+      "bridge_state": "PAUSED_FAULT",
+      "toe_brakes_released": true
+    }
+  },
+  "limitations": [
+    "First approach crossed below the MIBBY segment altitude and was flown to a go-around.",
+    "The lowest sampled half-NM climb-gradient window to 2000 ft was below the published 500 ft/NM minimum; departure gradient is not qualified.",
+    "The second approach used the simulator's ILS signal without G1000 flight-plan sequencing or live ATC.",
+    "The flight-control bridge paused during rollout at 40 KIAS because its airborne speed guard applied on the ground; rollout resumed from the same paused position after a guard fix.",
+    "Raw traces are sampled fragments across attended pause/restart boundaries; this is not an uninterrupted qualification replay.",
+    "Runway sighting/visual references and radio-ident audio were not machine verified."
+  ],
+  "fragments": {
+    "departure-01": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee-kmyf-departure-01.jsonl",
+      "sha256": "9b7910074b8d09cd88d57ac1187ec45ea8efc8ea74caef17d3ec72b27259711e",
+      "samples": 66
+    },
+    "departure-02": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee-kmyf-departure-02.jsonl",
+      "sha256": "78401f86045d4aec7132d52925334bfddcfc2837561923a9e614249a0728fa14",
+      "samples": 336
+    },
+    "departure-03": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee-kmyf-departure-03.jsonl",
+      "sha256": "f776061b99f696b10b6f0d8b3cac9c6f3c0fb72f62893c2c2e146f44b07afe8d",
+      "samples": 855
+    },
+    "departure-04": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee-kmyf-departure-04.jsonl",
+      "sha256": "f69bf9886e044453ee54c2b1253d141532897da0c3a2bea14c5c1d6d62636aac",
+      "samples": 2605
+    },
+    "approach-01": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee-kmyf-approach-01.jsonl",
+      "sha256": "5345d23525c5662b41515eec0fcbacd69d4b7612a17fb85a8aca1ac5df8dbe80",
+      "samples": 3594
+    },
+    "approach-02": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee-kmyf-approach-02.jsonl",
+      "sha256": "f67704a3fc51bb4fd4e730db8994a15d1b08e5c29ed4dd1979c77a9ceae8e9fb",
+      "samples": 869
+    },
+    "approach-03": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee-kmyf-approach-03.jsonl",
+      "sha256": "748b24d6cfc26a02feaf20fadca950c12210fb60d3575534caaefba6f050f5f9",
+      "samples": 687
+    },
+    "approach-04": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee-kmyf-approach-04.jsonl",
+      "sha256": "2e045c7a497aeda7de84c61820c159f0a37c176a1a35b1f57ffffe22a730f6dd",
+      "samples": 909
+    },
+    "ils-final-01": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee-kmyf-ils-final-01.jsonl",
+      "sha256": "f32375b73201f85b86eb698130a7ce81bcffc9e19aa3471e50e586b78b0e2c04",
+      "samples": 823
+    },
+    "ils-final-02": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee-kmyf-ils-final-02.jsonl",
+      "sha256": "b40bc243b3958277004ebc67dc3199bd43ff6c526127721c3e9834bde88b785d",
+      "samples": 325
+    },
+    "ils-final-03": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee-kmyf-ils-final-03.jsonl",
+      "sha256": "4113cb4f43bf496cd95aecd09a238ad892d803680f85d12ab8cb8393117162bb",
+      "samples": 116
+    },
+    "missed-01": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee-kmyf-missed-01.jsonl",
+      "sha256": "c17ba920d7b6b0cfdd8d29e359e991e09cd610f23b656f9a6bf1f1e0a126f3e4",
+      "samples": 72
+    },
+    "missed-02": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee-kmyf-missed-02.jsonl",
+      "sha256": "33bee3fae2bd9b983fc3d46c792e091c18d5618b8a0745ecd6ec6e2c44227cbc",
+      "samples": 686
+    },
+    "missed-03": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee-kmyf-missed-03.jsonl",
+      "sha256": "3abf9463a347018174043f5150ee817d98d743c583617512d403500c8fb0c36c",
+      "samples": 527
+    },
+    "retry-bakel": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee-kmyf-retry-bakel.jsonl",
+      "sha256": "e09b085766fa67fe18492b7a7e8198c8785f5f194406bc1c6a42a1087d4fc8db",
+      "samples": 3761
+    },
+    "retry-mibby": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee-kmyf-retry-mibby.jsonl",
+      "sha256": "7efe49290e18dd5e2668905cea5d8b70e4be946943736b9d7ba45e3c86b746fc",
+      "samples": 848
+    },
+    "retry-nesty": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee-kmyf-retry-nesty.jsonl",
+      "sha256": "cf458abfa4438b1d118ed04a274248b8ab94482b66fe14737ef805a1493a725d",
+      "samples": 625
+    },
+    "retry-penyy": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee-kmyf-retry-penyy.jsonl",
+      "sha256": "5340e34a67f0f5b1c451050a2efb19200361e35acf3b888dcfbb81bbb171194a",
+      "samples": 821
+    },
+    "retry-ils": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee-kmyf-retry-ils.jsonl",
+      "sha256": "8ef54d667d6c14ebdc8f73bc353c6e5e829db60c3ab0276d7730c5843db97652",
+      "samples": 436
+    },
+    "retry-ils-filtered": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee-kmyf-retry-ils-filtered.jsonl",
+      "sha256": "b9923c04e647f75625f424f582c5488441b16a7183239fe807fc34022b4746d7",
+      "samples": 256
+    },
+    "retry-ils-integral": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee-kmyf-retry-ils-integral.jsonl",
+      "sha256": "bdaf5f7504ba193ee20ac38d38b683f01820bb3eadae3927dbf7a1baf2c554a9",
+      "samples": 513
+    },
+    "retry-landing": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee-kmyf-retry-landing.jsonl",
+      "sha256": "0b9005a3406a529b819753780373c93ac0b380ce302170b44761270877633a2f",
+      "samples": 415
+    },
+    "retry-rollout": {
+      "path": "/home/ron/.cache/capvsar/ai-pilot/ksee-kmyf-retry-rollout.jsonl",
+      "sha256": "1e69efc1f57d94f875f4901309e6e6d83e086d50d8f0b60d26ecbe1b8e9a20e7",
+      "samples": 38
+    }
+  }
+}

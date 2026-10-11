@@ -1,7 +1,9 @@
 # Stock C172 KSEE–KMYF taxi, departure, and ILS trial
 
-Date: 2026-10-11. Status: implementation in progress; no complete live sortie
-has been flown. The F-4 program is paused. This scenario uses the stock
+Date: 2026-10-11. Status: an attended simulator sortie reached KMYF 28R,
+landed and stopped after one go-around and several paused controller revisions;
+an uninterrupted, independently scored qualification remains open. The F-4
+program is paused. This scenario uses the stock
 X-Plane 12 C172SP G1000 and the user's requested KSEE 27R → Mission Bay Two
 departure to 5,000 ft MSL → vectors to BAKEL → KMYF ILS 28R sequence.
 
@@ -96,5 +98,59 @@ At 0.3 NM airborne, climb from the 388 ft field elevation was about
 (SHA-256 `dbb6b582cfb321442100013d5e4c2415bdff5f0874792b853d9239c733c27346`).
 The bridge confirmed pause and released overrides on completion. The hold-point
 checkpoint is marked as an intervention and is not part of this continuous
-pass. Actual ATC, the Mission Bay Two departure to 5,000 ft, and ILS
-qualification remain pending.
+pass.
+
+## Attended Mission Bay Two and KMYF ILS flight
+
+The aircraft was continued from the paused 300 ft AGL takeoff state without
+repositioning. It climbed on runway heading to **790 ft MSL**, turned to
+**062° magnetic**, tracked south to PGY10 and west to MZB, and crossed MZB at
+**5,002 ft**. The controller flew a simulated vector direct BAKEL at 5,000 ft.
+The G1000 flight plan was not loaded; the route was flown with direct surface
+control. NAV1 was tuned to I-MYF **111.95** for the ILS.
+
+The cumulative climb from observed liftoff to 2,000 ft was about
+**549 ft/NM**, but the lowest sampled half-NM window was **493 ft/NM** near
+1,800 ft. Because that is below the chart's **500 ft/NM** minimum, this run
+does not qualify the departure climb gradient. The climb controller or loading
+must be improved and the segment reflown before claiming chart compliance.
+
+The first approach missed the MIBBY altitude constraint: its sampled low was
+about **4,120 ft**, below the charted 4,200 ft segment floor. The subsequent
+ILS final was unstable at the 1.2 NM landing handoff (about two glideslope
+dots high), so the controller went around. It climbed on runway heading to
+**1,100 ft**, then on **270° magnetic**. During the climb, the user directed
+a vector to BAKEL near 3,450 ft; the aircraft turned direct and climbed to
+5,000 ft. This vector superseded the published CARIF continuation in the
+simulated trial, and no live ATC clearance was received.
+
+On the second approach, the sampled segment lows and fix-crossing altitudes
+were above the charted floors:
+
+| Fix | Charted floor | Sampled low on leg | Fix crossing |
+| --- | ---: | ---: | ---: |
+| MIBBY | 4,200 ft | 4,220 ft | 4,309 ft |
+| NESTY | 3,600 ft | 3,667 ft | 3,717 ft |
+| PENYY | 2,500 ft | 2,558 ft | 2,641 ft |
+
+At the ILS-to-landing handoff, the localizer and glideslope were each near
+**0.1 dot** from center, with about **73 KIAS**. The landing controller crossed
+the physical threshold about **37 ft AGL** and **64 KIAS**, touched down
+**399 m** along runway 28R and **0.1 m** from centerline at about
+**−124 ft/min**, then stopped **558 m** along the runway. The simulator was
+paused with bridge authority released after the stop.
+
+The bridge's airborne 40 KIAS minimum erroneously remained active after
+touchdown. It paused the aircraft on the runway at about 40 KIAS; a bounded
+rollout guard was installed and the same paused aircraft continued to a stop.
+Raw trace fragments therefore do **not** constitute an uninterrupted landing
+qualification replay. The simulator's older navigation data, absence of live
+ATC, lack of an audio radio-ident check, and lack of machine-verified runway
+visual references at decision altitude also limit what can be claimed. The
+independent fragment scorer and hashes are in
+[the flight evidence](evidence/ai_pilot_ksee_kmyf_20261011.json).
+
+The next controller interface should accept bounded, authenticated heading,
+direct-to and altitude changes during flight. This attended runner still
+pauses for route-code changes; live vector reassignment has not yet been
+implemented or qualified.

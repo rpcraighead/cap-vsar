@@ -24,7 +24,7 @@ from services.ai_pilot.experiment import BridgeClient, Recorder, Scenario, diges
 from services.ai_pilot.control_ownership import ControllerLock
 
 
-def inventory(xplane, include_landing=False, include_surface=False):
+def inventory(xplane, include_landing=False, include_surface=False, include_mission=False):
     aircraft = xplane / "Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf"
     plugins = xplane / "Resources/plugins/PythonPlugins"
     def git(*args):
@@ -37,6 +37,8 @@ def inventory(xplane, include_landing=False, include_surface=False):
         sources.append(ROOT / "xplane/capvsar_landing.py")
     if include_surface:
         sources.append(ROOT / "xplane/capvsar_surface.py")
+    if include_mission:
+        sources.append(ROOT / "xplane/capvsar_mission.py")
     installed = [plugins / path.name for path in sources]
     return {
         "repository": str(ROOT), "commit": git("rev-parse", "HEAD"),
@@ -67,7 +69,8 @@ def stage_observer(destination, qualification_aircraft=None, mode="qualification
     names = ("PI_capvsar_flight_control.py", "capvsar_flight_control_core.py",
              "capvsar_flight_control_mapping.py", "capvsar_telemetry.py", "capvsar_qualification.py")
     extras = (("capvsar_landing.py",) if mode == "landing" else
-              ("capvsar_surface.py",) if mode == "surface" else ())
+              ("capvsar_surface.py",) if mode == "surface" else
+              ("capvsar_mission.py",) if mode == "mission" else ())
     for name in names + extras:
         shutil.copy2(ROOT / "xplane" / name, destination / name)
     session = secrets.token_hex(16)
@@ -76,7 +79,7 @@ def stage_observer(destination, qualification_aircraft=None, mode="qualification
               "socket_path": f"/tmp/capvsar-flight-control-{session}.sock"}
     if qualification_aircraft is not None:
         config.update(mode=mode, aircraft_path=str(qualification_aircraft),
-                      expires_unix_s=time.time() + (10800 if mode in ("landing", "surface") else 3600))
+                      expires_unix_s=time.time() + (14300 if mode == "mission" else 10800 if mode in ("landing", "surface") else 3600))
         if mode == "landing":
             from xplane.capvsar_landing import RUNWAYS
             if runway not in RUNWAYS:
@@ -171,6 +174,9 @@ def main():
     surface = commands.add_parser("stage-surface")
     surface.add_argument("destination", type=Path)
     surface.add_argument("--aircraft", type=Path, required=True)
+    mission = commands.add_parser("stage-mission")
+    mission.add_argument("destination", type=Path)
+    mission.add_argument("--aircraft", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "observe":
         if not 2 <= args.seconds <= 600:
@@ -181,8 +187,8 @@ def main():
         print(json.dumps(result, indent=2))
         return 0 if result["outcome"] == "PASS" else 1
     else:
-        stage_observer(args.destination, args.aircraft if args.command in ("stage-qualification", "stage-landing", "stage-surface") else None,
-                       mode="landing" if args.command == "stage-landing" else "surface" if args.command == "stage-surface" else "qualification",
+        stage_observer(args.destination, args.aircraft if args.command in ("stage-qualification", "stage-landing", "stage-surface", "stage-mission") else None,
+                       mode="landing" if args.command == "stage-landing" else "surface" if args.command == "stage-surface" else "mission" if args.command == "stage-mission" else "qualification",
                        runway=args.runway if args.command == "stage-landing" else "KMYF 28R")
     return 0
 

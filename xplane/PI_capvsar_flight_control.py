@@ -36,6 +36,14 @@ except ModuleNotFoundError as error:
     class SurfaceLab:
         def __init__(self, *_args, **_kwargs):
             raise RuntimeError("Surface laboratory module is not installed")
+try:
+    from capvsar_mission import MissionLab
+except ModuleNotFoundError as error:
+    if error.name != "capvsar_mission":
+        raise
+    class MissionLab:
+        def __init__(self, *_args, **_kwargs):
+            raise RuntimeError("Mission laboratory module is not installed")
 
 CONFIG = Path(__file__).with_name("capvsar_flight_control_config.json")
 LIVE_PLUGIN_QUALIFIED = False
@@ -167,7 +175,7 @@ class PythonInterface:
 
     def XPluginStart(self):
         config = json.loads(CONFIG.read_text()) if CONFIG.is_file() else None
-        if config and (LIVE_PLUGIN_QUALIFIED or config.get("mode") in ("observe", "qualification", "landing", "surface")):
+        if config and (LIVE_PLUGIN_QUALIFIED or config.get("mode") in ("observe", "qualification", "landing", "surface", "mission")):
             self.observe_only = config.get("mode") == "observe"
             session = config["session"]
             candidate_prefix(session)
@@ -178,16 +186,17 @@ class PythonInterface:
             self.config = config
             landing = config.get("mode") == "landing"
             surface = config.get("mode") == "surface"
-            braked = landing or surface
-            self.core = ControlBridge(XPlaneSink(landing=braked, toe_brakes=surface), session,
+            mission = config.get("mode") == "mission"
+            braked = landing or surface or mission
+            self.core = ControlBridge(XPlaneSink(landing=braked, toe_brakes=surface or mission), session,
                                       atomic=config.get("protocol") == "atomic-v1",
                                       channels=CHANNELS + ("brake",) if braked else CHANNELS,
-                                      brake_max=1. if surface else .35)
+                                      brake_max=1. if surface or mission else .35)
             self.telemetry = Telemetry(xp, self.core.sink, session)
-            if config.get("mode") in ("qualification", "landing", "surface"):
+            if config.get("mode") in ("qualification", "landing", "surface", "mission"):
                 if not self.core.atomic:
                     raise ValueError("Qualification requires atomic-v1 protocol")
-                lab_type = SurfaceLab if surface else LandingLab if landing else QualificationLab
+                lab_type = MissionLab if mission else SurfaceLab if surface else LandingLab if landing else QualificationLab
                 self.lab = lab_type(xp, self.core.sink, config)
                 self.lab_sessions.add(session)
             if not self.observe_only and not self.core.atomic:
@@ -331,8 +340,8 @@ class PythonInterface:
                     result = self.lab.reset(self.core, **request)
                     self.lab_sessions.add(new_session)
                     self.core = ControlBridge(self.core.sink, new_session, atomic=True,
-                                              channels=CHANNELS + ("brake",) if isinstance(self.lab, (LandingLab, SurfaceLab)) else CHANNELS,
-                                              brake_max=1. if isinstance(self.lab, SurfaceLab) else .35)
+                                              channels=CHANNELS + ("brake",) if isinstance(self.lab, (LandingLab, SurfaceLab, MissionLab)) else CHANNELS,
+                                              brake_max=1. if isinstance(self.lab, (SurfaceLab, MissionLab)) else .35)
                     self.telemetry.session = new_session
                     self.snapshot = None
                     answer.put_nowait({**result, "bridge": self.core.status()})
@@ -438,7 +447,7 @@ class PythonInterface:
                 if self.lab and self.core.state == "ACTIVE":
                     self.lab.verify_identity()
                 self.core.tick()
-                if isinstance(self.lab, (LandingLab, SurfaceLab)):
+                if isinstance(self.lab, (LandingLab, SurfaceLab, MissionLab)):
                     left, right = self.core.sink.read_brakes()
                     self.actuator_readback = {
                         "wall_time_s": time.monotonic(), "frame_sequence": self.core.frame_sequence,
@@ -450,7 +459,7 @@ class PythonInterface:
     def capture_loop(self, sinceLast, elapsed, counter, refCon):
         try:
             self.snapshot = self.telemetry.capture(counter)
-            if isinstance(self.lab, (LandingLab, SurfaceLab)) and self.actuator_readback:
+            if isinstance(self.lab, (LandingLab, SurfaceLab, MissionLab)) and self.actuator_readback:
                 self.snapshot["actuator_readback"] = dict(self.actuator_readback)
             if self.lab:
                 self.lab.check_flight(self.snapshot, self.core)
