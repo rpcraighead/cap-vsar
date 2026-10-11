@@ -315,5 +315,100 @@ class AuthIsCheapAndOffTheLoop(Base):
                 ws.receive_json()
 
 
+class SortieLifecycle(Base):
+    """X2-9, X2-11, and the removal of hub.messages."""
+
+    def scenario(self):
+        r = self.client.post("/api/scenarios", json=SCENARIO, headers=self.instr)
+        self.assertEqual(r.status_code, 200, r.text)
+        return r.json()["id"]
+
+    def open_sorties(self):
+        with self.main.db() as c:
+            return [r["id"] for r in c.execute(
+                "SELECT id FROM sorties WHERE stopped IS NULL")]
+
+    def test_overlapping_starts_leave_the_hub_on_the_sortie_the_database_kept(self):
+        import sys
+        sid = self.scenario()
+        sorties = sys.modules["app.routers.sorties"]
+        real, calls = sorties.db_call, []
+
+        async def slow_first(fn, *a):
+            calls.append(1)
+            mine = len(calls)
+            out = await real(fn, *a)
+            if mine == 1:
+                await asyncio.sleep(0.4)     # the first start is slow to resume
+            return out
+
+        sorties.db_call = slow_first
+
+        async def go():
+            transport = httpx.ASGITransport(app=self.main.app)
+            async with httpx.AsyncClient(transport=transport,
+                                         base_url="http://testserver",
+                                         headers=self.instr) as c:
+                first = asyncio.create_task(c.post("/api/sorties", json={"scenario_id": sid}))
+                await asyncio.sleep(0.1)
+                second = await c.post("/api/sorties", json={"scenario_id": sid})
+                return (await first), second
+
+        try:
+            first, second = asyncio.run(go())
+        finally:
+            sorties.db_call = real
+        self.assertEqual((first.status_code, second.status_code), (200, 200))
+        self.assertEqual(self.open_sorties(), [self.main.hub.sortie["id"]],
+                         "hub.sortie is a sortie the database closed")
+        self.assertEqual(self.main.hub.sortie["id"], second.json()["id"])
+
+    def test_stop_is_idempotent_and_does_not_restamp(self):
+        sid, oid = run_sortie(self.main, self.client, headers=self.instr)
+        first = self.client.post("/api/sorties/stop", headers=self.instr)
+        self.assertEqual(first.status_code, 200)
+        stamp = first.json()["stopped"]
+        time.sleep(0.05)
+        again = self.client.post("/api/sorties/stop", headers=self.instr)
+        self.assertEqual(again.status_code, 200)
+        self.assertEqual(again.json()["stopped"], stamp)
+        with self.main.db() as c:
+            self.assertEqual(c.execute("SELECT stopped FROM sorties WHERE id=?",
+                                       (oid,)).fetchone()[0], stamp)
+
+    def test_stop_without_a_sortie_is_still_a_400(self):
+        self.assertEqual(self.client.post("/api/sorties/stop", headers=self.instr)
+                         .status_code, 400)
+
+    def test_deleting_the_scenario_of_a_running_sortie_is_refused(self):
+        sid, oid = run_sortie(self.main, self.client, headers=self.instr)
+        r = self.client.delete(f"/api/scenarios/{sid}", headers=self.instr)
+        self.assertEqual(r.status_code, 409, r.text)
+        with self.main.db() as c:
+            self.assertIsNotNone(c.execute("SELECT 1 FROM scenarios WHERE id=?",
+                                           (sid,)).fetchone())
+        self.client.post("/api/sorties/stop", headers=self.instr)
+        self.assertEqual(self.client.delete(f"/api/scenarios/{sid}", headers=self.instr)
+                         .status_code, 200)
+
+    def test_deleting_an_unused_scenario_still_works(self):
+        sid = self.scenario()
+        self.assertEqual(self.client.delete(f"/api/scenarios/{sid}", headers=self.instr)
+                         .status_code, 200)
+
+    def test_hub_keeps_no_message_list(self):
+        """hub.messages was filled by rehydrate and send_message and read by nothing:
+        /api/messages and the debrief read the messages table."""
+        run_sortie(self.main, self.client, headers=self.instr)
+        for _ in range(3):
+            self.client.post("/api/messages", headers=self.base, json={"body": "x"})
+        self.assertFalse(hasattr(self.main.hub, "messages"))
+        self.assertEqual(len(self.client.get("/api/messages", headers=self.base).json()), 3)
+        main2, client2, _ = build_app(db_path=self.db, instructor=INSTRUCTOR, base=BASE,
+                                      plugin=PLUGIN)
+        main2.rehydrate()
+        self.assertEqual(len(main2.list_messages(since=0.0)), 3)
+
+
 if __name__ == "__main__":
     unittest.main()

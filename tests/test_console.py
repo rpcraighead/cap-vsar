@@ -567,7 +567,6 @@ class F4Backfill(unittest.TestCase):
                 'INSERT INTO messages (sortie_id, t, sender, recipient, body)'
                 ' VALUES (?,?,?,?,?)',
                 (self.oid, when, 'MISSION BASE', 'ALL', body))
-        self.main.hub.messages.clear()
 
         rows = self.main.list_messages(since=1000.0)
         self.assertEqual([r['body'] for r in rows], ['missed'])

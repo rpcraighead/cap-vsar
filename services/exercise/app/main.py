@@ -54,7 +54,6 @@ def rehydrate():
 
     Live state was in-process only, so a container restart mid-exercise
     orphaned the sortie: positions were discarded because hub.sortie was None,
-    /api/messages answered empty because it reads memory rather than the table,
     and the row kept stopped=NULL forever. An exercise cannot depend on the
     console never restarting.
     """
@@ -79,16 +78,10 @@ def rehydrate():
             except (TypeError, ValueError):
                 pass
         hub.sortie.pop("effects", None)
-        hub.messages = [
-            {"type": "message", **dict(m)} for m in reversed(c.execute(
-                "SELECT t, sender, recipient, body FROM messages"
-                " WHERE sortie_id=? ORDER BY t DESC LIMIT 100",
-                (row["id"],)).fetchall())]
     # Aircraft are deliberately not restored: their positions are seconds old
     # and the plugins will re-report within a few seconds anyway. A stale
     # aircraft on the map is worse than a briefly empty one.
-    log.info("resumed sortie %s (%d messages)", hub.sortie["id"],
-             len(hub.messages))
+    log.info("resumed sortie %s", hub.sortie["id"])
 
 
 @asynccontextmanager

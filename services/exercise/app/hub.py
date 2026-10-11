@@ -27,8 +27,23 @@ class Hub:
         self.aircraft: dict[str, dict] = {}
         self.sortie: dict | None = None
         self.scenario: dict | None = None
-        self.messages: list[dict] = []
         self.truth_clients: set[WebSocket] = set()   # sockets that logged in as instructor
+        self._lock_loop = None
+        self._lock: asyncio.Lock | None = None
+
+    def sortie_lock(self) -> asyncio.Lock:
+        """The lock that serialises start, stop, reveal, effects and scenario delete (X2-9).
+
+        Each of those reads hub.sortie, awaits a worker thread and then writes
+        hub.sortie back, so two of them interleaving could leave the hub on a
+        sortie the database had closed. One lock per event loop: the console
+        has exactly one, but a test builds a new loop per request and a lock
+        bound to a finished loop raises on contention.
+        """
+        loop = asyncio.get_running_loop()
+        if self._lock is None or self._lock_loop is not loop:
+            self._lock, self._lock_loop = asyncio.Lock(), loop
+        return self._lock
 
     async def broadcast(self, msg: dict):
         """Send to every console at once, and drop anyone who cannot keep up.

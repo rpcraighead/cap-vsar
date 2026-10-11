@@ -54,7 +54,6 @@ async def send_message(m: MessageIn, request: Request):
         message_id = await db_call(go)
     msg = {"type": "message", "id": message_id, "t": now, "sender": sender,
            "recipient": m.recipient, "body": m.body}
-    hub.messages.append(msg)
     await hub.broadcast(msg)
     return {"ok": True}
 

@@ -62,9 +62,29 @@ def create_scenario(s: ScenarioIn):
 
 
 @router.delete("/api/scenarios/{sid}", dependencies=[instructor_only])
-def delete_scenario(sid: str):
-    with db() as c:
-        c.execute("DELETE FROM scenarios WHERE id=?", (sid,))
+async def delete_scenario(sid: str):
+    """Delete a scenario definition. Refused while a sortie is flying it.
+
+    X2-11: deleting the scenario of a running sortie stranded it: rehydrate()
+    returns early when the scenario row is gone, so after a restart the sortie
+    was never resumed and never closed.
+    """
+    def go():
+        with db() as c:
+            open_sortie = c.execute(
+                "SELECT id FROM sorties WHERE scenario_id=? AND stopped IS NULL"
+                " LIMIT 1", (sid,)).fetchone()
+            if open_sortie:
+                return open_sortie["id"]
+            c.execute("DELETE FROM scenarios WHERE id=?", (sid,))
+        return None
+
+    async with hub.sortie_lock():
+        blocking = await db_call(go)
+    if blocking:
+        raise HTTPException(
+            409, f"Sortie {blocking} is still running on this scenario. "
+                 f"Stop it before deleting the scenario.")
     return {"ok": True}
 
 
