@@ -53,6 +53,77 @@ class TestMissionMasterSwitch(unittest.TestCase):
                              "switch must not respond once the guard is closed again")
 
 
+class TestReloadAndProducerPresentPath(unittest.TestCase):
+    """I2-7: the producers publish once at load, and the consumers are tested
+    with the producers actually loaded into the same Air Manager state."""
+
+    def test_master_switch_reload_republishes_its_drawn_state(self):
+        with AirManager() as am:
+            # A previous session left the variable OFF; AM keeps variables
+            # across an instrument reload, and the reloaded switch draws ON.
+            am.write_si_variable("cap_mission_master_on", False)
+            am.load_instrument("cap-mission-master-switch")
+            self.assertTrue(am.read_si_variable("cap_mission_master_on"))
+
+    def test_cb_panel_reload_republishes_its_drawn_state(self):
+        with AirManager() as am:
+            am.write_si_variable("cap_mission_cb_fm_in", False)
+            am.write_si_variable("cap_mission_cb_df_in", False)
+            am.load_instrument("cap-mission-cb-panel")
+            for var in ("cap_mission_cb_df_in", "cap_mission_cb_fm_in", "cap_mission_cb_audio_in"):
+                self.assertTrue(am.read_si_variable(var), var)
+
+    def test_stale_off_does_not_keep_a_reloaded_consumer_dark(self):
+        """A consumer that subscribed to the stale OFF would stay unpowered until
+        someone worked the switch; the producer's load-time publish fixes that."""
+        with AirManager() as am:
+            am.write_si_variable("cap_mission_cb_fm_in", False)
+            am.load_instrument("cap-fm-tdfm-136b")
+            am.set_avionics_power(True, 28.0)
+            self.assertFalse(am.read_si_variable("cap_fm_power_on"))
+            am.load_instrument("cap-mission-cb-panel")
+            self.assertTrue(am.read_si_variable("cap_fm_power_on"))
+
+    def _all_loaded(self, consumer_first):
+        am = AirManager()
+        order = ["cap-fm-tdfm-136b", "cap-mission-master-switch", "cap-mission-cb-panel"]
+        if not consumer_first:
+            order = order[1:] + order[:1]
+        for name in order:
+            am.load_instrument(name)
+        am.set_avionics_power(True, 28.0)
+        return am
+
+    def test_master_switch_cuts_and_restores_a_loaded_tdfm(self):
+        for consumer_first in (True, False):
+            with self.subTest(consumer_first=consumer_first):
+                am = self._all_loaded(consumer_first)
+                try:
+                    self.assertTrue(am.read_si_variable("cap_fm_power_on"))
+                    am.click_at(110 + 5, 40 + 5)                  # lift the guard
+                    am.click_at(110 + 40, 74 + 28)                # switch OFF
+                    self.assertFalse(am.read_si_variable("cap_mission_master_on"))
+                    self.assertFalse(am.read_si_variable("cap_fm_power_on"))
+                    am.click_at(110 + 40, 74 + 28)                # switch ON
+                    self.assertTrue(am.read_si_variable("cap_fm_power_on"))
+                finally:
+                    am.close()
+
+    def test_pulling_the_fm_breaker_cuts_a_loaded_tdfm_only(self):
+        for consumer_first in (True, False):
+            with self.subTest(consumer_first=consumer_first):
+                am = self._all_loaded(consumer_first)
+                try:
+                    x, y = TestMissionCBPanel.BREAKER_BUTTONS["fm"]
+                    am.click_at(x + 10, y + 10)
+                    self.assertFalse(am.read_si_variable("cap_mission_cb_fm_in"))
+                    self.assertFalse(am.read_si_variable("cap_fm_power_on"))
+                    am.click_at(x + 10, y + 10)
+                    self.assertTrue(am.read_si_variable("cap_fm_power_on"))
+                finally:
+                    am.close()
+
+
 class TestMissionCBPanel(unittest.TestCase):
     BREAKER_BUTTONS = {"df": (54, 46), "fm": (228, 46), "audio": (401, 46)}
     VARS = {"df": "cap_mission_cb_df_in", "fm": "cap_mission_cb_fm_in",

@@ -49,6 +49,13 @@ local function publish(b)
     si_variable_write(b.var, b.in_state)
 end
 
+-- Publish every breaker once at load, so a reload (Air Manager keeps the
+-- variables) cannot leave the bus saying OUT for a breaker drawn IN, and a
+-- consumer loaded earlier hears the producer arrive.
+for _, b in ipairs(BREAKERS) do
+    publish(b)
+end
+
 local function draw()
     _rect(0, 0, CANVAS_W, CANVAS_H); _fill("#1c1f26")
     _rect(2, 2, CANVAS_W - 4, CANVAS_H - 4); _stroke("#3a3f4a", 2)
