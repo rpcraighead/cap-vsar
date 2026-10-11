@@ -139,13 +139,6 @@ button.active{background:var(--blue);color:#fff;border-color:var(--blue)}
 .login-error-box{background:#F8D7DA;border:1px solid #F5C6CB;color:#721C24;padding:8px 12px;border-radius:4px;font-size:12px;margin-bottom:16px;text-align:center}
 .code-input{font-size:22px;font-weight:800;letter-spacing:.15em;text-align:center;text-transform:uppercase;padding:10px;border:2px solid var(--blue);border-radius:6px}
 .btn-block{width:100%;text-align:center;padding:12px;font-size:15px}
-.login-shortcuts-section{margin-top:24px;border-top:1px solid var(--line);padding-top:16px}
-.shortcuts-title{font-size:11px;font-weight:700;color:var(--grey);text-transform:uppercase;margin-bottom:10px;text-align:center}
-.shortcuts-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.btn-code-shortcut{padding:8px;background:var(--bg);border:1px solid var(--line);border-radius:4px;display:flex;flex-direction:column;align-items:center;cursor:pointer}
-.btn-code-shortcut:hover{background:var(--pale);border-color:var(--blue)}
-.btn-code-shortcut b{color:var(--navy);font-size:13px;font-family:Consolas,monospace}
-.btn-code-shortcut span{color:var(--grey);font-size:10.5px;margin-top:2px}
 .login-footer-notice{margin-top:24px;text-align:center;font-size:9.5px;color:var(--grey);letter-spacing:.06em}
 
 /* Print Stylesheet for Badges */

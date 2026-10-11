@@ -16,21 +16,26 @@
 <details><summary>Windows</summary><p>Open the downloaded certificate → Install Certificate → Current User. Choose “Place all certificates in the following store” and select “Trusted Root Certification Authorities.” Finish the import, then restart your browser. A managed computer may require your administrator.</p></details>
 <details><summary>Mac</summary><p>Open the downloaded certificate in Keychain Access and add it to your login keychain. Open the certificate’s Trust settings and trust it for SSL. Reopen your browser. See <a href="https://support.apple.com/guide/keychain-access/change-the-trust-settings-of-a-certificate-kyca11871/mac">Apple’s Keychain guide</a>.</p></details>
 <details><summary>Android / other devices</summary><p>Install the downloaded file as a CA certificate in the device’s security or certificate settings. The menu varies by manufacturer. Restart the browser. On a managed tablet, ask its administrator to install the mission server certificate.</p></details>
-<p><a class="button" href="https://192.0.2.151/radio">Open secure mission radio ↗</a></p>
+<p><a class="button" id="secureRadio" href="/radio">Open secure mission radio ↗</a></p>
 <h2>Start a radio session</h2>
 <ol>
 <li>Pair your Bluetooth headset in the tablet or computer’s settings. Select it for both microphone and sound output. A wired headset also works.</li>
-<li>Open the secure radio page, enter your callsign and select your mission net. Choose either radio face.</li>
-<li>Press <strong>Join mission net</strong> and allow microphone access. Choose the headset microphone from the list after permission is granted.</li>
+<li>Open the secure radio page, enter your callsign and select your mission nets. Choose either radio face. Your station has two radios: the tactical radio (the large instrument) and the airband radio below it. Each listens to its own net, and the two cannot share one.</li>
+<li>Press <strong>Join mission net</strong> and allow microphone access. Both radios join together. Choose the headset microphone from the list after permission is granted.</li>
 <li>Press <strong>Test headset sound</strong>. If sound comes from the device, select the headset in the app’s output list or in the device’s audio controls. Some browsers use only the system output selection.</li>
-<li>Hold the large <strong>HOLD TO TALK</strong> button to transmit. On a computer, you can hold the <strong>spacebar</strong> when you are not typing or adjusting a control. Release to listen.</li>
+<li>Under <strong>PTT transmitter</strong>, pick the radio you want to speak on, then hold the large <strong>HOLD TO TALK</strong> button to transmit. Only that radio transmits; both keep receiving. On a computer, you can hold the <strong>spacebar</strong> when you are not typing or adjusting a control. Release to listen.</li>
 </ol>
 <aside>Keep the radio page visible and the device awake. Switching apps, locking the screen or losing the connection ends transmission. After 60 seconds, release PTT before speaking again. Bluetooth headset call buttons are not assigned as PTT.</aside>
 <h2>Radio faces and controls</h2>
 <p>The Motorola APX 4500 O2 and EFJohnson 5300 represent two CAP-documented mobile/base radio families. CAP training references show these families; they do not establish a nationwide ranking of the two most numerous models.</p>
 <figure><img src="/static/radio-art/apx4500.svg" alt="Motorola APX 4500 O2 instrument face"><figcaption>Motorola APX 4500 · O2 control head</figcaption></figure>
 <figure><img src="/static/radio-art/efj5300.svg" alt="EFJohnson 5300 instrument face"><figcaption>EFJohnson 5300 · mobile/base control head</figcaption></figure>
-<p>The displays show training net names and your callsign. Power, net selection, home and volume controls operate the web station. The two faces share one active radio connection. Printed scan, squelch, monitor and emergency controls are artwork; those hardware functions are not simulated. This station listens to one selected net at a time.</p>
+<p>The displays show training net names and your callsign. Power, net selection, home and volume controls operate the web station. The two faces are two looks for the same tactical radio. The EFJohnson face’s MON key opens its squelch so weak signals are audible; the other printed scan, squelch and emergency controls are artwork, and those hardware functions are not simulated.</p>
+<h2>Two radios, one operator</h2>
+<p>Each station carries a second receiver, the <strong>airband radio</strong>, with its own net selector and volume. Both radios choose from the same four mission nets (the airband radio is not a connection to aviation frequencies), and the station will not let both sit on one net: moving one onto the other’s net moves the other radio. Each radio has its own sidetones, and a fault on the airband radio never takes down the tactical radio.</p>
+<p>Because each operator holds two voice connections, the server has room for eight stations running both radios at once. A ninth operator still gets the tactical radio, but the airband radio will report that it could not connect.</p>
+<h2>The communications log (CAP Form 110)</h2>
+<p>Below the radios is the Form 110 log. Every transmission, yours and everyone else’s on either radio, adds a row automatically with the date, Zulu time, net, who keyed and for how long. Click a row’s <strong>Traffic</strong> cell to write in what was passed; <strong>Add entry</strong> records something you heard another way. <strong>Export CAPF-110</strong> saves a text file. The log is kept in this browser tab, so it survives a reload but not closing the tab; export it before you finish. It is never sent to the console and is not an actual mission record.</p>
 <p>Mission audio travels through the existing Mumble server. It does not transmit over an actual VHF radio or provide an ATC connection. Use exercise traffic procedures.</p>
 <h2>References</h2>
 <ul>
@@ -40,4 +45,17 @@
 </ul>
 <small>CAP V-SAR · Mission base training station</small>
 </main>
+<script>
+// The link has to follow whatever address this page was opened on: a tablet on
+// the mission Wi-Fi reaches the server by IP, a laptop by name. Over plain HTTP
+// (the certificate download page) it upgrades to HTTPS; the relative /radio
+// href stands if scripting is off, because the server redirects HTTP to HTTPS.
+(function () {
+  var link = document.getElementById('secureRadio');
+  if (link) {
+    var host = location.hostname;
+    link.href = 'https://' + (host.indexOf(':') >= 0 ? '[' + host + ']' : host) + '/radio';
+  }
+})();
+</script>
 </html>

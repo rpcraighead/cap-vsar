@@ -2,12 +2,7 @@
 // highest-value artefact the system produces, so it always shows the answer.
 const $ = id => document.getElementById(id);
 
-// F-6: nothing escapes server strings on the way out, and any LAN client can
-// POST message bodies, bearing notes and callsigns. Escape every server value
-// interpolated into HTML. Values already passed through toFixed() or
-// Math.round() are provably numeric and are left alone.
-const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c =>
-  ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+// esc(), planeIcon and fmtDur come from charts.js.
 
 const map = L.map('map').setView([33.15, -117.18], 11);
 capvsarCharts(map, {view: 'debrief'});
@@ -39,12 +34,6 @@ const headingOf = (p, prev) => {
   return Math.atan2(dx, p.lat - prev.lat) * 180 / Math.PI;
 };
 
-const planeIcon = c => L.divIcon({className:'', iconSize:[26,26], html:
-  `<svg width="26" height="26" viewBox="0 0 24 24" style="transform:rotate(${c}deg)">
-     <path d="M12 2 L15 11 L22 13 L22 15 L13.5 14 L13 20 L16 22 L16 23 L12 22 L8 23 L8 22 L11 20 L10.5 14 L2 15 L2 13 L9 11 Z"
-       fill="#2e5496" stroke="#1f3864" stroke-width="0.8"/></svg>`});
-
-const fmt = s => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(Math.floor(s%60)).padStart(2,'0')}`;
 const R_NM = 3440.065;
 const distNm = (a, b, c, d) => {
   const r = Math.PI/180, dla=(c-a)*r, dlo=(d-b)*r;
@@ -52,8 +41,17 @@ const distNm = (a, b, c, d) => {
   return 2*R_NM*Math.asin(Math.min(1, Math.sqrt(h)));
 };
 
+// F2-7: neither fetch checked .ok or caught, so a 403/503 either threw out of
+// the page or painted "undefined" into the selector. Say what failed.
+function debriefStatus(text) { $('sortieInfo').textContent = text; }
+
 async function loadList() {
-  const list = await (await fetch('/api/sorties')).json();
+  let list;
+  try {
+    const r = await vsarFetch('/api/sorties');
+    if (!r.ok) { debriefStatus(`Sorties could not be loaded (HTTP ${r.status}).`); return; }
+    list = await r.json();
+  } catch (e) { debriefStatus('Sorties could not be loaded: the console is unreachable.'); return; }
   $('sortieSel').innerHTML = list.map(s => {
     const d = new Date(s.started*1000).toISOString().slice(0,16).replace('T',' ');
     return `<option value="${esc(s.id)}">${d}Z — ${esc(s.name)} (${esc(s.points)} pts)</option>`;
@@ -61,15 +59,36 @@ async function loadList() {
   if (list.length) load($('sortieSel').value);
 }
 
+// Forget the previous sortie before anything about the next one is known. The
+// early return below used to leave the old callsigns in `order`, so seek()
+// went on indexing a `groups` that no longer held them, on every 250 ms tick.
+function clearSortie() {
+  stop();
+  data = null; groups = {}; order = []; acMarkers = {}; flownLines = {};
+  layers.clearLayers(); beacon = ring = null;
+  $('result').textContent = '\u2014';
+  $('events').textContent = '\u2014';
+  $('sortieInfo').textContent = '';
+  $('tlabel').textContent = fmtDur(0);
+  $('slider').value = 0;
+}
+
+let loadSeq = 0;
 async function load(id) {
   if (!id) return;
-  data = await (await fetch(`/api/sorties/${id}/track`)).json();
-  layers.clearLayers();
-  beacon = ring = null;
-  acMarkers = {}; flownLines = {};
+  clearSortie();
+  const mine = ++loadSeq;
+  let loaded;
+  try {
+    const r = await vsarFetch(`/api/sorties/${encodeURIComponent(id)}/track`);
+    if (!r.ok) { debriefStatus(`That sortie could not be loaded (HTTP ${r.status}).`); return; }
+    loaded = await r.json();
+  } catch (e) { debriefStatus('That sortie could not be loaded: the console is unreachable.'); return; }
+  if (mine !== loadSeq) return;   // a newer selection superseded this one
+  data = loaded;
 
   const P = data.positions;
-  if (!P.length) { $('sortieInfo').textContent = 'no positions recorded for this sortie'; return; }
+  if (!P.length) { data = null; debriefStatus('no positions recorded for this sortie'); return; }
   t0 = P[0].t; t1 = P[P.length-1].t;
   $('slider').value = 0;
 
@@ -97,7 +116,7 @@ async function load(id) {
 
   $('sortieInfo').innerHTML =
     `<b>${esc($('sortieSel').selectedOptions[0].text.split(' — ')[1] || '')}</b>
-     <div class="df">${P.length} position reports over ${fmt(t1-t0)}
+     <div class="df">${P.length} position reports over ${fmtDur(t1-t0)}
      &middot; ${data.bearings.length} bearing cuts &middot; ${data.messages.length} messages</div>`;
 
   // Scoring, per aircraft: how close each got, and how efficiently it searched.
@@ -114,7 +133,7 @@ async function load(id) {
       const verdict = best < 0.5 ? 'overhead the beacon'
                     : best < 2   ? 'localised' : 'did not close';
       return `<div style="border-left:3px solid ${AC_COLORS[i % AC_COLORS.length]};padding-left:8px;margin-bottom:8px">
-         <div><b>${esc(cs)}</b> — closest approach <b>${best.toFixed(2)} nm</b> at ${fmt(bestT)}</div>
+         <div><b>${esc(cs)}</b> — closest approach <b>${best.toFixed(2)} nm</b> at ${fmtDur(bestT)}</div>
          <div class="df">track flown ${flownNm.toFixed(1)} nm &middot; direct line ${direct.toFixed(1)} nm
          &middot; efficiency ${(direct/Math.max(flownNm,0.01)*100).toFixed(0)}%</div>
          <div class="df">${verdict}</div></div>`;
@@ -128,7 +147,7 @@ async function load(id) {
 function seek(frac) {
   if (!data) return;
   const t = t0 + (t1 - t0) * frac;
-  $('tlabel').textContent = fmt(t - t0);
+  $('tlabel').textContent = fmtDur(t - t0);
 
   order.forEach(cs => {
     const upto = groups[cs].filter(p => p.t <= t);
@@ -152,12 +171,12 @@ function seek(frac) {
     ev.push({t: m.t, s: `<b>${esc(m.sender)} &rarr; ${esc(m.recipient)}</b> ${esc(m.body)}`}));
   ev.sort((a,b) => b.t - a.t);
   $('events').innerHTML = ev.length
-    ? ev.map(e => `<div class="brg">${fmt(e.t - t0)} &nbsp; ${e.s}</div>`).join('')
+    ? ev.map(e => `<div class="brg">${fmtDur(e.t - t0)} &nbsp; ${e.s}</div>`).join('')
     : '—';
 }
 
 $('slider').oninput = e => seek(e.target.value / 100);
-$('sortieSel').onchange = e => { stop(); load(e.target.value); };
+$('sortieSel').onchange = e => { load(e.target.value); };
 $('play').onclick = () => playing ? stop() : start();
 
 function start() {
@@ -171,5 +190,5 @@ function start() {
 }
 function stop() { playing = false; $('play').textContent = 'Play'; clearInterval(timer); }
 
-setInterval(() => $('clock').textContent = new Date().toUTCString().slice(17,25) + 'Z', 1000);
+vsarStartClock();
 loadList();

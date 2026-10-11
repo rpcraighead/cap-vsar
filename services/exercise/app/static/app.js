@@ -1,11 +1,7 @@
 const $ = id => document.getElementById(id);
 
-// F-6: nothing escapes server strings on the way out, and any LAN client can
-// POST message bodies, bearing notes and callsigns. Escape every server value
-// interpolated into HTML. Values already passed through toFixed() or
-// Math.round() are provably numeric and are left alone.
-const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c =>
-  ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+// esc(), planeIcon, fmtDur, the socket, clock and auth badge: charts.js.
+// The great-circle geometry (bearingDestination): geodesy.js.
 
 const map = L.map('map').setView([33.15, -117.18], 11);
 capvsarCharts(map, {view: 'instructor'});
@@ -23,27 +19,49 @@ const bearingLayer = L.layerGroup().addTo(map);
 const bearingLog = [];
 let followed = false;
 
-const planeIcon = c => L.divIcon({className:'', iconSize:[26,26], html:
-  `<svg width="26" height="26" viewBox="0 0 24 24" style="transform:rotate(${c}deg)">
-     <path d="M12 2 L15 11 L22 13 L22 15 L13.5 14 L13 20 L16 22 L16 23 L12 22 L8 23 L8 22 L11 20 L10.5 14 L2 15 L2 13 L9 11 Z"
-       fill="#2e5496" stroke="#1f3864" stroke-width="0.8"/></svg>`});
-
 // ---------------------------------------------------------------- websocket
+let sortieId = null, lastBearingT = 0;
+const seenBearings = new Set();
+
 function connect() {
-  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
-  ws.onopen  = () => { $('status').textContent = 'live'; $('status').className = 'status online'; };
-  ws.onclose = () => { $('status').textContent = 'reconnecting'; $('status').className = 'status offline';
-                       setTimeout(connect, 2000); };
-  ws.onmessage = e => {
-    const m = JSON.parse(e.data);
-    if (m.type === 'state')   { state = m; render(); }
-    if (m.type === 'bearing') { addBearing(m); }
-  };
+  vsarConnect({
+    onOpen: () => backfill(),
+    onMessage: m => {
+      if (m.type === 'state')   { state = m; render(); }
+      if (m.type === 'bearing') { addBearing(m); }
+    },
+  });
+}
+
+// A new sortie, seen by whichever console pressed Start (or none: this page
+// may have been opened mid-sortie, or reloaded). Everything drawn belonged to
+// the last one. The aircraft markers go too: render() only builds a track line
+// when it builds a marker, so keeping the markers and dropping the lines threw
+// on the next position report.
+function resetSortieView() {
+  bearingLayer.clearLayers(); bearingLog.length = 0;
+  seenBearings.clear(); lastBearingT = 0;
+  Object.values(trackLines).forEach(l => map.removeLayer(l)); trackLines = {};
+  Object.values(acLayers).forEach(l => map.removeLayer(l)); acLayers = {};
+  $('bearings').textContent = 'no bearings logged';
+  $('effects').dataset.for = '';
+}
+
+// F-4 for the instructor: bearings logged while this socket was down.
+async function backfill() {
+  try {
+    const since = Math.max(0, lastBearingT - .001);
+    const r = await fetch(`/api/bearings?since=${since}`);
+    if (r.ok) (await r.json()).forEach(addBearing);
+  } catch (e) { /* the next reconnect tries again */ }
 }
 
 // ------------------------------------------------------------------- render
 function render() {
   const s = state.sortie, sc = state.scenario;
+
+  const id = s ? s.id : null;
+  if (id !== sortieId) { resetSortieView(); sortieId = id; if (id) backfill(); }
 
   $('sortieBox').innerHTML = s
     ? `<b>${esc(s.name)}</b><br><span class="df">${s.stopped ? 'STOPPED' : 'running'} &middot; ${
@@ -119,24 +137,34 @@ function render() {
 }
 
 function addBearing(m) {
+  const key = m.id != null ? `bearing:${m.id}` :
+    `bearing:${m.t}:${m.callsign}:${m.bearing_true}`;
+  if (seenBearings.has(key)) return;
+  seenBearings.add(key); lastBearingT = Math.max(lastBearingT, m.t || 0);
   bearingLog.unshift(m);
-  const lat1 = m.lat * Math.PI/180;
-  const R = 40 / 60; // 40 nm ray, in degrees of latitude
-  const brg = m.bearing_true * Math.PI/180;
-  const lat2 = m.lat + R * Math.cos(brg);
-  const lon2 = m.lon + R * Math.sin(brg) / Math.cos(lat1);
-  L.polyline([[m.lat, m.lon], [lat2, lon2]],
+  // The same great-circle ray the mission base draws (geodesy.js), not a flat
+  // approximation of it.
+  const endpoint = bearingDestination(m.lat, m.lon, m.bearing_true, 40);
+  L.polyline([[m.lat, m.lon], endpoint],
     {color:'#c00000', weight:2, dashArray:'6,5', opacity:.8}).addTo(bearingLayer);
   $('bearings').innerHTML = bearingLog.map(b =>
     `<div class="brg">${esc(b.callsign)} &rarr; ${b.bearing_true.toFixed(0)}&deg;T${b.note ? ' &middot; ' + esc(b.note) : ''}</div>`
   ).join('');
 }
 
-const fmtDur = s => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(Math.floor(s%60)).padStart(2,'0')}`;
-
 // -------------------------------------------------------------------- wiring
 async function loadScenarios(selectId) {
-  const r = await fetch('/api/scenarios'); const list = await r.json();
+  // F2-9: an expired session or a 503 used to reach r.json() and leave the
+  // scenario list empty with nothing said.
+  const r = await fetch('/api/scenarios');
+  if (!r.ok) {
+    $('scenarioNotes').textContent = r.status === 401 || r.status === 403
+      ? 'Scenarios unavailable: log in again.'
+      : `Scenarios could not be loaded (HTTP ${r.status}).`;
+    if (r.status === 401 || r.status === 403) vsarGoToLogin();
+    return;
+  }
+  const list = await r.json();
   $('scenarioSel').innerHTML = list.map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
   if (selectId) $('scenarioSel').value = selectId;
   const show = () => {
@@ -146,22 +174,28 @@ async function loadScenarios(selectId) {
   $('scenarioSel').onchange = show; show();
 }
 
+// The view resets itself when the pushed state names a new sortie
+// (resetSortieView), so a Start the server refused leaves the old one on screen.
 $('startBtn').onclick = async () => {
-  await vsarFetch('/api/sorties', {method:'POST', headers:{'Content-Type':'application/json'},
+  const r = await vsarFetch('/api/sorties', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({scenario_id: $('scenarioSel').value})});
-  bearingLayer.clearLayers(); bearingLog.length = 0;
-  Object.values(trackLines).forEach(l => map.removeLayer(l)); trackLines = {};
-  $('bearings').textContent = 'no bearings logged';
-  $('effects').dataset.for = '';
+  if (!r.ok) await vsarReportFailure(r, 'Sortie not started');
 };
-$('stopBtn').onclick   = () => vsarFetch('/api/sorties/stop',   {method:'POST'});
-$('revealBtn').onclick = () => vsarFetch('/api/sorties/reveal', {method:'POST'});
+$('stopBtn').onclick = async () => {
+  const r = await vsarFetch('/api/sorties/stop', {method:'POST'});
+  if (!r.ok) await vsarReportFailure(r, 'Sortie not stopped');
+};
+$('revealBtn').onclick = async () => {
+  const r = await vsarFetch('/api/sorties/reveal', {method:'POST'});
+  if (!r.ok) await vsarReportFailure(r, 'Beacon not revealed');
+};
 $('brgAdd').onclick = async () => {
   const cs = $('brgCallsign').value.trim(), v = parseFloat($('brgValue').value);
   if (!cs || isNaN(v)) return;
   const r = await vsarFetch('/api/bearings', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({callsign: cs, bearing_true: v})});
   if (r.ok) $('brgValue').value = '';
+  else await vsarReportFailure(r, 'Bearing not logged');
 };
 
 // ------------------------------------------------------------- new scenario
@@ -274,28 +308,5 @@ $('nsCreate').onclick = async () => {
   $('nsName').value = ''; $('nsNotes').value = '';
 };
 
-async function initAuthBadge() {
-  try {
-    const res = await fetch('/api/auth/me');
-    if (res.ok) {
-      const data = await res.json();
-      if (data.authenticated && $('userBadge')) {
-        const title = data.title || (data.role ? data.role.toUpperCase() : 'Instructor');
-        const cs = data.callsign ? ` (${data.callsign})` : '';
-        $('userBadge').textContent = `\uD83D\uDC64 ${title}${cs}`;
-      }
-    }
-  } catch (e) {}
-
-  if ($('logoutBtn')) {
-    $('logoutBtn').onclick = async () => {
-      try {
-        await fetch('/api/auth/logout', {method: 'POST'});
-      } catch (e) {}
-      location.href = '/login';
-    };
-  }
-}
-
-setInterval(() => $('clock').textContent = new Date().toUTCString().slice(17, 25) + 'Z', 1000);
-nsRenderEffects(); loadScenarios(); connect(); initAuthBadge();
+vsarStartClock();
+nsRenderEffects(); loadScenarios(); connect(); vsarInitAuthBadge('Instructor');

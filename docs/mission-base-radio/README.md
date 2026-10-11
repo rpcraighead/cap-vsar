@@ -1,15 +1,17 @@
 # Mission base headset radio
 
-The web radio at `https://192.0.2.151/radio` connects tablet and computer
-operators to the existing CAP V-SAR Mumble mission nets. Select an APX 4500 or
-EFJohnson 5300 face, pair a headset in the device settings, enter a callsign,
-choose a net, and join. Hold the touch button or spacebar to speak; release to
-listen. Both skins use the same single active radio connection.
+The web radio at `https://<mission-host>/radio` (the server's name or address
+on the mission network; the pages build their own links from the address they
+were opened on) connects tablet and computer operators to the existing CAP V-SAR
+Mumble mission nets. Select an APX 4500 or EFJohnson 5300 face, pair a headset
+in the device settings, enter a callsign, choose a net for each radio, and join.
+Hold the touch button or spacebar to speak; release to listen. Both skins are
+the same tactical radio; the second receiver is described below.
 
 First-time setup is at
-`https://192.0.2.151/static/radio-help.html`.
+`https://<mission-host>/static/radio-help.html`.
 Install the server's public CA certificate from
-`http://192.0.2.151/radio-ca.crt`, then open the HTTPS radio page. This public
+`http://<mission-host>/radio-ca.crt`, then open the HTTPS radio page. This public
 certificate is the only plaintext response; every other HTTP path redirects to
 HTTPS. The certificate is generated locally by Caddy; each device must
 explicitly trust it. Its private key stays in Caddy's Docker data volume. No
@@ -21,6 +23,36 @@ microphone selection, output selection where `AudioContext.setSinkId` is
 supported, a local headset sound test, and receive volume. Safari and other
 browsers without output selection use the system audio route. Headset hardware
 call buttons are not mapped to PTT. Keep the page visible and device awake.
+
+## Two radios and the Form 110 log
+
+**Dual receiver (F-10).** Every operator holds two Mumble sessions: the
+*tactical radio* (the faceplate) and the *airband radio* (a second panel under
+it, "RADIO 02 / AIRBAND"). Each has its own net selector and volume, and a
+PTT-transmitter selector chooses which one keys; both keep receiving. Both
+radios pick from the same four mission nets (airband proper is PilotEdge's, in
+X-Plane, not a channel here), and the page keeps them on different nets: moving
+one onto the other's net moves the other. A failure on the airband radio stops
+only that radio, retried every five seconds; the tactical radio is torn down
+only by its own failures. Sidetones follow the keyed radio (P25 chirp and tail
+on tactical, AM click and squelch burst on airband, F-11), and the EFJohnson
+face's MON key opens that radio's squelch (F-12).
+
+**Session capacity.** `CAPVSAR_RADIO_MAX_SESSIONS` (default 16) counts
+sessions, not people, and a dual-radio desk uses two. Sixteen sessions is
+therefore **eight dual-radio desks** (`maxDualRadioOperators` in
+`/api/radio/config`). The ninth operator keeps the tactical radio and is told
+the airband radio could not connect.
+
+**CAP Form 110 (F-9).** The communications log is on the mission radio page,
+not only on `/radio-legacy`. Transmissions on either radio, sent or received,
+add a row (date, Zulu time, net, station, duration); the operator writes the
+traffic into the editable cell, or adds an entry for something heard another
+way. Export writes a fixed-width `CAPF110_<station>_<date>.txt`. The log is held
+in the page and autosaved to the tab's `sessionStorage` on every change, so a
+reload, back-swipe or iOS tab eviction restores it; closing the tab ends it, so
+export before finishing. Nothing is sent to the console and it is not an actual
+mission record.
 
 ## Radio selection and artwork
 
@@ -46,13 +78,14 @@ python3 scripts/make_base_radio_artwork.py
 ```
 
 The face controls provide power/join, channel/net selection, home, and volume
-where mapped. Hover/focus labels identify active controls. Printed SCAN, SQL,
-MON and emergency controls are visual references, not implemented hardware
-functions. Real radio softkey programming varies by fleet. Displays use
-training net names, not a CAP frequency/codeplug plan. There is no RF gateway,
-ATC bridge, dual watch, guard receiver, encryption emulation or audio recording.
-The older APX6500/Icom typed-message and Form 110 console remains at
-`/radio-legacy`; this new page does not automatically transcribe voice to it.
+where mapped, plus MON on the EFJohnson face. Hover/focus labels identify active
+controls. The other printed SCAN, SQL and emergency controls are visual
+references, not implemented hardware functions. Real radio softkey programming
+varies by fleet. Displays use training net names, not a CAP frequency/codeplug
+plan. There is no RF gateway, ATC bridge, scan or dual-watch emulation (the two
+receivers are independent), encryption emulation or audio recording. The older
+APX6500/Icom typed-message console remains at `/radio-legacy`; the new page
+logs transmissions to its own Form 110 but does not transcribe voice.
 
 ## Architecture
 

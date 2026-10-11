@@ -9,7 +9,6 @@ import hashlib
 import hmac
 import html
 import secrets
-import re
 from urllib.parse import parse_qs, quote
 
 import json
@@ -41,8 +40,6 @@ def login_page():
     page = (STATIC / "login.html").read_text()
     page = page.replace('maxlength="12"', 'maxlength="128"').replace(
         'placeholder="e.g. OBS-423"', 'placeholder="Full code from your badge"')
-    page = re.sub(r'    <div class="login-shortcuts-section">.*?(?=    <div class="login-footer-notice">)',
-                  '', page, flags=re.S)
     return HTMLResponse(page, headers={"Cache-Control": "no-store"})
 
 
