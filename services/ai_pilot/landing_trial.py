@@ -3,8 +3,12 @@ from __future__ import annotations
 
 import math
 
-from xplane.capvsar_landing import (AIRPORT_ELEV_FT, HEADING_TRUE_DEG,
+from xplane.capvsar_landing import (AIRPORT_ELEV_FT, GLIDEPATH_AIMPOINT_M, HEADING_TRUE_DEG,
                                    RUNWAY_LENGTH_M, runway_coordinates)
+
+# The unflared glidepath intersects 25 ft beyond the displaced threshold.
+TOUCHDOWN_MIN_M = GLIDEPATH_AIMPOINT_M
+TOUCHDOWN_MAX_M = GLIDEPATH_AIMPOINT_M + 400. * .3048
 
 
 def clamp(x, a, b):
@@ -36,6 +40,10 @@ class LandingController:
         self.last_heading = None
         self.heading_rate_dps = 0.
         self.heading_i = 0.
+        self.last_vvi = None
+        self.vvi_rate_fpmps = 0.
+        self.last_air_roll = 0.
+        self.touchdown_aileron = 0.
 
     def step(self, snapshot):
         v = snapshot["values"]
@@ -55,6 +63,10 @@ class LandingController:
                                      -30., 30.)
             self.heading_rate_dps += clamp(dt / .3, 0., 1.) * (raw_heading_rate - self.heading_rate_dps)
         self.last_heading = v["heading_true_deg"]
+        if self.last_vvi is not None:
+            raw_vvi_rate = clamp((v["vvi_fpm"] - self.last_vvi) / dt, -500., 500.)
+            self.vvi_rate_fpmps += clamp(dt / .5, 0., 1.) * (raw_vvi_rate - self.vvi_rate_fpmps)
+        self.last_vvi = v["vvi_fpm"]
         left_crosswind_mps = (v["wind_mps"] *
                               math.sin(math.radians(wrap180(HEADING_TRUE_DEG -
                                                           v["wind_from_true_deg"]))))
@@ -64,6 +76,7 @@ class LandingController:
         if v["on_ground"]:
             if self.touchdown_sim is None:
                 self.touchdown_sim = sim
+                self.touchdown_aileron = self.last_air_roll
             self.phase = "rollout"
         elif agl_ft < self.FLARE_START_AGL_FT and along > -50:
             if self.flare_started_sim is None:
@@ -74,6 +87,9 @@ class LandingController:
             self.phase = "approach"
 
         if self.phase == "rollout":
+            # Carry the airborne rudder bias briefly through wheel contact,
+            # then shed it as nosewheel steering takes over.
+            self.heading_i *= max(0., 1. - dt / 1.5)
             # Brake only after main gear contact and some nosewheel-settling time.
             brake = clamp((sim - self.touchdown_sim - .7) / 2., 0., .32)
             if gs_kt < 4:
@@ -89,9 +105,16 @@ class LandingController:
             else:
                 yaw = clamp(heading_error * .02 - cross * .010
                             - v["beta_deg"] * .015, -.25, .25)
-            rollout_roll = (clamp(-left_crosswind_mps * .06 - cross * .01
-                                  - self.cross_rate_mps * .025, -.3, .3)
-                            if crosswind else clamp(-v["roll_deg"] * .015, -.2, .2))
+            if crosswind:
+                # Keep the touchdown input continuous. As speed falls, the
+                # ailerons lose authority, so progressively increase input
+                # into the wind rather than stepping it at wheel contact.
+                windward = -1. if left_crosswind_mps > 0 else 1.
+                entry = clamp(windward * self.touchdown_aileron, .04, .30)
+                slow_fraction = clamp((55. - gs_kt) / 53., 0., 1.)
+                rollout_roll = windward * (entry + (.30 - entry) * slow_fraction)
+            else:
+                rollout_roll = clamp(-v["roll_deg"] * .015, -.2, .2)
             controls = {"roll": rollout_roll,
                         "pitch": .08, "yaw": yaw, "throttle": 0., "flap": 1.,
                         "trim": clamp(snapshot["controls"]["trim"], -.6, .6), "brake": brake}
@@ -111,9 +134,13 @@ class LandingController:
                 # Wing-low slip: aileron into wind holds ground track and
                 # centerline; rudder independently aligns the fuselage with
                 # the runway through flare, contact and rollout.
-                bank_target = clamp(-left_crosswind_mps * .75 - cross * .45
+                # The stock C172 needs less right bank for a wind from the
+                # right: excess bank increases slip and rudder demand there.
+                wind_bank_gain = 1.05 if left_crosswind_mps >= 0 else .85
+                cross_bank_gain = .60 if left_crosswind_mps >= 0 else .50
+                bank_target = clamp(-left_crosswind_mps * wind_bank_gain - cross * cross_bank_gain
                                     - self.cross_rate_mps * 1.8, -10., 10.)
-                roll = clamp((bank_target - v["roll_deg"]) * .025
+                roll = clamp((bank_target - v["roll_deg"]) * .035
                              - v["roll_rate_dps"] * .022, -.3, .3)
                 heading_error = wrap180(HEADING_TRUE_DEG - v["heading_true_deg"])
             else:
@@ -123,7 +150,11 @@ class LandingController:
                 roll = clamp((bank_target - v["roll_deg"]) * .020
                              - v["roll_rate_dps"] * .022, -.3, .3)
             if self.phase == "approach":
-                target_alt_ft = AIRPORT_ELEV_FT + 50. + max(-along, 0.) * math.tan(math.radians(3.)) * 3.28084
+                # Continue the 3-degree line over the physical threshold.
+                # Its zero-height intersection is the specified aimpoint.
+                target_alt_ft = (AIRPORT_ELEV_FT +
+                                 (GLIDEPATH_AIMPOINT_M - along) *
+                                 math.tan(math.radians(3.)) * 3.28084)
                 alt_error_ft = target_alt_ft - v["altitude_msl_m"] * 3.28084
                 desired_vvi = clamp(-390. + alt_error_ft * 2., -750., 0.)
                 speed_error = target_speed - v["kias"]
@@ -172,7 +203,8 @@ class LandingController:
                 # trials. Keep increasing the nose-up request as the ground
                 # approaches instead of holding a nearly flat attitude.
                 late_flare = clamp((10. - agl_ft) / 10., 0., 1.)
-                flare_pitch = clamp(5.5 + (desired_vvi - v["vvi_fpm"]) * .010
+                flare_pitch = clamp(5.5 + (desired_vvi - v["vvi_fpm"]) * .020
+                                    - clamp(self.vvi_rate_fpmps, 0., 250.) * .015
                                     + 4.5 * late_flare, 0., 12.)
                 pitch_target = (1. - blend) * self.flare_entry_pitch + blend * flare_pitch
                 target_power = clamp(.10 * (agl_ft / 50.), 0., .10)
@@ -193,18 +225,22 @@ class LandingController:
                 # during the flare so the yoke can keep raising the nose.
                 self.trim = min(-.10, self.trim + .06 * dt)
             if crosswind:
-                self.heading_i = clamp(self.heading_i + heading_error * .006 * dt,
-                                       -.15, .15)
-                yaw = clamp(heading_error * .055 - self.heading_rate_dps * .018
+                self.heading_i = clamp(self.heading_i + heading_error * .012 * dt,
+                                       -.50, .50)
+                # A wing-low landing intentionally carries sideslip. Rudder
+                # follows runway heading; beta must not cancel that command.
+                yaw = clamp(heading_error * .070 - self.heading_rate_dps * .018
                             + self.heading_i
-                            + .07 * throttle * (100. / max(v["kias"], 40.)) ** 2
-                            - v["beta_deg"] * .015, -.55, .55)
+                            + left_crosswind_mps * .025
+                            + .07 * throttle * (100. / max(v["kias"], 40.)) ** 2,
+                            -1., .75)
             else:
                 yaw = clamp(.07 * throttle * (100. / max(v["kias"], 40.)) ** 2
                             + roll * .25 - v["beta_deg"] * .045, -.3, .3)
             controls = {"roll": roll, "pitch": pitch, "yaw": yaw,
                         "throttle": throttle, "flap": flap,
                         "trim": self.trim, "brake": 0.}
+            self.last_air_roll = roll
         self.last_commands = {"phase": self.phase, "along_m": along, "cross_m": cross,
                               "agl_ft": agl_ft, "groundspeed_kt": gs_kt,
                               "target_kias": target_speed if self.phase != "rollout" else 0.,
@@ -222,6 +258,8 @@ class LandingObserver:
     def __init__(self, wind_speed_kt=0., wind_from_offset_deg=0.):
         self.wind_speed_kt = wind_speed_kt
         self.wind_from_true_deg = (HEADING_TRUE_DEG + wind_from_offset_deg) % 360.
+        self.wind_side = (-1 if wind_from_offset_deg < -1 else
+                          1 if wind_from_offset_deg > 1 else 0)
         self.previous = None
         self.first_sim = None
         self.session = None
@@ -300,7 +338,7 @@ class LandingObserver:
                                                 agl_ft - self.flare_low_agl_ft)
                 if self.max_flare_rebound_ft > 1.5:
                     return self.fail("Flare balloon exceeded 1.5 ft")
-                if self.wind_speed_kt and c["roll"] < -.01:
+                if self.wind_speed_kt and self.wind_side * c["roll"] > .01:
                     self.flare_aileron_samples += 1
             actual_flap = v["flap_actual"]
             if along < -1852 and .25 <= actual_flap <= .42:
@@ -339,14 +377,15 @@ class LandingObserver:
                                   "pre_touch_roll_deg": self.last_air_roll_deg,
                                   "wind_mps": v["wind_mps"],
                                   "wind_from_true_deg": wind_from}
-                if (not 0 <= along <= 450 or abs(cross) > 4 or gs_kt > 78
+                if (not TOUCHDOWN_MIN_M <= along <= TOUCHDOWN_MAX_M or abs(cross) > 4 or gs_kt > 78
                         or v["vvi_fpm"] < -600 or self.last_air_pitch_deg is None
                         or not 5. <= self.last_air_pitch_deg <= 7.):
                     return self.fail("Touchdown outside acceptance window")
-                if (self.wind_speed_kt and
+                if (self.wind_speed_kt and self.wind_side and
                     (self.last_air_heading_deg is None or
                      abs(wrap180(HEADING_TRUE_DEG - self.last_air_heading_deg)) > 3 or
-                     self.last_air_roll_deg is None or self.last_air_roll_deg >= 0 or
+                     self.last_air_roll_deg is None or
+                     self.wind_side * self.last_air_roll_deg <= 0 or
                      self.flare_aileron_samples < 10)):
                     return self.fail("Crosswind touchdown alignment not demonstrated")
             elif not v["on_ground"]:
@@ -358,8 +397,8 @@ class LandingObserver:
                     return self.fail("Bounced above 3 ft")
                 if brake >= .15:
                     self.braked_samples += 1
-                if self.wind_speed_kt and v["on_ground"]:
-                    if c["roll"] < -.01:
+                if self.wind_speed_kt and self.wind_side and v["on_ground"]:
+                    if self.wind_side * c["roll"] > .01:
                         self.rollout_aileron_samples += 1
                     self.max_rollout_heading_error_deg = max(
                         self.max_rollout_heading_error_deg,
@@ -371,7 +410,7 @@ class LandingObserver:
                         return self.fail("Stopped outside runway stop window")
                     if self.braked_samples < 10 or self.max_brake > .351:
                         return self.fail("Moderate braking not demonstrated")
-                    if self.wind_speed_kt and self.rollout_aileron_samples < 10:
+                    if self.wind_speed_kt and self.wind_side and self.rollout_aileron_samples < 10:
                         return self.fail("Into-wind aileron not held through rollout")
                     self.outcome = "PASS"
         except (KeyError, TypeError, ValueError) as exc:

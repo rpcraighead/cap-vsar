@@ -67,7 +67,7 @@ def stage_observer(destination, qualification_aircraft=None, mode="qualification
               "socket_path": f"/tmp/capvsar-flight-control-{session}.sock"}
     if qualification_aircraft is not None:
         config.update(mode=mode, aircraft_path=str(qualification_aircraft),
-                      expires_unix_s=time.time() + 3600)
+                      expires_unix_s=time.time() + (10800 if mode == "landing" else 3600))
     fd = os.open(destination / "capvsar_flight_control_config.json",
                  os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w") as stream:

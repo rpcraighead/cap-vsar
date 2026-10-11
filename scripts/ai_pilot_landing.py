@@ -12,7 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from services.ai_pilot.control_ownership import ControllerLock
 from services.ai_pilot.experiment import BridgeClient, Recorder, digest
-from services.ai_pilot.landing_trial import LandingController, LandingObserver
+from services.ai_pilot.landing_trial import (LandingController, LandingObserver,
+                                             TOUCHDOWN_MAX_M, TOUCHDOWN_MIN_M)
 from scripts.ai_pilot_experiment import inventory
 
 
@@ -51,7 +52,7 @@ def run(args):
     inv["runner_sha256"] = digest(Path(__file__))
     manifest = {"purpose": "KMYF-28R-moderate-braking", "created_utc": datetime.now(timezone.utc).isoformat(),
                 "inventory": inv, "qualification_only": True,
-                "criteria": {"touchdown_along_m": [0, 450], "touchdown_cross_m": [-4, 4],
+                "criteria": {"touchdown_along_m": [TOUCHDOWN_MIN_M, TOUCHDOWN_MAX_M], "touchdown_cross_m": [-4, 4],
                              "touchdown_sink_fpm_min": -600, "max_brake_ratio": .35,
                              "pre_touch_pitch_deg": [5, 7],
                              "max_flare_rebound_ft": 1.5,

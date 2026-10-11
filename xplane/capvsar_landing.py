@@ -14,6 +14,8 @@ except ImportError:
 THRESHOLD = (32.8128249, -117.1311307)  # 28R approach threshold
 FAR_END = (32.8181752, -117.1447205)    # 10L threshold
 AIRPORT_ELEV_FT = 424.0
+DISPLACED_THRESHOLD_28R_M = 366.0  # apt.dat 28R endpoint displacement
+GLIDEPATH_AIMPOINT_M = DISPLACED_THRESHOLD_28R_M + 25. * .3048
 RUNWAY_WIDTH_M = 46.02
 M_PER_DEG_LAT = 111132.92
 M_PER_DEG_LON = 111412.84 * math.cos(math.radians(THRESHOLD[0]))
@@ -22,7 +24,7 @@ RUNWAY_E = (FAR_END[1] - THRESHOLD[1]) * M_PER_DEG_LON
 RUNWAY_LENGTH_M = math.hypot(RUNWAY_N, RUNWAY_E)
 UNIT_N, UNIT_E = RUNWAY_N / RUNWAY_LENGTH_M, RUNWAY_E / RUNWAY_LENGTH_M
 HEADING_TRUE_DEG = math.degrees(math.atan2(UNIT_E, UNIT_N)) % 360
-AUTHORITY = {"roll": (-.35, .35), "pitch": (-.45, .45), "yaw": (-.55, .55),
+AUTHORITY = {"roll": (-.35, .35), "pitch": (-.45, .45), "yaw": (-1., 1.),
              "throttle": (0., .65), "flap": (0., 1.), "trim": (-.6, .6),
              "brake": (0., .35)}
 
@@ -59,10 +61,10 @@ class LandingLab(QualificationLab):
             if type(value) not in (int, float) or not math.isfinite(value) or abs(value) > bound:
                 raise ValueError("Landing disturbance outside laboratory bounds")
         if (type(wind_speed_kt) not in (int, float) or not math.isfinite(wind_speed_kt)
-                or not 0 <= wind_speed_kt <= 12 or
+                or not 0 <= wind_speed_kt <= 15 or
                 type(wind_from_offset_deg) not in (int, float)
                 or not math.isfinite(wind_from_offset_deg)
-                or abs(wind_from_offset_deg) > 45):
+                or abs(wind_from_offset_deg) > 90):
             raise ValueError("Landing wind outside laboratory bounds")
         xp = self.xp
         lat = xp.getDatad(self.refs["sim/flightmodel/position/latitude"])
@@ -95,7 +97,8 @@ class LandingLab(QualificationLab):
         east = -distance * UNIT_E + lateral_offset * UNIT_N
         latitude = THRESHOLD[0] + north / M_PER_DEG_LAT
         longitude = THRESHOLD[1] + east / M_PER_DEG_LON
-        altitude = (AIRPORT_ELEV_FT + 50. + distance * math.tan(math.radians(3.)) * 3.28084
+        altitude = (AIRPORT_ELEV_FT + (distance + GLIDEPATH_AIMPOINT_M) *
+                    math.tan(math.radians(3.)) * 3.28084
                     + altitude_offset) * .3048
         position = xp.worldToLocal(latitude, longitude, altitude)
         for axis, value in zip("xyz", position):

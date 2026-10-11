@@ -4,9 +4,10 @@ import math
 import pytest
 
 from xplane.capvsar_flight_control_core import CHANNELS, ControlBridge
-from xplane.capvsar_landing import (FAR_END, HEADING_TRUE_DEG, RUNWAY_LENGTH_M,
+from xplane.capvsar_landing import (AIRPORT_ELEV_FT, FAR_END, GLIDEPATH_AIMPOINT_M,
+                                   HEADING_TRUE_DEG, RUNWAY_LENGTH_M,
                                    THRESHOLD, runway_coordinates)
-from services.ai_pilot.landing_trial import LandingController, LandingObserver
+from services.ai_pilot.landing_trial import LandingController, LandingObserver, TOUCHDOWN_MIN_M
 
 
 def test_kmyf_28r_geometry_uses_installed_runway_direction():
@@ -16,6 +17,16 @@ def test_kmyf_28r_geometry_uses_installed_runway_direction():
     assert cross == pytest.approx(0, abs=1e-8)
     assert 294 < HEADING_TRUE_DEG < 296
     assert 1390 < RUNWAY_LENGTH_M < 1420
+    assert GLIDEPATH_AIMPOINT_M == pytest.approx(373.62)
+
+
+def test_unflared_glidepath_intersects_new_aimpoint():
+    c = LandingController()
+    c.step(snapshot(0, agl_ft=50., gs_kt=65.))
+    assert c.last_commands["target_altitude_ft"] == pytest.approx(
+        AIRPORT_ELEV_FT + GLIDEPATH_AIMPOINT_M * math.tan(math.radians(3.)) * 3.28084)
+    c.step(snapshot(GLIDEPATH_AIMPOINT_M, agl_ft=20., gs_kt=65., sim=1.1, frame=2))
+    assert c.last_commands["target_altitude_ft"] == pytest.approx(AIRPORT_ELEV_FT)
 
 
 def test_atomic_landing_frame_caps_brake_and_fault_releases_it():
@@ -175,21 +186,67 @@ def test_left_crosswind_uses_left_aileron_and_rudder_for_runway_heading_through_
     assert slow_rollout["yaw"] > 0
 
 
+def test_direct_right_crosswind_reverses_aileron_side():
+    wind = {"wind_mps": 12 * .514444,
+            "wind_from_true_deg": (HEADING_TRUE_DEG + 90) % 360}
+    air = LandingController().step(snapshot(100, agl_ft=12, **wind))
+    ground = LandingController().step(snapshot(100, ground=1, agl_ft=0, **wind))
+    assert air["roll"] > 0
+    assert ground["roll"] > 0
+    assert LandingObserver(12, 90).wind_side == 1
+
+
+@pytest.mark.parametrize("offset,windward", [(-90, -1), (90, 1)])
+def test_rollout_aileron_continues_then_increases_as_speed_falls(offset, windward):
+    wind = {"wind_mps": 12 * .514444,
+            "wind_from_true_deg": (HEADING_TRUE_DEG + offset) % 360}
+    c = LandingController()
+    air = c.step(snapshot(300, agl_ft=1., gs_kt=53., **wind))
+    touchdown = c.step(snapshot(301, ground=1, agl_ft=0., gs_kt=52.,
+                                sim=1.05, frame=2, **wind))
+    slowed = c.step(snapshot(420, ground=1, agl_ft=0., gs_kt=25.,
+                            sim=3., frame=3, **wind))
+    taxi_speed = c.step(snapshot(470, ground=1, agl_ft=0., gs_kt=3.,
+                                sim=6., frame=4, **wind))
+    assert abs(touchdown["roll"] - air["roll"]) < .08
+    assert 0 < windward * air["roll"] < windward * touchdown["roll"]
+    assert windward * touchdown["roll"] < windward * slowed["roll"]
+    assert windward * slowed["roll"] < windward * taxi_speed["roll"] <= .30
+
+
+def test_wing_low_slip_does_not_cancel_runway_heading_rudder():
+    wind = {"wind_mps": 12 * .514444,
+            "wind_from_true_deg": HEADING_TRUE_DEG - 90,
+            "heading_deg": HEADING_TRUE_DEG - 4}
+    no_slip = LandingController().step(snapshot(150, agl_ft=12, beta_deg=0, **wind))
+    slip = LandingController().step(snapshot(150, agl_ft=12, beta_deg=5, **wind))
+    assert slip["yaw"] == pytest.approx(no_slip["yaw"])
+
+
 def test_observer_requires_runway_touchdown_moderate_braking_and_stop():
     o = LandingObserver()
     for i, (along, flap) in enumerate(((-2000, 1/3), (-1300, 2/3), (-500, 1.),
                                        (-50, 1.), (2, 1.)), 1):
         assert o.observe(snapshot(along, flap=flap, agl_ft=50, gs_kt=65, pitch_deg=6.,
                                   sim=1. + .1 * (i - 1), frame=i))["outcome"] == "INCOMPLETE"
-    assert o.observe(snapshot(60, ground=1, gs_kt=65, sim=1.5, frame=6, agl_ft=0))["outcome"] == "INCOMPLETE"
+    assert o.observe(snapshot(400, ground=1, gs_kt=65, sim=1.5, frame=6, agl_ft=0))["outcome"] == "INCOMPLETE"
     for i in range(7, 22):
-        assert o.observe(snapshot(60+(i-6)*20, ground=1, gs_kt=max(4, 65-i*3),
+        assert o.observe(snapshot(400+(i-6)*20, ground=1, gs_kt=max(4, 65-i*3),
                                   brake=.3, sim=1. + .1 * (i - 1), frame=i, agl_ft=0))["outcome"] == "INCOMPLETE"
-    assert o.observe(snapshot(500, ground=1, gs_kt=1.5, brake=.25, sim=3.1, frame=22,
+    assert o.observe(snapshot(800, ground=1, gs_kt=1.5, brake=.25, sim=3.1, frame=22,
                               agl_ft=0))["outcome"] == "PASS"
     early = LandingObserver()
     early.observe(snapshot(-50))
     assert early.observe(snapshot(-10, ground=1, sim=1.1, frame=2, agl_ft=0))["outcome"] == "FAIL"
+    displaced = LandingObserver()
+    for i, (along, flap) in enumerate(((-2000, 1/3), (-1300, 2/3),
+                                       (-500, 1.), (2, 1.)), 1):
+        displaced.observe(snapshot(along, flap=flap, agl_ft=50., gs_kt=65.,
+                                   pitch_deg=6., sim=1. + .1 * (i - 1), frame=i))
+    displaced.observe(snapshot(350, agl_ft=2., pitch_deg=6., sim=1.4, frame=5))
+    short = displaced.observe(snapshot(TOUCHDOWN_MIN_M - 1., ground=1, agl_ft=0.,
+                                       pitch_deg=6., sim=1.5, frame=6))
+    assert short["reason"] == "Touchdown outside acceptance window"
     flat = LandingObserver()
     for i, (along, flap) in enumerate(((-2000, 1/3), (-1300, 2/3),
                                        (-500, 1.), (2, 1.)), 1):
@@ -212,7 +269,7 @@ def test_crosswind_observer_rejects_crabbed_touchdown():
     for i in range(5, 16):
         assert o.observe(snapshot(50 + i, agl_ft=12 - .2 * i, gs_kt=60,
                                   sim=1. + .1 * (i - 1), frame=i, **wind))["outcome"] == "INCOMPLETE"
-    report = o.observe(snapshot(100, ground=1, agl_ft=0, gs_kt=52,
+    report = o.observe(snapshot(400, ground=1, agl_ft=0, gs_kt=52,
                                 sim=2.5, frame=16, **wind))
     assert report["outcome"] == "FAIL"
     assert report["reason"] == "Crosswind touchdown alignment not demonstrated"
