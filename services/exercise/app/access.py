@@ -11,8 +11,10 @@ Roles:
 Authentication modes:
 1. Session Cookie (`capvsar_session`) or Bearer Token: established via participant
    short codes or QR code mobile scan (/join/<code>).
-2. Shared-secret environment tokens (`CAPVSAR_TOKEN_*`) via `X-CAPVSAR-Token` header
-   or `?token=` query param (preserved for backward compatibility with scripts/plugin).
+2. Shared-secret environment tokens (`CAPVSAR_TOKEN_*`) via the `X-CAPVSAR-Token`
+   header only. X2-10: a `?token=` query parameter used to work as well, and so
+   put role tokens (including the plugin key on the one route that serves beacon
+   truth) into uvicorn and Caddy access logs. It is no longer read.
 """
 from __future__ import annotations
 
@@ -50,6 +52,12 @@ def auth_db():
     db_file = os.environ.get("CAPVSAR_DB", DB_PATH_ENV)
     c = sqlite3.connect(db_file, timeout=5.0)
     c.row_factory = sqlite3.Row
+    # X2-6: same pairing as store.db() (FE-9). `synchronous` is per connection,
+    # and this one opens on every authenticated request, so left at FULL each
+    # session write fsynced. busy_timeout is stated rather than left to the
+    # connect() argument so a lock wait here is bounded the same way.
+    c.execute("PRAGMA busy_timeout=5000")
+    c.execute("PRAGMA synchronous=NORMAL")
     try:
         yield c
         c.commit()
@@ -61,7 +69,13 @@ def auth_db():
 
 
 def init_auth_db() -> None:
-    """Ensure roster, session, and exercise configuration tables exist."""
+    """Ensure roster, session, and exercise configuration tables exist.
+
+    X2-6: run once, from store.init_db() at startup. It used to run, migrations
+    and a write transaction included, on every authenticated request. Nothing
+    on the request path calls it now; a caller that builds its own database
+    (a test, a script) calls it explicitly.
+    """
     with auth_db() as c:
         c.executescript("""
         CREATE TABLE IF NOT EXISTS roster (
@@ -133,6 +147,13 @@ def init_auth_db() -> None:
             )
 
 
+def sweep_expired_sessions() -> int:
+    """Delete expired session rows. Called from the ticker, not per request."""
+    with auth_db() as c:
+        return c.execute("DELETE FROM sessions WHERE expires<=?",
+                         (time.time(),)).rowcount
+
+
 def _credential_row(row: tuple) -> tuple:
     """The public badge label alone is never a credential; require its random token."""
     return (row[0], row[1] + "-" + row[7], *row[2:])
@@ -166,9 +187,8 @@ def dev_open() -> bool:
 
 
 def presented(request: Request) -> str:
-    return (request.headers.get(TOKEN_HEADER)
-            or request.query_params.get("token")
-            or "").strip()
+    # Header only (X2-10): a token in the URL ends up in access logs.
+    return (request.headers.get(TOKEN_HEADER) or "").strip()
 
 
 def _matches(supplied: str, accepted: list[str]) -> bool:
@@ -207,11 +227,15 @@ def get_session_from_request(request: Request) -> dict | None:
     if not sess_id:
         return None
 
-    init_auth_db()
     now = time.time()
     with auth_db() as c:
+        # One indexed read (X2-6). assigned_name comes from the roster row the
+        # session was minted for, so the radio can tell a pilot from an
+        # observer by what the roster says rather than by the callsign.
         row = c.execute(
-            "SELECT code, role, title, callsign, aircraft_id, target_url, expires "
+            "SELECT code, role, title, callsign, aircraft_id, target_url, expires, "
+            "(SELECT assigned_name FROM roster WHERE roster.code=sessions.code) "
+            "AS assigned_name "
             "FROM sessions WHERE session_id=? AND expires>?",
             (_session_hash(sess_id), now)
         ).fetchone()
@@ -225,7 +249,6 @@ def get_session_from_request(request: Request) -> dict | None:
 def create_session(code: str, role: str, title: str, callsign: str = "",
                    aircraft_id: str = "", target_url: str = "") -> str:
     """Create a persistent session token lasting 24 hours."""
-    init_auth_db()
     sess_id = secrets.token_urlsafe(32)
     now = time.time()
     expires = now + 86400.0  # 24 hours
@@ -239,14 +262,12 @@ def create_session(code: str, role: str, title: str, callsign: str = "",
 
 
 def delete_session(sess_id: str) -> None:
-    init_auth_db()
     with auth_db() as c:
         c.execute("DELETE FROM sessions WHERE session_id=?", (_session_hash(sess_id),))
 
 
 def authenticate_code(code: str) -> tuple[dict, str] | None:
     """Validate a participant access code (case-insensitive) and return (roster_row, session_id)."""
-    init_auth_db()
     clean_code = code.strip().upper()
     now = time.time()
 
@@ -283,7 +304,6 @@ def authenticate_code(code: str) -> tuple[dict, str] | None:
 
 
 def get_roster() -> list[dict]:
-    init_auth_db()
     with auth_db() as c:
         rows = c.execute(
             "SELECT id, code, role, title, callsign, aircraft_id, assigned_name, token, target_url, created, last_login "
@@ -293,7 +313,6 @@ def get_roster() -> list[dict]:
 
 
 def get_exercise_setup() -> dict:
-    init_auth_db()
     with auth_db() as c:
         row = c.execute(
             "SELECT id, name, num_aircraft, config_json, updated FROM exercise_config WHERE active=1 ORDER BY updated DESC LIMIT 1"
@@ -329,7 +348,6 @@ def get_exercise_setup() -> dict:
 
 def save_exercise_setup(name: str, num_aircraft: int, aircraft_list: list[dict], staff_list: list[dict]) -> dict:
     """Save exercise configuration and generate participant roster with codes and invite URLs."""
-    init_auth_db()
     now = time.time()
     config_obj = {"aircraft": aircraft_list, "staff": staff_list}
     config_json = json.dumps(config_obj)

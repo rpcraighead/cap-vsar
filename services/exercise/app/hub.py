@@ -12,6 +12,9 @@ import asyncio
 import json
 import time
 
+from starlette.concurrency import run_in_threadpool
+
+from . import access
 from .roles import public_aircraft, public_scenario
 from .settings import log
 
@@ -103,10 +106,25 @@ hub = Hub()
 
 
 
+SESSION_SWEEP_EVERY_S = 600
+
+
 async def ticker():
-    """Push state to consoles, and expire aircraft that stop reporting."""
+    """Push state to consoles, and expire aircraft that stop reporting.
+
+    Also the home of the low-frequency housekeeping (X2-6): expired login
+    sessions are swept here every ten minutes, in a worker thread, instead of
+    on every authenticated request.
+    """
+    last_sweep = time.monotonic()
     while True:
         await asyncio.sleep(1.0)
+        if time.monotonic() - last_sweep >= SESSION_SWEEP_EVERY_S:
+            last_sweep = time.monotonic()
+            try:
+                await run_in_threadpool(access.sweep_expired_sessions)
+            except Exception as e:
+                log.warning("session sweep failed: %s", e)
         now = time.time()
         stale = [k for k, a in hub.aircraft.items() if now - a["t"] > 30]
         for k in stale:

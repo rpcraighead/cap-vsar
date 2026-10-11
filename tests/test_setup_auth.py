@@ -635,6 +635,8 @@ class HardenedCredentialTests(unittest.TestCase):
         with self.access.auth_db() as db:
             db.execute('UPDATE sessions SET expires=0')
         self.assertFalse(other.get('/api/auth/me', headers={'Authorization': 'Bearer ' + secret}).json()['authenticated'])
+        # X2-6: the lookup no longer reclaims expired rows; the ticker does.
+        self.access.sweep_expired_sessions()
         with self.access.auth_db() as db:
             self.assertEqual(db.execute('SELECT COUNT(*) FROM sessions').fetchone()[0], 0)
 

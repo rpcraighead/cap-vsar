@@ -18,7 +18,8 @@ import time
 import uuid
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
+from starlette.concurrency import run_in_threadpool
 
 from .roles import any_role, base_or_instructor
 from . import access
@@ -53,6 +54,10 @@ def radio_key(callsign: str, receiver: str) -> tuple[str, str]:
 
 CHANNEL_ACTIVITY: dict[str, float] = {}
 
+# Mumble username -> the radio that owns it, so the receiving side can look up
+# who is speaking when the speaker is one of ours.
+BY_USERNAME: dict = {}
+
 
 @router.get('/api/radio/config', dependencies=[any_role])
 def config():
@@ -75,31 +80,103 @@ def rx_status():
     }
 
 
-ICS_STATE: dict = {
-    "mode": "ALL",
-    "split_com": False,
-    "pilot_isolated": False,
-    "copilot_isolated": False,
-    "crew_isolated": False,
-}
+def _blank_ics() -> dict:
+    return {
+        "mode": "ALL",
+        "split_com": False,
+        "pilot_isolated": False,
+        "copilot_isolated": False,
+        "crew_isolated": False,
+    }
+
+
+# The default, console-wide intercom state. The Air Manager instruments read
+# this one (flat, unkeyed) from GET /api/radio/ics, so its shape is a contract.
+ICS_STATE: dict = _blank_ics()
+
+# Improvement 4: one global dict meant that setting the intercom for one
+# aircraft changed it for every aircraft on the net. An aircraft that has been
+# given its own state uses it; every other aircraft keeps following ICS_STATE.
+ICS_BY_AIRCRAFT: dict[str, dict] = {}
+
+
+def ics_for(aircraft_id: str | None) -> dict:
+    """The intercom state that applies to a radio flying in `aircraft_id`."""
+    return ICS_BY_AIRCRAFT.get(aircraft_id or '', ICS_STATE)
+
+
+def apply_ics(state: dict, data: dict) -> dict:
+    mode = str(data.get('mode', state['mode'])).upper()
+    if mode in ('ALL', 'PILOT', 'COPILOT', 'CREW'):
+        state['mode'] = mode
+        state['pilot_isolated'] = (mode == 'PILOT')
+        state['copilot_isolated'] = (mode in ('PILOT', 'COPILOT'))
+        state['crew_isolated'] = (mode == 'CREW')
+    if 'split_com' in data:
+        state['split_com'] = bool(data['split_com'])
+    return state
+
+
+def _target_ics(aircraft_id) -> dict:
+    """The dict an update should change: the aircraft's own, made on demand."""
+    if not aircraft_id:
+        return ICS_STATE
+    if aircraft_id not in ICS_BY_AIRCRAFT:
+        ICS_BY_AIRCRAFT[aircraft_id] = dict(ICS_STATE)
+    return ICS_BY_AIRCRAFT[aircraft_id]
+
+
+def _aircraft_arg(value) -> str:
+    if value in (None, ''):
+        return ''
+    if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9._-]{1,32}', value):
+        raise HTTPException(422, 'aircraft_id must be 1-32 letters, numbers, dots, dashes or underscores.')
+    return value
+
+
+def classify_crew(assigned_name: str | None, callsign: str = '') -> str:
+    """'pilot', 'copilot', 'crew' (observer/scanner) or 'other'.
+
+    The roster says what a seat is: its assigned name is "Mission Pilot" or
+    "Mission Observer". The old test looked for PILOT or a bare 'MO' inside the
+    callsign, which for a roster-issued callsign ("CAP 423" is shared by every
+    seat in the aircraft) never matched anything, and which matched "MO" inside
+    any word. The callsign is only consulted when there is no roster entry.
+    """
+    text = (assigned_name or '').strip() or callsign
+    up = text.upper()
+    if 'COPILOT' in up or 'CO-PILOT' in up:
+        return 'copilot'
+    if re.search(r'\bPILOT\b', up):
+        return 'pilot'
+    if re.search(r'\b(OBSERVER|SCANNER|CREW|MO)\b', up):
+        return 'crew'
+    return 'other'
+
+
+def ics_blocks(state: dict, listener: str, speaker: str, channel_key: str | None) -> bool:
+    """True when the intercom state keeps `speaker` out of `listener`'s ears."""
+    if state.get('pilot_isolated'):
+        crew = ('crew', 'copilot')
+        if (speaker == 'pilot' and listener in crew) or (speaker in crew and listener == 'pilot'):
+            return True
+    # Split COM drops the mission observer from the FM mission net.
+    if (state.get('split_com') and listener == 'crew'
+            and channel_key in ('primary', 'alternate')):
+        return True
+    return False
 
 
 @router.get('/api/radio/ics')
-def ics_status():
-    return dict(ICS_STATE)
+def ics_status(aircraft: str = ''):
+    return dict(ics_for(_aircraft_arg(aircraft)))
 
 
 @router.post('/api/radio/ics', dependencies=[base_or_instructor])
 def update_ics(payload: dict):
-    mode = str(payload.get('mode', ICS_STATE['mode'])).upper()
-    if mode in ('ALL', 'PILOT', 'COPILOT', 'CREW'):
-        ICS_STATE['mode'] = mode
-        ICS_STATE['pilot_isolated'] = (mode == 'PILOT')
-        ICS_STATE['copilot_isolated'] = (mode in ('PILOT', 'COPILOT'))
-        ICS_STATE['crew_isolated'] = (mode == 'CREW')
-    if 'split_com' in payload:
-        ICS_STATE['split_com'] = bool(payload['split_com'])
-    return dict(ICS_STATE)
+    """Set the intercom mode, console-wide or (aircraft_id) for one aircraft."""
+    aircraft_id = _aircraft_arg(payload.get('aircraft_id'))
+    return dict(apply_ics(_target_ics(aircraft_id), payload))
 
 
 class TransmitGate:
@@ -135,6 +212,13 @@ class MumbleRadio:
                              else f'{callsign} / AIRBAND')
         self.client = None
         self.loop = asyncio.get_running_loop()
+        # Who sits at this radio, from the roster (improvement 4).
+        self.aircraft_id = ''
+        self.crew_class = classify_crew(None, callsign)
+        self.username = None
+        self.watchdog_task = None
+        self.dropped: dict = {}
+        self.drop_reason: dict = {}
         # X-9: every attached face gets its own outbound queue. One slow tablet
         # must not stall the other face on the same desk, and a queue that
         # overflows takes down that face only.
@@ -175,12 +259,35 @@ class MumbleRadio:
         """Add a browser face to this radio and return its outbound queue."""
         queue = asyncio.Queue(maxsize=32)
         self.faces[sock] = queue
+        self.dropped[sock] = asyncio.Event()
         return queue
 
     def detach(self, sock):
         """Remove one face. True when that was the last one."""
         self.faces.pop(sock, None)
+        self.dropped.pop(sock, None)
+        self.drop_reason.pop(sock, None)
         return not self.faces
+
+    def drop_face(self, sock, reason):
+        """Disconnect one face and leave the radio and the other faces alone.
+
+        X2-7: a full queue used to set `failed` on the whole radio, which its
+        own comment promised not to do - the next face to join then built a
+        second Mumble client for the same desk. The slow face is cut off (its
+        stream handler raises `reason` and closes its socket) and the rest of
+        the desk keeps hearing the net.
+        """
+        self.faces.pop(sock, None)
+        event = self.dropped.get(sock)
+        if event is not None and not event.is_set():
+            self.drop_reason[sock] = reason
+            event.set()
+
+    async def face_dropped(self, sock):
+        """Completes (by raising) when this face is dropped by the radio."""
+        await self.dropped[sock].wait()
+        raise RuntimeError(self.drop_reason.get(sock, 'Radio connection dropped.'))
 
     def enqueue(self, item):
         if self.closed:
@@ -190,7 +297,7 @@ class MumbleRadio:
                 # Never accumulate delayed speech or silently drop control
                 # acks. One wedged face fails on its own; the rest of the desk
                 # keeps hearing the net.
-                self.failed = True
+                self.drop_face(sock, 'Radio connection too slow. Reconnect to listen.')
                 continue
             queue.put_nowait(item)
 
@@ -220,22 +327,15 @@ class MumbleRadio:
         if not pcm or len(pcm) % 2 or len(pcm) > RATE * 2:
             return
 
-        # Check ICS isolation: PILOT mode isolates pilot from copilot/crew path
-        if ICS_STATE.get('pilot_isolated'):
-            spk_u = name.upper()
-            self_u = self.callsign.upper()
-            is_spk_pilot = ('PILOT' in spk_u and 'COPILOT' not in spk_u)
-            is_self_pilot = ('PILOT' in self_u and 'COPILOT' not in self_u)
-            is_spk_crew = ('OBSERVER' in spk_u or 'COPILOT' in spk_u or 'CREW' in spk_u or 'MO' in spk_u)
-            is_self_crew = ('OBSERVER' in self_u or 'COPILOT' in self_u or 'CREW' in self_u or 'MO' in self_u)
-            if (is_spk_pilot and is_self_crew) or (is_spk_crew and is_self_pilot):
-                return
-
-        # Split COM drops MO from FM mission net
-        if ICS_STATE.get('split_com'):
-            self_u = self.callsign.upper()
-            if ('MO' in self_u or 'OBSERVER' in self_u) and self.channel_key in ('primary', 'alternate'):
-                return
+        # Intercom isolation, from this listener's aircraft state. The speaker
+        # is another browser radio of ours when we can find it, and then its
+        # roster seat decides; an outside Mumble client is judged by its name.
+        speaker_radio = BY_USERNAME.get(name)
+        speaker = (speaker_radio.crew_class if speaker_radio
+                   else classify_crew(None, name))
+        if ics_blocks(ics_for(self.aircraft_id), self.crew_class, speaker,
+                      self.channel_key):
+            return
 
         now = time.monotonic()
         if self.channel_key:
@@ -251,6 +351,8 @@ class MumbleRadio:
         from pymumble_py3.constants import PYMUMBLE_CLBK_CONNECTED, PYMUMBLE_CLBK_DISCONNECTED, PYMUMBLE_CLBK_SOUNDRECEIVED
         host = os.environ['CAPVSAR_MUMBLE_HOST']
         username = f'{self.log_identity} [web-{uuid.uuid4().hex[:6]}]'
+        self.username = username
+        BY_USERNAME[username] = self
         self.client = pymumble_py3.Mumble(
             host, username, port=int(os.getenv('CAPVSAR_MUMBLE_PORT', '64738')),
             password=os.getenv('CAPVSAR_MUMBLE_PASSWORD', ''), reconnect=False)
@@ -341,15 +443,10 @@ class MumbleRadio:
             # Reachable only through a joined socket, and since FE-4 a join
             # requires an authenticated session whenever roles are configured,
             # so this shares the REST route's gate rather than needing its own.
-            mode = str(data.get('mode', ICS_STATE['mode'])).upper()
-            if mode in ('ALL', 'PILOT', 'COPILOT', 'CREW'):
-                ICS_STATE['mode'] = mode
-                ICS_STATE['pilot_isolated'] = (mode == 'PILOT')
-                ICS_STATE['copilot_isolated'] = (mode in ('PILOT', 'COPILOT'))
-                ICS_STATE['crew_isolated'] = (mode == 'CREW')
-            if 'split_com' in data:
-                ICS_STATE['split_com'] = bool(data['split_com'])
-            self.enqueue({"type": "ics", **ICS_STATE})
+            # A seat in an aircraft changes that aircraft's intercom, not the
+            # whole net's.
+            state = apply_ics(_target_ics(self.aircraft_id), data)
+            self.enqueue({"type": "ics", **state})
         else:
             raise ValueError('Unknown radio command.')
 
@@ -381,11 +478,26 @@ class MumbleRadio:
             send = sock.send_bytes(item) if isinstance(item, bytes) else sock.send_json(item)
             await asyncio.wait_for(send, 3)
 
+    def start_watchdog(self):
+        """Start the radio's own watchdog. Called once, by the face that built it."""
+        if self.watchdog_task is None:
+            self.watchdog_task = asyncio.create_task(self.watchdog())
+
     async def watchdog(self):
+        """X2-7: owned by the radio, not by whichever face opened it.
+
+        It used to be one of the opening face's pump tasks, so when that tab
+        closed the desk's other faces were left with no watchdog at all: a
+        dead Mumble link or an expired PTT lease went unnoticed. close()
+        cancels it; a lost link drops every face.
+        """
         while True:
             await asyncio.sleep(.2)
             if self.failed or (self.client and not self.client.is_alive()):
-                raise RuntimeError('Mission voice connection lost. Reconnect to listen.')
+                self.failed = True
+                for sock in list(self.faces):
+                    self.drop_face(sock, 'Mission voice connection lost. Reconnect to listen.')
+                return
             if self.gate.expired(time.monotonic()):
                 self.unkey('PTT released: transmit timer expired.', locked=True)
 
@@ -408,6 +520,13 @@ class MumbleRadio:
         self.closed = True
         self.gate.release()
         self.channel_id = None
+        if self.username and BY_USERNAME.get(self.username) is self:
+            BY_USERNAME.pop(self.username, None)
+        task, self.watchdog_task = self.watchdog_task, None
+        if task is not None and task is not asyncio.current_task():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await task
         if self.client:
             self.stop_audio()
             with contextlib.suppress(Exception):
@@ -470,7 +589,8 @@ async def stream(sock: WebSocket):
         # "MISSION BASE". It now applies only to an explicitly open dev
         # console (CAPVSAR_DEV_OPEN) with no base credential, the same
         # condition that opens every other endpoint.
-        session = access.get_session_from_request(sock)
+        # X2-5: off the event loop, which is also carrying the audio frames.
+        session = await run_in_threadpool(access.get_session_from_request, sock)
         if session and session.get('callsign'):
             name = session['callsign']
         elif not (access.dev_open() and 'base' in access.unconfigured()):
@@ -497,11 +617,14 @@ async def stream(sock: WebSocket):
             SESSIONS.add(radio)
             OPERATORS[key] = radio
             await radio.connect(hello.get('channel', 'primary'))
-        # The watchdog belongs to the connection, not to each face, so only the
-        # face that opened it runs one.
-        pumps = [radio.sender(sock), radio.receiver(sock)]
-        if not shared:
-            pumps.append(radio.watchdog())
+            # Who sits here, for the intercom (improvement 4).
+            if session:
+                radio.aircraft_id = session.get('aircraft_id') or ''
+                radio.crew_class = classify_crew(session.get('assigned_name'),
+                                                 radio.callsign)
+            # The watchdog belongs to the radio (X2-7), not to this face.
+            radio.start_watchdog()
+        pumps = [radio.sender(sock), radio.receiver(sock), radio.face_dropped(sock)]
         tasks = [asyncio.create_task(coro) for coro in pumps]
         done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         for task in done:

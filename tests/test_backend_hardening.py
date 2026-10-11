@@ -216,5 +216,104 @@ class SetupIsTyped(Base):
         self.assertEqual(r.status_code, 422)
 
 
+class AuthIsCheapAndOffTheLoop(Base):
+    """X2-5, X2-6, X2-10."""
+
+    def login(self):
+        from app import access
+        code = next(r["code"] for r in access.get_roster() if r["role"] == "base")
+        r = self.client.post("/api/auth/login", json={"code": code})
+        self.assertEqual(r.status_code, 200, r.text)
+        return r.cookies["capvsar_session"]
+
+    def test_requests_do_not_run_the_schema_migration(self):
+        """X2-6: init_auth_db() ran migrations and a write transaction per call."""
+        sess = self.login()
+        calls = []
+        real = self.main.access.init_auth_db
+        self.main.access.init_auth_db = lambda: (calls.append(1), real())[1]
+        try:
+            for _ in range(3):
+                self.assertEqual(self.client.get(
+                    "/api/state", headers={"Authorization": "Bearer " + sess}).status_code, 200)
+            self.assertEqual(self.client.post(
+                "/api/messages", headers={"Authorization": "Bearer " + sess},
+                json={"body": "hello"}).status_code, 200)
+            self.client.get("/api/auth/me", headers={"Authorization": "Bearer " + sess})
+        finally:
+            self.main.access.init_auth_db = real
+        self.assertEqual(calls, [], "a request re-ran init_auth_db()")
+
+    def test_startup_creates_the_auth_schema(self):
+        """store.init_db() is where init_auth_db() runs now."""
+        with sqlite3.connect(self.db) as c:
+            tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master")}
+        self.assertTrue({"roster", "sessions", "exercise_config"} <= tables)
+
+    def test_the_ticker_sweeps_expired_sessions(self):
+        import sys
+        hub = sys.modules["app.hub"]
+        access = self.main.access
+        sess = access.create_session("MRO-1", "base", "t", callsign="MRO 1")
+        access.create_session("MRO-2", "base", "t2", callsign="MRO 2")
+        with access.auth_db() as c:
+            c.execute("UPDATE sessions SET expires=1 WHERE code='MRO-1'")
+        self.assertIsNone(access.get_session_from_request(
+            type("R", (), {"headers": {"Authorization": "Bearer " + sess},
+                           "cookies": {}, "query_params": {}})()))
+        with access.auth_db() as c:
+            self.assertEqual(c.execute("SELECT COUNT(*) FROM sessions").fetchone()[0], 2)
+        sweep_every = hub.SESSION_SWEEP_EVERY_S
+        hub.SESSION_SWEEP_EVERY_S = 0
+
+        async def run():
+            task = asyncio.create_task(self.main.ticker())
+            await asyncio.sleep(1.5)
+            task.cancel()
+
+        try:
+            asyncio.run(run())
+        finally:
+            hub.SESSION_SWEEP_EVERY_S = sweep_every
+        with access.auth_db() as c:
+            self.assertEqual([r[0] for r in c.execute("SELECT code FROM sessions")], ["MRO-2"])
+
+    def test_message_sender_lookup_is_off_the_event_loop(self):
+        seen = []
+        access = self.main.access
+        real = access.get_session_from_request
+
+        def wrapper(*a, **kw):
+            try:
+                asyncio.get_running_loop()
+                seen.append("loop")
+            except RuntimeError:
+                seen.append("thread")
+            return real(*a, **kw)
+
+        access.get_session_from_request = wrapper
+        try:
+            r = self.client.post("/api/messages", headers=self.base, json={"body": "hi"})
+        finally:
+            access.get_session_from_request = real
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertTrue(seen)
+        self.assertNotIn("loop", seen, "a SQLite lookup ran on the event loop")
+
+    def test_a_role_token_in_the_url_is_not_a_credential(self):
+        """X2-10: ?token= put role tokens into access logs."""
+        run_sortie(self.main, self.client, headers=self.instr)
+        for url in ("/api/state", "/api/plugin/scenario"):
+            self.assertIn(self.client.get(f"{url}?token={INSTRUCTOR}").status_code, (401, 403), url)
+            self.assertIn(self.client.get(f"{url}?token={PLUGIN}").status_code, (401, 403), url)
+        self.assertEqual(self.client.post(
+            f"/api/scenarios?token={INSTRUCTOR}", json=SCENARIO).status_code, 403)
+        self.assertEqual(self.client.post("/api/scenarios", json=SCENARIO,
+                                          headers=self.instr).status_code, 200)
+        with self.assertRaises(Exception):
+            with self.client.websocket_connect(f"/ws?token={INSTRUCTOR}") as ws:
+                ws.receive_json()
+
+
 if __name__ == "__main__":
     unittest.main()

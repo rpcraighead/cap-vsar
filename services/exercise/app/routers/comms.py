@@ -10,6 +10,7 @@ import time
 import uuid
 
 from fastapi import APIRouter, HTTPException, Request, Response
+from starlette.concurrency import run_in_threadpool
 
 from .. import access
 from ..hub import hub
@@ -35,7 +36,9 @@ async def send_message(m: MessageIn, request: Request):
     before.
     """
     now = time.time()
-    session = access.get_session_from_request(request)
+    # X2-5: a blocking SQLite read on the event loop that also carries the
+    # Mumble bridge's 20 ms audio frames.
+    session = await run_in_threadpool(access.get_session_from_request, request)
     sender = (session.get("callsign") or session.get("title")) if session else None
     sender = sender or m.sender
     message_id = None

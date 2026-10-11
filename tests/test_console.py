@@ -354,13 +354,15 @@ class PluginTruthChannel(unittest.TestCase):
         finally:
             os.unlink(db)
 
-    def test_query_parameter_also_accepted(self):
-        """The plugin can pass the key in the URL where a header is awkward."""
+    def test_query_parameter_is_no_longer_accepted(self):
+        """X2-10: a key in the URL lands in uvicorn and Caddy access logs."""
         main, client, db = build_app(plugin=PLUGIN, instructor=INSTRUCTOR)
         try:
             run_sortie(main, client, headers={"X-CAPVSAR-Token": INSTRUCTOR})
             r = client.get(f"/api/plugin/scenario?token={PLUGIN}")
-            self.assertEqual(r.status_code, 200)
+            self.assertEqual(r.status_code, 403)
+            self.assertEqual(client.get("/api/plugin/scenario",
+                                        headers={"X-CAPVSAR-Token": PLUGIN}).status_code, 200)
         finally:
             os.unlink(db)
 
@@ -1424,3 +1426,10 @@ class ConnectionPragmas(unittest.TestCase):
             self.assertEqual(c.execute("PRAGMA journal_mode").fetchone()[0], "wal")
             self.assertEqual(c.execute("PRAGMA synchronous").fetchone()[0], 1,
                              "connection reverted to FULL: every commit fsyncs")
+
+    def test_auth_connections_are_normal_too(self):
+        """X2-6: auth_db() opens on every authenticated request and never set it."""
+        with self.main.access.auth_db() as c:
+            self.assertEqual(c.execute("PRAGMA synchronous").fetchone()[0], 1,
+                             "auth_db() connection is on FULL: every session write fsyncs")
+            self.assertGreaterEqual(c.execute("PRAGMA busy_timeout").fetchone()[0], 5000)
