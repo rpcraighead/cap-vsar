@@ -291,24 +291,16 @@ class TestAirManagerHarness(unittest.TestCase):
             am.turn_dial_matching(1, x=405, y=15)
             am.turn_dial_matching(1, x=405, y=15)
 
-            # Feed live 406 frame WITHOUT position
-            am.eval("""
-                cap_df.state.cs_sync = 1
-                cap_df.state.cs_protocol = 1
-                cap_df.state.cs_country = 366
-                cap_df.state.cs_has_pos = false
-                cap_df.state.cs_hex15 = "AD4800000000000"
-            """)
+            # Feed live 406 frame WITHOUT position, through the datarefs the
+            # engine publishes (not by poking cap_df.state).
+            am.publish_df(cs_sync=1, cs_protocol=1, cs_country=366,
+                          cs_has_position=0, cs_hex15="AD4800000000000")
 
             # Press STORE (x=234, y=18) to save this positionless frame into st.stored_msg
             am.click_button_matching(x=234, y=18)
 
             # Now update the live stream with a frame that DOES have position
-            am.eval("""
-                cap_df.state.cs_has_pos = true
-                cap_df.state.cs_lat = 33.123
-                cap_df.state.cs_lon = -117.456
-            """)
+            am.publish_df(cs_has_position=1, cs_lat=33.123, cs_lon=-117.456)
 
             # Press REP (x=320, y=18) to display the STORED message (st.shown_msg = st.stored_msg)
             am.eval("_AM.drawn_commands = {}")

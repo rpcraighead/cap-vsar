@@ -371,9 +371,16 @@ canvas_id = canvas_add(LCD_X, LCD_Y, dcu.LCD_W, dcu.LCD_H, draw_lcd)
 
 -- ------------------------------------------------------------- behaviour -----
 
+--- Transients of the last session. The real head powers up clean, so a REP
+--- bearing or an open decode window does not survive a power cycle.
+local function reset_volatile()
+    st.repeat_show, st.decode_open = false, false
+    st.repeat_bearing, st.repeat_signal = nil, nil
+end
+
 local function power_on()
     st.power, st.booting = true, true
-    st.repeat_show, st.decode_open = false, false
+    reset_volatile()
     push_state(); sync_audio(); redraw()
 
     if boot_timer then timer_stop(boot_timer) end
@@ -395,6 +402,7 @@ local function power_off()
         st.long_fired[k] = false
     end
     st.power, st.booting, st.dim_mode = false, false, false
+    reset_volatile()
     df.set_power(false)
     df_audio.stop()
     redraw()
