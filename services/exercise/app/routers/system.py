@@ -6,23 +6,20 @@ Split out of main.py under C15-1.
 from __future__ import annotations
 
 import json
-import time
-import uuid
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
 from .. import access
 from ..hub import hub
-from ..roles import (base_or_instructor, instructor_only, plugin_only,
-                     public_scenario)
 from ..settings import log
 from ..roles import any_role
-from ..store import _exec, _fetchone, db, db_call, row_to_scenario
+from ..store import db
 
 import os
 from urllib.parse import urlsplit
 
 from fastapi import WebSocket, WebSocketDisconnect
+from starlette.concurrency import run_in_threadpool
 
 router = APIRouter()
 
@@ -114,19 +111,23 @@ async def ws(sock: WebSocket):
     # D1.3: a live feed of the exercise needs a login, and the login decides
     # which rendering of the state this socket receives. The handshake carries
     # the session cookie because the page and the socket share an origin.
-    try:
+    # Both lookups hit SQLite, so they run in a worker thread (X2-5).
+    def admit():
         access.enforce_read(sock)
+        return access.is_instructor(sock)
+    try:
+        sees_truth = await run_in_threadpool(admit)
     except HTTPException:
         await sock.close(code=1008)
         return
     await sock.accept()
-    sees_truth = access.is_instructor(sock)
     hub.clients.add(sock)
     if sees_truth:
         hub.truth_clients.add(sock)
     try:
         await sock.send_text(json.dumps(
-            {"type": "state", **hub.snapshot(include_df=sees_truth)}))
+            {"type": "state", **hub.snapshot(include_df=sees_truth)},
+            allow_nan=False))
         while True:
             await sock.receive_text()
     except WebSocketDisconnect:

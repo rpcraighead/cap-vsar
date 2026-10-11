@@ -7,17 +7,13 @@ from __future__ import annotations
 
 import json
 import time
-import uuid
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException
 
-from .. import access
 from ..hub import hub
-from ..roles import (base_or_instructor, instructor_only, plugin_only,
-                     public_scenario)
-from ..settings import log
+from ..roles import base_or_instructor, plugin_only
 from ..roles import any_role
-from ..store import _exec, _fetchone, db, db_call, row_to_scenario
+from ..store import _exec, _fetchone, db, db_call
 
 from .. import propagation
 from ..models import BearingIn, PositionIn
@@ -44,7 +40,7 @@ async def ingest(p: PositionIn):
         if p.df is not None:
             # The X-Plane plugin is authoritative when it reports receiver
             # state. It alone has real aircraft attitude and terrain probes.
-            df = dict(p.df)
+            df = p.df.as_dict()
         elif p.mock:
             # Mock bridge, explicitly. Never a real station: a stub that
             # disagrees with the cockpit is worse than a blank panel, because
@@ -69,7 +65,7 @@ async def ingest(p: PositionIn):
         # V2-5: record what the direction finder was showing, not just where
         # the aircraft was. Without it the debrief can score the bearings the
         # crew reported but never compare them with what the needle did.
-        df_json = json.dumps(df) if df is not None else None
+        df_json = json.dumps(df, allow_nan=False) if df is not None else None
         await db_call(lambda: _exec(
             "INSERT INTO positions (sortie_id, callsign, t, lat, lon, alt_ft,"
             " hdg_true, df_json) VALUES (?,?,?,?,?,?,?,?)",

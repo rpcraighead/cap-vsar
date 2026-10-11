@@ -126,7 +126,8 @@ def test_authenticated_session_callsign_overrides_the_claimed_one(sockets, monke
     try:
         access.init_auth_db()
         sess_id = access.create_session('MRO-1', 'base', 'Mission Radio Operator 1', callsign='MRO-1')
-        with client.websocket_connect('/api/radio/stream', cookies={access.SESSION_COOKIE: sess_id}) as sock:
+        client.cookies.set(access.SESSION_COOKIE, sess_id)   # on the client: Starlette 1.x
+        with client.websocket_connect('/api/radio/stream') as sock:
             sock.send_json({'action': 'join', 'callsign': 'INSTRUCTOR', 'channel': 'primary'})
             sock.receive_json()
             assert [r.callsign for r in radio.SESSIONS] == ['MRO-1']
@@ -599,9 +600,8 @@ def test_join_with_a_session_uses_the_session_callsign(sockets, monkeypatch):
     try:
         sess = access.create_session('X7QM-2FBX', 'base', 'Mission Radio Operator 1',
                                      callsign='MRO 1')
-        with client.websocket_connect(
-                '/api/radio/stream',
-                cookies={access.SESSION_COOKIE: sess}) as sock:
+        client.cookies.set(access.SESSION_COOKIE, sess)
+        with client.websocket_connect('/api/radio/stream') as sock:
             sock.send_json({'action': 'join', 'callsign': 'MISSION BASE',
                             'channel': 'primary'})
             assert sock.receive_json()['type'] == 'tuned'
@@ -712,3 +712,141 @@ def test_the_error_branch_routes_through_the_classifier():
         'the error branch does not go through handleServerError: ' + branch)
     assert 'connectionLost' in src.split('function handleServerError', 1)[1][:600], (
         'handleServerError never schedules a reconnect')
+
+
+# ------------------------------------------------------------- wave C (X2-5/7)
+
+def _on_loop(real, seen):
+    """Wrap a function so the test can tell whether it ran on the event loop."""
+    def wrapper(*a, **kw):
+        try:
+            asyncio.get_running_loop()
+            seen.append('loop')
+        except RuntimeError:
+            seen.append('thread')
+        return real(*a, **kw)
+    return wrapper
+
+
+def test_join_looks_the_session_up_off_the_event_loop(sockets, monkeypatch):
+    """X2-5: a blocking SQLite read on the loop that carries 20 ms audio."""
+    client, _ = sockets
+    seen = []
+    monkeypatch.setattr(access, 'get_session_from_request',
+                        _on_loop(access.get_session_from_request, seen))
+    with join(client) as sock:
+        hello(sock)
+    assert seen == ['thread']
+
+
+def _run_on_loop(r, fn):
+    """Run fn() on the radio's event loop and wait for it."""
+    import threading
+    done = threading.Event()
+    def call():
+        try:
+            fn()
+        finally:
+            done.set()
+    r.loop.call_soon_threadsafe(call)
+    assert done.wait(2)
+
+
+def _wait(cond, seconds=3.0):
+    end = time.time() + seconds
+    while time.time() < end:
+        if cond():
+            return True
+        time.sleep(.02)
+    return False
+
+
+def test_the_watchdog_belongs_to_the_radio_not_to_the_first_face(sockets):
+    """X2-7: it used to be a pump task of the face that opened the radio, so
+    when that tab closed the desk's other face had no watchdog."""
+    client, clients = sockets
+    with join(client) as a:
+        hello(a, 'BASE A')
+        with join(client) as b:
+            hello(b, 'BASE A')
+            r = next(iter(radio.SESSIONS))
+            a.close()                       # the opening tab goes away
+            assert _wait(lambda: len(r.faces) == 1)
+            assert r.watchdog_task is not None and not r.watchdog_task.done()
+            clients[0].stopped = True       # the Mumble link dies
+            assert _wait(lambda: r.failed), 'nothing noticed the dead link'
+            reply = b.receive_json()        # the surviving face is told, then cut off
+            assert reply['type'] == 'error'
+
+
+def test_close_cancels_the_watchdog(sockets):
+    client, _ = sockets
+    with join(client) as sock:
+        hello(sock)
+        r = next(iter(radio.SESSIONS))
+        task = r.watchdog_task
+        assert task is not None
+    assert _wait(lambda: task.done()), 'the watchdog outlived its radio'
+
+
+def test_a_full_queue_drops_that_face_not_the_radio(sockets):
+    """X2-7: one wedged tablet marked the whole radio failed."""
+    client, _ = sockets
+    with join(client) as a, join(client) as b:
+        hello(a, 'BASE A')
+        hello(b, 'BASE A')
+        r = next(iter(radio.SESSIONS))
+        slow = next(iter(r.faces))           # the first face attached
+        def jam():
+            q = r.faces[slow]
+            while not q.full():
+                q.put_nowait({'type': 'pong'})
+            r.enqueue({'type': 'pong'})
+        _run_on_loop(r, jam)
+        assert slow not in r.faces and len(r.faces) == 1
+        assert not r.failed, 'one slow face failed the whole radio'
+        b.send_json({'action': 'ping'})
+        assert b.receive_json()['type'] == 'pong'   # the other face still works
+
+
+# ------------------------------------------------- improvement 4: intercom
+
+def test_crew_class_comes_from_the_roster_seat_not_a_callsign_substring():
+    assert radio.classify_crew('Mission Pilot', 'CAP 423') == 'pilot'
+    assert radio.classify_crew('Mission Observer', 'CAP 423') == 'crew'
+    assert radio.classify_crew('Mission Scanner', 'CAP 423') == 'crew'
+    assert radio.classify_crew('Mission Copilot', 'CAP 423') == 'copilot'
+    assert radio.classify_crew('Mission Radio Operator 1', 'MRO 1') == 'other'
+    # the old substring test called every one of these a mission observer
+    assert radio.classify_crew(None, 'MOUNTAIN BASE') == 'other'
+    assert radio.classify_crew(None, 'HOMOSASSA UDF') == 'other'
+    assert radio.classify_crew(None, 'CAP 423 MO') == 'crew'      # no roster: callsign
+    assert radio.classify_crew(None, 'CAP 423 PILOT') == 'pilot'
+
+
+def test_ics_isolation_rules():
+    pilot_iso = {'pilot_isolated': True}
+    assert radio.ics_blocks(pilot_iso, 'crew', 'pilot', 'primary')
+    assert radio.ics_blocks(pilot_iso, 'pilot', 'copilot', 'primary')
+    assert not radio.ics_blocks(pilot_iso, 'other', 'pilot', 'primary')
+    assert not radio.ics_blocks({}, 'crew', 'pilot', 'primary')
+    split = {'split_com': True}
+    assert radio.ics_blocks(split, 'crew', 'other', 'primary')
+    assert not radio.ics_blocks(split, 'crew', 'other', 'tactical')
+    assert not radio.ics_blocks(split, 'pilot', 'other', 'primary')
+
+
+def test_ics_state_is_kept_per_aircraft(sockets):
+    client, _ = sockets
+    try:
+        default_before = client.get('/api/radio/ics').json()
+        r = client.post('/api/radio/ics', json={'mode': 'PILOT', 'aircraft_id': 'ac-1'})
+        assert r.status_code == 200 and r.json()['pilot_isolated'] is True
+        assert client.get('/api/radio/ics', params={'aircraft': 'ac-1'}).json()['mode'] == 'PILOT'
+        # another aircraft, and the console-wide default the instruments read, are untouched
+        assert client.get('/api/radio/ics', params={'aircraft': 'ac-2'}).json() == default_before
+        assert client.get('/api/radio/ics').json() == default_before
+        assert radio.ics_for('ac-1')['pilot_isolated'] and not radio.ics_for('ac-2')['pilot_isolated']
+        assert client.post('/api/radio/ics', json={'mode': 'ALL', 'aircraft_id': '../x'}).status_code == 422
+    finally:
+        radio.ICS_BY_AIRCRAFT.clear()

@@ -11,18 +11,10 @@ import html
 import secrets
 from urllib.parse import parse_qs, quote
 
-import json
-import time
-import uuid
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
 from .. import access
-from ..hub import hub
-from ..roles import (base_or_instructor, instructor_only, plugin_only,
-                     public_scenario)
-from ..settings import log
-from ..store import _exec, _fetchone, db, db_call, row_to_scenario
 
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
@@ -167,8 +159,8 @@ def api_save_setup(payload: SetupPayload, request: Request):
     return access.save_exercise_setup(
         name=payload.name,
         num_aircraft=payload.num_aircraft,
-        aircraft_list=payload.aircraft,
-        staff_list=payload.staff
+        aircraft_list=[a.model_dump(exclude_none=True) for a in payload.aircraft],
+        staff_list=[st.model_dump(exclude_none=True) for st in payload.staff],
     )
 
 

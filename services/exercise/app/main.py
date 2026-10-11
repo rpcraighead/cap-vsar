@@ -41,8 +41,8 @@ from . import access, propagation, radio
 from .settings import (ALERT_COLUMNS, DB, DEFAULT_EFFECTS, LOG_LEVEL,
                        POSITION_RETENTION_SORTIES, SEED, STATIC,
                        TRACK_PAGE_DEFAULT, TRACK_PAGE_MAX, log)
-from .store import (_exec, _fetchone, db, db_call, init_db, prune_positions,
-                    row_to_scenario)
+from .store import (_exec, _fetchone, db, db_call, init_db, load_effects,
+                    prune_positions, row_to_scenario)
 from .roles import (base_or_instructor, instructor_only, plugin_only,
                     public_scenario, role_gate)
 from .hub import Hub, hub, ticker
@@ -54,7 +54,6 @@ def rehydrate():
 
     Live state was in-process only, so a container restart mid-exercise
     orphaned the sortie: positions were discarded because hub.sortie was None,
-    /api/messages answered empty because it reads memory rather than the table,
     and the row kept stopped=NULL forever. An exercise cannot depend on the
     console never restarting.
     """
@@ -75,20 +74,14 @@ def rehydrate():
         sortie_effects = dict(row).get("effects")
         if sortie_effects:
             try:
-                hub.scenario["effects"] = json.loads(sortie_effects)
+                hub.scenario["effects"] = load_effects(sortie_effects)
             except (TypeError, ValueError):
                 pass
         hub.sortie.pop("effects", None)
-        hub.messages = [
-            {"type": "message", **dict(m)} for m in reversed(c.execute(
-                "SELECT t, sender, recipient, body FROM messages"
-                " WHERE sortie_id=? ORDER BY t DESC LIMIT 100",
-                (row["id"],)).fetchall())]
     # Aircraft are deliberately not restored: their positions are seconds old
     # and the plugins will re-report within a few seconds anyway. A stale
     # aircraft on the map is worse than a briefly empty one.
-    log.info("resumed sortie %s (%d messages)", hub.sortie["id"],
-             len(hub.messages))
+    log.info("resumed sortie %s", hub.sortie["id"])
 
 
 @asynccontextmanager

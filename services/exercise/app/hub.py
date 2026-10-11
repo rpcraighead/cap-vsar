@@ -12,6 +12,9 @@ import asyncio
 import json
 import time
 
+from starlette.concurrency import run_in_threadpool
+
+from . import access
 from .roles import public_aircraft, public_scenario
 from .settings import log
 
@@ -24,8 +27,23 @@ class Hub:
         self.aircraft: dict[str, dict] = {}
         self.sortie: dict | None = None
         self.scenario: dict | None = None
-        self.messages: list[dict] = []
         self.truth_clients: set[WebSocket] = set()   # sockets that logged in as instructor
+        self._lock_loop = None
+        self._lock: asyncio.Lock | None = None
+
+    def sortie_lock(self) -> asyncio.Lock:
+        """The lock that serialises start, stop, reveal, effects and scenario delete (X2-9).
+
+        Each of those reads hub.sortie, awaits a worker thread and then writes
+        hub.sortie back, so two of them interleaving could leave the hub on a
+        sortie the database had closed. One lock per event loop: the console
+        has exactly one, but a test builds a new loop per request and a lock
+        bound to a finished loop raises on contention.
+        """
+        loop = asyncio.get_running_loop()
+        if self._lock is None or self._lock_loop is not loop:
+            self._lock, self._lock_loop = asyncio.Lock(), loop
+        return self._lock
 
     async def broadcast(self, msg: dict):
         """Send to every console at once, and drop anyone who cannot keep up.
@@ -36,7 +54,7 @@ class Hub:
         """
         if not self.clients:
             return
-        text = json.dumps(msg)
+        text = json.dumps(msg, allow_nan=False)
         await self._deliver([(w, text) for w in list(self.clients)])
 
     async def _deliver(self, pairs):
@@ -86,8 +104,14 @@ class Hub:
         """
         if not self.clients:
             return
-        full = json.dumps({"type": "state", **self.snapshot(include_df=True)})
-        public = json.dumps({"type": "state", **self.snapshot()})
+        # X2-3: allow_nan=False. A bare NaN is not JSON, every browser's
+        # JSON.parse rejects the frame, and it was being sent to all of them
+        # once a second. A bad value now raises here, once, where it can be
+        # logged, instead of silently breaking every console.
+        full = json.dumps({"type": "state", **self.snapshot(include_df=True)},
+                          allow_nan=False)
+        public = json.dumps({"type": "state", **self.snapshot()},
+                            allow_nan=False)
         pairs = [(w, full if w in self.truth_clients else public)
                  for w in list(self.clients)]
         await self._deliver(pairs)
@@ -97,15 +121,36 @@ hub = Hub()
 
 
 
+SESSION_SWEEP_EVERY_S = 600
+
+
 async def ticker():
-    """Push state to consoles, and expire aircraft that stop reporting."""
+    """Push state to consoles, and expire aircraft that stop reporting.
+
+    Also the home of the low-frequency housekeeping (X2-6): expired login
+    sessions are swept here every ten minutes, in a worker thread, instead of
+    on every authenticated request.
+    """
+    last_sweep = time.monotonic()
     while True:
         await asyncio.sleep(1.0)
+        if time.monotonic() - last_sweep >= SESSION_SWEEP_EVERY_S:
+            last_sweep = time.monotonic()
+            try:
+                await run_in_threadpool(access.sweep_expired_sessions)
+            except Exception as e:
+                log.warning("session sweep failed: %s", e)
         now = time.time()
         stale = [k for k, a in hub.aircraft.items() if now - a["t"] > 30]
         for k in stale:
             hub.aircraft.pop(k, None)
         if hub.clients:
-            await hub.broadcast_state()
+            try:
+                await hub.broadcast_state()
+            except ValueError as e:
+                # A value JSON cannot carry (X2-3). Say so every second rather
+                # than let the exception end the ticker, which would also stop
+                # aircraft expiry for the rest of the exercise.
+                log.error("state not broadcast: %s", e)
 
 

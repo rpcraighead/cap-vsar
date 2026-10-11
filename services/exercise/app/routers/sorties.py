@@ -9,15 +9,14 @@ import json
 import time
 import uuid
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Request
 
 from .. import access
 from ..hub import hub
-from ..roles import (base_or_instructor, instructor_only, plugin_only,
-                     public_scenario)
+from ..roles import instructor_only
 from ..settings import log
 from ..roles import any_role
-from ..store import _exec, _fetchone, db, db_call, row_to_scenario
+from ..store import _exec, db, db_call, row_to_scenario
 
 from ..models import EffectsIn, SortieIn
 from ..settings import TRACK_PAGE_DEFAULT, TRACK_PAGE_MAX
@@ -60,21 +59,25 @@ async def start_sortie(body: SortieIn):
                       " :started, :effects, :truth)",
                       {"id": oid, "scenario_id": sid,
                        "name": body.name or r["name"], "started": started,
-                       "effects": json.dumps(scenario["effects"]),
+                       "effects": json.dumps(scenario["effects"], allow_nan=False),
                        "truth": json.dumps(truth)})
             scenario["_earlier_reveal"] = dict(earlier) if earlier else None
             return oid, scenario
 
-    oid, scenario = await db_call(go)
-    if oid is None:
-        raise HTTPException(404, "no such scenario")
-    earlier = scenario.pop("_earlier_reveal", None)
-    hub.scenario = scenario
-    hub.sortie = {"id": oid, "scenario_id": sid,
-                  "name": body.name or scenario["name"],
-                  "started": started, "stopped": None, "revealed": 0}
-    hub.aircraft.clear()
-    hub.messages.clear()
+    # X2-9: two starts could interleave their database work and then assign
+    # hub.sortie in the opposite order, leaving the hub on a sortie the
+    # database had just closed. The whole change of sortie is one critical
+    # section.
+    async with hub.sortie_lock():
+        oid, scenario = await db_call(go)
+        if oid is None:
+            raise HTTPException(404, "no such scenario")
+        earlier = scenario.pop("_earlier_reveal", None)
+        hub.scenario = scenario
+        hub.sortie = {"id": oid, "scenario_id": sid,
+                      "name": body.name or scenario["name"],
+                      "started": started, "stopped": None, "revealed": 0}
+        hub.aircraft.clear()
     log.info("sortie %s started: scenario %s (%s), band %s",
              oid, sid, scenario.get("name"), scenario.get("band"))
     await hub.broadcast_state()
@@ -89,29 +92,37 @@ async def start_sortie(body: SortieIn):
 
 @router.post("/api/sorties/stop", dependencies=[instructor_only])
 async def stop_sortie():
-    if not hub.sortie:
-        raise HTTPException(400, "no sortie running")
-    stopped = time.time()
-    await db_call(lambda: _exec("UPDATE sorties SET stopped=? WHERE id=?",
-                                (stopped, hub.sortie["id"])))
-    hub.sortie["stopped"] = stopped
-    log.info("sortie %s stopped after %.0f s, %d aircraft reporting",
-             hub.sortie["id"], stopped - hub.sortie["started"],
-             len(hub.aircraft))
+    async with hub.sortie_lock():
+        sortie = hub.sortie
+        if not sortie:
+            raise HTTPException(400, "no sortie running")
+        if sortie.get("stopped"):
+            # Idempotent (X2-9): a double click, or a retry after a timeout,
+            # used to re-stamp `stopped` and move the end of the sortie.
+            return sortie
+        stopped = time.time()
+        await db_call(lambda: _exec(
+            "UPDATE sorties SET stopped=? WHERE id=? AND stopped IS NULL",
+            (stopped, sortie["id"])))
+        sortie["stopped"] = stopped
+        log.info("sortie %s stopped after %.0f s, %d aircraft reporting",
+                 sortie["id"], stopped - sortie["started"], len(hub.aircraft))
     await hub.broadcast_state()
-    return hub.sortie
+    return sortie
 
 
 @router.post("/api/sorties/reveal", dependencies=[instructor_only])
 async def reveal():
     """Debrief: expose beacon truth to every connected console."""
-    if not hub.sortie:
-        raise HTTPException(400, "no sortie running")
-    await db_call(lambda: _exec("UPDATE sorties SET revealed=1 WHERE id=?",
-                                (hub.sortie["id"],)))
-    hub.sortie["revealed"] = 1
-    log.info("sortie %s: beacon truth revealed to every console",
-             hub.sortie["id"])
+    async with hub.sortie_lock():
+        sortie = hub.sortie
+        if not sortie:
+            raise HTTPException(400, "no sortie running")
+        await db_call(lambda: _exec("UPDATE sorties SET revealed=1 WHERE id=?",
+                                    (sortie["id"],)))
+        sortie["revealed"] = 1
+        log.info("sortie %s: beacon truth revealed to every console",
+                 sortie["id"])
     await hub.broadcast_state()
     return {"revealed": True}
 
@@ -126,19 +137,22 @@ async def set_effects(body: EffectsIn):
     masking off. The scenario is the exercise designer's intent; the sortie is
     what is being flown right now. Only the sortie changes here.
     """
-    if not hub.sortie or hub.sortie.get("stopped") or not hub.scenario:
-        raise HTTPException(400, "no sortie running")
-    changes = body.changes()
-    if not changes:
-        return hub.scenario["effects"]
-    hub.scenario["effects"].update(changes)
-    effects_json = json.dumps(hub.scenario["effects"])
-    await db_call(lambda: _exec("UPDATE sorties SET effects=? WHERE id=?",
-                                (effects_json, hub.sortie["id"])))
-    log.info("effects changed on sortie %s: %s", hub.sortie["id"],
-             ", ".join(f"{k}={v!r}" for k, v in sorted(changes.items())))
+    async with hub.sortie_lock():
+        sortie = hub.sortie
+        if not sortie or sortie.get("stopped") or not hub.scenario:
+            raise HTTPException(400, "no sortie running")
+        changes = body.changes()
+        if not changes:
+            return hub.scenario["effects"]
+        hub.scenario["effects"].update(changes)
+        effects = hub.scenario["effects"]
+        effects_json = json.dumps(effects, allow_nan=False)
+        await db_call(lambda: _exec("UPDATE sorties SET effects=? WHERE id=?",
+                                    (effects_json, sortie["id"])))
+        log.info("effects changed on sortie %s: %s", sortie["id"],
+                 ", ".join(f"{k}={v!r}" for k, v in sorted(changes.items())))
     await hub.broadcast_state()
-    return hub.scenario["effects"]
+    return effects
 
 
 @router.get("/api/sorties", dependencies=[any_role])
