@@ -28,12 +28,16 @@ class ControlBridge:
     TRANSFER_TIMEOUT_S = 1.0
 
     def __init__(self, sink, session: str, clock=time.monotonic, *, atomic=False,
-                 channels=CHANNELS):
+                 channels=CHANNELS, brake_max=.35):
         self.sink, self.session, self.clock = sink, session, clock
         self.channels = tuple(channels)
         if (not set(CHANNELS) <= set(self.channels) or len(set(self.channels)) != len(self.channels)
                 or not set(self.channels) <= set(RANGES) or ("brake" in self.channels and not atomic)):
             raise ValueError("Invalid actuator channel set")
+        if (type(brake_max) not in (int, float) or not math.isfinite(brake_max)
+                or not .35 <= brake_max <= 1.0):
+            raise ValueError("Invalid brake limit")
+        self.brake_max = float(brake_max)
         self.prefix = candidate_prefix(session)
         self.generation = 0
         self.state = "MANUAL"
@@ -85,7 +89,7 @@ class ControlBridge:
         if not isinstance(controls, dict) or set(controls) != set(self.channels):
             raise ValueError("Complete actuator frame required")
         for channel, value in controls.items():
-            low, high = RANGES[channel]
+            low, high = (0., self.brake_max) if channel == "brake" else RANGES[channel]
             if (type(value) not in (int, float) or not math.isfinite(value)
                     or not low <= value <= high):
                 raise ValueError("Invalid actuator: %s" % channel)

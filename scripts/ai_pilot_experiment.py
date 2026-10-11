@@ -24,7 +24,7 @@ from services.ai_pilot.experiment import BridgeClient, Recorder, Scenario, diges
 from services.ai_pilot.control_ownership import ControllerLock
 
 
-def inventory(xplane, include_landing=False):
+def inventory(xplane, include_landing=False, include_surface=False):
     aircraft = xplane / "Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf"
     plugins = xplane / "Resources/plugins/PythonPlugins"
     def git(*args):
@@ -35,6 +35,8 @@ def inventory(xplane, include_landing=False):
     sources = [ROOT / "xplane" / name for name in names]
     if include_landing:
         sources.append(ROOT / "xplane/capvsar_landing.py")
+    if include_surface:
+        sources.append(ROOT / "xplane/capvsar_surface.py")
     installed = [plugins / path.name for path in sources]
     return {
         "repository": str(ROOT), "commit": git("rev-parse", "HEAD"),
@@ -64,7 +66,9 @@ def stage_observer(destination, qualification_aircraft=None, mode="qualification
     destination.mkdir(parents=True, exist_ok=False)
     names = ("PI_capvsar_flight_control.py", "capvsar_flight_control_core.py",
              "capvsar_flight_control_mapping.py", "capvsar_telemetry.py", "capvsar_qualification.py")
-    for name in names + (("capvsar_landing.py",) if mode == "landing" else ()):
+    extras = (("capvsar_landing.py",) if mode == "landing" else
+              ("capvsar_surface.py",) if mode == "surface" else ())
+    for name in names + extras:
         shutil.copy2(ROOT / "xplane" / name, destination / name)
     session = secrets.token_hex(16)
     config = {"mode": "observe", "protocol": "atomic-v1", "session": session,
@@ -72,12 +76,14 @@ def stage_observer(destination, qualification_aircraft=None, mode="qualification
               "socket_path": f"/tmp/capvsar-flight-control-{session}.sock"}
     if qualification_aircraft is not None:
         config.update(mode=mode, aircraft_path=str(qualification_aircraft),
-                      expires_unix_s=time.time() + (10800 if mode == "landing" else 3600))
+                      expires_unix_s=time.time() + (10800 if mode in ("landing", "surface") else 3600))
         if mode == "landing":
             from xplane.capvsar_landing import RUNWAYS
             if runway not in RUNWAYS:
                 raise ValueError("Unknown landing runway: " + runway)
             config["runway"] = runway
+        if mode == "surface":
+            config["parking"] = "KSEE East Transient Parking 12"
     fd = os.open(destination / "capvsar_flight_control_config.json",
                  os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w") as stream:
@@ -162,6 +168,9 @@ def main():
     landing.add_argument("destination", type=Path)
     landing.add_argument("--aircraft", type=Path, required=True)
     landing.add_argument("--runway", choices=("KMYF 28R", "KSAN 27"), default="KMYF 28R")
+    surface = commands.add_parser("stage-surface")
+    surface.add_argument("destination", type=Path)
+    surface.add_argument("--aircraft", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "observe":
         if not 2 <= args.seconds <= 600:
@@ -172,8 +181,8 @@ def main():
         print(json.dumps(result, indent=2))
         return 0 if result["outcome"] == "PASS" else 1
     else:
-        stage_observer(args.destination, args.aircraft if args.command in ("stage-qualification", "stage-landing") else None,
-                       mode="landing" if args.command == "stage-landing" else "qualification",
+        stage_observer(args.destination, args.aircraft if args.command in ("stage-qualification", "stage-landing", "stage-surface") else None,
+                       mode="landing" if args.command == "stage-landing" else "surface" if args.command == "stage-surface" else "qualification",
                        runway=args.runway if args.command == "stage-landing" else "KMYF 28R")
     return 0
 

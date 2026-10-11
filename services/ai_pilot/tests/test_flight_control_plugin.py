@@ -134,6 +134,20 @@ def test_plugin_fd_only_readback_does_not_claim_ap_engagement(monkeypatch, tmp_p
     plugin.XPluginStop()
 
 
+def test_surface_sink_owns_toe_brakes_and_releases_them(monkeypatch, tmp_path):
+    fake, plugin = load_plugin(monkeypatch, tmp_path)
+    sink = type(plugin.core.sink)(landing=True, toe_brakes=True)
+    sink.set_override(True)
+    sink.write_control("brake", .7)
+    assert sink.override_state() is True
+    assert sink.read_brakes() == (.7, .7)
+    assert fake.refs["sim/operation/override/override_toe_brakes"] == 1
+    sink.set_override(False)
+    assert sink.override_state() is False
+    assert sink.read_brakes() == (0., 0.)
+    plugin.XPluginStop()
+
+
 def test_plugin_registers_fresh_candidate_namespace_on_verified_garmin_return(monkeypatch, tmp_path):
     fake, plugin = load_plugin(monkeypatch, tmp_path)
     for channel in CHANNELS:

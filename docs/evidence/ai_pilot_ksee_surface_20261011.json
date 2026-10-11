@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-11",
+  "aircraft": "stock X-Plane 12 Cessna_172SP_G1000.acf",
+  "airport": "KSEE",
+  "start": "East Transient Parking 12",
+  "departure_runway": "27R",
+  "authority": "explicit simulated taxi and takeoff clearances for engineering trial; no live ATC integration",
+  "scenario": {
+    "payload_kg": 170,
+    "fuel_kg": 100,
+    "wind_mps": 0,
+    "sea_level_temperature_c": 15,
+    "qnh_pa": 101325,
+    "scenery_apt_dat_sha256": "bd7748202a98bf0b134ba38703f98fe606d47c00dc9d447db509845b162ec079"
+  },
+  "taxi_only": {
+    "outcome": "PASS",
+    "trace": "/home/ron/.cache/capvsar/ai-pilot/ksee_surface_taxi_20261011_trial8.jsonl",
+    "sha256": "583682755525b39937aec698abd6fd467a87baf243b338587e14be056e325a30",
+    "hold_latitude_deg": 32.825955,
+    "hold_longitude_deg": -116.964434
+  },
+  "diagnostic_checkpoint_takeoff": {
+    "outcome": "PASS",
+    "start_at": "D8 hold diagnostic checkpoint",
+    "trace": "/home/ron/.cache/capvsar/ai-pilot/ksee_hold_takeoff_20261011_trial4.jsonl",
+    "sha256": "485b1a354b1ef60ab1e9f9c3477a5e45d77596043ff9a7130383b5765f58192e"
+  },
+  "continuous_parking_to_takeoff": {
+    "outcome": "PASS",
+    "trace": "/home/ron/.cache/capvsar/ai-pilot/ksee_parking_to_takeoff_20261011_trial2.jsonl",
+    "sha256": "dbb6b582cfb321442100013d5e4c2415bdff5f0874792b853d9239c733c27346",
+    "sample_count": 10788,
+    "hold_groundspeed_mps": 0.49,
+    "max_taxi_groundspeed_mps": 3.98,
+    "lineup_along_runway_m": 74.7,
+    "lineup_heading_true_deg": 278.55,
+    "surveyed_runway_heading_true_deg": 282.10,
+    "rotation_kias": 55.13,
+    "rotation_along_runway_m": 334.0,
+    "first_4ft_airborne_kias": 71.09,
+    "first_4ft_airborne_along_runway_m": 508.5,
+    "max_ground_roll_centerline_offset_m": 5.54,
+    "max_ground_roll_heading_error_deg": 6.99,
+    "climb_gradient_ft_per_nm_at_0_3_nm_airborne": 653,
+    "end_agl_ft": 300.23,
+    "end_kias": 72.84,
+    "end_simulator_paused": true,
+    "end_control_override": false,
+    "end_toe_brakes_ratio": [0, 0]
+  },
+  "limits": "This qualifies only the attended simulator taxi, runway entry, takeoff and first 300 ft AGL in the pinned no-wind scenario. The Mission Bay Two departure to 5,000 ft, actual ATC, vectors, and KMYF ILS remain untested."
+}

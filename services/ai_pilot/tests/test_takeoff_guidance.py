@@ -86,6 +86,34 @@ class TakeoffGuidanceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             command.actuator_frame(float("nan"))
 
+    def test_runway_roll_uses_full_rudder_authority_for_drift(self):
+        self.clear()
+        self.pilot.step(self.observation())
+        correction = self.pilot.step(self.observation(sim_time_s=2,
+                                                      heading_true_deg=272,
+                                                      cross_runway_m=-2,
+                                                      groundspeed_mps=8))
+        self.assertEqual(correction.phase, "roll")
+        self.assertGreater(correction.yaw, .6)
+
+    def test_early_climb_retains_positive_pitch_at_high_airspeed(self):
+        self.clear()
+        self.pilot.step(self.observation())
+        self.pilot.step(self.observation(sim_time_s=12, kias=70,
+                                         on_ground=False, agl_ft=6,
+                                         pitch_deg=5, altitude_msl_ft=394))
+        command = self.pilot.step(self.observation(sim_time_s=13, kias=75,
+                                                   on_ground=False, agl_ft=8,
+                                                   pitch_deg=2, altitude_msl_ft=396))
+        self.assertEqual(command.phase, "climb")
+        self.assertGreater(command.pitch, .3)
+        correction = self.pilot.step(self.observation(sim_time_s=14, kias=75,
+                                                      on_ground=False, agl_ft=10,
+                                                      pitch_deg=7, altitude_msl_ft=398,
+                                                      heading_true_deg=270,
+                                                      cross_runway_m=-3))
+        self.assertGreater(correction.roll, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

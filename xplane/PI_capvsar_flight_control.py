@@ -28,6 +28,14 @@ except ModuleNotFoundError as error:
     class LandingLab:
         def __init__(self, *_args, **_kwargs):
             raise RuntimeError("Landing laboratory module is not installed")
+try:
+    from capvsar_surface import SurfaceLab
+except ModuleNotFoundError as error:
+    if error.name != "capvsar_surface":
+        raise
+    class SurfaceLab:
+        def __init__(self, *_args, **_kwargs):
+            raise RuntimeError("Surface laboratory module is not installed")
 
 CONFIG = Path(__file__).with_name("capvsar_flight_control_config.json")
 LIVE_PLUGIN_QUALIFIED = False
@@ -42,15 +50,22 @@ NATIVE = {
 
 
 class XPlaneSink:
-    def __init__(self, landing=False):
+    def __init__(self, landing=False, toe_brakes=False):
         self.controls = {key: xp.findDataRef(ref) for key, ref in NATIVE.items()}
         self.brakes = None
+        self.toe_brake_override = (xp.findDataRef("sim/operation/override/override_toe_brakes")
+                                   if toe_brakes else None)
         if landing:
-            self.brakes = tuple(xp.findDataRef(name) for name in (
-                "sim/flightmodel/controls/l_brake_add", "sim/flightmodel/controls/r_brake_add"))
+            names = (("sim/cockpit2/controls/left_brake_ratio",
+                      "sim/cockpit2/controls/right_brake_ratio") if toe_brakes else
+                     ("sim/flightmodel/controls/l_brake_add",
+                      "sim/flightmodel/controls/r_brake_add"))
+            self.brakes = tuple(xp.findDataRef(name) for name in names)
             if not all(self.brakes):
                 raise RuntimeError("Required landing brake datarefs missing")
             self.controls["brake"] = self.brakes[0]
+        if toe_brakes and not self.toe_brake_override:
+            raise RuntimeError("Required toe-brake override missing")
         self.cockpit_throttle = xp.findDataRef("sim/cockpit2/engine/actuators/throttle_ratio")
         self.joystick = xp.findDataRef("sim/operation/override/override_joystick")
         self.throttles = xp.findDataRef("sim/operation/override/override_throttles")
@@ -74,7 +89,9 @@ class XPlaneSink:
 
     def override_state(self):
         a, b = xp.getDatai(self.joystick), xp.getDatai(self.throttles)
-        return True if a == b == 1 else False if a == b == 0 else None
+        states = (a, b) + ((xp.getDatai(self.toe_brake_override),)
+                           if self.toe_brake_override else ())
+        return True if all(value == 1 for value in states) else False if all(value == 0 for value in states) else None
 
     def set_override(self, enabled):
         if not enabled and self.brakes:
@@ -83,6 +100,8 @@ class XPlaneSink:
         value = 1 if enabled else 0
         xp.setDatai(self.joystick, value)
         xp.setDatai(self.throttles, value)
+        if self.toe_brake_override:
+            xp.setDatai(self.toe_brake_override, value)
 
     def write_control(self, channel, value):
         if channel == "brake":
@@ -148,7 +167,7 @@ class PythonInterface:
 
     def XPluginStart(self):
         config = json.loads(CONFIG.read_text()) if CONFIG.is_file() else None
-        if config and (LIVE_PLUGIN_QUALIFIED or config.get("mode") in ("observe", "qualification", "landing")):
+        if config and (LIVE_PLUGIN_QUALIFIED or config.get("mode") in ("observe", "qualification", "landing", "surface")):
             self.observe_only = config.get("mode") == "observe"
             session = config["session"]
             candidate_prefix(session)
@@ -158,14 +177,18 @@ class PythonInterface:
                 raise ValueError("Flight-control socket path must be task-specific under /tmp")
             self.config = config
             landing = config.get("mode") == "landing"
-            self.core = ControlBridge(XPlaneSink(landing=landing), session,
+            surface = config.get("mode") == "surface"
+            braked = landing or surface
+            self.core = ControlBridge(XPlaneSink(landing=braked, toe_brakes=surface), session,
                                       atomic=config.get("protocol") == "atomic-v1",
-                                      channels=CHANNELS + ("brake",) if landing else CHANNELS)
+                                      channels=CHANNELS + ("brake",) if braked else CHANNELS,
+                                      brake_max=1. if surface else .35)
             self.telemetry = Telemetry(xp, self.core.sink, session)
-            if config.get("mode") in ("qualification", "landing"):
+            if config.get("mode") in ("qualification", "landing", "surface"):
                 if not self.core.atomic:
                     raise ValueError("Qualification requires atomic-v1 protocol")
-                self.lab = (LandingLab if landing else QualificationLab)(xp, self.core.sink, config)
+                lab_type = SurfaceLab if surface else LandingLab if landing else QualificationLab
+                self.lab = lab_type(xp, self.core.sink, config)
                 self.lab_sessions.add(session)
             if not self.observe_only and not self.core.atomic:
                 self._register_candidates(session)
@@ -308,7 +331,8 @@ class PythonInterface:
                     result = self.lab.reset(self.core, **request)
                     self.lab_sessions.add(new_session)
                     self.core = ControlBridge(self.core.sink, new_session, atomic=True,
-                                              channels=CHANNELS + ("brake",) if isinstance(self.lab, LandingLab) else CHANNELS)
+                                              channels=CHANNELS + ("brake",) if isinstance(self.lab, (LandingLab, SurfaceLab)) else CHANNELS,
+                                              brake_max=1. if isinstance(self.lab, SurfaceLab) else .35)
                     self.telemetry.session = new_session
                     self.snapshot = None
                     answer.put_nowait({**result, "bridge": self.core.status()})
@@ -414,7 +438,7 @@ class PythonInterface:
                 if self.lab and self.core.state == "ACTIVE":
                     self.lab.verify_identity()
                 self.core.tick()
-                if isinstance(self.lab, LandingLab):
+                if isinstance(self.lab, (LandingLab, SurfaceLab)):
                     left, right = self.core.sink.read_brakes()
                     self.actuator_readback = {
                         "wall_time_s": time.monotonic(), "frame_sequence": self.core.frame_sequence,
@@ -426,7 +450,7 @@ class PythonInterface:
     def capture_loop(self, sinceLast, elapsed, counter, refCon):
         try:
             self.snapshot = self.telemetry.capture(counter)
-            if isinstance(self.lab, LandingLab) and self.actuator_readback:
+            if isinstance(self.lab, (LandingLab, SurfaceLab)) and self.actuator_readback:
                 self.snapshot["actuator_readback"] = dict(self.actuator_readback)
             if self.lab:
                 self.lab.check_flight(self.snapshot, self.core)

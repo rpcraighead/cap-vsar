@@ -112,15 +112,32 @@ class TaxiGuidance:
         if remaining <= 2:
             return GroundCommand(brake=.35, reason="brake at taxi point")
         desired_speed = min(4., math.sqrt(2*1.0*max(0., remaining-2)))
+        target_heading = math.degrees(math.atan2(dx, dy)) % 360
+        leg_index = self.coordinator._leg_index
+        if remaining < 12 and leg_index + 1 < len(self.route.legs):
+            following = self.route.legs[leg_index + 1]
+            end, following_end = self.points[following.start], self.points[following.end]
+            next_heading = math.degrees(math.atan2(following_end.east_m-end.east_m,
+                                                   following_end.north_m-end.north_m)) % 360
+            corner = wrap180(next_heading-target_heading)
+            if 45 <= abs(corner) <= 120:
+                blend = clamp((12-remaining)/10, 0., 1.)
+                target_heading = (target_heading + blend*corner) % 360
+                desired_speed = min(desired_speed, 1.5)
         if o.groundspeed_mps > desired_speed:
             return GroundCommand(brake=clamp(.12*(o.groundspeed_mps-desired_speed),
                                              .05, .35), reason="decelerate before taxi point")
-        target_heading = math.degrees(math.atan2(dx, dy)) % 360
         heading_error = wrap180(target_heading-o.heading_true_deg)
-        if abs(heading_error) > 45:
+        if abs(heading_error) > 110:
             self.fault = "taxi heading outside capture envelope"
             return GroundCommand(brake=.35, reason=self.fault)
-        yaw = clamp(.025*heading_error-.06*cross, -.4, .4)
-        throttle = clamp(.07+.05*(desired_speed-o.groundspeed_mps), 0., .22)
+        if abs(heading_error) > 45:
+            # A parking exit or sharp taxiway corner needs a slow rolling turn.
+            # Stay inside the surveyed corridor; a failed turn latches a stop.
+            if o.groundspeed_mps > 1.5:
+                return GroundCommand(brake=.15, reason="slow for taxi corner")
+            desired_speed = min(desired_speed, 1.)
+        yaw = clamp(.025*heading_error-.06*cross, -1., 1.)
+        throttle = clamp(.16+.08*(desired_speed-o.groundspeed_mps), 0., .28)
         return GroundCommand(yaw=yaw, throttle=throttle,
                              reason=directive.action)

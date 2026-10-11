@@ -29,7 +29,7 @@ class TaxiGuidanceTests(unittest.TestCase):
         self.taxi.authorize_taxi(ClearanceSource.ATC)
         command = self.guide.step(self.observation())
         self.assertGreater(command.throttle, 0)
-        self.assertLessEqual(command.throttle, .22)
+        self.assertLessEqual(command.throttle, .28)
         self.assertEqual(command.brake, 0)
         self.guide.step(self.observation(north_m=99,groundspeed_mps=.2))
         self.assertEqual(self.taxi.phase, TaxiPhase.HOLDING_SHORT_DEPARTURE)
@@ -52,6 +52,32 @@ class TaxiGuidanceTests(unittest.TestCase):
         self.assertGreater(command.brake,0)
         second=TaxiGuidance(self.taxi,self.route,self.guide.points)
         self.assertEqual(second.step(self.observation(on_ground=False)).brake,.35)
+
+    def test_slow_rolling_turn_from_parking_heading(self):
+        self.taxi.authorize_taxi(ClearanceSource.ATC)
+        turn = self.guide.step(self.observation(heading_true_deg=60))
+        self.assertAlmostEqual(turn.throttle, .24)
+        self.assertLess(turn.yaw, 0)
+        self.assertLessEqual(abs(turn.yaw), 1.)
+        slow = self.guide.step(self.observation(heading_true_deg=60,
+                                                groundspeed_mps=2))
+        self.assertEqual((slow.throttle, slow.brake), (0., .15))
+
+    def test_sharp_corner_steering_begins_before_node(self):
+        route = TaxiRoute(RoutePurpose.OUTBOUND,
+                          (TaxiLeg("ramp", "corner"), TaxiLeg("corner", "hold short")))
+        taxi = TaxiCoordinator("ramp", towered=True)
+        taxi.load_route(route)
+        taxi.authorize_taxi(ClearanceSource.ATC)
+        guide = TaxiGuidance(taxi, route, {"ramp": TaxiPoint(0, 0),
+                                          "corner": TaxiPoint(0, 30),
+                                          "hold short": TaxiPoint(30, 30)},
+                             corridor_half_width_m=10.)
+        turn = guide.step(self.observation(north_m=22, groundspeed_mps=1))
+        self.assertGreater(turn.yaw, .5)
+        self.assertGreater(turn.throttle, 0)
+        brake = guide.step(self.observation(north_m=22, groundspeed_mps=2.5))
+        self.assertGreater(brake.brake, 0)
 
 
 if __name__ == "__main__":

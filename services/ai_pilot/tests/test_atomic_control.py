@@ -19,6 +19,22 @@ def setup():
     return wall, sim, bridge, frame
 
 
+def test_surface_profile_can_command_full_rejected_takeoff_braking_only_when_explicit():
+    wall = [10.]
+    frame = {"session": SESSION, "generation": 0, "sequence": 0,
+             "expires_at": 10.15,
+             "controls": {**{c: 0. for c in CHANNELS}, "brake": 1.}}
+    restricted = ControlBridge(Simulator(), SESSION, clock=lambda: wall[0],
+                               atomic=True, channels=CHANNELS+("brake",))
+    with pytest.raises(ValueError, match="brake"):
+        restricted.submit_frame(**frame)
+    surface = ControlBridge(Simulator(), SESSION, clock=lambda: wall[0],
+                            atomic=True, channels=CHANNELS+("brake",),
+                            brake_max=1.)
+    surface.submit_frame(**frame)
+    assert surface.candidates["brake"][0] == 1.
+
+
 @pytest.mark.parametrize("change", [
     {"session": "b" * 32}, {"generation": 1}, {"generation": False},
     {"sequence": -1}, {"sequence": True}, {"expires_at": 10.0},

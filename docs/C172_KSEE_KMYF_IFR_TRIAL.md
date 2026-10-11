@@ -47,15 +47,13 @@ real-world clearance is implied.
 ## Implementation order
 
 1. Survey a particular parking spawn, route, hold lines and 27R runway frame
-   from the installed apt.dat network against the FAA airport diagram. KSEE
-   has 195 taxi nodes and 194 taxi edges in installed scenery, but the route
-   and crossing identities have not yet been validated. A graph-only candidate
-   from node 48 on the east side to node 124 near 27R is
-   `48–49–55–57–56–58–59–60–175–128–127–126–125–124` (about 547 m,
-   along A/B/D taxiway labels). The east transient parking position is about
-   56 m from node 48, with no mapped connector in this candidate. Neither that
-   apron gap nor any hold line is approved for autonomous movement. Ground
-   guidance and takeoff control remain offline until the whole path is mapped.
+   from the installed apt.dat network against the FAA airport diagram. The
+   selected spot is **East Transient Parking 12**. The pinned scenery route is
+   `Parking 12–49–55–57–56–58–59–60–175–128–127–126–125–124`, with the
+   first 35 m as an apron connector and node 124 as the D8 hold point. The
+   surveyed network portion is about 496 m. The controller checks the pinned
+   scenery hash and samples every leg against all three KSEE runway footprints.
+   The apron connector and physical hold marking still need visual review.
 2. Add a bounded ground/takeoff mode to the expiring XPPython3 bridge, with
    independent brake, throttle, flap, heading and runway readback. First run
    attended taxi-only and runway-only trials, each with recorded traces and
@@ -73,6 +71,30 @@ real-world clearance is implied.
    missed approach and landing-to-taxi recovery. Only measured runs count as
    qualification.
 
-Current code is the taxi authority coordinator, offline bounded ground
-guidance, and offline stock-C172 takeoff/initial-climb guidance. Focused tests
-pass; no live taxi, takeoff, Mission Bay departure, or ILS result is claimed.
+On 11 October 2026, an attended stock-C172 taxi-only diagnostic **passed** from
+East Transient Parking 12 to the D8 hold point. The last recorded position was
+32.825955° N, 116.964434° W, below 0.5 m/s. The bridge then confirmed pause,
+override release and toe-brake release. Earlier runs exposed a parking-brake
+reset defect, a brake dataref that did not apply during the roll, and two sharp
+corners that needed full nosewheel steering and early turn anticipation. The
+passing trace is
+`/home/ron/.cache/capvsar/ai-pilot/ksee_surface_taxi_20261011_trial8.jsonl`.
+This is an engineering diagnostic using explicit **simulated** taxi authority;
+it does not represent an ATC clearance or a complete sortie. A subsequent
+taxi-plus-takeoff run stopped at D8, entered 27R and lined up near runway
+along-track 75 m. It rejected the initial roll at roughly 8 m/s when the
+heading drifted about 15° left. Revised steering and initial-climb speed
+control then passed both a hold-point diagnostic and a **continuous Parking
+12-to-300 ft AGL trial**. The continuous run stopped at D8 at 0.49 m/s,
+lined up 75 m along 27R with heading 278.6° true (surveyed 282.1°), crossed
+55 KIAS at runway along-track 334 m, became airborne at 71 KIAS near
+along-track 509 m, and ended at 300.2 ft AGL and 72.8 KIAS. During the ground
+roll the maximum centerline offset was 5.6 m and heading error was 7.0°.
+At 0.3 NM airborne, climb from the 388 ft field elevation was about
+653 ft/NM. The complete trace is
+`/home/ron/.cache/capvsar/ai-pilot/ksee_parking_to_takeoff_20261011_trial2.jsonl`
+(SHA-256 `dbb6b582cfb321442100013d5e4c2415bdff5f0874792b853d9239c733c27346`).
+The bridge confirmed pause and released overrides on completion. The hold-point
+checkpoint is marked as an intervention and is not part of this continuous
+pass. Actual ATC, the Mission Bay Two departure to 5,000 ft, and ILS
+qualification remain pending.

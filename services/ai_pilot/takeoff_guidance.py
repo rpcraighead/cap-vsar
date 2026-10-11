@@ -1,9 +1,8 @@
-"""Offline stock-C172 runway roll and initial-climb controller.
+"""Bounded stock-C172 runway roll and initial-climb controller.
 
-This controller is deliberately not wired to the live X-Plane bridge yet. A
-surveyed runway frame, independent telemetry and a takeoff-mode bridge profile
-are prerequisites for live control. Speeds come from the bundled X-Plane C172
-pilot operating manual; the KSEE 27R climb-gradient gate is from FAA MZB2.
+Speeds come from the bundled X-Plane C172 pilot operating manual; the KSEE 27R
+climb-gradient gate is from FAA Mission Bay Two. Live use requires a surveyed
+runway frame, independent telemetry and the expiring attended surface bridge.
 """
 from __future__ import annotations
 
@@ -48,8 +47,8 @@ class TakeoffObservation:
                    self.engine_rpm, self.flap_ratio)
         if any(not math.isfinite(x) for x in numbers):
             raise ValueError("takeoff observation must be finite")
-        if min(self.kias, self.groundspeed_mps, self.agl_ft,
-               self.climb_distance_nm, self.engine_rpm, self.flap_ratio) < 0:
+        if (min(self.kias, self.groundspeed_mps, self.climb_distance_nm,
+                self.engine_rpm, self.flap_ratio) < 0 or self.agl_ft < -1):
             raise ValueError("takeoff observation has a negative physical quantity")
 
 
@@ -134,7 +133,7 @@ class TakeoffGuidance:
                 if o.kias >= self.VR_KIAS:
                     self.phase = "rotate"
                 heading_error = wrap180(self.heading_true_deg-o.heading_true_deg)
-                yaw = clamp(.025*heading_error-.02*o.cross_runway_m, -.35, .35)
+                yaw = clamp(.06*heading_error-.04*o.cross_runway_m, -1., 1.)
                 target_pitch = 7. if self.phase == "rotate" else 1.
                 pitch = clamp(.09*(target_pitch-o.pitch_deg)-.025*o.pitch_rate_dps,
                               -.2, .45)
@@ -151,10 +150,17 @@ class TakeoffGuidance:
             if .3 <= o.climb_distance_nm and o.altitude_msl_ft < 2000:
                 achieved = (o.altitude_msl_ft-self.field_elevation_ft) / o.climb_distance_nm
                 self.gradient_deficit |= achieved < self.MIN_GRADIENT_FT_PER_NM
-            target_pitch = clamp(7.+.7*(target-o.kias), 2., 12.)
+            if o.agl_ft < 100:
+                target_pitch = clamp(7.+.35*(o.kias-target), 5., 12.)
+            else:
+                target_pitch = clamp(7.+.4*(o.kias-target), 4., 12.)
             pitch = clamp(.09*(target_pitch-o.pitch_deg)-.025*o.pitch_rate_dps,
                           -.25, .4)
-            return TakeoffCommand(pitch=pitch, throttle=1., target_kias=target,
+            heading_target = self.heading_true_deg-clamp(o.cross_runway_m*.15, -8., 8.)
+            heading_error = wrap180(heading_target-o.heading_true_deg)
+            bank_target = clamp(heading_error*1.1, -8., 8.)
+            roll = clamp((bank_target-o.roll_deg)*.025, -.25, .25)
+            return TakeoffCommand(roll=roll, pitch=pitch, yaw=.1, throttle=1., target_kias=target,
                                   phase="climb", reason="initial climb",
                                   intervention_required=self.gradient_deficit)
         raise AssertionError("unreachable takeoff state")
