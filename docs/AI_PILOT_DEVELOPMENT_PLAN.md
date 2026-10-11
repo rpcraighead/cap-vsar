@@ -15,6 +15,10 @@ normal 65 KIAS approaches, a low/slow recovery, two 12 kt left-crosswind
 landings and a calm regression all reached a scored full stop. Repeated
 landing qualification, short-field 61 KIAS landings, taxi and takeoff remain
 future milestones.
+The active stock-C172 route is now the
+[KSEE 27R–Mission Bay Two–BAKEL–KMYF ILS 28R trial](C172_KSEE_KMYF_IFR_TRIAL.md).
+Its taxi and takeoff controllers are offline candidates pending surveyed
+airport geometry, a bounded live bridge mode, and trace-backed simulator tests.
 The [first increment](AI_PILOT_FIRST_INCREMENT.md) records the earlier
 observation-only stage. Broader aircraft and mission qualification remains
 outstanding.

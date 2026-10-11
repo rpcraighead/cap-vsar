@@ -30,6 +30,14 @@ class TaxiCoordinatorTests(unittest.TestCase):
             ),
         )
 
+    def clear_and_depart(self):
+        self.taxi.load_route(self.outbound)
+        self.taxi.authorize_taxi(ClearanceSource.ATC)
+        while self.taxi.phase is TaxiPhase.TAXIING_OUT:
+            self.taxi.complete_leg()
+        self.taxi.authorize_departure_runway("17", ClearanceSource.ATC, takeoff=True)
+        self.taxi.mark_airborne()
+
     def test_towered_airport_holds_until_taxi_clearance_is_received(self):
         self.taxi.load_route(self.outbound)
         directive = self.taxi.directive()
@@ -146,14 +154,14 @@ class TaxiCoordinatorTests(unittest.TestCase):
         self.assertEqual(taxi.directive().action, "cross_runway")
 
     def test_return_route_must_end_at_recorded_start_point(self):
-        self.taxi.mark_airborne()
+        self.clear_and_depart()
         self.taxi.mark_landed_and_runway_clear("B1")
         wrong = TaxiRoute(RoutePurpose.RETURN, (leg("B1", "other ramp"),))
         with self.assertRaisesRegex(ValueError, "recorded starting point"):
             self.taxi.load_route(wrong)
 
     def test_after_landing_return_taxi_requires_clearance_and_ends_at_start(self):
-        self.taxi.mark_airborne()
+        self.clear_and_depart()
         self.taxi.mark_landed_and_runway_clear("B1")
         route = TaxiRoute(
             RoutePurpose.RETURN,
