@@ -107,13 +107,31 @@ class RawIn(BaseModel):
 
 
 @app.get("/api/health")
-async def health() -> dict:
-    return {
-        "status": "ok",
-        "board_present": BOARD_PATH.is_file(),
-        "git_sync": sync.is_repo(),
+async def health() -> JSONResponse:
+    """O2-6: unhealthy means unhealthy, so the compose healthcheck can fail.
+
+    The board is only useful with its board file, and with git sync on (the
+    deployed default) only if /repo is a real checkout; `GitSync.pull` on a
+    non-repo is a quiet no-op, which would otherwise read as a working board
+    nobody had written to. A missing write token is NOT a health failure: it
+    is a supported read-only configuration.
+    """
+    board_present = BOARD_PATH.is_file()
+    is_repo = sync.is_repo()
+    problems = []
+    if not board_present:
+        problems.append(f"board file missing: {BOARD_PATH}")
+    if GIT_SYNC and not is_repo:
+        problems.append(f"git sync is on but {REPO} is not a git checkout")
+    body = {
+        "status": "degraded" if problems else "ok",
+        "board_present": board_present,
+        "git_sync": is_repo,
         "writes_enabled": bool(TOKEN),
     }
+    if problems:
+        body["problems"] = problems
+    return JSONResponse(body, status_code=503 if problems else 200)
 
 
 @app.get("/api/board")

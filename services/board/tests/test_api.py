@@ -20,6 +20,36 @@ def test_health_reports_configuration(make_app):
     assert body["git_sync"] is False
 
 
+def test_health_is_503_when_the_board_file_is_missing(make_app):
+    """O2-6: the compose healthcheck must be able to fail."""
+    client, repo = make_app()
+    repo.joinpath("docs/BOARD.md").unlink()
+    resp = client.get("/api/health")
+    assert resp.status_code == 503
+    body = resp.json()
+    assert body["status"] == "degraded"
+    assert any("board file missing" in p for p in body["problems"])
+
+
+def test_health_is_503_when_git_sync_is_on_but_repo_is_not_a_checkout(make_app):
+    """O2-6: GitSync.pull on a non-repo is a silent no-op; health must not be."""
+    client, _ = make_app(git_sync="1")  # board file present, but no .git
+    resp = client.get("/api/health")
+    assert resp.status_code == 503
+    body = resp.json()
+    assert body["git_sync"] is False
+    assert any("not a git checkout" in p for p in body["problems"])
+
+
+def test_health_is_ok_for_a_real_checkout_and_without_a_write_token(make_app, git_repo):
+    _, work = git_repo
+    client, _ = make_app(repo=work, git_sync="1")
+    resp = client.get("/api/health")
+    assert resp.status_code == 200
+    assert resp.json()["git_sync"] is True
+    assert resp.json()["writes_enabled"] is False
+
+
 def test_get_board_returns_the_parsed_board(make_app):
     client, _ = make_app()
     body = client.get("/api/board").json()
@@ -107,7 +137,9 @@ def test_the_page_and_its_stylesheet_are_served(make_app):
 def test_a_missing_board_file_is_reported_not_crashed(make_app):
     client, repo = make_app(board_text=None)
     repo.joinpath("docs/BOARD.md").unlink(missing_ok=True)
-    assert client.get("/api/health").json()["board_present"] is False
+    health = client.get("/api/health")
+    assert health.status_code == 503
+    assert health.json()["board_present"] is False
     assert client.get("/api/board").json()["tasks"] == []
 
 
