@@ -114,6 +114,9 @@ print("\n== the browser copies have not drifted ==")
 static = os.path.join(ROOT, "services", "exercise", "app", "static")
 debrief = open(os.path.join(static, "debrief.js"), encoding="utf-8").read()
 base_js = open(os.path.join(static, "base.js"), encoding="utf-8").read()
+# One shared file (geodesy.js) serves the instructor's and the base's bearing
+# rays, so the block under test lives there rather than in base.js.
+geodesy_js = open(os.path.join(static, "geodesy.js"), encoding="utf-8").read()
 
 check("debrief.js uses the same earth radius",
       ("const R_NM = %s;" % geo.R_NM) in debrief, "R_NM = %s" % geo.R_NM)
@@ -166,8 +169,10 @@ check("three bearings make the written-down confidence triangle",
 # their numeric vertices must agree with geo.py.
 browser_block = re.search(
     r"// BEGIN F-8 PURE GEODESY\n(.*?)// END F-8 PURE GEODESY",
-    base_js, re.S)
-check("base.js provides executable bearing-cut geodesy", browser_block is not None)
+    geodesy_js, re.S)
+check("geodesy.js provides executable bearing-cut geodesy", browser_block is not None)
+check("base.js no longer carries its own copy of the geodesy",
+      "BEGIN F-8 PURE GEODESY" not in base_js)
 # node runs the browser half. It is present on the laptop and not on every
 # workstation, and a missing interpreter used to raise FileNotFoundError at
 # IMPORT time, which aborts collection for the entire suite rather than

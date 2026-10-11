@@ -506,7 +506,9 @@ class OfflineAssets(unittest.TestCase):
     pages ask for, and that no remote asset creeps back in.
     """
 
-    VIEWS = ("/", "/base", "/debrief")
+    # "/" is the participant portal, which carries its own inline styles and
+    # no script at all; the instructor console is /instructor.
+    VIEWS = ("/instructor", "/base", "/debrief", "/radio")
 
     def setUp(self):
         self.main, self.client, self.db = build_app()
@@ -520,7 +522,11 @@ class OfflineAssets(unittest.TestCase):
             r'<(?:script[^>]*\bsrc|link[^>]*\bhref)\s*=\s*"(https?://[^"]+)"',
             re.I)
         for view in self.VIEWS:
-            html = self.client.get(view).text
+            response = self.client.get(view)
+            html = response.text
+            self.assertEqual(response.status_code, 200, view)
+            # A page with no script of its own proves nothing about remote ones.
+            self.assertIn('/static/', html, f"{view} loads nothing from /static")
             self.assertEqual(pattern.findall(html), [],
                              f"{view} pulls an asset from the internet")
 
@@ -604,7 +610,12 @@ class F4Backfill(unittest.TestCase):
                   'services/exercise/app/static/base.js').read_text()
         self.assertIn('/api/messages?since=', source)
         self.assertIn('/api/bearings?since=', source)
-        self.assertRegex(source, r'ws\.onopen\s*=.*backfill')
+        # The socket itself is charts.js's vsarConnect, which calls onOpen from
+        # ws.onopen; base.js hands it backfill.
+        self.assertRegex(source, r'onOpen\s*:\s*\(\)\s*=>\s*backfill\(\)')
+        shared = (Path(__file__).resolve().parents[1] /
+                  'services/exercise/app/static/charts.js').read_text()
+        self.assertRegex(shared, r'ws\.onopen\s*=[\s\S]*?opts\.onOpen')
 
 
 class EffectsBelongToTheSortie(unittest.TestCase):
@@ -849,7 +860,7 @@ class Form110OnTheMumbleConsole(unittest.TestCase):
     def test_the_log_never_uses_innerhtml_for_traffic(self):
         """F-6 was the same class of bug in four other views, now escaped in
         ServerStringsAreEscaped. The log must not reintroduce it."""
-        body = self.js[self.js.index("function renderLog"):
+        body = self.js[self.js.index("// BEGIN F2-3 PURE FORM 110 VIEW"):
                        self.js.index("function pad(")]
         self.assertNotIn("innerHTML +=", body)
         self.assertIn("textContent", body)
@@ -961,7 +972,13 @@ class ServerStringsAreEscaped(unittest.TestCase):
     where markup is inert.
     """
 
-    VIEWS = ("base.js", "app.js", "debrief.js", "radio.js", "setup.js")
+    VIEWS = ("base.js", "app.js", "debrief.js", "radio.js", "setup.js",
+             "mission-radio.js")
+    # Which page loads each view, so "the helper is defined" can also mean "the
+    # page loads charts.js, which now owns the shared esc()".
+    PAGES = {"base.js": "base.html", "app.js": "index.html",
+             "debrief.js": "debrief.html", "radio.js": "radio.html",
+             "setup.js": "setup.html", "mission-radio.js": "mission-radio.html"}
     # Server-controlled string fields. Numbers reach HTML through toFixed()
     # or Math.round(), neither of which can carry markup.
     TAINTED = ("body", "sender", "recipient", "note", "callsign", "name",
@@ -977,6 +994,17 @@ class ServerStringsAreEscaped(unittest.TestCase):
     def setUpClass(cls):
         static = Path(__file__).resolve().parents[1] / "services/exercise/app/static"
         cls.src = {name: (static / name).read_text() for name in cls.VIEWS}
+        cls.pages = {name: (static / page).read_text() for name, page in cls.PAGES.items()}
+        cls.charts = (static / "charts.js").read_text()
+
+    def _has_helper(self, name):
+        src = self.src[name]
+        if "const esc =" in src or "function escapeHtml" in src:
+            return True
+        # The shared esc() in charts.js, for a page that loads it before the view.
+        page = self.pages[name]
+        return ("/static/charts.js" in page and "const esc =" in self.charts and
+                page.index("/static/charts.js") < page.index("/static/" + name))
 
     @classmethod
     def _sink_statements(cls, src):
@@ -1026,11 +1054,18 @@ class ServerStringsAreEscaped(unittest.TestCase):
     def test_every_view_defines_an_escape_helper(self):
         for name, src in self.src.items():
             with self.subTest(view=name):
-                self.assertTrue("const esc =" in src or "function escapeHtml" in src,
-                                f"{name} has no escape helper")
-                # The quote matters: two setup.js values sit in attributes.
-                for entity in ("&amp;", "&lt;", "&gt;", "&quot;"):
-                    self.assertIn(entity, src, f"{name} does not produce {entity}")
+                if name == "mission-radio.js":
+                    # No escape helper because it never interpolates: every
+                    # HTML sink in it is a literal, and traffic goes through
+                    # textContent.
+                    for stmt in self._sink_statements(src):
+                        self.assertNotIn("${", stmt, "mission-radio.js builds HTML from a value")
+                    continue
+                self.assertTrue(self._has_helper(name), f"{name} has no escape helper")
+        # The quote matters: two setup.js values sit in attributes.
+        for entity in ("&amp;", "&lt;", "&gt;", "&quot;"):
+            self.assertIn(entity, self.charts + self.src["setup.js"] + self.src["radio.js"],
+                          f"no helper produces {entity}")
 
     def test_the_shared_helper_also_escapes_the_apostrophe(self):
         for name, src in self.src.items():
@@ -1038,6 +1073,7 @@ class ServerStringsAreEscaped(unittest.TestCase):
                 continue  # radio.js predates the shared helper
             with self.subTest(view=name):
                 self.assertIn("&#39;", src)
+        self.assertIn("&#39;", self.charts)
 
     def test_no_tainted_field_reaches_an_html_sink_unescaped(self):
         for name, src in self.src.items():
