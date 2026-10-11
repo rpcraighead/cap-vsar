@@ -40,7 +40,11 @@ SHARED_TO_INSTRUMENTS = {
         ],
     },
     "cap-fm-tdfm-136b": {
-        "lib": ["lcd.lua"],
+        "lib": ["lcd.lua", "knob_push.lua"],
+        "resources": [],
+    },
+    "mo-audio-panel-gma1347": {
+        "lib": ["knob_push.lua"],
         "resources": [],
     },
 }

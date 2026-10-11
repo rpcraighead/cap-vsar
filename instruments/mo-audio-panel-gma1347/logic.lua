@@ -419,7 +419,7 @@ end
 -- moves what the observer hears; the inner is modelled for completeness and
 -- because reaching for the wrong ring is a real cockpit error.
 --
--- Pressing either ring swaps between volume and squelch, which is the closest a
+-- Pressing the knob swaps between volume and squelch, which is the closest a
 -- mouse gets to pull-for-squelch.
 local function adjust(direction, pilot_side)
     if not st.powered then return end
@@ -447,12 +447,17 @@ end
 
 dial_add("knob_outer.png", panel.KNOB_OUTER.x, panel.KNOB_OUTER.y,
          panel.KNOB_OUTER.w, panel.KNOB_OUTER.h, 20,
-         function(direction) adjust(direction, false) end, swap_mode)
+         function(direction) adjust(direction, false) end)
 
--- Added after the outer ring so the inner knob takes the clicks inside it.
+-- Added after the outer ring so the inner knob takes the turns inside it.
 dial_add("knob_inner.png", panel.KNOB_INNER.x, panel.KNOB_INNER.y,
          panel.KNOB_INNER.w, panel.KNOB_INNER.h, 20,
-         function(direction) adjust(direction, true) end, swap_mode)
+         function(direction) adjust(direction, true) end)
+
+-- The two rings share a centre, and the VOL/SQ push is the centre of the pair.
+-- dial_add has no press callback, so the push is a transparent button over that
+-- centre, added last so it is on top (lib/knob_push.lua, as the stock G1000).
+knob_push(panel.KNOB_INNER, swap_mode)
 
 -- DISPLAY BACKUP: reversionary mode. The CAP guide is blunt about this one --
 -- "the red button on the audio panel is display reversion, not a radio control.
@@ -501,6 +506,12 @@ local function update_power()
     else
         st.self_test = false
         stop_playback()
+        -- A dark recorder hears nothing. Forget which radios were mid-transmission
+        -- so the fall of a stale "receiving" flag after power returns cannot
+        -- record a block that was never heard.
+        for com in pairs(st.recorder.active_rx) do
+            st.recorder.active_rx[com] = false
+        end
         si_variable_write(var_fm_audio, false)
         si_variable_write(var_fm_mic, false)
         refresh()
@@ -528,8 +539,11 @@ si_variable_subscribe("cap_mission_cb_audio_in", "BOOL", function(v)
     update_power()
 end)
 
--- Ingest audio events to feed the clearance recorder buffer
-xpl_dataref_subscribe("sim/cockpit2/radios/indicators/com1_receiving", "INT", function(v)
+-- Ingest audio events to feed the clearance recorder buffer. sim/atc/com1_rx and
+-- com2_rx are X-Plane's "is this radio receiving an ATC / ATIS / plugin
+-- transmission" flags (DataRefs.txt, read-only). The names this used to
+-- subscribe, sim/cockpit2/radios/indicators/com{1,2}_receiving, do not exist.
+xpl_dataref_subscribe("sim/atc/com1_rx", "INT", function(v)
     if not st.powered then return end
     local rx = (v == 1)
     if rx and not st.recorder.active_rx.com1 then
@@ -540,7 +554,7 @@ xpl_dataref_subscribe("sim/cockpit2/radios/indicators/com1_receiving", "INT", fu
     end
 end)
 
-xpl_dataref_subscribe("sim/cockpit2/radios/indicators/com2_receiving", "INT", function(v)
+xpl_dataref_subscribe("sim/atc/com2_rx", "INT", function(v)
     if not st.powered then return end
     local rx = (v == 1)
     if rx and not st.recorder.active_rx.com2 then
@@ -551,8 +565,21 @@ xpl_dataref_subscribe("sim/cockpit2/radios/indicators/com2_receiving", "INT", fu
     end
 end)
 
+-- The TDFM leaves its channel and frequency at their last values when it powers
+-- off (docs/DATAREF_CONTRACT.md Part 5), so the only signal that the FM radio is
+-- dark is cap_fm_power_on. A radio that is off hears nothing, and a recorder
+-- that logs its carrier would play back a call nobody received. Defaults true so
+-- a panel without a TDFM instrument behaves as before.
+local fm_radio_on = true
+si_variable_subscribe("cap_fm_power_on", "BOOL", function(v)
+    fm_radio_on = v and true or false
+    if not fm_radio_on then
+        st.recorder.active_rx.com3 = false
+    end
+end)
+
 si_variable_subscribe("cap_fm_main_rx", "BOOL", function(v)
-    if not st.powered then return end
+    if not st.powered or not fm_radio_on then return end
     local rx = v and true or false
     if rx and not st.recorder.active_rx.com3 then
         st.recorder.active_rx.com3 = true

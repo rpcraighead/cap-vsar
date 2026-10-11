@@ -49,7 +49,10 @@ class TestAirManagerHarness(unittest.TestCase):
         with AirManager() as am:
             with self.assertRaises(RuntimeError) as ctx:
                 am.eval("canvas_draw(1)")
-            self.assertIn("canvas_draw requires callback", str(ctx.exception))
+            self.assertIn("canvas_draw: not enough arguments", str(ctx.exception))
+            with self.assertRaises(RuntimeError) as ctx:
+                am.eval("canvas_draw(1, nil)")
+            self.assertIn("canvas_draw: bad argument #2", str(ctx.exception))
 
     def test_timer_progression(self):
         """timer_start, timer_stop, and step_time fire single-shot and recurring timers."""
@@ -207,9 +210,9 @@ class TestAirManagerHarness(unittest.TestCase):
             self.assertFalse(am.read_si_variable("cap_recorder_playing"))
 
             # COM1 receives a clearance transmission
-            am.write_dataref("sim/cockpit2/radios/indicators/com1_receiving", "INT", 1)
+            am.write_dataref("sim/atc/com1_rx", "INT", 1)
             am.step_time(100)
-            am.write_dataref("sim/cockpit2/radios/indicators/com1_receiving", "INT", 0)
+            am.write_dataref("sim/atc/com1_rx", "INT", 0)
             self.assertEqual(am.read_si_variable("cap_recorder_count"), 1)
 
             # COM3 receives a mission radio message
@@ -390,7 +393,7 @@ class TestAirManagerHarness(unittest.TestCase):
             am.load_instrument("cap-fm-tdfm-136b")
             self.assertFalse(am.read_si_variable("cap_fm_power_on"))
             # Main encoder press inert on cold bus
-            am.click_dial_matching(x=80, y=202)
+            am.click_at(118, 240)      # knob_push over the main encoder centre
             am.step_time(500)
             self.assertFalse(am.read_si_variable("cap_fm_power_on"))
 

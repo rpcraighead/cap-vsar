@@ -517,6 +517,10 @@ end
 -- ---------------------------------------------------------------- controls ---
 
 -- §1.1.1(3): Main encoder — volume, press for ON, press and hold for OFF.
+--
+-- dial_add has one callback (the turn). The push is a transparent button over
+-- the knob centre, added after the dial so it is on top: knob_push() in
+-- lib/knob_push.lua, as the stock G1000 does it.
 local main_hold_timer
 dial_add("knob.png", panel.MAIN_ENC.x, panel.MAIN_ENC.y,
          panel.MAIN_ENC.w, panel.MAIN_ENC.h, 20,
@@ -525,14 +529,17 @@ dial_add("knob.png", panel.MAIN_ENC.x, panel.MAIN_ENC.y,
         st.main_volume = math.max(0, math.min(100, st.main_volume + direction * 2))
         si_variable_write(var_main_vol, st.main_volume / 100)
         redraw()
-    end,
+    end)
+knob_push(panel.MAIN_ENC,
     function()  -- pressed
         if not bus_powered then return end
         if not st.power then
             power_on()
         else
             -- Hold to switch off.
+            if main_hold_timer then timer_stop(main_hold_timer) end
             main_hold_timer = timer_start(1500, 0, function()
+                main_hold_timer = nil
                 power_off()
             end)
         end
@@ -549,7 +556,8 @@ dial_add("knob.png", panel.GUARD_ENC.x, panel.GUARD_ENC.y,
         st.guard_volume = math.max(0, math.min(100, st.guard_volume + direction * 2))
         si_variable_write(var_guard_vol, st.guard_volume / 100)
         redraw()
-    end,
+    end)
+knob_push(panel.GUARD_ENC,
     function()
         if not st.power then return end
         st.squelch_defeat = true
@@ -706,11 +714,15 @@ local function update_transmit()
     end
 end
 
+-- PTT arrives on the cap_fm_ptt si_variable only (the mission-net PTT device or
+-- the console). X-Plane has no copilot PTT dataref and no copilot PTT command:
+-- DataRefs.txt has nothing containing "ptt" and Commands.txt only the pilot's
+-- sim/operation/contact_atc_ptt, which is the ATC network key and must not key
+-- the mission radio. The COM3 MIC interlock below still applies.
 local manual_ptt = false
-local copilot_ptt = false
 
 local function sync_ptt_state()
-    local pressed = manual_ptt or copilot_ptt
+    local pressed = manual_ptt
     if pressed ~= st.ptt_pressed then
         st.ptt_pressed = pressed
         if not pressed then
@@ -730,11 +742,6 @@ end
 
 si_variable_subscribe("cap_fm_ptt", "BOOL", function(v)
     manual_ptt = v and true or false
-    sync_ptt_state()
-end)
-
-xpl_dataref_subscribe("sim/cockpit2/radios/actuators/audio_panel_copilot_ptt", "INT", function(v)
-    copilot_ptt = (v == 1)
     sync_ptt_state()
 end)
 

@@ -8,6 +8,10 @@ import unittest
 
 from tests.am import AirManager
 
+# The TDFM main encoder's push is a button over the knob centre (knob_push):
+# MAIN_ENC is x=80 y=202 w=76 h=76 in lib/tdfm_panel.lua.
+TDFM_MAIN_ENC_CENTRE = (118, 240)
+
 
 class TestMissionMasterSwitch(unittest.TestCase):
     def test_defaults_on(self):
@@ -83,16 +87,16 @@ class TestMissionGatingIntegration(unittest.TestCase):
         with AirManager() as am:
             am.load_instrument("cap-fm-tdfm-136b")
             am.set_avionics_power(True, 28.0)
-            am.press_dial_matching(x=80, y=202)
-            am.release_dial_matching(x=80, y=202)
+            am.press_at(*TDFM_MAIN_ENC_CENTRE)
+            am.release_at(*TDFM_MAIN_ENC_CENTRE)
             self.assertTrue(am.read_si_variable("cap_fm_power_on"))
 
     def test_mission_master_off_cuts_tdfm_even_with_bus_up(self):
         with AirManager() as am:
             am.load_instrument("cap-fm-tdfm-136b")
             am.set_avionics_power(True, 28.0)
-            am.press_dial_matching(x=80, y=202)
-            am.release_dial_matching(x=80, y=202)
+            am.press_at(*TDFM_MAIN_ENC_CENTRE)
+            am.release_at(*TDFM_MAIN_ENC_CENTRE)
             self.assertTrue(am.read_si_variable("cap_fm_power_on"))
 
             am.write_si_variable("cap_mission_master_on", False)
@@ -103,8 +107,8 @@ class TestMissionGatingIntegration(unittest.TestCase):
         with AirManager() as am:
             am.load_instrument("cap-fm-tdfm-136b")
             am.set_avionics_power(True, 28.0)
-            am.press_dial_matching(x=80, y=202)
-            am.release_dial_matching(x=80, y=202)
+            am.press_at(*TDFM_MAIN_ENC_CENTRE)
+            am.release_at(*TDFM_MAIN_ENC_CENTRE)
             self.assertTrue(am.read_si_variable("cap_fm_power_on"))
 
             am.write_si_variable("cap_mission_cb_fm_in", False)

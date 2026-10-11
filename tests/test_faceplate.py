@@ -331,7 +331,10 @@ for head in ALL:
         source = open(os.path.join(d, "lib", name + ".lua"),
                       encoding="utf-8").read()
         all_lua += source
-        if not re.search(r'(?m)^' + re.escape(name) + r'\s*=\s*\{\}', source):
+        # A lib publishes a global table (name = {}) or, for a single helper
+        # such as knob_push, a global function (function name(...)).
+        if not re.search(r'(?m)^(?:' + re.escape(name) + r'\s*=\s*\{\}|function\s+'
+                         + re.escape(name) + r'\s*\()', source):
             unpublished.append(name)
     check("%s: lib tables are globally published" % head,
           not unpublished, str(sorted(unpublished)))
@@ -343,10 +346,9 @@ for head in ("becker-sar-df-517", "rhotheta-rt-600", "cap-fm-tdfm-136b"):
     d = os.path.join(ROOT, "instruments", head)
     logic = open(os.path.join(d, "logic.lua"), encoding="utf-8").read()
     lcd_src = open(os.path.join(d, "lib", "lcd.lua"), encoding="utf-8").read()
-    # Called directly (TDFM) or pcall-wrapped (the two DF heads, whose 250 ms
-    # tick timer is the one caller that can race the engine's own repaint -
-    # see the redraw() comment in becker-sar-df-517/logic.lua). Either way
-    # canvas_id and the real draw function must reach canvas_draw.
+    # Called directly by every head (I-2 removed the pcall the two DF heads
+    # once wrapped it in). canvas_id and the real draw function must reach
+    # canvas_draw.
     check("%s: canvas redraw supplies its callback" % head,
           bool(re.search(r'canvas_draw[\s,(]*canvas_id\s*,\s*draw_', logic)))
     check("%s: canvas text uses the AM 4.2 built-in font" % head,
