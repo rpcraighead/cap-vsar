@@ -3,6 +3,7 @@
 Static checks on docker-compose.yml and scripts/deploy.sh; they need neither
 Docker nor a running stack.
 """
+import os
 import re
 import unittest
 from pathlib import Path
@@ -163,6 +164,47 @@ class DockerContextHygiene(unittest.TestCase):
             for name in copies:
                 self.assertNotIn(name, ignored)
                 self.assertNotIn(name + "/", ignored)
+
+
+class OneTestCommand(unittest.TestCase):
+    """O2-2: one command runs every suite; CI runs the same one on 3.12."""
+
+    CI = (ROOT / "scripts" / "ci_local.sh").read_text()
+
+    def test_each_pytest_suite_runs_in_its_own_process(self):
+        runs = re.findall(r"(?m)^run (pytest_\w+)\s+\$PY -m pytest (\S+)", self.CI)
+        self.assertEqual({name for name, _ in runs},
+                         {"pytest_root", "pytest_ai", "pytest_fp", "pytest_board"})
+        self.assertEqual(len({target for _, target in runs}), 4)
+        targets = {name: target for name, target in runs}
+        self.assertEqual(targets["pytest_fp"], "services/flightplanner/tests")
+        self.assertEqual(targets["pytest_board"], "services/board/tests")
+
+    def test_run_tests_is_the_entry_point_and_is_executable(self):
+        script = ROOT / "scripts" / "run_tests.sh"
+        self.assertTrue(os.access(script, os.X_OK))
+        self.assertIn("ci_local.sh", script.read_text())
+        self.assertTrue(os.access(ROOT / "scripts" / "ci_local.sh", os.X_OK))
+
+    def test_ci_workflow_runs_the_local_script_on_python_3_12(self):
+        wf = (ROOT / ".gitea" / "workflows" / "ci.yml").read_text()
+        self.assertIn('python-version: "3.12"', wf)
+        self.assertIn("scripts/ci_local.sh --no-shim", wf)
+        self.assertIn("pip install -r requirements-dev.txt", wf)
+
+    def test_ci_workflow_is_valid_yaml_when_pyyaml_is_available(self):
+        yaml = __import__("pytest").importorskip("yaml")
+        doc = yaml.safe_load((ROOT / ".gitea" / "workflows" / "ci.yml").read_text())
+        self.assertIn("tests", doc["jobs"])
+
+    def test_pytest_ini_explains_why_two_suites_are_not_collected(self):
+        ini = (ROOT / "pytest.ini").read_text()
+        self.assertIn("scripts/run_tests.sh", ini)
+        self.assertNotIn("services/board", ini.split("testpaths", 1)[1])
+
+    def test_readmes_name_the_command(self):
+        for rel in ("README.md", "docs/mission-base-radio/README.md"):
+            self.assertIn("scripts/run_tests.sh", (ROOT / rel).read_text(), rel)
 
 
 if __name__ == "__main__":

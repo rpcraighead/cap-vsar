@@ -136,10 +136,12 @@ The installed public CA SHA-256 fingerprint is
 
 ## Verification
 
-Backend regressions (Python 3.12, install exercise requirements plus pytest/httpx):
+Backend regressions (Python 3.12; `pip install -r requirements-dev.txt` once,
+then the single command that runs every suite in the repository):
 
 ```sh
-python3 -m pytest tests/test_radio.py -q
+scripts/run_tests.sh                    # all suites, each in its own process
+python3 -m pytest tests/test_radio.py -q   # just these
 ```
 
 Twelve tests cover PTT gating, release, independent stations, access-code and

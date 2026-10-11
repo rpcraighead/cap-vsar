@@ -126,6 +126,15 @@ Prioritize voice quality: test bufferbloat while the lab performs uploads, PTT r
 ## 9. Backups, maintenance and cost
 
 - Back up local PostgreSQL with a consistent database backup and SQLite with its backup API, along with identity keys/configuration, persistent artifacts and protected Caddy data. Test a full restore into an isolated VM before launch.
+- **Today's backup and restore, for the lab stack on ms01 (O2-8).** `scripts/backup_exercise_db.py` takes an online backup of `exercise.db` (SQLite backup API, safe while the console is running) and of the Mumble database (`mumble/data/mumble-server.sqlite`: channel tree, ACLs, SuperUser hash) into `backups/exercise-db/` and `backups/mumble-db/`, and prunes after 14 days. The Mumble file is owned by the container's uid with mode 640, so run it with `sudo` from cron. State lives under `CAPVSAR_STATE_DIR` when that is set. Restore of the exercise database:
+
+  ```sh
+  docker compose stop exercise
+  python3 scripts/backup_exercise_db.py --restore backups/exercise-db/exercise-<stamp>.db
+  docker compose start exercise
+  ```
+
+  The restore refuses while the `capvsar-exercise` container is running (`--force` overrides), checks the file with `PRAGMA integrity_check`, writes through the SQLite backup API into a temporary file beside the target and renames it into place, moves the old database aside as `exercise.db.pre-restore-<stamp>` (kept, never deleted), removes the old `-wal`/`-shm`, and, when run as root, restores the previous owner (the container user is uid 1000). It prints each step. A restored file is migrated by the console on its next start; `tests/test_backup_exercise_db.py` proves a backup opens against the current schema, including one from before the alert columns. For Mumble, stop the `mumble` container and copy a `backups/mumble-db/mumble-<stamp>.db` over `mumble/data/mumble-server.sqlite` (as root, owner `10000:10000`, mode 640), then start it. Still to do for launch: a full restore rehearsal on a second host, as the line above says.
 - A trusted backup host initiates a narrowly authorized pull from the DMZ; the public VM has no credentials permitting writes/deletes of historic backups. Keep an encrypted second copy off-site using an existing destination or rotated offline media. A VM snapshot or second folder on the same disk is not the only backup.
 - Proposed pilot RPO: 24 hours, plus a backup after each exercise day; RTO: 4 hours. Keep 14 daily and 8 weekly backup sets initially and monitor actual capacity. Apply the original plan's record-retention policy separately from backup retention.
 - Use UPS coverage for host, router, switch and ISP termination where available; graceful shutdown/restart and clock synchronization. Expect a single-site/power/ISP failure domain and tell instructors how to pause/resume an interrupted exercise.

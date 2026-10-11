@@ -46,6 +46,21 @@ progress in their trees and a board edit must not sweep it up.
 
 ## One-time setup on ms01
 
+The board is **opt-in** (compose profile `board`, O2-5): a plain
+`docker compose up -d` leaves it out, and `scripts/deploy.sh` includes it only
+once steps 1 and 2 below are complete (a clone at `services/board/repo`, plus a
+non-empty `id_ed25519` and `known_hosts`). Until then deploy prints
+`board not configured, skipping` and says what is missing, and the participant
+front door starts regardless. `deploy.sh` creates the *directories*
+`services/board/repo` and `services/board/secrets` (mode 700) so steps 1 and 2
+work on a fresh host, but never the key or `known_hosts` themselves: Docker
+turns a missing file mount into a directory, which is what made `ssh-keygen`
+fail on a fresh host before. If you do see `id_ed25519/` as a directory,
+`rmdir` it and redo step 2. For hand-run compose commands, either name the
+service (`docker compose up -d --build board`, which enables the profile) or put
+`COMPOSE_PROFILES=board` in `.env`. With `CAPVSAR_STATE_DIR` set, the default
+clone location is `$CAPVSAR_STATE_DIR/services/board/repo`.
+
 1. **Give the board a clone of its own.** Never point it at an agent's live
    working tree — it commits and pushes.
 
@@ -77,10 +92,11 @@ progress in their trees and a board edit must not sweep it up.
    Leaving it unset does not open the board up — every mutating route returns
    `503` and the service says so at startup and in `/api/health`.
 
-4. **Build and start:**
+4. **Build and start** (either of these; the first is what a normal deploy does):
 
    ```bash
-   docker compose up -d --build board radio-https
+   scripts/deploy.sh
+   docker compose up -d --build board radio-https   # naming board enables its profile
    ```
 
 5. **Verify** — from another machine on the LAN:
@@ -89,6 +105,13 @@ progress in their trees and a board edit must not sweep it up.
    curl -sk https://192.0.2.151:8443/api/health
    # {"status":"ok","board_present":true,"git_sync":true,"writes_enabled":true}
    ```
+
+   `/api/health` answers **503** (`"status":"degraded"` plus a `problems` list)
+   when the board file is missing, or when git sync is on and `/repo` is not a
+   git checkout, so `docker compose ps` shows the container unhealthy instead of
+   a board that looks fine and has never synced (O2-6). A blank
+   `CAPVSAR_BOARD_TOKEN` is not a health failure: that is the supported
+   read-only mode and shows as `"writes_enabled":false`.
 
    Then open `https://192.0.2.151:8443/` and check the header reads
    **Git: in sync**. Tick a task and confirm the commit lands in Gitea.
