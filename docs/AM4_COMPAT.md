@@ -47,6 +47,49 @@ These arrived in Air Manager 5 and would silently break an AM4 station:
 (used by the G1000 MFD video stream and watchdog recovery wrapper for X-Plane 12),
 but not on earlier 4.x releases.
 
+## What the offline test harness refuses (D3)
+
+`tests/am.py` is built from the signature table in `tests/am_api.py`, which is
+taken from the AM 4.2 code snippets and the stock Sim Innovations G1000
+instrument, and it refuses what Air Manager refuses. Things instruments have got
+wrong before, now errors offline:
+
+- **`dial_add` has one callback.** `dial_add(img, x, y, w, h, [step], turn_cb)`;
+  `turn_cb(direction)` is called with +1 or -1. There is no press or release
+  callback (Lua silently ignored the extra arguments). A knob that is also a push
+  switch is a transparent `button_add(nil, nil, x, y, w, h, press_cb, [release_cb])`
+  over the knob centre, added **after** the dial. Use `knob_push(spec, press,
+  release)` from `_shared/lib/knob_push.lua` (copied into each instrument's
+  `lib/` by `scripts/deploy_df_instruments.py`). The stock G1000 does the same
+  with a 40x40 button on a 100x100 knob; the helper uses half the knob, at least
+  24 units.
+- **Names must exist in X-Plane.** `xpl_dataref_subscribe`, `xpl_dataref_write`
+  and `xpl_command` only accept names in `tests/fixtures/xplane_names.json`
+  (types included; a write needs a writable dataref) or the `cap/df/*` names
+  `PI_capvsar_df.py` registers. After adding a name to an instrument run
+  `scripts/check_xplane_names.py`: it verifies every `sim/...` literal in the
+  Lua against `X-Plane 12/Resources/plugins/DataRefs.txt` and `Commands.txt`
+  and regenerates the fixture. Laminar's files are never committed.
+- **A multi-dataref `xpl_dataref_subscribe`** is one callback that receives every
+  value, whenever any of them changes: `(name, type, name, type, ..., callback)`.
+- **Colours** are a name, `#RGB`, `#RRGGBB` or `#RRGGBBAA`. The CSS `rgba(...)`
+  form is rejected.
+- **`video_stream_add` stacks a new node above everything added before it** and
+  there is no call to remove one. Create one node, below any overlay, and re-arm
+  it by hiding and showing it (`g1000-mfd-watchdog`).
+- **`timer_start`** is `(delay, interval, cb)` with either number nil, or
+  `(delay, cb)`.
+- **No `require`, `dofile`, `loadfile`, `package` or `io`** in the sandbox.
+- A function that is not in the table does not exist. Add it to `tests/am_api.py`
+  (with its signature from a snippet) the first time an instrument needs it.
+
+Assumptions the harness makes that need a look at the live application, because
+no snippet or log settles them: that a turn aimed at the middle of a knob still
+reaches the dial under a `knob_push` button (the stock G1000 relies on it); that
+hide-then-show re-links a video stream; that `#RRGGBBAA` is accepted by `_fill`;
+and that `sound_add(file, volume)` takes the optional volume (the snippet shows
+one argument; the DF heads have always passed two and the log shows no error).
+
 ## Licensing note
 
 An Air Manager licence is not an Air Player licence. Crew stations that only
