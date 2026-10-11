@@ -6,13 +6,17 @@ cd "$(dirname "$0")/.."
 ROOT="$PWD"
 
 [ -f .env ] || { echo "ERROR: .env missing. cp .env.example .env and fill it in."; exit 1; }
-set -a; . ./.env; set +a
+
+# .env is NOT sourced: compose parses it with its own rules, and a shell parser
+# mangles values containing $, # or spaces (and would execute a stray line).
+# deploy_lib.sh reads only the keys this script needs.
+. "$ROOT/scripts/deploy_lib.sh"
 
 # O2-3: a blank Mumble password deploys a password-less voice net on the one
 # port the router forwards to the internet. Compose refuses it too; failing
 # here says why before anything is pulled or built.
 for var in MUMBLE_SUPERUSER_PASSWORD MUMBLE_SERVER_PASSWORD; do
-  [ -n "${!var:-}" ] || { echo "ERROR: $var is empty in .env. Set it before deploying."; exit 1; }
+  [ -n "$(cfg "$var")" ] || { echo "ERROR: $var is empty in .env. Set it before deploying."; exit 1; }
 done
 
 # ---------------------------------------------------------------- host paths
@@ -23,38 +27,50 @@ done
 # directory, but for a FILE mount it creates a DIRECTORY where a file was
 # meant to be. The flight planner then dies at import with
 # "unable to open database file" and gunicorn crash-loops, which is a
-# confusing way to learn that a directory was created for you.
+# confusing way to learn that a directory was created for you. The board's
+# SSH key and known_hosts are file mounts too (O2-5), which is why the board
+# is an opt-in compose profile started only once those files are real.
+#
+# CAPVSAR_STATE_DIR (O2-7) moves all of this out of the checkout; see
+# docker-compose.yml. Nothing is moved for you.
 #
 # The mumble image generates /data/mumble_server_config.ini from the
 # MUMBLE_CONFIG_* variables in docker-compose.yml on every start. Do not write
 # that file here - it will be overwritten.
 echo "==> host paths"
-mkdir -p mumble/data
-mkdir -p services/exercise/data                 # exercise.db lives here
-mkdir -p services/exercise/radio-public         # CA cert served at /radio-ca.crt
-mkdir -p services/flightplanner/data/charts     # cached chart tiles
-
-# A file mount, not a directory mount - see above. An empty file is a valid
-# SQLite database; init_database() creates the schema on first run.
-[ -e services/flightplanner/data/aviation_data.db ] \
-  || : > services/flightplanner/data/aviation_data.db
+prepare_host_paths
+STATE="$(state_dir)"
 
 # The exercise image runs as uid/gid 1000. Older deployments created the
 # SQLite file as root, so a newly rebuilt non-root image could read it but
 # crash on the first schema migration. Repair only this service's data mount.
-sudo chown -R 1000:1000 services/exercise/data
+sudo chown -R 1000:1000 "$STATE/services/exercise/data"
+
+# O2-5: the board needs a clone, a deploy key and known_hosts that cannot be
+# invented here. Without them it is simply not part of this deploy.
+PROFILE_ARGS=()
+BUILD_SERVICES=(exercise flightplanner)
+if BOARD_WHY=$(board_configured); then
+  PROFILE_ARGS=(--profile board)
+  BUILD_SERVICES+=(board)
+  echo "    board: configured, included in this deploy"
+else
+  echo "    $BOARD_WHY"
+  echo "    (see services/board/README.md for the one-time setup)"
+fi
+dc() { docker compose ${PROFILE_ARGS[@]+"${PROFILE_ARGS[@]}"} "$@"; }
 
 echo "==> pulling images"
-docker compose pull --quiet
+dc pull --quiet
 
 echo "==> building source services"
-# exercise and flightplanner are local build contexts. `compose up` recreates
+# exercise, flightplanner (and board, when configured) are local build contexts. `compose up` recreates
 # them when configuration changes but does not rebuild after a source-only
 # update, which can leave ms01 running an older application under a new proxy.
-docker compose build exercise flightplanner
+dc build "${BUILD_SERVICES[@]}"
 
 echo "==> starting stack"
-docker compose up -d
+dc up -d
 
 # --------------------------------------------------------- mumble channel tree
 # Murmur has no config-file channel definition and caches its ACL/channel
@@ -71,9 +87,9 @@ docker compose up -d
 # all, let alone write it. sudo, not a chmod/chown on data a running database
 # depends on the ownership of.
 echo "==> mumble channel tree"
-docker compose stop mumble
-sudo python3 scripts/provision_mumble.py mumble/data/mumble-server.sqlite
-docker compose start mumble
+dc stop mumble
+sudo python3 scripts/provision_mumble.py "$STATE/mumble/data/mumble-server.sqlite"
+dc start mumble
 
 # ------------------------------------------------------- browser radio trust
 # Tablets need a trusted secure context before a browser will hand the radio
@@ -83,11 +99,11 @@ docker compose start mumble
 # step that puts it there. Until this ran, that directory was populated by hand
 # on ms01 and was simply empty anywhere else.
 CA_SRC=/data/caddy/pki/authorities/local/root.crt
-CA_DST=services/exercise/radio-public/mission-base-ca.crt
+CA_DST="$STATE/services/exercise/radio-public/mission-base-ca.crt"
 echo "==> browser radio CA"
 for attempt in 1 2 3 4 5 6 7 8 9 10; do
-  if docker compose exec -T radio-https test -f "$CA_SRC" 2>/dev/null; then
-    docker compose exec -T radio-https cat "$CA_SRC" > "$CA_DST.tmp" 2>/dev/null \
+  if dc exec -T radio-https test -f "$CA_SRC" 2>/dev/null; then
+    dc exec -T radio-https cat "$CA_SRC" > "$CA_DST.tmp" 2>/dev/null \
       && mv "$CA_DST.tmp" "$CA_DST" \
       && echo "    published $CA_DST" \
       && break
@@ -99,7 +115,7 @@ for attempt in 1 2 3 4 5 6 7 8 9 10; do
 done
 
 echo "==> status"
-docker compose ps
+dc ps
 echo
 echo "Mumble: $(hostname -I | awk '{print $1}'):64738   (server password in .env)"
 echo "CAP V-SAR: https://$(hostname -I | awk '{print $1}')/"
@@ -108,4 +124,4 @@ echo
 echo "NOTE: not reachable from the internet until the router forwards 64738"
 echo "      TCP+UDP to this host - see infra/ROUTER.md."
 echo "      WireGuard runs on the ROUTER (wgserver), not on this host."
-echo "      Exercise :8700 and planner :8090 are private container ports."
+echo "      Exercise :8700 and planner :8080 are private container ports."

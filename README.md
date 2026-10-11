@@ -202,6 +202,26 @@ heads, 800×420 for the TDFM (Figure 1-1's 1.916 aspect), 240×1422 for the GMA
 geometry block, re-running the generator and updating `info.xml` — the tests
 check all three agree.
 
+## Running the tests
+
+One command runs every suite that needs neither X-Plane nor Air Manager:
+
+```sh
+python3.12 -m venv .venv && . .venv/bin/activate
+pip install -r requirements-dev.txt     # service pins + pytest, httpx, numpy, Pillow
+scripts/run_tests.sh                    # everything; logs in .ci-out/
+scripts/run_tests.sh --pytest-only      # just the four pytest suites
+```
+
+Use Python 3.12, which is what the service images and CI (`.gitea/workflows/ci.yml`)
+run, so a pass here means a pass on the pinned fastapi/pydantic. The script runs
+the root tests, `services/ai_pilot/tests`, `services/flightplanner/tests` and
+`services/board/tests` each in its **own** pytest process, because
+`services/exercise/app`, `services/board/app` and `services/flightplanner/app.py`
+are all imported as `app` and cannot share one. A bare `pytest` therefore
+collects only the root and ai_pilot suites (see `pytest.ini`). The document
+generators have their own dependencies in `requirements-docs.txt`.
+
 ## Artwork
 
 The faceplates are generated, not traced from photographs of the real units.

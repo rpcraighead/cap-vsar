@@ -1,0 +1,15 @@
+# The build context is this directory, and it holds live state. The Dockerfile
+# only COPYs requirements*.txt and app/, but the whole context is sent to the
+# daemon (and cached in layers' build records) first. Keep state out of it.
+data/
+radio-public/
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+Caddyfile
+README.md
+mock_bridge.py

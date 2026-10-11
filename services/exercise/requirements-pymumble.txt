@@ -1,0 +1,21 @@
+# O2-9: the one dependency that holds the Mumble password, pinned by content.
+#
+# Upstream is a GitHub commit tarball (PyPI 1.6.1 lacks Python 3.12 SSLContext
+# support), and GitHub tarballs are not content-addressed, so the commit SHA
+# alone does not prove what was installed. The sha256 below is of the tarball
+# for exactly this commit, computed 2026-10-11 from two independent downloads
+# (identical).
+#
+# pip switches the WHOLE install into --require-hashes mode if any requirement
+# carries a hash, which would demand hashes for every transitive package in
+# requirements.txt. So this file is installed on its own, after the main one,
+# with --no-deps (pymumble's own two dependencies, opuslib and protobuf, are
+# pinned in requirements.txt). See the Dockerfile.
+#
+# To bump: change the commit, then
+#   curl -sL <url> | sha256sum
+# and update the hash. tests/test_deploy_config.py checks the commit is a full
+# 40-character SHA, that this file carries a hash, and that
+# requirements-dev.txt installs the same commit.
+pymumble @ https://github.com/azlux/pymumble/archive/a560e6013dfbccb3666ce8756e1ca6b790bf05c8.tar.gz \
+    --hash=sha256:d20e2752ec1deca611c0b369bfe47e335943eaceb305663216627b306893aad5

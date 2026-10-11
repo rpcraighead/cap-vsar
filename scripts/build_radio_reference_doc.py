@@ -7,8 +7,13 @@ operational use cases.
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
-import docx
+
+try:
+    import docx
+except ImportError:  # B2-8: declared in requirements-docs.txt
+    sys.exit("python-docx is not installed: pip install -r requirements-docs.txt")
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -839,7 +844,7 @@ def build_documents():
 **Document Authority:** CAPR 100-1, CAPR 100-3, MART Vol. II, ICUT Syllabus  
 **Date:** September 8, 2026  
 **Status:** Operational Simulation Reference Manual  
-**Repository:** `/home/ron/Projects/cap-vsar`  
+**Repository:** this repository (`ron/capvsar`)  
 **Word Document (.docx):** [`docs/CAP_V-SAR_Radio_Features_and_Use_Cases.docx`](CAP_V-SAR_Radio_Features_and_Use_Cases.docx)
 
 ---

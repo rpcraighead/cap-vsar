@@ -172,7 +172,10 @@ class DatabaseLivesInADirectory(unittest.TestCase):
     def test_compose_mounts_the_directory(self):
         compose = open(os.path.join(ROOT, 'docker-compose.yml'),
                        encoding='utf-8').read()
-        self.assertIn('./services/flightplanner/data:/app/data', compose)
+        # O2-7: the host side is ${CAPVSAR_STATE_DIR:-.}/services/..., which is
+        # the same ./services/... path unless the operator moves the state.
+        self.assertIn('${CAPVSAR_STATE_DIR:-.}/services/flightplanner/data:/app/data',
+                      compose)
         self.assertNotIn('/aviation_data.db:/app/aviation_data.db', compose,
                          'still mounting the database as a single file')
         self.assertIn('DATABASE_PATH: /app/data/aviation_data.db', compose)

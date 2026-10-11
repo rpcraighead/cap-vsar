@@ -57,3 +57,4 @@ build/
 # covered by this rule.
 docs/figures/*.png
 !docs/figures/manual/
+.ci-out/

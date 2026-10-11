@@ -4,7 +4,7 @@
 **Document Authority:** CAPR 100-1, CAPR 100-3, MART Vol. II, ICUT Syllabus  
 **Date:** September 8, 2026  
 **Status:** Operational Simulation Reference Manual  
-**Repository:** `/home/ron/Projects/cap-vsar`  
+**Repository:** this repository (`ron/capvsar`)  
 **Word Document (.docx):** [`docs/CAP_V-SAR_Radio_Features_and_Use_Cases.docx`](CAP_V-SAR_Radio_Features_and_Use_Cases.docx)
 
 ---

@@ -43,8 +43,52 @@ SS = 4                                    # supersample factor
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INSTR = os.path.join(ROOT, "instruments")
 
-FONT_BOLD = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
-FONT_REG = "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
+# B2-8: was two hard-coded Debian paths. Look through the places Liberation
+# Sans (or its metric-compatible twin Arimo) lives on common systems, honour an
+# explicit override, and fail with a message that says what to do.
+_FONT_DIRS = (
+    "/usr/share/fonts/truetype/liberation",    # Debian, Ubuntu
+    "/usr/share/fonts/truetype/liberation2",
+    "/usr/share/fonts/liberation-sans",        # Fedora
+    "/usr/share/fonts/liberation",             # Arch
+    "/usr/share/fonts/TTF",
+    "/usr/share/fonts/truetype/croscore",      # Arimo
+    "/Library/Fonts",                          # macOS (if installed)
+    os.path.expanduser("~/.fonts"),
+    os.path.expanduser("~/.local/share/fonts"),
+)
+
+
+def find_font(names, env_var, dirs=_FONT_DIRS):
+    """First existing file among dirs x names, or $env_var if it is set."""
+    override = os.environ.get(env_var)
+    if override:
+        if os.path.isfile(override):
+            return override
+        raise SystemExit(f"{env_var}={override} does not exist")
+    tried = []
+    for d in dirs:
+        for n in names:
+            candidate = os.path.join(d, n)
+            if os.path.isfile(candidate):
+                return candidate
+            tried.append(candidate)
+    raise SystemExit(
+        "No usable font found for the faceplate artwork. Install Liberation Sans "
+        "(apt install fonts-liberation / dnf install liberation-sans-fonts) or set "
+        f"{env_var} to a .ttf file. Looked for:\n  " + "\n  ".join(tried))
+
+
+_FONT_CACHE = {}
+
+
+def font_path(bold=True):
+    """Resolved lazily, so importing this module never needs a font."""
+    if bold not in _FONT_CACHE:
+        _FONT_CACHE[bold] = (
+            find_font(("LiberationSans-Bold.ttf", "Arimo-Bold.ttf"), "CAPVSAR_FONT_BOLD") if bold
+            else find_font(("LiberationSans-Regular.ttf", "Arimo-Regular.ttf"), "CAPVSAR_FONT_REGULAR"))
+    return _FONT_CACHE[bold]
 # Exact AM 4.2 built-in font; included here under OFL for reproducible previews.
 FONT_DISPLAY = os.path.join(ROOT, "scripts", "fonts", "inconsolata_bold.ttf")
 DISPLAY_EM = 5.6
@@ -151,7 +195,7 @@ def S(v):
 # ------------------------------------------------------------ draw helpers ---
 
 def font(size, bold=True):
-    return ImageFont.truetype(FONT_BOLD if bold else FONT_REG, S(size))
+    return ImageFont.truetype(font_path(bold), S(size))
 
 
 def text_at(d, xy, s, size, fill=LEGEND, anchor="mm", bold=True, spacing=0):

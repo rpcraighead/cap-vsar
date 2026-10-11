@@ -1,3 +1,9 @@
+# TODO (2026-10-10 review, section 7 improvements): pin this base image by digest, as the Mumble and Caddy
+# images in docker-compose.yml are (O-5): FROM python:3.12-slim@sha256:<digest>.
+# Left as a tag because no digest could be resolved offline (no local image, and
+# resolving one needs a registry round trip). On a machine with network:
+#   docker buildx imagetools inspect python:3.12-slim | head -3
+# Use the SAME digest in all three services/*/Dockerfile.
 FROM python:3.12-slim
 
 # X-8: this container ran as root. It holds beacon truth, the auth tokens and
@@ -24,8 +30,11 @@ RUN groupadd --gid ${APP_GID} capvsar \
     && useradd --uid ${APP_UID} --gid ${APP_GID} --no-create-home --shell /usr/sbin/nologin capvsar
 
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt requirements-pymumble.txt ./
+# O2-9: pymumble is installed on its own, by content hash, because one hash in a
+# requirements file puts pip in --require-hashes mode for everything in it.
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir --no-deps --require-hashes -r requirements-pymumble.txt
 COPY app/ ./app/
 
 # So a container started with no bind mount still has somewhere to write.
