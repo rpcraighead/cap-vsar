@@ -1077,11 +1077,14 @@ function buildSarPayload() {
         }
         payload.sweep_width_nm = parseFloat(document.getElementById('sar-cs-width').value) || 3.0;
         payload.spacing_nm = parseFloat(document.getElementById('sar-cs-spacing').value) || 1.0;
+        payload.first_turn = document.getElementById('sar-cs-turn').value;
+        payload.num_legs = parseInt(document.getElementById('sar-cs-legs').value) || 12;
     } else if (patternType === 'parallel_track') {
         payload.length_nm = parseFloat(document.getElementById('sar-ps-length').value) || 5.0;
         payload.width_nm = parseFloat(document.getElementById('sar-ps-width').value) || 4.0;
         payload.axis_heading = parseFloat(document.getElementById('sar-ps-hdg').value) || 90.0;
         payload.spacing_nm = parseFloat(document.getElementById('sar-ps-spacing').value) || 1.0;
+        payload.turn_direction = document.getElementById('sar-ps-turn').value;
     }
     return payload;
 }

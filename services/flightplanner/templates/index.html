@@ -382,7 +382,7 @@
             </div>
             <div class="form-row">
               <label>Search Legs</label>
-              <input type="number" id="sar-ss-legs" value="8" step="2" min="4" max="16">
+              <input type="number" id="sar-ss-legs" value="8" step="2" min="4" max="60">
             </div>
             <div class="form-row">
               <label>Initial Heading (°T)</label>
@@ -412,6 +412,17 @@
               <label>Track Spacing (NM)</label>
               <input type="number" id="sar-cs-spacing" value="1.0" step="0.25" min="0.25" max="5.0">
             </div>
+            <div class="form-row">
+              <label>First Sweep Flies Toward</label>
+              <select id="sar-cs-turn" style="width:100%;padding:0.35rem;background:#1e222b;border:1px solid #333;color:#fff;border-radius:4px">
+                <option value="right">Right (default)</option>
+                <option value="left">Left</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label>Sweeps (max 60)</label>
+              <input type="number" id="sar-cs-legs" value="12" step="1" min="1" max="60">
+            </div>
           </div>
         </div>
 
@@ -432,6 +443,13 @@
             <div class="form-row">
               <label>Track Spacing (NM)</label>
               <input type="number" id="sar-ps-spacing" value="1.0" step="0.25" min="0.25">
+            </div>
+            <div class="form-row">
+              <label>Lanes Lie To The</label>
+              <select id="sar-ps-turn" style="width:100%;padding:0.35rem;background:#1e222b;border:1px solid #333;color:#fff;border-radius:4px">
+                <option value="right">Right of the axis (default)</option>
+                <option value="left">Left of the axis</option>
+              </select>
             </div>
           </div>
         </div>

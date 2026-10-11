@@ -210,7 +210,10 @@ class ErrorHandler(unittest.TestCase):
 
 
 class FmsWaypointCap(unittest.TestCase):
-    """L2-2: 99 is the G1000 flight-plan size; X-Plane's real limit is unverified."""
+    """L2-2: a file never has more than 99 entries, airports included.
+
+    99 is the G1000 flight-plan size; X-Plane's real limit is unverified.
+    """
 
     AIRPORT = {"latitude": 32.8, "longitude": -117.0, "elevation": 388}
 
@@ -223,30 +226,38 @@ class FmsWaypointCap(unittest.TestCase):
         return [{"identifier": f"P{i:03d}", "lat": 33.0 + i * 0.001, "lon": -117.0}
                 for i in range(n)]
 
-    def test_the_cap_is_a_named_constant_of_99(self):
-        self.assertEqual(flight_app.MAX_FMS_WAYPOINTS, 99)
+    def entries(self, text):
+        return [line for line in text.splitlines() if line[:3] in ("1 K", "28 ")]
+
+    def test_the_cap_counts_total_entries(self):
+        self.assertEqual(flight_app.MAX_FMS_ENTRIES, 99)
+        self.assertEqual(flight_app.MAX_FMS_WAYPOINTS, 97)     # minus ADEP and ADES
 
     def test_export_accepts_exactly_the_limit(self):
         with patch.object(flight_app, "get_airport", return_value=self.AIRPORT):
-            r = self.client.post("/api/sar/export-fms", json={"waypoints": self.points(99)})
+            r = self.client.post("/api/sar/export-fms", json={"waypoints": self.points(97)})
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(r.get_json()["content"].count("\n28 "), 99)
+        text = r.get_json()["content"]
+        self.assertEqual(len(self.entries(text)), 99)
+        self.assertIn("NUMENR 99", text)
 
     def test_export_refuses_one_more_and_says_how_to_fix_it(self):
         with patch.object(flight_app, "get_airport", return_value=self.AIRPORT):
-            r = self.client.post("/api/sar/export-fms", json={"waypoints": self.points(100)})
+            r = self.client.post("/api/sar/export-fms", json={"waypoints": self.points(98)})
         self.assertEqual(r.status_code, 400)
         body = r.get_json()
         self.assertNotIn("content", body)
-        self.assertIn("100", body["error"])
+        self.assertIn("98", body["error"])
+        self.assertIn("100 entries", body["error"])
         self.assertIn("99", body["error"])
         self.assertIn("split", body["error"].lower())
 
     def test_the_generator_enforces_it_too(self):
         with patch.object(flight_app, "get_airport", return_value=self.AIRPORT):
-            flight_app.generate_xplane_fms_content("KSEE", "KSEE", self.points(99))
+            ok = flight_app.generate_xplane_fms_content("KSEE", "KSEE", self.points(97))
+            self.assertEqual(len(self.entries(ok)), 99)
             with self.assertRaises(ValueError):
-                flight_app.generate_xplane_fms_content("KSEE", "KSEE", self.points(100))
+                flight_app.generate_xplane_fms_content("KSEE", "KSEE", self.points(98))
 
     def pattern(self, **extra):
         payload = {"datum": "@33.0,-117.0", "pattern_type": "parallel_track"}
@@ -257,9 +268,9 @@ class FmsWaypointCap(unittest.TestCase):
         big = self.pattern(length_nm=5, width_nm=50, spacing_nm=0.5)     # 100 lanes, 200 points
         self.assertTrue(big["success"])
         self.assertEqual(big["fms_waypoint_count"], len(big["waypoints"]))
-        self.assertGreater(big["fms_waypoint_count"], 99)
+        self.assertGreater(big["fms_waypoint_count"], 97)
         self.assertTrue(big["exceeds_fms_limit"])
-        self.assertEqual(big["fms_waypoint_limit"], 99)
+        self.assertEqual(big["fms_waypoint_limit"], 97)
         self.assertTrue(big["warnings"])
         self.assertIn("split", big["warnings"][0].lower())
 
@@ -270,10 +281,24 @@ class FmsWaypointCap(unittest.TestCase):
 
     def test_boundary_of_the_generate_pattern_flag(self):
         # expanding square: 1 datum + legs points
-        ok = self.client.post("/api/sar/generate-pattern",
-                              json={"datum": "@33,-117", "num_legs": 40}).get_json()
-        self.assertEqual(ok["fms_waypoint_count"], 41)
+        def sq(legs):
+            return self.client.post("/api/sar/generate-pattern",
+                                    json={"datum": "@33,-117", "num_legs": legs}).get_json()
+        ok = sq(56)
+        self.assertEqual(ok["fms_waypoint_count"], 57)
         self.assertFalse(ok["exceeds_fms_limit"])
+        edge = sq(60)
+        self.assertEqual(edge["fms_waypoint_count"], 61)
+        self.assertFalse(edge["exceeds_fms_limit"])
+
+    def test_flag_flips_at_exactly_97(self):
+        # creeping line: 2 points per sweep, so 48 sweeps = 96, 49 = 98
+        def cs(sweeps):
+            return self.client.post("/api/sar/generate-pattern", json={
+                "datum": "@33,-117", "pattern_type": "creeping_line", "end_lat": 33.9,
+                "end_lon": -117.0, "spacing_nm": 1, "num_legs": sweeps}).get_json()
+        self.assertFalse(cs(48)["exceeds_fms_limit"])
+        self.assertTrue(cs(49)["exceeds_fms_limit"])
 
 
 if __name__ == "__main__":

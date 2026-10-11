@@ -96,13 +96,18 @@ def _winds_cache_put(key, value):
 
 MAX_PARALLEL_DIMENSION_NM = 50.0
 MAX_PARALLEL_LEGS = 200
-# L2-2: the most waypoints one exported flight plan may carry. 99 is the G1000
-# flight-plan limit and sits just under the figure usually quoted for X-Plane's
-# FMS importer (100). The real X-Plane 12 limit has NOT been verified against
-# the simulator, so this is the conservative of the two. It is a ceiling on the
-# waypoints in the list (the pattern); the .fms file adds the departure and
-# destination airport records on top of them.
-MAX_FMS_WAYPOINTS = 99
+# L2-2: the most ENTRIES one exported .fms may carry, departure and destination
+# airport records included, so a file never has more than this many lines of
+# type 1/28. 99 is the G1000 flight-plan size and sits just under the figure
+# usually quoted for X-Plane's FMS importer (100). The real X-Plane 12 limit has
+# NOT been verified against the simulator, so this is the conservative of the
+# two. The airports take two entries, which leaves the pattern 97.
+MAX_FMS_ENTRIES = 99
+FMS_AIRPORT_ENTRIES = 2
+MAX_FMS_WAYPOINTS = MAX_FMS_ENTRIES - FMS_AIRPORT_ENTRIES
+# D2: most legs (expanding square) / sweeps (creeping line) one request may ask
+# for. 60 is Garmin's range and the g1000-sar library's.
+MAX_PATTERN_LEGS = 60
 # Most points one terrain-profile or export request may carry.
 MAX_REQUEST_POINTS = 500
 
@@ -866,17 +871,35 @@ def _magnetic_headings(points):
     return points
 
 
+def local_offset(lat, lon, along_nm, across_nm, heading):
+    """The point `along_nm` ahead of and `across_nm` to the right of `lat, lon`,
+    measured against `heading` (true). Every pattern point is placed this way
+    from the pattern's own origin, exactly as the g1000-sar library's
+    offset() does, so the two agree to a few metres at any size (D2.5); walking
+    leg by leg along great circles instead drifts by ~100 m over a large square.
+    """
+    return destination_point(lat, lon, math.hypot(along_nm, across_nm),
+                             (heading + math.degrees(math.atan2(across_nm, along_nm))) % 360)
+
+
 def generate_expanding_square(datum_lat, datum_lon, spacing_nm=1.0, num_legs=8, initial_heading=0.0, turn_dir='right'):
-    """Generate Civil Air Patrol Expanding Square (SS) search pattern waypoints."""
+    """Generate Civil Air Patrol Expanding Square (SS) search pattern waypoints.
+
+    DATUM is the centre; SSnn is the END of leg nn (leg 1 = S, leg 2 = S,
+    leg 3 = 2S ...), the planner's numbering and, since D2, the library's.
+    """
     points = [{'identifier': 'DATUM', 'lat': round(datum_lat, 6), 'lon': round(datum_lon, 6), 'leg_dist_nm': 0.0, 'heading_true': initial_heading}]
-    cur_lat, cur_lon = datum_lat, datum_lon
+    turn = 1 if str(turn_dir).lower() == 'right' else -1
     cur_hdg = initial_heading
-    turn_angle = 90.0 if turn_dir.lower() == 'right' else -90.0
-    
+    along = across = 0.0
+    prev_lat, prev_lon = datum_lat, datum_lon
+
     for i in range(1, num_legs + 1):
         leg_len = ((i + 1) // 2) * spacing_nm
-        next_lat, next_lon = destination_point(cur_lat, cur_lon, leg_len, cur_hdg)
-        var = mag_var((cur_lat + next_lat)/2, (cur_lon + next_lon)/2)
+        d_along, d_across = ((1, 0), (0, turn), (-1, 0), (0, -turn))[(i - 1) % 4]
+        along, across = along + d_along * leg_len, across + d_across * leg_len
+        next_lat, next_lon = local_offset(datum_lat, datum_lon, along, across, initial_heading)
+        var = mag_var((prev_lat + next_lat)/2, (prev_lon + next_lon)/2)
         points.append({
             'identifier': f'SS{i:02d}',
             'lat': next_lat,
@@ -885,94 +908,180 @@ def generate_expanding_square(datum_lat, datum_lon, spacing_nm=1.0, num_legs=8, 
             'heading_true': round(cur_hdg % 360, 1),
             'heading_mag': round((cur_hdg - var) % 360, 1)
         })
-        cur_lat, cur_lon = next_lat, next_lon
-        cur_hdg = (cur_hdg + turn_angle) % 360
-        
+        prev_lat, prev_lon = next_lat, next_lon
+        cur_hdg = (cur_hdg + 90.0 * turn) % 360
+
     return _magnetic_headings(points)
 
-def generate_creeping_line(start_lat, start_lon, end_lat, end_lon, sweep_width_nm=3.0, spacing_nm=1.0, max_legs=12):
-    """Generate Civil Air Patrol Creeping Line (CS) search pattern waypoints."""
+
+def _side_bearings(axis, turn):
+    """(toward, away) bearings for a right/left turn off `axis`."""
+    right, left = (axis + 90) % 360, (axis - 90) % 360
+    return (right, left) if str(turn).lower() != 'left' else (left, right)
+
+
+def generate_creeping_line(start_lat, start_lon, end_lat, end_lon, sweep_width_nm=3.0, spacing_nm=1.0,
+                           max_legs=MAX_PATTERN_LEGS, first_turn='right'):
+    """Generate Civil Air Patrol Creeping Line (CS) search pattern waypoints.
+
+    The planner's input is a start and an end point; the axis runs between
+    them and sweeps are spacing_nm apart, the first half a spacing in
+    (see creeping_inputs_from_datum for the exact relation to the g1000-sar
+    datum). first_turn is the side the first sweep flies toward: 'right'
+    (default) flies CS01 on the left end to CS02 on the right end, 'left'
+    mirrors it.
+    """
     adv_brg = bearing(start_lat, start_lon, end_lat, end_lon)
     tot_dist = gc_dist(start_lat, start_lon, end_lat, end_lon)
     num_sweeps = min(max_legs, max(1, math.ceil(tot_dist / spacing_nm)))
-    
-    left_brg = (adv_brg - 90) % 360
-    right_brg = (adv_brg + 90) % 360
+
+    to_brg, from_brg = _side_bearings(adv_brg, first_turn)
+    to_sign = 1 if str(first_turn).lower() != 'left' else -1
     half_w = sweep_width_nm / 2.0
-    
+    # The centre of the first sweep: the library's datum.
+    ctr_lat, ctr_lon = destination_point(start_lat, start_lon, min(spacing_nm, tot_dist) / 2, adv_brg)
+
+    def at(sweep, side):      # side +1 = the `to` end, -1 = the `from` end
+        return local_offset(ctr_lat, ctr_lon, sweep * spacing_nm, to_sign * side * half_w, adv_brg)
+
     points = []
-    cur_axis_lat, cur_axis_lon = destination_point(start_lat, start_lon, min(spacing_nm, tot_dist) / 2, adv_brg)
-    
-    # CS01 is where the pattern starts (left end of the first sweep). Nothing is
-    # flown to reach it, so like PS01 it carries no leg length, and the heading
-    # it shows is that of the first real leg, CS01 -> CS02 (L2-8). It used to
-    # carry a fictitious half-width leg and a heading to the left that nobody
-    # flies.
-    p1_lat, p1_lon = destination_point(cur_axis_lat, cur_axis_lon, half_w, left_brg)
-    points.append({'identifier': 'CS01', 'lat': p1_lat, 'lon': p1_lon, 'leg_dist_nm': 0.0, 'heading_true': round(right_brg, 1)})
-    
-    # Leg 2: Sweep right
-    p2_lat, p2_lon = destination_point(cur_axis_lat, cur_axis_lon, half_w, right_brg)
-    points.append({'identifier': 'CS02', 'lat': p2_lat, 'lon': p2_lon, 'leg_dist_nm': round(sweep_width_nm, 2), 'heading_true': round(right_brg, 1)})
-    
-    current_side = 'right'
+    # CS01 is where the pattern starts (the end of the first sweep opposite to
+    # the side it flies toward). Nothing is flown to reach it, so like PS01 it
+    # carries no leg length, and the heading it shows is that of the first real
+    # leg, CS01 -> CS02 (L2-8).
+    lat, lon = at(0, -1)
+    points.append({'identifier': 'CS01', 'lat': lat, 'lon': lon, 'leg_dist_nm': 0.0, 'heading_true': round(to_brg, 1)})
+    lat, lon = at(0, +1)
+    points.append({'identifier': 'CS02', 'lat': lat, 'lon': lon, 'leg_dist_nm': round(sweep_width_nm, 2), 'heading_true': round(to_brg, 1)})
+
+    side = +1        # the aircraft is on the `to` side after the first sweep
     wpt_idx = 3
     for i in range(1, num_sweeps):
-        cur_axis_lat, cur_axis_lon = destination_point(cur_axis_lat, cur_axis_lon, spacing_nm, adv_brg)
-        if current_side == 'right':
-            # Advance along right side
-            adv_lat, adv_lon = destination_point(cur_axis_lat, cur_axis_lon, half_w, right_brg)
-            points.append({'identifier': f'CS{wpt_idx:02d}', 'lat': adv_lat, 'lon': adv_lon, 'leg_dist_nm': round(spacing_nm, 2), 'heading_true': round(adv_brg, 1)})
-            wpt_idx += 1
-            # Cross to left side
-            cross_lat, cross_lon = destination_point(cur_axis_lat, cur_axis_lon, half_w, left_brg)
-            points.append({'identifier': f'CS{wpt_idx:02d}', 'lat': cross_lat, 'lon': cross_lon, 'leg_dist_nm': round(sweep_width_nm, 2), 'heading_true': round(left_brg, 1)})
-            wpt_idx += 1
-            current_side = 'left'
-        else:
-            # Advance along left side
-            adv_lat, adv_lon = destination_point(cur_axis_lat, cur_axis_lon, half_w, left_brg)
-            points.append({'identifier': f'CS{wpt_idx:02d}', 'lat': adv_lat, 'lon': adv_lon, 'leg_dist_nm': round(spacing_nm, 2), 'heading_true': round(adv_brg, 1)})
-            wpt_idx += 1
-            # Cross to right side
-            cross_lat, cross_lon = destination_point(cur_axis_lat, cur_axis_lon, half_w, right_brg)
-            points.append({'identifier': f'CS{wpt_idx:02d}', 'lat': cross_lat, 'lon': cross_lon, 'leg_dist_nm': round(sweep_width_nm, 2), 'heading_true': round(right_brg, 1)})
-            wpt_idx += 1
-            current_side = 'right'
-            
+        # Advance along the side the aircraft is on, then cross to the other.
+        lat, lon = at(i, side)
+        points.append({'identifier': f'CS{wpt_idx:02d}', 'lat': lat, 'lon': lon, 'leg_dist_nm': round(spacing_nm, 2), 'heading_true': round(adv_brg, 1)})
+        wpt_idx += 1
+        lat, lon = at(i, -side)
+        cross_brg = from_brg if side == +1 else to_brg
+        points.append({'identifier': f'CS{wpt_idx:02d}', 'lat': lat, 'lon': lon, 'leg_dist_nm': round(sweep_width_nm, 2), 'heading_true': round(cross_brg, 1)})
+        wpt_idx += 1
+        side = -side
+
     return _magnetic_headings(points)
 
-def generate_parallel_track(corner_lat, corner_lon, length_nm=5.0, width_nm=4.0, axis_heading=0.0, spacing_nm=1.0):
-    """Generate Civil Air Patrol Parallel Track (PS) search pattern waypoints."""
-    cross_heading = (axis_heading + 90) % 360
+
+def parallel_lane_count(width_nm, spacing_nm):
+    """Lanes in a box: ceil(width / spacing), with a hair of slack so that a
+    width that is a whole number of spacings (3 * 0.1 / 0.1) is not rounded
+    up to one lane more by floating point."""
+    return max(1, math.ceil(width_nm / spacing_nm - 1e-9))
+
+
+def generate_parallel_track(corner_lat, corner_lon, length_nm=5.0, width_nm=4.0, axis_heading=0.0, spacing_nm=1.0,
+                            turn='right'):
+    """Generate Civil Air Patrol Parallel Track (PS) search pattern waypoints.
+
+    The planner's input is a box: a corner, a length along the axis and a
+    width across it. The first lane starts half a spacing inside the corner;
+    lanes lie on the `turn` side of the axis ('right' by default, 'left'
+    for a left-handed box). See parallel_inputs_from_datum for the exact
+    relation to the g1000-sar datum.
+    """
+    cross_heading, _ = _side_bearings(axis_heading, turn)
+    side = 1 if str(turn).lower() != 'left' else -1
     opp_heading = (axis_heading + 180) % 360
-    num_sweeps = max(1, math.ceil(width_nm / spacing_nm))
-    
-    points = []
-    cur_lat, cur_lon = destination_point(corner_lat, corner_lon, min(spacing_nm, width_nm) / 2, cross_heading)
-    points.append({'identifier': 'PS01', 'lat': cur_lat, 'lon': cur_lon, 'leg_dist_nm': 0.0, 'heading_true': axis_heading})
-    
+    num_sweeps = parallel_lane_count(width_nm, spacing_nm)
+
+    # PS01: the first lane's start, half a spacing inside the corner. It is the
+    # origin lanes are measured from (the library's datum).
+    org_lat, org_lon = destination_point(corner_lat, corner_lon, min(spacing_nm, width_nm) / 2, cross_heading)
+    points = [{'identifier': 'PS01', 'lat': org_lat, 'lon': org_lon, 'leg_dist_nm': 0.0, 'heading_true': axis_heading}]
+
     wpt_idx = 2
     for i in range(num_sweeps):
-        # Fly length of box
-        curr_sweep_hdg = axis_heading if i % 2 == 0 else opp_heading
-        next_lat, next_lon = destination_point(cur_lat, cur_lon, length_nm, curr_sweep_hdg)
-        points.append({'identifier': f'PS{wpt_idx:02d}', 'lat': next_lat, 'lon': next_lon, 'leg_dist_nm': round(length_nm, 2), 'heading_true': curr_sweep_hdg})
+        # Fly the length of the box, then step across to the next lane.
+        forward = i % 2 == 0
+        curr_sweep_hdg = axis_heading if forward else opp_heading
+        lat, lon = local_offset(org_lat, org_lon, length_nm if forward else 0.0,
+                                side * i * spacing_nm, axis_heading)
+        points.append({'identifier': f'PS{wpt_idx:02d}', 'lat': lat, 'lon': lon, 'leg_dist_nm': round(length_nm, 2), 'heading_true': curr_sweep_hdg})
         wpt_idx += 1
-        cur_lat, cur_lon = next_lat, next_lon
-        
+
         if i < num_sweeps - 1:
-            # Step laterally across track
-            next_lat, next_lon = destination_point(cur_lat, cur_lon, spacing_nm, cross_heading)
-            points.append({'identifier': f'PS{wpt_idx:02d}', 'lat': next_lat, 'lon': next_lon, 'leg_dist_nm': round(spacing_nm, 2), 'heading_true': cross_heading})
+            lat, lon = local_offset(org_lat, org_lon, length_nm if forward else 0.0,
+                                    side * (i + 1) * spacing_nm, axis_heading)
+            points.append({'identifier': f'PS{wpt_idx:02d}', 'lat': lat, 'lon': lon, 'leg_dist_nm': round(spacing_nm, 2), 'heading_true': cross_heading})
             wpt_idx += 1
-            cur_lat, cur_lon = next_lat, next_lon
-            
+
     return _magnetic_headings(points)
 
+
+# ---- D2: front-end conversions -------------------------------------------
+#
+# The g1000-sar library describes every pattern from its DATUM with no inset
+# (D2.2): parallel track = first lane start, creeping line = centre of the
+# first sweep, expanding square = centre. The planner's people think in
+# boxes and start/end points, so its generators take those and put the first
+# lane / sweep half a spacing inside the box (D2.3). These pure functions are
+# that relation, in both directions; the fixture test
+# (tests/test_pattern_conventions.py) drives the generators through the
+# datum -> box direction and asserts the library's names and positions.
+
+def parallel_inputs_from_datum(datum_lat, datum_lon, axis_heading, spacing_nm, legs, turn='right'):
+    """Library parallel track (datum = first lane start) -> planner box inputs.
+
+    corner = the datum moved spacing/2 across the axis, AWAY from the turn
+    side (so the first lane lies spacing/2 inside the box edge, on the turn
+    side); width = legs * spacing, so ceil(width / spacing) == legs.
+    Returns {'corner_lat', 'corner_lon', 'width_nm', 'axis_heading', 'turn'}.
+    """
+    _, away = _side_bearings(axis_heading, turn)
+    lat, lon = destination_point(datum_lat, datum_lon, spacing_nm / 2.0, away)
+    return {'corner_lat': lat, 'corner_lon': lon, 'width_nm': legs * spacing_nm,
+            'axis_heading': axis_heading % 360.0, 'turn': turn}
+
+
+def parallel_datum_from_box(corner_lat, corner_lon, width_nm, axis_heading, spacing_nm, turn='right'):
+    """Planner box -> library parallel track: (datum_lat, datum_lon, legs).
+
+    The inverse of parallel_inputs_from_datum: datum = the corner moved
+    min(spacing, width)/2 toward the turn side, legs = ceil(width / spacing).
+    """
+    toward, _ = _side_bearings(axis_heading, turn)
+    lat, lon = destination_point(corner_lat, corner_lon, min(spacing_nm, width_nm) / 2.0, toward)
+    return lat, lon, parallel_lane_count(width_nm, spacing_nm)
+
+
+def creeping_inputs_from_datum(datum_lat, datum_lon, heading, spacing_nm, legs):
+    """Library creeping line (datum = centre of the first sweep) -> planner start/end.
+
+    The generator puts the first sweep min(spacing, distance)/2 along the
+    axis from the start, and runs ceil(distance / spacing) sweeps. Choosing
+    distance = (legs - 0.5) * spacing makes that count exactly `legs` (it can
+    never sit on a rounding boundary) and the inset min(spacing, distance)/2;
+    start = datum moved back by that inset, end = start + distance along the
+    heading. Returns {'start_lat', 'start_lon', 'end_lat', 'end_lon'}.
+    """
+    dist = (legs - 0.5) * spacing_nm
+    inset = min(spacing_nm, dist) / 2.0
+    start = destination_point(datum_lat, datum_lon, inset, (heading + 180) % 360)
+    end = destination_point(start[0], start[1], dist, heading % 360.0)
+    return {'start_lat': start[0], 'start_lon': start[1], 'end_lat': end[0], 'end_lon': end[1]}
+
+
+def creeping_datum_from_endpoints(start_lat, start_lon, end_lat, end_lon, spacing_nm):
+    """Planner start/end -> library creeping line: (datum_lat, datum_lon, heading, legs)."""
+    heading = bearing(start_lat, start_lon, end_lat, end_lon)
+    dist = gc_dist(start_lat, start_lon, end_lat, end_lon)
+    lat, lon = destination_point(start_lat, start_lon, min(spacing_nm, dist) / 2.0, heading)
+    return lat, lon, heading, max(1, math.ceil(dist / spacing_nm))
+
+
 def fms_waypoint_limit_message(count):
-    return (f'This flight plan has {count} waypoints; the limit is {MAX_FMS_WAYPOINTS} '
-            f'(the G1000 flight-plan size, just under X-Plane\'s FMS limit). '
+    return (f'This flight plan has {count} waypoints, {count + FMS_AIRPORT_ENTRIES} entries '
+            f'with the departure and destination; a file may hold at most '
+            f'{MAX_FMS_ENTRIES} ({MAX_FMS_WAYPOINTS} waypoints), the G1000 flight-plan '
+            f'size and just under X-Plane\'s FMS limit. '
             f'Split the pattern into two files: fewer legs, wider spacing, '
             f'or a smaller area per file.')
 
@@ -2254,12 +2363,16 @@ def sar_generate():
     # divide by it - 0 was an unhandled ZeroDivisionError) and num_legs caps
     # to keep one request from generating an unbounded waypoint list.
     spacing = _num(data, 'spacing_nm', 1.0, 0.1, 20.0, clamp=True)
-    legs = _num(data, 'num_legs', 8, 1, 40, integer=True, clamp=True)
+    legs = _num(data, 'num_legs', 8, 1, MAX_PATTERN_LEGS, integer=True, clamp=True)
     init_hdg = _num(data, 'initial_heading', 0.0, -36000, 36000) % 360.0
     coverage_truncated = False
     turn_dir = _text(data, 'turn_direction', 'right', 10).lower()
     if turn_dir not in ('left', 'right'):
         raise RequestError('turn_direction must be "left" or "right"')
+    # Creeping line: the side the first sweep flies toward (D2.4).
+    first_turn = _text(data, 'first_turn', 'right', 10).lower()
+    if first_turn not in ('left', 'right'):
+        raise RequestError('first_turn must be "left" or "right"')
 
     try:
         if ptype == 'expanding_square':
@@ -2269,7 +2382,7 @@ def sar_generate():
             end_lon = _num(data, 'end_lon', datum_coords[1] + 0.15, -180, 180)
             sweep_w = _num(data, 'sweep_width_nm', 3.0, 0.1, 50.0, clamp=True)
             coverage_truncated = math.ceil(gc_dist(*datum_coords, end_lat, end_lon) / spacing) > legs
-            wpts = generate_creeping_line(datum_coords[0], datum_coords[1], end_lat, end_lon, sweep_w, spacing, legs)
+            wpts = generate_creeping_line(datum_coords[0], datum_coords[1], end_lat, end_lon, sweep_w, spacing, legs, first_turn)
         elif ptype == 'parallel_track':
             box_len = max(0.1, _num(data, 'length_nm', 5.0, 0, 1e6))
             if box_len > MAX_PARALLEL_DIMENSION_NM:
@@ -2279,14 +2392,14 @@ def sar_generate():
             if box_w > MAX_PARALLEL_DIMENSION_NM:
                 return jsonify({'success': False, 'error':
                     f'width_nm must be at most {MAX_PARALLEL_DIMENSION_NM:g}'}), 400
-            sweeps = max(1, math.ceil(box_w / spacing))
+            sweeps = parallel_lane_count(box_w, spacing)
             leg_count = 2 * sweeps - 1
             if leg_count > MAX_PARALLEL_LEGS:
                 return jsonify({'success': False, 'error':
                     f'width_nm with spacing_nm would generate {sweeps} sweeps '
                     f'({leg_count} legs); maximum is {MAX_PARALLEL_LEGS} legs'}), 400
             axis_hdg = _num(data, 'axis_heading', 0.0, -36000, 36000) % 360.0
-            wpts = generate_parallel_track(datum_coords[0], datum_coords[1], box_len, box_w, axis_hdg, spacing)
+            wpts = generate_parallel_track(datum_coords[0], datum_coords[1], box_len, box_w, axis_hdg, spacing, turn_dir)
         else:
             return jsonify({'success': False, 'error': f'Unknown pattern: {ptype}'}), 400
     except (TypeError, ValueError) as exc:

@@ -322,18 +322,19 @@ Click the **SAR** button in the main toolbar. This opens the SAR Pattern Generat
 
 1. **Expanding Square (SS):**
    - Used when searching a concentrated area around a known datum (e.g., last known position or initial ELT alert location).
-   - Parameters: Datum coordinates (lat/lon), track spacing (0.5–2.0 NM), number of legs, initial heading, and turn direction (Right or Left).
+   - Parameters: Datum coordinates (lat/lon), track spacing (0.5–2.0 NM), number of legs (up to 60), initial heading, and turn direction (Right or Left). `DATUM` is the centre and `SSnn` is the end of leg nn.
    - Generates sequential expansion legs (1×S, 1×S, 2×S, 2×S, 3×S, 3×S...) with calculated magnetic courses and leg distances.
 
 2. **Creeping Line (CS):**
    - Used when searching a route corridor, valley floor, or canyon where the target is likely located along a specific track.
    - Parameters: Start point, end point, sweep width (NM), track spacing (NM), and maximum legs.
+   - Up to 60 sweeps. "First sweep flies toward" Right (default) or Left mirrors the pattern.
    - Generates alternating orthogonal cross-track sweeps advancing along the route axis. `CS01` is the left end of the first sweep and carries no leg of its own; the first sweep flies to the right.
 
 3. **Parallel Track (PS):**
    - Used for systematic grid searches covering large rectangular areas or CAP quadrangles.
    - Parameters: Corner coordinate, search box length (NM), search box width (NM), axis heading, and track spacing (NM).
-   - Generates parallel search tracks stepped across the search area.
+   - Generates parallel search tracks stepped across the search area. "Lanes lie to the" Right (default) or Left of the axis. The first lane is half a spacing inside the corner. See `docs/SEARCH_PATTERN_CONVENTIONS.md` in the repo for how this relates to the G1000 library.
 
 ### 8.3 Route Integration & Search Sortie Metrics
 Clicking **Apply to Route** integrates the generated search waypoints (`DATUM`, `SS01`, `CS01`, `PS01`...) into the active flight plan:
@@ -345,8 +346,9 @@ Clicking **Apply to Route** integrates the generated search waypoints (`DATUM`, 
 
 - **Export X-Plane 12 `.fms`:**
   Downloads a standard FMS format file (version 1100) compatible with X-Plane 11 and 12 G1000 / FMS navigation systems. Save directly to your simulator's `Output/FMS plans/` folder.
-  A file holds at most 99 pattern waypoints (the G1000 flight-plan size; the
-  real X-Plane limit has not been checked in the simulator). The pattern dialog
+  A file holds at most 99 entries counting the departure and destination, so
+  97 pattern waypoints (the G1000 flight-plan size; the real X-Plane limit has
+  not been checked in the simulator). The pattern dialog
   warns when a pattern is longer, and the export refuses it: split the pattern
   into two files with fewer legs, wider spacing or a smaller area.
 - **Push to V-SAR Console (shared `https://ms01/` origin):**
