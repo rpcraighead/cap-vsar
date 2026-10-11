@@ -2,12 +2,7 @@
 // instructor has revealed it for debrief.
 const $ = id => document.getElementById(id);
 
-// F-6: nothing escapes server strings on the way out, and any LAN client can
-// POST message bodies, bearing notes and callsigns. Escape every server value
-// interpolated into HTML. Values already passed through toFixed() or
-// Math.round() are provably numeric and are left alone.
-const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c =>
-  ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+// esc(), planeIcon, fmtDur, the socket, clock and auth badge: charts.js.
 
 const map = L.map('map').setView([33.15, -117.18], 10);
 capvsarCharts(map, {view: 'base'});
@@ -22,81 +17,9 @@ const seenBearings = new Set(), seenMessages = new Set();
 let lastBearingT = 0, lastMessageT = 0;
 let centred = false;
 
-// BEGIN F-8 PURE GEODESY
-// Browser deployment boundary: these functions derive from app/geo.py's
-// great-circle conventions. tests/test_geodesy.py executes this exact block
-// against the same fixture as the Python authority so the two cannot drift.
-const BASE_R_NM = 3440.065;
-const vCross = (a, b) => [
-  a[1] * b[2] - a[2] * b[1],
-  a[2] * b[0] - a[0] * b[2],
-  a[0] * b[1] - a[1] * b[0],
-];
-const vUnit = v => {
-  const n = Math.hypot(...v);
-  return n > 1e-15 ? v.map(x => x / n) : null;
-};
-const gcDistanceNm = (lat1, lon1, lat2, lon2) => {
-  const r = Math.PI / 180, p1 = lat1 * r, p2 = lat2 * r;
-  const dp = (lat2 - lat1) * r, dl = (lon2 - lon1) * r;
-  const h = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
-  return 2 * BASE_R_NM * Math.asin(Math.min(1, Math.sqrt(h)));
-};
-const bearingDestination = (lat, lon, bearing, distanceNm) => {
-  const r = Math.PI / 180, b = bearing * r, d = distanceNm / BASE_R_NM, p = lat * r;
-  const p2 = Math.asin(Math.sin(p) * Math.cos(d) + Math.cos(p) * Math.sin(d) * Math.cos(b));
-  const l2 = lon * r + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(p),
-    Math.cos(d) - Math.sin(p) * Math.sin(p2));
-  return [p2 / r, ((l2 / r + 540) % 360) - 180];
-};
-const bearingIntersection = (first, second, maxRangeNm = 40) => {
-  const pathPlane = row => {
-    const r = Math.PI / 180, lat = Number(row.lat) * r, lon = Number(row.lon) * r;
-    const b = ((Number(row.bearing_true) % 360) + 360) % 360 * r;
-    const point = [Math.cos(lat) * Math.cos(lon), Math.cos(lat) * Math.sin(lon), Math.sin(lat)];
-    const north = [-Math.sin(lat) * Math.cos(lon), -Math.sin(lat) * Math.sin(lon), Math.cos(lat)];
-    const east = [-Math.sin(lon), Math.cos(lon), 0];
-    const tangent = north.map((x, i) => x * Math.cos(b) + east[i] * Math.sin(b));
-    return [point, tangent, vCross(point, tangent)];
-  };
-  const [p1, d1, n1] = pathPlane(first), [p2, d2, n2] = pathPlane(second);
-  const crossing = vUnit(vCross(n1, n2));
-  if (!crossing) return null;
-  const candidates = [];
-  for (const q of [crossing, crossing.map(x => -x)]) {
-    if (d1.reduce((s, x, i) => s + x * q[i], 0) <= 1e-12 ||
-        d2.reduce((s, x, i) => s + x * q[i], 0) <= 1e-12) continue;
-    const point = [Math.asin(Math.max(-1, Math.min(1, q[2]))) * 180 / Math.PI,
-      Math.atan2(q[1], q[0]) * 180 / Math.PI];
-    const ranges = [gcDistanceNm(first.lat, first.lon, ...point),
-      gcDistanceNm(second.lat, second.lon, ...point)];
-    if (ranges.every(x => x <= maxRangeNm)) candidates.push([ranges[0] + ranges[1], point]);
-  }
-  candidates.sort((a, b) => a[0] - b[0]);
-  return candidates.length ? candidates[0][1] : null;
-};
-const bearingCutPolygon = (bearings, maxRangeNm = 40) => {
-  const points = [];
-  bearings.forEach((first, i) => bearings.slice(i + 1).forEach(second => {
-    const point = bearingIntersection(first, second, maxRangeNm);
-    if (point && !points.some(old => gcDistanceNm(...point, ...old) < .01)) points.push(point);
-  }));
-  if (points.length < 3) return points;
-  const centreLat = points.reduce((s, p) => s + p[0], 0) / points.length;
-  const lonX = points.reduce((s, p) => s + Math.cos(p[1] * Math.PI / 180), 0);
-  const lonY = points.reduce((s, p) => s + Math.sin(p[1] * Math.PI / 180), 0);
-  const centreLon = Math.atan2(lonY, lonX) * 180 / Math.PI;
-  return points.sort((a, b) => {
-    const angle = p => {
-      const dl = ((p[1] - centreLon + 540) % 360) - 180;
-      return Math.atan2(dl * Math.cos(centreLat * Math.PI / 180), p[0] - centreLat);
-    };
-    return angle(a) - angle(b);
-  });
-};
-const bearingCallsignChoices = aircraft => [...new Set(aircraft
-  .map(a => String(a.callsign || '').trim()).filter(Boolean))].sort();
-// END F-8 PURE GEODESY
+
+// The great-circle geometry (bearingDestination, bearingCutPolygon, ...) is in
+// geodesy.js, shared with the instructor view.
 
 // BEGIN F-8 BEARING UI POLICY
 // State ownership:
@@ -179,24 +102,15 @@ function renderBearingCut() {
     .addTo(bearingCutLayer).bindTooltip('bearing confidence area');
 }
 
-const planeIcon = c => L.divIcon({className:'', iconSize:[26,26], html:
-  `<svg width="26" height="26" viewBox="0 0 24 24" style="transform:rotate(${c}deg)">
-     <path d="M12 2 L15 11 L22 13 L22 15 L13.5 14 L13 20 L16 22 L16 23 L12 22 L8 23 L8 22 L11 20 L10.5 14 L2 15 L2 13 L9 11 Z"
-       fill="#2e5496" stroke="#1f3864" stroke-width="0.8"/></svg>`});
-
-const fmtDur = s => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(Math.floor(s%60)).padStart(2,'0')}`;
-
 function connect() {
-  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
-  ws.onopen  = () => { $('status').textContent = 'live'; $('status').className = 'status online'; backfill(); };
-  ws.onclose = () => { $('status').textContent = 'reconnecting'; $('status').className = 'status offline';
-                       setTimeout(connect, 2000); };
-  ws.onmessage = e => {
-    const m = JSON.parse(e.data);
-    if (m.type === 'state')   { state = m; render(); }
-    if (m.type === 'bearing') { addBearing(m); }
-    if (m.type === 'message') { addMessage(m); }
-  };
+  vsarConnect({
+    onOpen: () => backfill(),
+    onMessage: m => {
+      if (m.type === 'state')   { state = m; render(); }
+      if (m.type === 'bearing') { addBearing(m); }
+      if (m.type === 'message') { addMessage(m); }
+    },
+  });
 }
 
 function clearSortieLayers() {
@@ -339,7 +253,7 @@ $('brgAdd').onclick = async () => {
   const r = await vsarFetch('/api/bearings', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({callsign: cs, bearing_true: v, note: $('brgNote').value.trim()})});
   if (r.ok) { $('brgValue').value = ''; $('brgNote').value = ''; }
-  else { alert('That callsign is not reporting a position yet.'); }
+  else { await vsarReportFailure(r, 'Bearing not logged'); }
 };
 $('brgValue').addEventListener('keydown', e => { if (e.key === 'Enter') $('brgAdd').click(); });
 
@@ -349,31 +263,9 @@ $('msgSend').onclick = async () => {
   const r = await vsarFetch('/api/messages', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({recipient: $('msgTo').value.trim() || 'ALL', body})});
   if (r.ok) $('msgBody').value = '';
+  else await vsarReportFailure(r, 'Message not sent');
 };
 $('msgBody').addEventListener('keydown', e => { if (e.key === 'Enter') $('msgSend').click(); });
 
-async function initAuthBadge() {
-  try {
-    const res = await fetch('/api/auth/me');
-    if (res.ok) {
-      const data = await res.json();
-      if (data.authenticated && $('userBadge')) {
-        const title = data.title || (data.role ? data.role.toUpperCase() : 'Base Staff');
-        const cs = data.callsign ? ` (${data.callsign})` : '';
-        $('userBadge').textContent = `\uD83D\uDC64 ${title}${cs}`;
-      }
-    }
-  } catch (e) {}
-
-  if ($('logoutBtn')) {
-    $('logoutBtn').onclick = async () => {
-      try {
-        await fetch('/api/auth/logout', {method: 'POST'});
-      } catch (e) {}
-      location.href = '/login';
-    };
-  }
-}
-
-setInterval(() => $('clock').textContent = new Date().toUTCString().slice(17, 25) + 'Z', 1000);
-connect(); initAuthBadge();
+vsarStartClock();
+connect(); vsarInitAuthBadge('Base Staff');
