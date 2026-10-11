@@ -21,12 +21,9 @@
             { role: "ground_team", title: "Ground Search Team 1", callsign: "UDF 1" }
         ]
     };
-    let scenarios = [];
 
     // DOM Elements
     const exNameInput = document.getElementById("exName");
-    const exScenarioSelect = document.getElementById("exScenario");
-    const scenarioDesc = document.getElementById("scenarioDesc");
     const aircraftGrid = document.getElementById("aircraftGrid");
     const saveSetupBtn = document.getElementById("saveSetupBtn");
     const resetSetupBtn = document.getElementById("resetSetupBtn");
@@ -38,7 +35,6 @@
 
     async function init() {
         await checkAuth();
-        await loadScenarios();
         await loadSetup();
         bindEvents();
     }
@@ -58,32 +54,6 @@
             }
         } catch (e) {
             console.error("Auth check failed", e);
-        }
-    }
-
-    async function loadScenarios() {
-        try {
-            const res = await fetch("/api/scenarios");
-            scenarios = await res.json();
-            exScenarioSelect.innerHTML = "";
-            scenarios.forEach(sc => {
-                const opt = document.createElement("option");
-                opt.value = sc.id;
-                opt.textContent = sc.name;
-                exScenarioSelect.appendChild(opt);
-            });
-            updateScenarioDesc();
-        } catch (e) {
-            console.error("Failed to load scenarios", e);
-        }
-    }
-
-    function updateScenarioDesc() {
-        const sc = scenarios.find(s => s.id === exScenarioSelect.value);
-        if (sc) {
-            scenarioDesc.textContent = (sc.notes || "") + (sc.band ? ` | Band: ${sc.band} MHz` : "");
-        } else {
-            scenarioDesc.textContent = "";
         }
     }
 
@@ -111,8 +81,6 @@
     }
 
     function bindEvents() {
-        exScenarioSelect.addEventListener("change", updateScenarioDesc);
-
         // Aircraft Count Stepper buttons
         document.querySelectorAll(".btn-stepper").forEach(btn => {
             btn.addEventListener("click", () => {

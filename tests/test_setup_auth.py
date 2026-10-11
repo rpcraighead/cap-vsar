@@ -685,3 +685,9 @@ class HardenedCredentialTests(unittest.TestCase):
         page = self.client.get('/login').text
         self.assertIn('maxlength="128"', page)
         self.assertNotIn('data-code="INSTR-1"', page)
+        # F: the shortcuts are gone from the file itself, not stripped on the
+        # way out. The static mount serves the raw file to anyone.
+        raw = self.client.get('/static/login.html').text
+        for code in ('INSTR-1', 'MRO-1', 'OBS-423', 'UDF-1', 'login-shortcuts-section'):
+            self.assertNotIn(code, raw)
+        self.assertIn('maxlength="128"', raw)
