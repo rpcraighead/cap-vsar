@@ -12,18 +12,10 @@ import secrets
 import re
 from urllib.parse import parse_qs, quote
 
-import json
-import time
-import uuid
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
 from .. import access
-from ..hub import hub
-from ..roles import (base_or_instructor, instructor_only, plugin_only,
-                     public_scenario)
-from ..settings import log
-from ..store import _exec, _fetchone, db, db_call, row_to_scenario
 
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 

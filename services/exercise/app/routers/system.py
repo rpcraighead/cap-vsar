@@ -6,18 +6,14 @@ Split out of main.py under C15-1.
 from __future__ import annotations
 
 import json
-import time
-import uuid
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
 from .. import access
 from ..hub import hub
-from ..roles import (base_or_instructor, instructor_only, plugin_only,
-                     public_scenario)
 from ..settings import log
 from ..roles import any_role
-from ..store import _exec, _fetchone, db, db_call, row_to_scenario
+from ..store import db
 
 import os
 from urllib.parse import urlsplit

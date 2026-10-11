@@ -5,20 +5,16 @@ Split out of main.py under C15-1.
 """
 from __future__ import annotations
 
-import json
 import time
-import uuid
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Request
 from starlette.concurrency import run_in_threadpool
 
 from .. import access
 from ..hub import hub
-from ..roles import (base_or_instructor, instructor_only, plugin_only,
-                     public_scenario)
-from ..settings import log
+from ..roles import base_or_instructor
 from ..roles import any_role
-from ..store import _exec, _fetchone, db, db_call, row_to_scenario
+from ..store import db, db_call
 
 from ..models import MessageIn
 
