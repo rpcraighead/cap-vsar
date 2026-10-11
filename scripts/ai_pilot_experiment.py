@@ -24,14 +24,17 @@ from services.ai_pilot.experiment import BridgeClient, Recorder, Scenario, diges
 from services.ai_pilot.control_ownership import ControllerLock
 
 
-def inventory(xplane):
+def inventory(xplane, include_landing=False):
     aircraft = xplane / "Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf"
     plugins = xplane / "Resources/plugins/PythonPlugins"
     def git(*args):
         return subprocess.check_output(["git", "-C", str(ROOT), *args], text=True).strip()
-    sources = [ROOT / "xplane" / name for name in (
+    names = (
         "PI_capvsar_flight_control.py", "capvsar_flight_control_core.py",
-        "capvsar_flight_control_mapping.py", "capvsar_telemetry.py", "capvsar_qualification.py")]
+        "capvsar_flight_control_mapping.py", "capvsar_telemetry.py", "capvsar_qualification.py")
+    sources = [ROOT / "xplane" / name for name in names]
+    if include_landing:
+        sources.append(ROOT / "xplane/capvsar_landing.py")
     installed = [plugins / path.name for path in sources]
     return {
         "repository": str(ROOT), "commit": git("rev-parse", "HEAD"),
@@ -46,7 +49,7 @@ def inventory(xplane):
     }
 
 
-def stage_observer(destination, qualification_aircraft=None):
+def stage_observer(destination, qualification_aircraft=None, mode="qualification"):
     """Stage an explicit observation or expiring laboratory installation."""
     if qualification_aircraft is not None:
         from xplane.capvsar_qualification import STOCK_NAME, STOCK_SHA256
@@ -54,15 +57,16 @@ def stage_observer(destination, qualification_aircraft=None):
         if qualification_aircraft.name != STOCK_NAME or digest(qualification_aircraft) != STOCK_SHA256:
             raise ValueError("Qualification requires the pinned stock C172 G1000")
     destination.mkdir(parents=True, exist_ok=False)
-    for name in ("PI_capvsar_flight_control.py", "capvsar_flight_control_core.py",
-                 "capvsar_flight_control_mapping.py", "capvsar_telemetry.py", "capvsar_qualification.py"):
+    names = ("PI_capvsar_flight_control.py", "capvsar_flight_control_core.py",
+             "capvsar_flight_control_mapping.py", "capvsar_telemetry.py", "capvsar_qualification.py")
+    for name in names + (("capvsar_landing.py",) if mode == "landing" else ()):
         shutil.copy2(ROOT / "xplane" / name, destination / name)
     session = secrets.token_hex(16)
     config = {"mode": "observe", "protocol": "atomic-v1", "session": session,
               "secret": secrets.token_hex(32),
               "socket_path": f"/tmp/capvsar-flight-control-{session}.sock"}
     if qualification_aircraft is not None:
-        config.update(mode="qualification", aircraft_path=str(qualification_aircraft),
+        config.update(mode=mode, aircraft_path=str(qualification_aircraft),
                       expires_unix_s=time.time() + 3600)
     fd = os.open(destination / "capvsar_flight_control_config.json",
                  os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -144,6 +148,9 @@ def main():
     qualify = commands.add_parser("stage-qualification")
     qualify.add_argument("destination", type=Path)
     qualify.add_argument("--aircraft", type=Path, required=True)
+    landing = commands.add_parser("stage-landing")
+    landing.add_argument("destination", type=Path)
+    landing.add_argument("--aircraft", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "observe":
         if not 2 <= args.seconds <= 600:
@@ -154,7 +161,8 @@ def main():
         print(json.dumps(result, indent=2))
         return 0 if result["outcome"] == "PASS" else 1
     else:
-        stage_observer(args.destination, args.aircraft if args.command == "stage-qualification" else None)
+        stage_observer(args.destination, args.aircraft if args.command in ("stage-qualification", "stage-landing") else None,
+                       mode="landing" if args.command == "stage-landing" else "qualification")
     return 0
 
 

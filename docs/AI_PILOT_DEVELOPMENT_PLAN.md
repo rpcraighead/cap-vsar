@@ -10,8 +10,11 @@ terminal pause in every flight. See the [requalification report](evidence/AI_PIL
 the [earlier campaign](evidence/AI_PILOT_SOL_CAMPAIGN_20261010.md), and the
 [Sol handoff](AI_PILOT_SOL_HANDOFF.md). The earlier startup failures and one
 intermediate campaign's in-flight frame expiry are preserved as evidence.
-Landing testing is now the next requested flight phase, ahead of taxi and
-takeoff.
+The next phase produced attended [KMYF 28R landing engineering trials](evidence/AI_PILOT_KMYF_LANDING_20261010.md):
+normal 65 KIAS approaches, a low/slow recovery, two 12 kt left-crosswind
+landings and a calm regression all reached a scored full stop. Repeated
+landing qualification, short-field 61 KIAS landings, taxi and takeoff remain
+future milestones.
 The [first increment](AI_PILOT_FIRST_INCREMENT.md) records the earlier
 observation-only stage. Broader aircraft and mission qualification remains
 outstanding.

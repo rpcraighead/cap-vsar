@@ -18,7 +18,7 @@ CHANNELS = ("roll", "pitch", "yaw", "throttle", "flap", "trim")
 ARDUPLANE_CHANNELS = CHANNELS[:-1]
 RANGES = {"roll": (-1.0, 1.0), "pitch": (-1.0, 1.0),
           "yaw": (-1.0, 1.0), "throttle": (0.0, 1.0), "flap": (0.0, 1.0),
-          "trim": (-1.0, 1.0)}
+          "trim": (-1.0, 1.0), "brake": (0.0, .35)}
 
 
 class ControlBridge:
@@ -27,8 +27,13 @@ class ControlBridge:
     EXECUTIVE_AGE_S = 0.40
     TRANSFER_TIMEOUT_S = 1.0
 
-    def __init__(self, sink, session: str, clock=time.monotonic, *, atomic=False):
+    def __init__(self, sink, session: str, clock=time.monotonic, *, atomic=False,
+                 channels=CHANNELS):
         self.sink, self.session, self.clock = sink, session, clock
+        self.channels = tuple(channels)
+        if (not set(CHANNELS) <= set(self.channels) or len(set(self.channels)) != len(self.channels)
+                or not set(self.channels) <= set(RANGES) or ("brake" in self.channels and not atomic)):
+            raise ValueError("Invalid actuator channel set")
         self.prefix = candidate_prefix(session)
         self.generation = 0
         self.state = "MANUAL"
@@ -77,14 +82,14 @@ class ControlBridge:
         if (type(expires_at) not in (int, float) or not math.isfinite(expires_at)
                 or not now < expires_at <= now + self.CANDIDATE_AGE_S):
             raise ValueError("Frame expiry outside lease window")
-        if not isinstance(controls, dict) or set(controls) != set(CHANNELS):
+        if not isinstance(controls, dict) or set(controls) != set(self.channels):
             raise ValueError("Complete actuator frame required")
         for channel, value in controls.items():
             low, high = RANGES[channel]
             if (type(value) not in (int, float) or not math.isfinite(value)
                     or not low <= value <= high):
                 raise ValueError("Invalid actuator: %s" % channel)
-        self.candidates = {c: (float(controls[c]), now) for c in CHANNELS}
+        self.candidates = {c: (float(controls[c]), now) for c in self.channels}
         self.frame_sequence = sequence
         self.frame_deadline = expires_at
         self.frame_generation = generation
@@ -120,7 +125,7 @@ class ControlBridge:
                 raise ValueError("No frame for current generation")
             if self.frame_deadline is None or self.clock() >= self.frame_deadline:
                 raise ValueError("Atomic frame expired")
-        required = CHANNELS if self.owner == "DIRECT" else ARDUPLANE_CHANNELS
+        required = self.channels if self.owner == "DIRECT" else ARDUPLANE_CHANNELS
         if not set(required) <= set(self.candidates):
             raise ValueError("Incomplete candidate output")
         stamps = [self.candidates[c][1] for c in required]
