@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 119 items, 18 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 200 items, 25 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -10,21 +10,21 @@ IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split ou
 
 | | critical | high | medium | low | total |
 |---|---|---|---|---|---|
-| by severity | 13 | 40 | 44 | 22 | 119 |
+| by severity | 14 | 55 | 72 | 59 | 200 |
 
 | P0 | P1 | P2 | P3 |
 |---|---|---|---|
-| 17 | 39 | 44 | 19 |
+| 20 | 55 | 69 | 56 |
 
 | Component | Items |
 |---|---|
-| Deployment / infrastructure | 36 |
-| Air Manager instruments | 19 |
-| Exercise console (backend) | 17 |
-| Flight planner | 16 |
-| Exercise console (frontend) | 12 |
-| X-Plane plugin / engine | 12 |
-| Docs / record | 7 |
+| Deployment / infrastructure | 56 |
+| Flight planner | 30 |
+| Exercise console (backend) | 30 |
+| Air Manager instruments | 28 |
+| Exercise console (frontend) | 24 |
+| X-Plane plugin / engine | 21 |
+| Docs / record | 11 |
 
 ## Priority definitions
 
@@ -37,11 +37,11 @@ IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split ou
 
 _Wave dates track the illustrative calendar in docs/USE_CASE_SAREX_REHEARSAL.md (T-14/T-7/T-2 before a 17 Oct 2026 SAREX). Re-anchor to the real exercise date._
 
-- **Wave 0** (8 items) — Now — make the work safe to do at all.
-- **Wave 1** (11 items) — Before session 1 (base stand-up). Nothing flies; base, planner and comms must work.
-- **Wave 2** (20 items) — Before session 2 (full mission, three aircraft, injected effects).
-- **Wave 3** (59 items) — Before session 3 (dress rehearsal) and the live SAREX.
-- **Wave 4** (21 items) — After the SAREX — architecture, tooling, CalTopo phase 2.
+- **Wave 0** (11 items) — Now — make the work safe to do at all.
+- **Wave 1** (25 items) — Before session 1 (base stand-up). Nothing flies; base, planner and comms must work.
+- **Wave 2** (46 items) — Before session 2 (full mission, three aircraft, injected effects).
+- **Wave 3** (94 items) — Before session 3 (dress rehearsal) and the live SAREX.
+- **Wave 4** (24 items) — After the SAREX — architecture, tooling, CalTopo phase 2.
 
 ## Clusters
 
@@ -64,7 +64,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | C13 | Instrument tooling & shared libs | I-8, I-9a, I-7, I-9c | Gemini — instrument tooling; I-9a Lua harness is its first task |
 | C14 | Contract & documentation truth | D-1, D-2, D-3, D-4, D-5, P-10, I-9b | docs only, safe in parallel |
 | C15 | Service boundaries (architecture) | AI-22, AI-11, AI-1, AI-10, AI-12, AI-13, AI-2, AI-21, AI-23, AI-24, AI-3, AI-5, AI-6, AI-8, AI-9, AI-14, AI-15, AI-16, AI-17, AI-20, AI-4, V2-8, AI-18, AI-19, C15-1, P-11, C15-2 | unassigned — after C2 and C7 settle |
-| C16 | Aircraft package fidelity | A-1 | Claude — actively correcting the CAP 487 C182 model; visual and flight-model acceptance remain open |
+| C16 | Project review 2026-10-10 (waves A-D) | X2-1, O2-3, X2-2, B2-1, F2-1, I2-1, I2-3, L2-1, L2-4, O2-1, O2-2, O2-4, X2-3, X2-4, L2-6, P2-2, X2-8, F2-2, L2-13, B2-2, B2-4, B2-5, B2-7, B2-9, F2-3, F2-4, F2-5, F2-6, F2-7, I2-2, I2-4, L2-2, L2-3, L2-5, O2-5, O2-6, O2-7, O2-8, P2-1, P2-3, X2-5, X2-6, X2-7, A-1, L2-14, B2-10, B2-11, B2-3, B2-6, B2-8, F2-10, F2-11, F2-12, F2-8, F2-9, I2-5, I2-6, I2-7, I2-8, I2-9, L2-10, L2-11, L2-7, L2-8, L2-9, O2-10, O2-11, O2-12, O2-9, P2-4, P2-5, P2-6, P2-7, P2-8, P2-9, X2-10, X2-11, X2-12, X2-9, L2-12, O2-13, X2-13 | Claude (Sonnet 5.5) from docs/PROJECT_REVIEW_2026-10-10.md and docs/DECISIONS_2026-10-10.md |
 | C17 | Identity, single sign-on & service front door | AI-7, L-15, X-10, X-11, X-12, X-13, X-14, O-8 | Gemini - console and deck auth; Codex - planner deputy (L-15) |
 
 ## Board
@@ -78,6 +78,9 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [O-1](#o-1) | P0 | critical | Repo has no working git history | infra | C1 | S | — | fixed |
 | [X-10](#x-10) | P0 | critical | Literal codes ADMIN and INSTRUCTOR mint an instructor session without the token | console-api | C17 | S | — | fixed |
 | [X-11](#x-11) | P0 | critical | enforce() fails open and /api/auth/me reports instructor to anonymous callers | console-api | C17 | S | — | fixed |
+| [X2-1](#x2-1) | P0 | critical | Live DF telemetry (bearing_true, distance_nm) broadcast to anonymous /api/state and /ws | console-api | C16 | M | — | fixed |
+| [O2-3](#o2-3) | P0 | high | Blank Mumble password deploys an open voice net | infra | C16 | S | — | fixed |
+| [X2-2](#x2-2) | P0 | high | A revealed old sortie reveals the beacon of the scenario being flown | console-api | C16 | M | — | fixed |
 | [X-12](#x-12) | P1 | high | Session cookie lacks Secure, session id is returned to JavaScript, and a GET creates the session | console-api | C17 | S | O-8 | fixed |
 | [X-13](#x-13) | P1 | high | Roster codes are guessable, sessions are stored unhashed, and roster regeneration does not revoke them | console-api | C17 | M | — | fixed |
 | [X-14](#x-14) | P1 | high | POST /api/radio/ics mutates shared radio state with no authorization | console-api | C17 | S | X-11 | fixed |
@@ -95,8 +98,22 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [X-2](#x-2) | P0 | critical | No authentication or role separation on any console endpoint | console-api | C2 | L | — | fixed |
 | [F-5](#f-5) | P0 | high | Radio console setup path (verified working) | infra | C5 | S | O-3 | resolved |
 | [L-1](#l-1) | P0 | high | X-Plane .fms export is malformed | planner | C10 | M | — | fixed |
+| [B2-1](#b2-1) | P1 | high | Builder deleted the installed aircraft before building | infra | C16 | M | — | fixed |
+| [F2-1](#f2-1) | P1 | high | Flight Planner link rewritten to unpublished port 8090 | console-ui | C16 | S | — | fixed |
+| [I2-1](#i2-1) | P1 | high | GMA clearance recorder subscribes to nonexistent datarefs | instruments | C16 | S | — | fixed |
+| [I2-3](#i2-3) | P1 | high | dial_add press callbacks are not an Air Manager 4.2 feature | instruments | C16 | M | — | fixed |
+| [L2-1](#l2-1) | P1 | high | Unresolvable datum silently plans at a hard-coded point | planner | C16 | S | — | fixed |
+| [L2-4](#l2-4) | P1 | high | Terrain profile reports 0 ft and ADEQUATE when USGS is unreachable | planner | C16 | S | — | fixed |
 | [O-8](#o-8) | P1 | high | No single front door: Caddy fronts one backend and is bypassable on the LAN | infra | C17 | M | X-11, X-12 | fixed |
+| [O2-1](#o2-1) | P1 | high | Two console route tests fail on FastAPI 0.143 | infra | C16 | S | — | fixed |
+| [O2-2](#o2-2) | P1 | high | No reproducible test environment; planner and board suites not run | infra | C16 | M | — | fixed |
+| [O2-4](#o2-4) | P1 | high | CAPVSAR_ENV never set so the production guard is inert | infra | C16 | S | — | fixed |
+| [X2-3](#x2-3) | P1 | high | ScenarioIn.effects accepts NaN and unknown keys; one scenario breaks every client | console-api | C16 | S | — | fixed |
+| [X2-4](#x2-4) | P1 | high | Radio stream and pages fail open on a roster-only console | console-api | C16 | S | — | fixed |
+| [L2-6](#l2-6) | P1 | medium | Console push anchors the alert and beacon offset on waypoints[0] | planner | C16 | S | — | fixed |
 | [O-2a](#o-2a) | P1 | medium | Participant CONNECT.md cited by the as-built does not exist | docs | C4 | S | O-2 | resolved |
+| [P2-2](#p2-2) | P1 | medium | Per-beacon state not reset when the scenario changes under a running sortie | plugin | C16 | S | — | fixed |
+| [X2-8](#x2-8) | P1 | medium | Scenario notes are not truth-filtered and the seed notes name the beacon | console-api | C16 | S | — | fixed |
 
 ### Wave 2 — Before session 2 (full mission, three aircraft, injected effects).
 
@@ -105,11 +122,13 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [F-2](#f-2) | P1 | high | Base view keeps the previous sortie's alert circle and tracks | console-ui | C8 | S | — | fixed |
 | [F-3](#f-3) | P1 | high | Debrief conflates all aircraft into one track | console-ui | C8 | M | — | fixed |
 | [F-4](#f-4) | P1 | high | Radio console does not rejoin after a network blip | console-ui | C9 | M | — | fixed |
+| [F2-2](#f2-2) | P1 | high | Airband timeouts tear down the tactical radio | console-ui | C16 | S | — | fixed |
 | [I-1](#i-1) | P1 | high | DF faceplates repaint ~8 Hz regardless of change | instruments | C12 | M | — | fixed |
 | [I-2](#i-2) | P1 | high | pcall around canvas_draw hides real errors | instruments | C12 | S | — | fixed |
 | [L-2](#l-2) | P1 | high | Unauthenticated scenario push and CSRF-able database wipe | planner | C11 | M | X-2 | fixed |
 | [L-3](#l-3) | P1 | high | Parallel-track generator can be driven into a 100M-iteration loop | planner | C10 | S | — | fixed |
 | [L-4](#l-4) | P1 | high | Both gunicorn workers race to rebuild the aviation database | planner | C10 | S | — | fixed |
+| [L2-13](#l2-13) | P1 | high | Planner, G1000 library and grid tool disagree on search-pattern conventions | planner | C16 | L | — | fixed |
 | [O-4](#o-4) | P1 | high | Mumble channel tree exists only as hand-made rows in a runtime volume | infra | C5 | M | O-3 | fixed |
 | [O-6](#o-6) | P1 | high | No backup, monitoring or pre-exercise smoke check | infra | C5 | M | O-3 | fixed |
 | [O-7b](#o-7b) | P1 | high | G1000 MFD video stream never re-arms after a reconnect | instruments | C12 | M | — | open |
@@ -121,7 +140,31 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [X-5](#x-5) | P1 | high | One wedged WebSocket client stalls every broadcast | console-api | C7 | S | — | fixed |
 | [I-10](#i-10) | P1 | medium | TDFM-136B has no transmitter time-out timer | instruments | C12 | M | — | fixed |
 | [X-7](#x-7) | P1 | medium | Sortie lifecycle leaks state between exercises | console-api | C7 | M | — | fixed |
+| [B2-2](#b2-2) | P2 | medium | Builder and fetcher donor paths differ | infra | C16 | S | — | fixed |
+| [B2-4](#b2-4) | P2 | medium | ACF patch application reported but not enforced | infra | C16 | S | — | fixed |
+| [B2-5](#b2-5) | P2 | medium | Prop-lever TRIS offsets hard-coded without validation | infra | C16 | M | — | fixed |
+| [B2-7](#b2-7) | P2 | medium | generate_manual.py hard-codes another checkout and bakes /home/ron paths into tracked HTML | docs | C16 | S | — | fixed |
+| [B2-9](#b2-9) | P2 | medium | Docs site republishes manufacturer manuals | docs | C16 | S | — | fixed |
+| [F2-3](#f2-3) | P2 | medium | Form 110 table rebuilt under the MRO's cursor | console-ui | C16 | S | — | fixed |
+| [F2-4](#f2-4) | P2 | medium | Form 110 log lives only in page memory | console-ui | C16 | S | — | fixed |
+| [F2-5](#f2-5) | P2 | medium | Shared role token stored in localStorage and solicited by prompt() | console-ui | C16 | S | — | fixed |
+| [F2-6](#f2-6) | P2 | medium | Open redirect on the login page | console-ui | C16 | S | — | fixed |
+| [F2-7](#f2-7) | P2 | medium | Debrief breaks after a sortie with no positions; no fetch error handling | console-ui | C16 | S | — | fixed |
+| [I2-2](#i2-2) | P2 | medium | TDFM copilot-PTT dataref does not exist | instruments | C16 | S | — | fixed |
+| [I2-4](#i2-4) | P2 | medium | DF audio restarts the noise loop on every update | instruments | C16 | S | — | fixed |
 | [L-1a](#l-1a) | P2 | medium | Search-pattern labels are lost in the FMS export | planner | C10 | S | L-1 | fixed |
+| [L2-2](#l2-2) | P2 | medium | FMS export has no waypoint cap | planner | C16 | S | — | fixed |
+| [L2-3](#l2-3) | P2 | medium | Five endpoints still return Werkzeug HTML 500 on bad input | planner | C16 | M | — | fixed |
+| [L2-5](#l2-5) | P2 | medium | Nav log plans on invented winds offline | planner | C16 | S | — | fixed |
+| [O2-5](#o2-5) | P2 | medium | deploy.sh does not know the board service | infra | C16 | M | — | fixed |
+| [O2-6](#o2-6) | P2 | medium | Board healthcheck cannot fail | infra | C16 | S | — | fixed |
+| [O2-7](#o2-7) | P2 | medium | Runtime state lives inside the git checkout | infra | C16 | M | — | fixed |
+| [O2-8](#o2-8) | P2 | medium | Backups have no restore path | infra | C16 | M | — | fixed |
+| [P2-1](#p2-1) | P2 | medium | Plugin disable/enable leaks a network thread | plugin | C16 | S | — | fixed |
+| [P2-3](#p2-3) | P2 | medium | Default console URL unreachable and transport failures never logged | plugin | C16 | S | — | fixed |
+| [X2-5](#x2-5) | P2 | medium | Blocking SQLite auth lookups on the event loop | console-api | C16 | S | — | fixed |
+| [X2-6](#x2-6) | P2 | medium | init_auth_db() runs a write transaction on every authenticated request | console-api | C16 | M | — | fixed |
+| [X2-7](#x2-7) | P2 | medium | Shared-radio watchdog belongs to the first face; one slow face fails the whole radio | console-api | C16 | M | — | fixed |
 
 ### Wave 3 — Before session 3 (dress rehearsal) and the live SAREX.
 
@@ -173,6 +216,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [L-7a](#l-7a) | P2 | medium | Align simulator loading baseline with selected 182T POH sample | infra | C10 | M | L-7 | resolved |
 | [L-8](#l-8) | P2 | medium | Planner has no offline map path | planner | C6 | M | F-1 | fixed |
 | [L-9](#l-9) | P2 | medium | API returns HTML 500s and misreports push status | planner | C10 | M | — | fixed |
+| [L2-14](#l2-14) | P2 | medium | FMS waypoint limit and the G1000 display of exported .fms unverified in a running X-Plane 12 | planner | C16 | S | — | open |
 | [P-6](#p-6) | P2 | medium | 121.5 beacons produce a COSPAS-SARSAT decode | plugin | C3 | S | — | fixed |
 | [P-7](#p-7) | P2 | medium | Signal bar stays lit between 406 bursts | plugin | C3 | S | — | fixed |
 | [P-8](#p-8) | P2 | medium | Terrain masking is only -12 dB | plugin | C3 | S | P-1 | fixed |
@@ -185,7 +229,41 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [I-14](#i-14) | P2 | low | GMA 1347 ICS isolation and Split COM are lamp-only | instruments | C12 | L | — | fixed |
 | [AI-18](#ai-18) | P3 | low | SIGTERM skips every shutdown safeguard (red team RT-11) | infra | C15 | S | — | open |
 | [AI-19](#ai-19) | P3 | low | Advisory chat's no-action guard is a keyword list with no output filter (red team RT-13) | infra | C15 | S | — | open |
+| [B2-10](#b2-10) | P3 | low | Tracked fig_c182t_aircraft.png is a render of Laminar's C172 model | docs | C16 | S | — | open |
+| [B2-11](#b2-11) | P3 | low | c182t_corrections radial scale ignores the JSON axis | infra | C16 | S | — | fixed |
+| [B2-3](#b2-3) | P3 | low | Selection icon renders the literal text &bull; | infra | C16 | S | — | fixed |
+| [B2-6](#b2-6) | P3 | low | Flap animation range disagrees with patched travel | infra | C16 | S | — | fixed |
+| [B2-8](#b2-8) | P3 | low | Doc generators' dependencies undeclared | docs | C16 | S | — | fixed |
 | [F-11](#f-11) | P3 | low | No operational sidetone on the new radio console | console-ui | C9 | S | — | fixed |
+| [F2-10](#f2-10) | P3 | low | Setup 'Target Exercise Scenario' control is decorative | console-ui | C16 | S | — | fixed |
+| [F2-11](#f2-11) | P3 | low | One malformed control frame permanently drops the radio | console-ui | C16 | S | — | fixed |
+| [F2-12](#f2-12) | P3 | low | Legacy radio: spacebar PTT keys from focused controls; failed POST logged as sent | console-ui | C16 | S | — | fixed |
+| [F2-8](#f2-8) | P3 | low | Hard-coded host on the headset help page | console-ui | C16 | S | — | fixed |
+| [F2-9](#f2-9) | P3 | low | Every bearing-log failure reads 'callsign not reporting'; reads ignore errors | console-ui | C16 | S | — | fixed |
+| [I2-5](#i2-5) | P3 | low | LS and BURST timers read 00:00 before any signal | instruments | C16 | S | — | fixed |
+| [I2-6](#i2-6) | P3 | low | Becker STORE tone suppression survives a power cycle | instruments | C16 | S | — | fixed |
+| [I2-7](#i2-7) | P3 | low | Master switch and CB panel never publish on load | instruments | C16 | S | — | fixed |
+| [I2-8](#i2-8) | P3 | low | G1000 watchdog stacks video nodes and hides its banner | instruments | C16 | M | — | fixed |
+| [I2-9](#i2-9) | P3 | low | TDFM squelch-defeat push sets st.squelch_defeat but nothing reads it | instruments | C16 | S | — | open |
+| [L2-10](#l2-10) | P3 | low | Internet tile fallbacks bypass the offline cache | planner | C16 | S | — | fixed |
+| [L2-11](#l2-11) | P3 | low | get_climb snaps both ends to the nearest row | planner | C16 | S | — | fixed |
+| [L2-7](#l2-7) | P3 | low | Apply to Route drops DATUM and relabels the pattern | planner | C16 | S | — | fixed |
+| [L2-8](#l2-8) | P3 | low | CS01 carries a fictitious leg | planner | C16 | S | — | fixed |
+| [L2-9](#l2-9) | P3 | low | d-TPP cycle computed from the calendar month | planner | C16 | S | — | fixed |
+| [O2-10](#o2-10) | P3 | low | Planner port 8090 in preflight, deploy and docs | infra | C16 | S | — | fixed |
+| [O2-11](#o2-11) | P3 | low | .ci-out/ not gitignored | infra | C16 | S | — | fixed |
+| [O2-12](#o2-12) | P3 | low | scripts/wg-peer.sh drives a removed WireGuard container | infra | C16 | S | — | fixed |
+| [O2-9](#o2-9) | P3 | low | pymumble pinned by commit tarball without a hash | infra | C16 | S | — | fixed |
+| [P2-4](#p2-4) | P3 | low | compute() re-reads self.scn mid-tick | plugin | C16 | S | — | fixed |
+| [P2-5](#p2-5) | P3 | low | Radio horizon uses MSL heights | plugin | C16 | S | — | fixed |
+| [P2-6](#p2-6) | P3 | low | Wall clock, no pause awareness | plugin | C16 | S | — | fixed |
+| [P2-7](#p2-7) | P3 | low | fetch_scenario comment promises an unimplemented fallback | plugin | C16 | S | — | fixed |
+| [P2-8](#p2-8) | P3 | low | self.net not initialised | plugin | C16 | S | — | fixed |
+| [P2-9](#p2-9) | P3 | low | Pause freezing and TLS trust of the plugin unverified in X-Plane | plugin | C16 | S | — | open |
+| [X2-10](#x2-10) | P3 | low | Role tokens accepted as ?token= and logged in access logs | console-api | C16 | S | — | fixed |
+| [X2-11](#x2-11) | P3 | low | Deleting a scenario with a running sortie strands it | console-api | C16 | S | — | fixed |
+| [X2-12](#x2-12) | P3 | low | /api/setup accepts untyped fields and mints arbitrary roles | console-api | C16 | S | — | fixed |
+| [X2-9](#x2-9) | P3 | low | Concurrent sortie start/stop races; stop re-stamps | console-api | C16 | S | — | fixed |
 
 ### Wave 4 — After the SAREX — architecture, tooling, CalTopo phase 2.
 
@@ -208,10 +286,13 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [I-9c](#i-9c) | P3 | low | Deploy coverage and manifest claims are wrong | instruments | C13 | S | — | fixed |
 | [L-10](#l-10) | P3 | low | Planner dependency and container hygiene | planner | C11 | M | — | fixed |
 | [L-13](#l-13) | P3 | low | Planner direct-handler tests fail with real Flask installed | planner | C10 | S | — | fixed |
+| [L2-12](#l2-12) | P3 | low | Export rate limiter is per-process | planner | C16 | S | — | open |
 | [O-1a](#o-1a) | P3 | low | Generated handbook committed deliberately | infra | C1 | S | O-1 | resolved |
+| [O2-13](#o2-13) | P3 | low | Dockerfile base images not pinned by digest | infra | C16 | S | — | open |
 | [P-12](#p-12) | P3 | low | Plugin reporting cadence and heading source are off | plugin | C3 | S | — | fixed |
 | [P-13](#p-13) | P3 | low | Signal model has no dB calibration and multipath is scripted | plugin | C3 | L | P-1 | fixed |
 | [P-9](#p-9) | P3 | low | Fixed 24 terrain probes, no earth curvature | plugin | C3 | M | P-1 | fixed |
+| [X2-13](#x2-13) | P3 | low | ICS pilot/observer seats share a callsign so the first joiner's seat decides for a shared radio | console-api | C16 | M | — | open |
 
 ## Detail
 
@@ -270,6 +351,39 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Problem:** access.enforce() returns (allowing the call) when no matching env token is configured and no session is active - an explicit 'open for local dev' branch. Every gated mutating endpoint therefore accepts anonymous requests in that state. .env.example ships all three CAPVSAR_TOKEN_* values blank, so the default deployment is unauthenticated; main.py logs a warning naming the open roles but starts anyway. Compounding it, GET /api/auth/me actively reports {authenticated: true, role: instructor} to any anonymous caller in the same state, so the UI renders full instructor controls for a stranger. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35.
 - **Fix:** Deny by default. enforce() must raise when it cannot positively identify a satisfying session or token. Gate the dev convenience behind an explicit opt-in flag (e.g. CAPVSAR_DEV_OPEN=1) that is refused when a production marker is set, and fail startup rather than warn when required identity configuration is missing. /api/auth/me must return authenticated:false when there is no session. Fixed 2026-09-13 (commit 944f093). enforce() now denies when no credential is configured instead of returning. Opening the console is deliberate via CAPVSAR_DEV_OPEN, refused when CAPVSAR_ENV is production. /api/auth/me no longer claims an instructor identity for anonymous callers.
 - **Done when:** With all CAPVSAR_TOKEN_* unset and no dev flag, the app refuses to start; with the dev flag, a startup banner states it. Anonymous POST to a gated route returns 403. /api/auth/me returns authenticated:false with no session. Verified: anonymous POST /api/scenarios returns 403 with tokens configured and 503 with none; /api/auth/me reports authenticated false. Covered by DenyByDefaultTests, including that CAPVSAR_DEV_OPEN is honoured only outside production. Two suites that had been passing on the fail-open were corrected rather than relaxed. 140 tests and 23 subtests pass.
+
+### X2-1
+
+**Live DF telemetry (bearing_true, distance_nm) broadcast to anonymous /api/state and /ws**
+
+`P0` · `critical` · `bug` · Exercise console (backend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort M · wave 0 · **fixed**
+
+- **Files:** `services/exercise/app/hub.py`, `services/exercise/app/roles.py`, `services/exercise/app/routers/system.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 2.
+- **Fix:** Aircraft df is reduced to receiver state for every viewer but the instructor; /ws and the ticker render per socket (hub.broadcast_state). tests/test_console.py::TruthBoundaryByViewer.
+- **Done when:** 
+
+### O2-3
+
+**Blank Mumble password deploys an open voice net**
+
+`P0` · `high` · `bug` · Deployment / infrastructure · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 0 · **fixed**
+
+- **Files:** `docker-compose.yml`, `scripts/deploy.sh`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 7.
+- **Fix:** Compose :? and deploy.sh check.
+- **Done when:** 
+
+### X2-2
+
+**A revealed old sortie reveals the beacon of the scenario being flown**
+
+`P0` · `high` · `bug` · Exercise console (backend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort M · wave 0 · **fixed**
+
+- **Files:** `services/exercise/app/routers/sorties.py`, `services/exercise/app/store.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 2.
+- **Fix:** Sorties snapshot their beacon at start; /track withholds a revealed sortie's beacon and df from non-instructors while an unrevealed sortie flies the same beacon; start returns a warning when the scenario was revealed before.
+- **Done when:** 
 
 ### X-12
 
@@ -408,6 +522,72 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Fix:** Emit type 28 with a +lat_lon ident and the DRCT column for user waypoints; derive CYCLE from the date; fix the test to assert the real format.
 - **Done when:** Load an exported pattern in X-Plane 12 and fly the first two legs from the G1000 flight plan page.
 
+### B2-1
+
+**Builder deleted the installed aircraft before building**
+
+`P1` · `high` · `bug` · Deployment / infrastructure · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort M · wave 1 · **fixed**
+
+- **Files:** `scripts/build_c182t_package.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 8.
+- **Fix:** Resolved by 57663ec (staged build, backup).
+- **Done when:** 
+
+### F2-1
+
+**Flight Planner link rewritten to unpublished port 8090**
+
+`P1` · `high` · `bug` · Exercise console (frontend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 1 · **fixed**
+
+- **Files:** `services/exercise/app/static/charts.js`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 3.
+- **Fix:** Rewrite removed; test scans app/static/*.js for :8090.
+- **Done when:** 
+
+### I2-1
+
+**GMA clearance recorder subscribes to nonexistent datarefs**
+
+`P1` · `high` · `bug` · Air Manager instruments · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 1 · **fixed**
+
+- **Files:** `instruments/mo-audio-panel-gma1347/logic.lua`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 6.
+- **Fix:** sim/atc/com1_rx and com2_rx. Live check pending. Supersedes the I-15 verification.
+- **Done when:** 
+
+### I2-3
+
+**dial_add press callbacks are not an Air Manager 4.2 feature**
+
+`P1` · `high` · `bug` · Air Manager instruments · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort M · wave 1 · **fixed**
+
+- **Files:** `instruments/_shared/lib/knob_push.lua`, `instruments/cap-fm-tdfm-136b/logic.lua`, `instruments/mo-audio-panel-gma1347/logic.lua`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 6.
+- **Fix:** knob_push() transparent button over the knob. Live check pending (hold TDFM main encoder 2 s).
+- **Done when:** 
+
+### L2-1
+
+**Unresolvable datum silently plans at a hard-coded point**
+
+`P1` · `high` · `bug` · Flight planner · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 1 · **fixed**
+
+- **Files:** `services/flightplanner/app.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 4.
+- **Fix:** 400 with a clear message; a datum is required.
+- **Done when:** 
+
+### L2-4
+
+**Terrain profile reports 0 ft and ADEQUATE when USGS is unreachable**
+
+`P1` · `high` · `bug` · Flight planner · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 1 · **fixed**
+
+- **Files:** `services/flightplanner/app.py`, `services/flightplanner/static/js/app.js`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 4.
+- **Fix:** Unknown terrain is reported as unknown; the badge says NO TERRAIN DATA.
+- **Done when:** 
+
 ### O-8
 
 **No single front door: Caddy fronts one backend and is bypassable on the LAN**
@@ -420,6 +600,72 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Done when:** Live on ms01 2026-09-14: cross-machine HTTPS health, CA bootstrap, redirect, roster login, portal, base, planner and prefixed tile-source checks all returned the expected 200/302/308 responses; direct connections to 8700 and 8090 were refused. scripts/preflight.py reported ALL PASS for front door, private backends, Mumble channels/ACL, chart source and CA publication. The installed station credential reached /api/plugin/scenario over verified HTTPS with the process-local CA bundle. Automated: 93 planner tests + 17 subtests, 38 setup/auth tests + 6 subtests, and 21 radio tests passed; Caddy and Compose configs validated on ms01.
 - **Depends on:** X-11, X-12
 
+### O2-1
+
+**Two console route tests fail on FastAPI 0.143**
+
+`P1` · `high` · `bug` · Deployment / infrastructure · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 1 · **fixed**
+
+- **Files:** `tests/test_console.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 7.
+- **Fix:** route_paths() walks lazy included routers.
+- **Done when:** 
+
+### O2-2
+
+**No reproducible test environment; planner and board suites not run**
+
+`P1` · `high` · `bug` · Deployment / infrastructure · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort M · wave 1 · **fixed**
+
+- **Files:** `requirements-dev.txt`, `scripts/run_tests.sh`, `scripts/ci_local.sh`, `.gitea/workflows/ci.yml`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 7.
+- **Fix:** scripts/run_tests.sh runs root, ai_pilot, planner and board in separate processes. Not run on Python 3.12 here (unavailable).
+- **Done when:** 
+
+### O2-4
+
+**CAPVSAR_ENV never set so the production guard is inert**
+
+`P1` · `high` · `bug` · Deployment / infrastructure · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 1 · **fixed**
+
+- **Files:** `docker-compose.yml`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 7.
+- **Fix:** CAPVSAR_ENV: production.
+- **Done when:** 
+
+### X2-3
+
+**ScenarioIn.effects accepts NaN and unknown keys; one scenario breaks every client**
+
+`P1` · `high` · `bug` · Exercise console (backend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 1 · **fixed**
+
+- **Files:** `services/exercise/app/models.py`, `services/exercise/app/hub.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 2.
+- **Fix:** effects is EffectsIn (forbid extras, finite numbers); hub JSON uses allow_nan=False and the ticker survives a bad value.
+- **Done when:** 
+
+### X2-4
+
+**Radio stream and pages fail open on a roster-only console**
+
+`P1` · `high` · `bug` · Exercise console (backend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 1 · **fixed**
+
+- **Files:** `services/exercise/app/radio.py`, `services/exercise/app/routers/pages.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 2.
+- **Fix:** Sessionless radio join and anonymous page loads are allowed only on an explicit dev-open console with no base credential. Completes X-14.
+- **Done when:** 
+
+### L2-6
+
+**Console push anchors the alert and beacon offset on waypoints[0]**
+
+`P1` · `medium` · `bug` · Flight planner · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 1 · **fixed**
+
+- **Files:** `services/flightplanner/app.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 4.
+- **Fix:** search_centre for all three patterns.
+- **Done when:** 
+
 ### O-2a
 
 **Participant CONNECT.md cited by the as-built does not exist**
@@ -431,6 +677,28 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Fix:** WRONG FINDING, corrected 2026-09-08. docs/CONNECT.md exists in the canonical repo on ms01 and is a complete participant guide (Mumble client per platform, server details, nets, PTT). It was absent only from the local working tree this review was written against. Now pulled down. No work needed.
 - **Done when:** A member who has never seen the project can get onto the voice net and the base console from that page alone.
 - **Depends on:** O-2
+
+### P2-2
+
+**Per-beacon state not reset when the scenario changes under a running sortie**
+
+`P1` · `medium` · `bug` · X-Plane plugin / engine · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 1 · **fixed**
+
+- **Files:** `xplane/PI_capvsar_df.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 5.
+- **Fix:** beacon_key in the scenario dict; flight loop clears held bearing, decode and scan hold.
+- **Done when:** 
+
+### X2-8
+
+**Scenario notes are not truth-filtered and the seed notes name the beacon**
+
+`P1` · `medium` · `bug` · Exercise console (backend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 1 · **fixed**
+
+- **Files:** `services/exercise/app/roles.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 2.
+- **Fix:** notes travel with the truth fields.
+- **Done when:** 
 
 ### F-2
 
@@ -464,6 +732,17 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Problem:** The radio deliberately does not auto-reconnect, so a Wi-Fi blip silently drops the base station off the voice net with only a text notice. Base and legacy reconnect but lose bearings and messages broadcast during the outage: messages are fetched only at page load and bearings have no list endpoint at all.
 - **Fix:** Rejoin with backoff plus an audible alarm on the radio; add GET /api/bearings?since= and ?since= on messages; refetch on reconnect.
 - **Done when:** Drop the tablet's Wi-Fi for 30 s: the radio rejoins audibly and the base view backfills what it missed.
+
+### F2-2
+
+**Airband timeouts tear down the tactical radio**
+
+`P1` · `high` · `bug` · Exercise console (frontend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 2 · **fixed**
+
+- **Files:** `services/exercise/app/static/mission-radio.js`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 3.
+- **Fix:** Both timeout paths call airbandLost().
+- **Done when:** 
 
 ### I-1
 
@@ -520,6 +799,17 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Problem:** auto_update_if_empty() runs at import in both workers, so two threads concurrently DELETE/INSERT the same SQLite file; lock errors are swallowed by bare except: pass, silently dropping rows. update_status is per-process so /api/update-status answers inconsistently.
 - **Fix:** Do the update once (a CLI command or a lock file); log exceptions instead of swallowing them.
 - **Done when:** Cold start with an empty DB twice: row counts match the source both times.
+
+### L2-13
+
+**Planner, G1000 library and grid tool disagree on search-pattern conventions**
+
+`P1` · `high` · `bug` · Flight planner · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort L · wave 2 · **fixed**
+
+- **Files:** `services/flightplanner/app.py`, `docs/SEARCH_PATTERN_CONVENTIONS.md`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 4.
+- **Fix:** Decision D2: DATUM + SSnn = end of leg nn, no inset in the geometry, planner conversions, shared fixture (24 cases) asserted in both repos. scripts/fly_search_grid.py left alone deliberately (autopilot flight-test work).
+- **Done when:** 
 
 ### O-4
 
@@ -644,6 +934,138 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Fix:** Fixed 2026-09-08. Starting a sortie closes any still-open one (they used to keep stopped=NULL forever, so the debrief list showed two running and rehydrate would resume the wrong one). Bearings and messages no longer attach to a stopped sortie. A bearing whose aircraft has expired from the live map now falls back to that aircraft's last recorded position for the sortie instead of 404ing - a bearing passed over voice is often typed in after the 30 s expiry. DEVIATION from the tracker's suggested fix: hub.sortie is deliberately NOT cleared on stop, because reveal happens at debrief AFTER stop and needs it. POST /api/exercise/reset was not added; nothing needs it yet.
 - **Done when:** Back-to-back sorties produce clean, separable records.
 
+### B2-2
+
+**Builder and fetcher donor paths differ**
+
+`P2` · `medium` · `bug` · Deployment / infrastructure · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 2 · **fixed**
+
+- **Files:** `scripts/build_c182t_package.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 8.
+- **Fix:** Resolved by 57663ec.
+- **Done when:** 
+
+### B2-4
+
+**ACF patch application reported but not enforced**
+
+`P2` · `medium` · `bug` · Deployment / infrastructure · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 2 · **fixed**
+
+- **Files:** `scripts/build_c182t_package.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 8.
+- **Fix:** Resolved by 57663ec.
+- **Done when:** 
+
+### B2-5
+
+**Prop-lever TRIS offsets hard-coded without validation**
+
+`P2` · `medium` · `bug` · Deployment / infrastructure · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort M · wave 2 · **fixed**
+
+- **Files:** `scripts/build_c182t_package.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 8.
+- **Fix:** find_knob_tris asserts the counts.
+- **Done when:** 
+
+### B2-7
+
+**generate_manual.py hard-codes another checkout and bakes /home/ron paths into tracked HTML**
+
+`P2` · `medium` · `bug` · Docs / record · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 2 · **fixed**
+
+- **Files:** `scripts/generate_manual.py`, `docs/manual/CAP_VSAR_Flight_Operations_Handbook.html`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 8.
+- **Fix:** Repo-relative paths; HTML regenerated; the tracked PDF still has the old figures.
+- **Done when:** 
+
+### B2-9
+
+**Docs site republishes manufacturer manuals**
+
+`P2` · `medium` · `bug` · Docs / record · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 2 · **fixed**
+
+- **Files:** `scripts/build_docs_site.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 8.
+- **Fix:** Conservative default: vendor manuals no longer copied; links to docs/SOURCES.md. Ron to confirm the licensing call.
+- **Done when:** 
+
+### F2-3
+
+**Form 110 table rebuilt under the MRO's cursor**
+
+`P2` · `medium` · `bug` · Exercise console (frontend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 2 · **fixed**
+
+- **Files:** `services/exercise/app/static/mission-radio.js`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 3.
+- **Fix:** Incremental row insertion; no rebuild while a traffic cell has focus.
+- **Done when:** 
+
+### F2-4
+
+**Form 110 log lives only in page memory**
+
+`P2` · `medium` · `bug` · Exercise console (frontend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 2 · **fixed**
+
+- **Files:** `services/exercise/app/static/mission-radio.js`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 3.
+- **Fix:** Autosaved to sessionStorage and restored on load.
+- **Done when:** 
+
+### F2-5
+
+**Shared role token stored in localStorage and solicited by prompt()**
+
+`P2` · `medium` · `bug` · Exercise console (frontend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 2 · **fixed**
+
+- **Files:** `services/exercise/app/static/charts.js`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 3.
+- **Fix:** Token path removed; 401/403 redirects to /login?next=.
+- **Done when:** 
+
+### F2-6
+
+**Open redirect on the login page**
+
+`P2` · `medium` · `bug` · Exercise console (frontend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 2 · **fixed**
+
+- **Files:** `services/exercise/app/static/login.js`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 3.
+- **Fix:** safeNext() accepts only same-origin single-slash paths.
+- **Done when:** 
+
+### F2-7
+
+**Debrief breaks after a sortie with no positions; no fetch error handling**
+
+`P2` · `medium` · `bug` · Exercise console (frontend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 2 · **fixed**
+
+- **Files:** `services/exercise/app/static/debrief.js`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 3.
+- **Fix:** State reset before the early return; .ok and exception handling.
+- **Done when:** 
+
+### I2-2
+
+**TDFM copilot-PTT dataref does not exist**
+
+`P2` · `medium` · `bug` · Air Manager instruments · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 2 · **fixed**
+
+- **Files:** `instruments/cap-fm-tdfm-136b/logic.lua`, `docs/DATAREF_CONTRACT.md`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 6.
+- **Fix:** Subscription and the contract's claim removed; cap_fm_ptt is the PTT path.
+- **Done when:** 
+
+### I2-4
+
+**DF audio restarts the noise loop on every update**
+
+`P2` · `medium` · `bug` · Air Manager instruments · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 2 · **fixed**
+
+- **Files:** `instruments/_shared/lib/cap_df_audio.lua`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 6.
+- **Fix:** noise_playing flag; transitions only.
+- **Done when:** 
+
 ### L-1a
 
 **Search-pattern labels are lost in the FMS export**
@@ -655,6 +1077,138 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Fix:** Implemented: type 28 records preserve generator labels as uppercase ASCII letters/digits/underscores and keep separate coordinate columns, per https://developer.x-plane.com/article/flightplan-files-v11-fms-file-format/ (applies to X-Plane 12). File structure, labels and sanitization tested. Running X-Plane/G1000 display check remains unperformed and is documented in USER_GUIDE.md.
 - **Done when:** Load an exported pattern in X-Plane 12 and read the leg names on the G1000 flight plan page.
 - **Depends on:** L-1
+
+### L2-2
+
+**FMS export has no waypoint cap**
+
+`P2` · `medium` · `bug` · Flight planner · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 2 · **fixed**
+
+- **Files:** `services/flightplanner/app.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 4.
+- **Fix:** MAX_FMS_ENTRIES = 99 counting departure and destination; generate-pattern reports exceeds_fms_limit. The real X-Plane/G1000 limit is unverified in the sim (see L2-14).
+- **Done when:** 
+
+### L2-3
+
+**Five endpoints still return Werkzeug HTML 500 on bad input**
+
+`P2` · `medium` · `bug` · Flight planner · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort M · wave 2 · **fixed**
+
+- **Files:** `services/flightplanner/app.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 4.
+- **Fix:** _num/_text/_points helpers and a JSON errorhandler under /api/.
+- **Done when:** 
+
+### L2-5
+
+**Nav log plans on invented winds offline**
+
+`P2` · `medium` · `bug` · Flight planner · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 2 · **fixed**
+
+- **Files:** `services/flightplanner/app.py`, `services/flightplanner/static/js/app.js`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 4.
+- **Fix:** Simulated winds are not planned on; the route is planned in still air and says so.
+- **Done when:** 
+
+### O2-5
+
+**deploy.sh does not know the board service**
+
+`P2` · `medium` · `bug` · Deployment / infrastructure · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort M · wave 2 · **fixed**
+
+- **Files:** `scripts/deploy.sh`, `docker-compose.yml`, `services/board/README.md`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 7.
+- **Fix:** Board is an opt-in compose profile; deploy.sh enables it only when configured.
+- **Done when:** 
+
+### O2-6
+
+**Board healthcheck cannot fail**
+
+`P2` · `medium` · `bug` · Deployment / infrastructure · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 2 · **fixed**
+
+- **Files:** `services/board/app/main.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 7.
+- **Fix:** 503 when the repo is not a checkout.
+- **Done when:** 
+
+### O2-7
+
+**Runtime state lives inside the git checkout**
+
+`P2` · `medium` · `bug` · Deployment / infrastructure · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort M · wave 2 · **fixed**
+
+- **Files:** `docker-compose.yml`, `scripts/backup_exercise_db.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 7.
+- **Fix:** CAPVSAR_STATE_DIR (default unchanged); backup includes the Mumble DB.
+- **Done when:** 
+
+### O2-8
+
+**Backups have no restore path**
+
+`P2` · `medium` · `bug` · Deployment / infrastructure · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort M · wave 2 · **fixed**
+
+- **Files:** `scripts/backup_exercise_db.py`, `docs/LAB_HOSTED_DEPLOYMENT_PLAN.md`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 7.
+- **Fix:** --restore mode, documented procedure, schema test.
+- **Done when:** 
+
+### P2-1
+
+**Plugin disable/enable leaks a network thread**
+
+`P2` · `medium` · `bug` · X-Plane plugin / engine · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 2 · **fixed**
+
+- **Files:** `xplane/PI_capvsar_df.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 5.
+- **Fix:** Worker captures its stop Event.
+- **Done when:** 
+
+### P2-3
+
+**Default console URL unreachable and transport failures never logged**
+
+`P2` · `medium` · `bug` · X-Plane plugin / engine · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 2 · **fixed**
+
+- **Files:** `xplane/PI_capvsar_df.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 5.
+- **Fix:** Front-door default; first failure and recovery logged once; SSL error class logged.
+- **Done when:** 
+
+### X2-5
+
+**Blocking SQLite auth lookups on the event loop**
+
+`P2` · `medium` · `bug` · Exercise console (backend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 2 · **fixed**
+
+- **Files:** `services/exercise/app/routers/comms.py`, `services/exercise/app/radio.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 2.
+- **Fix:** Session lookups use run_in_threadpool.
+- **Done when:** 
+
+### X2-6
+
+**init_auth_db() runs a write transaction on every authenticated request**
+
+`P2` · `medium` · `bug` · Exercise console (backend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort M · wave 2 · **fixed**
+
+- **Files:** `services/exercise/app/access.py`, `services/exercise/app/store.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 2.
+- **Fix:** Schema init at startup only; one-SELECT session lookup; sweep on the ticker; synchronous=NORMAL and busy_timeout on auth_db().
+- **Done when:** 
+
+### X2-7
+
+**Shared-radio watchdog belongs to the first face; one slow face fails the whole radio**
+
+`P2` · `medium` · `bug` · Exercise console (backend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort M · wave 2 · **fixed**
+
+- **Files:** `services/exercise/app/radio.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 2.
+- **Fix:** Radio-owned watchdog cancelled in close(); a full queue drops that face only.
+- **Done when:** 
 
 ### AI-22
 
@@ -672,7 +1226,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **CAP 487 retains the stock C172S airframe geometry and exterior**
 
-`P0` · `high` · `bug` · Deployment / infrastructure · cluster C16 (Aircraft package fidelity) · effort L · wave 3 · **open**
+`P0` · `high` · `bug` · Deployment / infrastructure · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort L · wave 3 · **open**
 
 - **Files:** `scripts/build_c182t_package.py`, `scripts/fetch_flightgear_c182.py`, `scripts/convert_flightgear_c182.py`, `tests/test_flightgear_c182.py`, `docs/FLIGHTGEAR_C182_GPL_PLAN.md`, `docs/SOURCES.md`, `README.md`, `NOTICE`, `docs/C182T_DIMENSION_MASTER.md`, `scripts/c182t_dimension_master.json`, `scripts/measure_c182t.py`, `tests/test_c182t_measurements.py`, `tests/fixtures/c182t_landmarks.json`, `docs/C182T_MEASUREMENT_HARNESS.md`
 - **Problem:** The CAP 487 builder copies Laminar's Cessna 172 SP package and patches identity, engine, propeller, weights, fuel, cowl flaps and V-speeds, but it does not replace the Plane Maker body, wing, tail, gear or exterior meshes. A direct ACF comparison found no airframe-geometry changes, and the installed fuselage.obj, wings.obj, fuselage_gear.obj and fuselage_prop.obj are byte-for-byte identical to the stock 172 files. CAP 487 therefore presents and partly flies as a C172S under C182T identity and performance data. The real 182T is 29 ft long and 9 ft 4 in high; the 172S is 27 ft 2 in long and 8 ft 11 in high, with material differences in cowling, fuselage, landing gear, tail and three-blade propeller despite their similar span.
@@ -1175,6 +1729,17 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Fix:** Guard parsing and return JSON errors; report persisted vs broadcast honestly; carry a real beacon elevation; offset the beacon from the datum.
 - **Done when:** Bad input returns JSON 400; a pushed scenario does not sit on the planned datum.
 
+### L2-14
+
+**FMS waypoint limit and the G1000 display of exported .fms unverified in a running X-Plane 12**
+
+`P2` · `medium` · `bug` · Flight planner · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **open**
+
+- **Files:** `docs/SEARCH_PATTERN_CONVENTIONS.md`, `services/flightplanner/docs/USER_GUIDE.md`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 4.
+- **Fix:** 
+- **Done when:** 
+
 ### P-6
 
 **121.5 beacons produce a COSPAS-SARSAT decode**
@@ -1308,6 +1873,61 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Fix:** Filter LLM output for action claims (or prefix every LLM reply with the no-action banner); broaden the intent gate beyond a word list.
 - **Done when:** services/ai_pilot/tests/test_redteam.py: remove the xfail marker on test_rt13_control_language_never_produces_an_action_claim and the test must pass; it then guards the fix.
 
+### B2-10
+
+**Tracked fig_c182t_aircraft.png is a render of Laminar's C172 model**
+
+`P3` · `low` · `bug` · Docs / record · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **open**
+
+- **Files:** `docs/figures/manual/fig_c182t_aircraft.png`, `website/images/fig_c182t_aircraft.png`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 8.
+- **Fix:** 
+- **Done when:** 
+
+### B2-11
+
+**c182t_corrections radial scale ignores the JSON axis**
+
+`P3` · `low` · `bug` · Deployment / infrastructure · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `scripts/c182t_corrections.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 8.
+- **Fix:** Raises unless the axis matches PROP_ROTATION.
+- **Done when:** 
+
+### B2-3
+
+**Selection icon renders the literal text &bull;**
+
+`P3` · `low` · `bug` · Deployment / infrastructure · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `scripts/build_c182t_package.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 8.
+- **Fix:** Real bullet in a TrueType font.
+- **Done when:** 
+
+### B2-6
+
+**Flap animation range disagrees with patched travel**
+
+`P3` · `low` · `bug` · Deployment / infrastructure · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `scripts/convert_flightgear_c182.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 8.
+- **Fix:** Already 38 after 57663ec; a test ties it to the .acf patch.
+- **Done when:** 
+
+### B2-8
+
+**Doc generators' dependencies undeclared**
+
+`P3` · `low` · `bug` · Docs / record · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `requirements-docs.txt`, `scripts/make_df_artwork.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 8.
+- **Fix:** Declared; font candidates.
+- **Done when:** 
+
 ### F-11
 
 **No operational sidetone on the new radio console**
@@ -1318,6 +1938,325 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. The only oscillator is the 660 Hz headset-test beep. There is no talk-permit chirp on channel grant and no squelch tail, so an operator gets no acoustic confirmation that the radio actually keyed. NOTE (corrected 2026-09-10): they DO exist, as methods of the audio class in radio.js (playP25Chirp ~:29, playP25Tail ~:60, playAmSquelchBurst ~:102). An earlier note here said they were absent; that was a grep for standalone functions. This is a port, and the legacy implementations are the reference.
 - **Fix:** Fixed 2026-09-15. Ported the retired console's P25 permit chirp and tail plus its VHF-AM relay click and squelch burst. Tone choice, output gain and pending grant delay follow the latched transmitter radio, not console-wide selection. The microphone remains disabled until the 115 ms P25 chirp or 15 ms AM click finishes, and release plays the matching tail through that receiver's gain.
 - **Done when:** Two executable Node-backed behavioral tests were written first and failed because the sidetone decision block did not exist. They now prove the exact per-radio grant/release mapping and that the grant sequence places the tone before live microphone audio. Required suite: 101 passed, 17 subtests. Not verified: audible timing through a real headset against the live Mumble service.
+
+### F2-10
+
+**Setup 'Target Exercise Scenario' control is decorative**
+
+`P3` · `low` · `bug` · Exercise console (frontend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `services/exercise/app/static/setup.html`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 3.
+- **Fix:** Control removed.
+- **Done when:** 
+
+### F2-11
+
+**One malformed control frame permanently drops the radio**
+
+`P3` · `low` · `bug` · Exercise console (frontend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `services/exercise/app/static/mission-radio.js`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 3.
+- **Fix:** connectionLost() so FE-5 retries.
+- **Done when:** 
+
+### F2-12
+
+**Legacy radio: spacebar PTT keys from focused controls; failed POST logged as sent**
+
+`P3` · `low` · `bug` · Exercise console (frontend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `services/exercise/app/static/radio.js`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 3.
+- **Fix:** Focus-aware PTT; failed POST not logged.
+- **Done when:** 
+
+### F2-8
+
+**Hard-coded host on the headset help page**
+
+`P3` · `low` · `bug` · Exercise console (frontend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `services/exercise/app/static/radio-help.html`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 3.
+- **Fix:** Secure link built from location.
+- **Done when:** 
+
+### F2-9
+
+**Every bearing-log failure reads 'callsign not reporting'; reads ignore errors**
+
+`P3` · `low` · `bug` · Exercise console (frontend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `services/exercise/app/static/base.js`, `services/exercise/app/static/app.js`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 3.
+- **Fix:** Real HTTP status and detail shown; .ok checks added.
+- **Done when:** 
+
+### I2-5
+
+**LS and BURST timers read 00:00 before any signal**
+
+`P3` · `low` · `bug` · Air Manager instruments · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `instruments/_shared/lib/cap_df.lua`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 6.
+- **Fix:** --:-- until first signal.
+- **Done when:** 
+
+### I2-6
+
+**Becker STORE tone suppression survives a power cycle**
+
+`P3` · `low` · `bug` · Air Manager instruments · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `instruments/becker-sar-df-517/logic.lua`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 6.
+- **Fix:** reset_volatile() from power_off().
+- **Done when:** 
+
+### I2-7
+
+**Master switch and CB panel never publish on load**
+
+`P3` · `low` · `bug` · Air Manager instruments · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `instruments/cap-mission-master-switch/logic.lua`, `instruments/cap-mission-cb-panel/logic.lua`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 6.
+- **Fix:** publish() at load.
+- **Done when:** 
+
+### I2-8
+
+**G1000 watchdog stacks video nodes and hides its banner**
+
+`P3` · `low` · `bug` · Air Manager instruments · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort M · wave 3 · **fixed**
+
+- **Files:** `instruments/g1000-mfd-watchdog/logic.lua`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 6.
+- **Fix:** One stream node; banner and hotspot added after it; #RRGGBBAA. Instrument still not deployed; O-7b stays open.
+- **Done when:** 
+
+### I2-9
+
+**TDFM squelch-defeat push sets st.squelch_defeat but nothing reads it**
+
+`P3` · `low` · `bug` · Air Manager instruments · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **open**
+
+- **Files:** `instruments/cap-fm-tdfm-136b/logic.lua`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 6.
+- **Fix:** 
+- **Done when:** 
+
+### L2-10
+
+**Internet tile fallbacks bypass the offline cache**
+
+`P3` · `low` · `bug` · Flight planner · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `services/flightplanner/static/js/app.js`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 4.
+- **Fix:** Fallbacks removed; app.js scanned by the offline test.
+- **Done when:** 
+
+### L2-11
+
+**get_climb snaps both ends to the nearest row**
+
+`P3` · `low` · `bug` · Flight planner · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `services/flightplanner/app.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 4.
+- **Fix:** Interpolates both ends.
+- **Done when:** 
+
+### L2-7
+
+**Apply to Route drops DATUM and relabels the pattern**
+
+`P3` · `low` · `bug` · Flight planner · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `services/flightplanner/static/js/app.js`, `services/flightplanner/app.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 4.
+- **Fix:** Named route tokens; nav-log names equal the .fms names.
+- **Done when:** 
+
+### L2-8
+
+**CS01 carries a fictitious leg**
+
+`P3` · `low` · `bug` · Flight planner · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `services/flightplanner/app.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 4.
+- **Fix:** leg_dist 0.
+- **Done when:** 
+
+### L2-9
+
+**d-TPP cycle computed from the calendar month**
+
+`P3` · `low` · `bug` · Flight planner · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `services/flightplanner/app.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 4.
+- **Fix:** 28-day cycle anchored on 2601 = 2026-01-22.
+- **Done when:** 
+
+### O2-10
+
+**Planner port 8090 in preflight, deploy and docs**
+
+`P3` · `low` · `bug` · Deployment / infrastructure · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `scripts/preflight.py`, `scripts/deploy.sh`, `infra/ROUTER.md`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 7.
+- **Fix:** 8080.
+- **Done when:** 
+
+### O2-11
+
+**.ci-out/ not gitignored**
+
+`P3` · `low` · `bug` · Deployment / infrastructure · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `.gitignore`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 7.
+- **Fix:** Added.
+- **Done when:** 
+
+### O2-12
+
+**scripts/wg-peer.sh drives a removed WireGuard container**
+
+`P3` · `low` · `bug` · Deployment / infrastructure · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `scripts/wg-peer.sh`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 7.
+- **Fix:** Deleted. References remain in historical text: tracker O-2, CHANGELOG, website/deployment.html:132.
+- **Done when:** 
+
+### O2-9
+
+**pymumble pinned by commit tarball without a hash**
+
+`P3` · `low` · `bug` · Deployment / infrastructure · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `services/exercise/requirements-pymumble.txt`, `services/exercise/Dockerfile`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 7.
+- **Fix:** Installed with --require-hashes. Exercise image build not tested here.
+- **Done when:** 
+
+### P2-4
+
+**compute() re-reads self.scn mid-tick**
+
+`P3` · `low` · `bug` · X-Plane plugin / engine · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `xplane/PI_capvsar_df.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 5.
+- **Fix:** Tick scenario passed to helpers.
+- **Done when:** 
+
+### P2-5
+
+**Radio horizon uses MSL heights**
+
+`P3` · `low` · `bug` · X-Plane plugin / engine · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `xplane/PI_capvsar_df.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 5.
+- **Fix:** Height above probed terrain.
+- **Done when:** 
+
+### P2-6
+
+**Wall clock, no pause awareness**
+
+`P3` · `low` · `bug` · X-Plane plugin / engine · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `xplane/PI_capvsar_df.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 5.
+- **Fix:** monotonic time less paused time; compute frozen while paused.
+- **Done when:** 
+
+### P2-7
+
+**fetch_scenario comment promises an unimplemented fallback**
+
+`P3` · `low` · `bug` · X-Plane plugin / engine · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `xplane/PI_capvsar_df.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 5.
+- **Fix:** Comment corrected.
+- **Done when:** 
+
+### P2-8
+
+**self.net not initialised**
+
+`P3` · `low` · `bug` · X-Plane plugin / engine · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `xplane/PI_capvsar_df.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 5.
+- **Fix:** Initialised in __init__.
+- **Done when:** 
+
+### P2-9
+
+**Pause freezing and TLS trust of the plugin unverified in X-Plane**
+
+`P3` · `low` · `bug` · X-Plane plugin / engine · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **open**
+
+- **Files:** `xplane/PI_capvsar_df.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 5.
+- **Fix:** 
+- **Done when:** 
+
+### X2-10
+
+**Role tokens accepted as ?token= and logged in access logs**
+
+`P3` · `low` · `bug` · Exercise console (backend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `services/exercise/app/access.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 2.
+- **Fix:** Header only. No callers found in scripts/, xplane/, services/.
+- **Done when:** 
+
+### X2-11
+
+**Deleting a scenario with a running sortie strands it**
+
+`P3` · `low` · `bug` · Exercise console (backend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `services/exercise/app/routers/scenarios.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 2.
+- **Fix:** 409 while a sortie on it is open.
+- **Done when:** 
+
+### X2-12
+
+**/api/setup accepts untyped fields and mints arbitrary roles**
+
+`P3` · `low` · `bug` · Exercise console (backend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `services/exercise/app/models.py`, `services/exercise/app/access.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 2.
+- **Fix:** Typed AircraftIn/StaffIn with caps; staff roles limited to base, aircrew, ground_team.
+- **Done when:** 
+
+### X2-9
+
+**Concurrent sortie start/stop races; stop re-stamps**
+
+`P3` · `low` · `bug` · Exercise console (backend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
+
+- **Files:** `services/exercise/app/routers/sorties.py`, `services/exercise/app/hub.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 2.
+- **Fix:** hub.sortie_lock() around lifecycle mutations; stop is idempotent.
+- **Done when:** 
 
 ### C15-1
 
@@ -1508,6 +2447,17 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Fix:** Explicitly mock jsonify in direct-handler unit tests. New HTTP regressions use Flask test_client to check actual JSON and status.
 - **Done when:** 29 planner tests pass with Flask installed.
 
+### L2-12
+
+**Export rate limiter is per-process**
+
+`P3` · `low` · `bug` · Flight planner · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 4 · **open**
+
+- **Files:** `services/flightplanner/app.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 4.
+- **Fix:** 
+- **Done when:** 
+
 ### O-1a
 
 **Generated handbook committed deliberately**
@@ -1519,6 +2469,17 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Fix:** Resolved by decision: Codex's v0.1 baseline entry states the generated handbook PDF/HTML are tracked deliberately as the published artefact. No change needed; expect churn in those two files on every manual rebuild.
 - **Done when:** Decision recorded in the CHANGELOG v0.1 baseline entry.
 - **Depends on:** O-1
+
+### O2-13
+
+**Dockerfile base images not pinned by digest**
+
+`P3` · `low` · `bug` · Deployment / infrastructure · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 4 · **open**
+
+- **Files:** `services/exercise/Dockerfile`, `services/flightplanner/Dockerfile`, `services/board/Dockerfile`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 7.
+- **Fix:** 
+- **Done when:** 
 
 ### P-12
 
@@ -1554,4 +2515,15 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Fix:** Scale probe count with distance; add the curvature term.
 - **Done when:** A narrow ridge at 25 NM blocks.
 - **Depends on:** P-1
+
+### X2-13
+
+**ICS pilot/observer seats share a callsign so the first joiner's seat decides for a shared radio**
+
+`P3` · `low` · `bug` · Exercise console (backend) · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort M · wave 4 · **open**
+
+- **Files:** `services/exercise/app/radio.py`
+- **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 2.
+- **Fix:** 
+- **Done when:** 
 
