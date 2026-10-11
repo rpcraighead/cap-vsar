@@ -1,10 +1,9 @@
-"""Bounded KMYF 28R landing controller and independent engineering observer."""
+"""Bounded stock-C172 landing controller and independent engineering observer."""
 from __future__ import annotations
 
 import math
 
-from xplane.capvsar_landing import (AIRPORT_ELEV_FT, GLIDEPATH_AIMPOINT_M, HEADING_TRUE_DEG,
-                                   RUNWAY_LENGTH_M, runway_coordinates)
+from xplane.capvsar_landing import GLIDEPATH_AIMPOINT_M, RUNWAYS
 
 # The unflared glidepath intersects 25 ft beyond the displaced threshold.
 TOUCHDOWN_MIN_M = GLIDEPATH_AIMPOINT_M
@@ -22,7 +21,8 @@ def wrap180(x):
 class LandingController:
     FLARE_START_AGL_FT = 17.5
 
-    def __init__(self):
+    def __init__(self, runway="KMYF 28R"):
+        self.runway = RUNWAYS[runway]
         self.start_sim = None
         self.last_sim = None
         self.last_throttle = .24
@@ -46,6 +46,10 @@ class LandingController:
         self.touchdown_aileron = 0.
 
     def step(self, snapshot):
+        runway_coordinates = self.runway.coordinates
+        HEADING_TRUE_DEG = self.runway.heading_true_deg
+        GLIDEPATH_AIMPOINT_M = self.runway.aimpoint_m
+        AIRPORT_ELEV_FT = self.runway.airport_elev_ft
         v = snapshot["values"]
         sim = v["sim_time_s"]
         if self.start_sim is None:
@@ -128,7 +132,7 @@ class LandingController:
             else:
                 flap = 1.
             target_speed = 65. + 5. * clamp((-along - 900.) / 900., 0., 1.)
-            # runway_coordinates() is positive to the RIGHT of 28R. A left
+            # Runway cross-track is positive to the RIGHT. A left
             # displacement therefore needs a positive (right) heading change.
             if crosswind:
                 # Wing-low slip: aileron into wind holds ground track and
@@ -255,9 +259,10 @@ class LandingController:
 
 class LandingObserver:
     """Scores measured runway position, touchdown, braking and complete stop."""
-    def __init__(self, wind_speed_kt=0., wind_from_offset_deg=0.):
+    def __init__(self, wind_speed_kt=0., wind_from_offset_deg=0., runway="KMYF 28R"):
+        self.runway = RUNWAYS[runway]
         self.wind_speed_kt = wind_speed_kt
-        self.wind_from_true_deg = (HEADING_TRUE_DEG + wind_from_offset_deg) % 360.
+        self.wind_from_true_deg = (self.runway.heading_true_deg + wind_from_offset_deg) % 360.
         self.wind_side = (-1 if wind_from_offset_deg < -1 else
                           1 if wind_from_offset_deg > 1 else 0)
         self.previous = None
@@ -289,6 +294,11 @@ class LandingObserver:
     def observe(self, s):
         if self.outcome != "INCOMPLETE":
             return self.report()
+        runway_coordinates = self.runway.coordinates
+        HEADING_TRUE_DEG = self.runway.heading_true_deg
+        RUNWAY_LENGTH_M = self.runway.length_m
+        TOUCHDOWN_MIN_M = self.runway.aimpoint_m
+        TOUCHDOWN_MAX_M = TOUCHDOWN_MIN_M + 400. * .3048
         try:
             v, c = s["values"], s["controls"]
             wind_from = v.get("wind_from_true_deg", HEADING_TRUE_DEG if not self.wind_speed_kt else None)

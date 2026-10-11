@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Attended KMYF 28R stock-C172 landing trial and independent trace replay."""
+"""Attended stock-C172 runway landing trial and independent trace replay."""
 import argparse
 from datetime import datetime, timezone
 import json
@@ -12,8 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from services.ai_pilot.control_ownership import ControllerLock
 from services.ai_pilot.experiment import BridgeClient, Recorder, digest
-from services.ai_pilot.landing_trial import (LandingController, LandingObserver,
-                                             TOUCHDOWN_MAX_M, TOUCHDOWN_MIN_M)
+from services.ai_pilot.landing_trial import LandingController, LandingObserver
+from xplane.capvsar_landing import RUNWAYS
 from scripts.ai_pilot_experiment import inventory
 
 
@@ -26,7 +26,8 @@ def replay(path):
             if record["kind"] == "manifest":
                 entry = record["payload"].get("entry", {})
                 observer = LandingObserver(entry.get("wind_speed_kt", 0.),
-                                           entry.get("wind_from_offset_deg", 0.))
+                                           entry.get("wind_from_offset_deg", 0.),
+                                           entry.get("runway", "KMYF 28R"))
             elif record["kind"] == "snapshot":
                 if observer is None:
                     raise ValueError("Landing trace has no manifest")
@@ -45,28 +46,34 @@ def replay(path):
 def run(args):
     config = json.loads(args.config.read_text())
     if config.get("mode") != "landing":
-        raise ValueError("Requires an expiring KMYF landing laboratory installation")
+        raise ValueError("Requires an expiring landing laboratory installation")
+    if config.get("runway", "KMYF 28R") != args.runway:
+        raise ValueError("Installed runway does not match requested runway")
+    runway = RUNWAYS[args.runway]
     client = BridgeClient(config)
     inv = inventory(args.xplane, include_landing=True)
     inv["controller_sha256"] = digest(ROOT / "services/ai_pilot/landing_trial.py")
     inv["runner_sha256"] = digest(Path(__file__))
-    manifest = {"purpose": "KMYF-28R-moderate-braking", "created_utc": datetime.now(timezone.utc).isoformat(),
+    manifest = {"purpose": args.runway.replace(" ", "-") + "-moderate-braking",
+                "created_utc": datetime.now(timezone.utc).isoformat(),
                 "inventory": inv, "qualification_only": True,
-                "criteria": {"touchdown_along_m": [TOUCHDOWN_MIN_M, TOUCHDOWN_MAX_M], "touchdown_cross_m": [-4, 4],
+                "criteria": {"touchdown_along_m": [runway.aimpoint_m, runway.aimpoint_m + 400. * .3048],
+                             "touchdown_cross_m": [-4, 4],
                              "touchdown_sink_fpm_min": -600, "max_brake_ratio": .35,
                              "pre_touch_pitch_deg": [5, 7],
                              "max_flare_rebound_ft": 1.5,
                              "crosswind_pre_touch_heading_error_deg": 3,
                              "crosswind_max_rollout_heading_error_deg": 5,
-                             "full_stop_groundspeed_kt": 2, "max_stop_along_m": 1304},
-                "entry": {"lateral_offset": args.lateral_offset,
+                             "full_stop_groundspeed_kt": 2,
+                             "max_stop_along_m": runway.length_m - 100},
+                "entry": {"runway": args.runway, "lateral_offset": args.lateral_offset,
                           "altitude_offset": args.altitude_offset,
                           "speed_offset": args.speed_offset,
                           "wind_speed_kt": args.wind_speed_kt,
                           "wind_from_offset_deg": args.wind_from_offset_deg}}
     recorder = Recorder(args.output, manifest)
-    observer = LandingObserver(args.wind_speed_kt, args.wind_from_offset_deg)
-    controller = LandingController()
+    observer = LandingObserver(args.wind_speed_kt, args.wind_from_offset_deg, args.runway)
+    controller = LandingController(args.runway)
     result = {"outcome": "FAIL", "reason": "Setup incomplete"}
     session = secrets.token_hex(16)
     generation = 0
@@ -87,7 +94,8 @@ def run(args):
                 raise ValueError("Setup pause not confirmed")
             time.sleep(.03)
             status = client.request("status")
-        reset = client.request("lab_reset", session=session, **manifest["entry"])
+        reset = client.request("lab_reset", session=session,
+                               **{k: v for k, v in manifest["entry"].items() if k != "runway"})
         recorder.write("setup", reset)
         deadline = time.monotonic() + 15
         while True:
@@ -154,7 +162,9 @@ def run(args):
             controls = controller.step(s)
             recorder.write("command", {"source_frame": s["frame"], "controls": controls,
                                         "diagnostics": controller.last_commands})
-            time.sleep(.020)
+            # The exchange already waits for the simulator's flight loop.
+            # Request the next measured frame immediately; an additional sleep
+            # spends the 180 ms lease margin on scenery-heavy simulator frames.
         else:
             raise ValueError("Landing wall deadline exceeded")
     except BaseException as error:
@@ -190,6 +200,7 @@ def main():
     fly.add_argument("--config", type=Path, required=True)
     fly.add_argument("--xplane", type=Path, default=Path.home() / "X-Plane 12")
     fly.add_argument("--output", type=Path, required=True)
+    fly.add_argument("--runway", choices=tuple(RUNWAYS), default="KMYF 28R")
     fly.add_argument("--lateral-offset", type=float, default=0.)
     fly.add_argument("--altitude-offset", type=float, default=0.)
     fly.add_argument("--speed-offset", type=float, default=0.)

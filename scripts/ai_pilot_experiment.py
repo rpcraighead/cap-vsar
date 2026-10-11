@@ -43,13 +43,18 @@ def inventory(xplane, include_landing=False):
         "installed_bridge_sha256": {p.name: digest(p) if p.exists() else None for p in installed},
         "aircraft": {"path": str(aircraft), "sha256": digest(aircraft)},
         "scenery_packs_sha256": digest(xplane / "Custom Scenery/scenery_packs.ini"),
+        "preferences_sha256": {
+            name: digest(xplane / "Output/preferences" / name)
+            if (xplane / "Output/preferences" / name).exists() else None
+            for name in ("X-Plane.prf", "X-Plane Window Positions.prf", "Freeflight.prf")},
         "python": sys.version, "platform": platform.platform(),
         "plugins": sorted(p.name for p in (xplane / "Resources/plugins").iterdir()),
         "python_plugins": sorted(p.name for p in plugins.glob("PI_*.py")),
     }
 
 
-def stage_observer(destination, qualification_aircraft=None, mode="qualification"):
+def stage_observer(destination, qualification_aircraft=None, mode="qualification",
+                   runway="KMYF 28R"):
     """Stage an explicit observation or expiring laboratory installation."""
     if qualification_aircraft is not None:
         from xplane.capvsar_qualification import STOCK_NAME, STOCK_SHA256
@@ -68,6 +73,11 @@ def stage_observer(destination, qualification_aircraft=None, mode="qualification
     if qualification_aircraft is not None:
         config.update(mode=mode, aircraft_path=str(qualification_aircraft),
                       expires_unix_s=time.time() + (10800 if mode == "landing" else 3600))
+        if mode == "landing":
+            from xplane.capvsar_landing import RUNWAYS
+            if runway not in RUNWAYS:
+                raise ValueError("Unknown landing runway: " + runway)
+            config["runway"] = runway
     fd = os.open(destination / "capvsar_flight_control_config.json",
                  os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w") as stream:
@@ -151,6 +161,7 @@ def main():
     landing = commands.add_parser("stage-landing")
     landing.add_argument("destination", type=Path)
     landing.add_argument("--aircraft", type=Path, required=True)
+    landing.add_argument("--runway", choices=("KMYF 28R", "KSAN 27"), default="KMYF 28R")
     args = parser.parse_args()
     if args.command == "observe":
         if not 2 <= args.seconds <= 600:
@@ -162,7 +173,8 @@ def main():
         return 0 if result["outcome"] == "PASS" else 1
     else:
         stage_observer(args.destination, args.aircraft if args.command in ("stage-qualification", "stage-landing") else None,
-                       mode="landing" if args.command == "stage-landing" else "qualification")
+                       mode="landing" if args.command == "stage-landing" else "qualification",
+                       runway=args.runway if args.command == "stage-landing" else "KMYF 28R")
     return 0
 
 

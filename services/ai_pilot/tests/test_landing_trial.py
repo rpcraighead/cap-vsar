@@ -5,7 +5,7 @@ import pytest
 
 from xplane.capvsar_flight_control_core import CHANNELS, ControlBridge
 from xplane.capvsar_landing import (AIRPORT_ELEV_FT, FAR_END, GLIDEPATH_AIMPOINT_M,
-                                   HEADING_TRUE_DEG, RUNWAY_LENGTH_M,
+                                   HEADING_TRUE_DEG, RUNWAYS, RUNWAY_LENGTH_M,
                                    THRESHOLD, runway_coordinates)
 from services.ai_pilot.landing_trial import LandingController, LandingObserver, TOUCHDOWN_MIN_M
 
@@ -27,6 +27,22 @@ def test_unflared_glidepath_intersects_new_aimpoint():
         AIRPORT_ELEV_FT + GLIDEPATH_AIMPOINT_M * math.tan(math.radians(3.)) * 3.28084)
     c.step(snapshot(GLIDEPATH_AIMPOINT_M, agl_ft=20., gs_kt=65., sim=1.1, frame=2))
     assert c.last_commands["target_altitude_ft"] == pytest.approx(AIRPORT_ELEV_FT)
+
+
+def test_ksan_27_uses_installed_runway_and_displaced_threshold():
+    runway = RUNWAYS["KSAN 27"]
+    assert runway.coordinates(*runway.threshold) == pytest.approx((0, 0))
+    assert runway.coordinates(*runway.far_end) == pytest.approx((runway.length_m, 0), abs=1e-8)
+    assert runway.length_m == pytest.approx(2101.6, abs=1.)
+    assert runway.heading_true_deg == pytest.approx(286.04, abs=.1)
+    assert runway.aimpoint_m == pytest.approx(559.62)
+    controller = LandingController(runway.name)
+    controller.step(snapshot(0, agl_ft=55., runway=runway.name,
+                             heading_deg=runway.heading_true_deg))
+    assert controller.last_commands["target_altitude_ft"] == pytest.approx(
+        17. + runway.aimpoint_m * math.tan(math.radians(3.)) * 3.28084)
+    observer = LandingObserver(15., -90., runway.name)
+    assert observer.wind_from_true_deg == pytest.approx(196.04, abs=.1)
 
 
 def test_atomic_landing_frame_caps_brake_and_fault_releases_it():
@@ -68,10 +84,11 @@ def test_atomic_landing_frame_caps_brake_and_fault_releases_it():
 def snapshot(along, cross=0., ground=0, gs_kt=70., brake=0., sim=1., frame=1,
              agl_ft=100., vvi=-350., flap=1., pitch_deg=2.,
              wind_mps=0., wind_from_true_deg=HEADING_TRUE_DEG, heading_deg=HEADING_TRUE_DEG,
-             beta_deg=0., roll_deg=0., roll_control=0.):
-    from xplane.capvsar_landing import M_PER_DEG_LAT, M_PER_DEG_LON, UNIT_N, UNIT_E
-    north = along * UNIT_N - cross * UNIT_E
-    east = along * UNIT_E + cross * UNIT_N
+             beta_deg=0., roll_deg=0., roll_control=0., runway="KMYF 28R"):
+    from xplane.capvsar_landing import M_PER_DEG_LAT
+    geometry = RUNWAYS[runway]
+    north = along * geometry.unit_n - cross * geometry.unit_e
+    east = along * geometry.unit_e + cross * geometry.unit_n
     return {"schema": "capvsar.telemetry.v1", "phase": "after_flight_model",
             "session": "a" * 32, "frame": frame, "wall_time_s": sim,
             "aircraft": {"name": "Cessna_172SP_G1000.acf", "path": "/sim/stock"},
@@ -81,9 +98,9 @@ def snapshot(along, cross=0., ground=0, gs_kt=70., brake=0., sim=1., frame=1,
                                   "brake_right": brake},
             "controls": {"trim": 0., "brake": brake, "roll": roll_control},
             "values": {"sim_time_s": sim, "paused": 0,
-                       "latitude_deg": THRESHOLD[0] + north / M_PER_DEG_LAT,
-                       "longitude_deg": THRESHOLD[1] + east / M_PER_DEG_LON,
-                       "altitude_msl_m": (424 + agl_ft) / 3.28084,
+                       "latitude_deg": geometry.threshold[0] + north / M_PER_DEG_LAT,
+                       "longitude_deg": geometry.threshold[1] + east / geometry.m_per_deg_lon,
+                       "altitude_msl_m": (geometry.airport_elev_ft + agl_ft) / 3.28084,
                        "agl_m": agl_ft / 3.28084,
                        "heading_true_deg": heading_deg, "kias": gs_kt,
                        "groundspeed_mps": gs_kt / 1.94384,
