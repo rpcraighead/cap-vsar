@@ -110,5 +110,45 @@ class WindsAndTerrainAreHonest(unittest.TestCase):
         self.assertIsNotNone(body["min_clearance"])
 
 
+class WeatherDegradesVisibly(unittest.TestCase):
+    """With every upstream down, the briefing says what is simulated."""
+
+    def setUp(self):
+        flight_app.app.config["TESTING"] = True
+        self.client = flight_app.app.test_client()
+
+    def test_offline_briefing_marks_every_source_simulated(self):
+        def down(*a, **kw):
+            raise OSError("offline")
+        with patch.object(flight_app.requests, "get", side_effect=down):
+            r = self.client.post("/api/weather-briefing", json={
+                "departure": "@33.0,-117.0", "destination": "@34.0,-117.0", "waypoints": []})
+        self.assertEqual(r.status_code, 200)
+        briefing = r.get_json()["briefing"]
+        for kind in ("metars", "tafs", "notams"):
+            self.assertTrue(briefing[kind])
+            self.assertTrue(all(item["simulated"] for item in briefing[kind]), kind)
+        self.assertTrue(briefing["winds_aloft"]["simulated"])
+
+    def test_offline_route_says_it_was_planned_in_still_air(self):
+        def down(*a, **kw):
+            raise OSError("offline")
+        with patch.object(flight_app.requests, "get", side_effect=down):
+            r = self.client.post("/api/calculate-route", json={
+                "departure": "@33.0,-117.0", "destination": "@34.0,-117.0"})
+        w = r.get_json()["winds_aloft"]
+        self.assertFalse(w["available"])
+        self.assertIn("still air", w["source"])
+        self.assertEqual((w["direction"], w["speed"]), (0, 0))
+
+    def test_a_crash_in_the_briefing_does_not_leak_the_exception(self):
+        with patch.object(flight_app, "fetch_metar",
+                          side_effect=TypeError("Unknown format code 'f'")):
+            r = self.client.post("/api/weather-briefing", json={
+                "departure": "@33.0,-117.0", "destination": "@34.0,-117.0"})
+        self.assertGreaterEqual(r.status_code, 500)
+        self.assertNotIn("format code", r.get_data(as_text=True))
+
+
 if __name__ == "__main__":
     unittest.main()
