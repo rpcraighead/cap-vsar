@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-planner-base="{{ request.script_root }}">
+<html lang="en" data-planner-base="{{ request.script_root }}" data-default-airport="{{ default_airport }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -369,7 +369,7 @@
         <div class="form-row">
           <label>Datum / LKP (Fix, Airport, or @Lat,Lon)</label>
           <div style="display:flex;gap:0.4rem">
-            <input type="text" id="sar-datum" placeholder="e.g. KCRQ, @33.17,-117.0792" value="@33.1700,-117.0792" style="flex:1">
+            <input type="text" id="sar-datum" placeholder="e.g. KCRQ, @33.17,-117.0792" value="{{ default_datum }}" style="flex:1">
             <button class="layer-btn" id="sar-pick-map" type="button" title="Click on map to pick datum">Pick on Map</button>
           </div>
         </div>

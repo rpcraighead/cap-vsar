@@ -56,7 +56,7 @@ Three kinds of identifiers are accepted:
 |------|---------|-------|
 | **Airport (ICAO)** | `KSEE`, `KPSP` | US airports from the OurAirports dataset. |
 | **Navaid** | `JLI` (Julian VORTAC), `TRM` (Thermal VORTAC) | VORs, VORTACs, NDBs, etc. |
-| **User waypoint** | `@33.0450,-116.5880` | A raw `@lat,lon` point. You normally create these by dragging on the map (see §4.3) rather than typing them, but you can type them too. They appear in the log as `USR1`, `USR2`, … |
+| **User waypoint** | `@33.0450,-116.5880` | A raw `@lat,lon` point. You normally create these by dragging on the map (see §4.3) rather than typing them, but you can type them too. They appear in the log as `USR1`, `USR2`, … A point can carry a name, `NAME=@lat,lon` (for example `DATUM=@33.17,-117.08`); the log then shows the name. **Apply to Route** writes the search pattern this way. |
 
 At least two identifiers are required (a departure and a destination).
 Press **Enter** in the box or click **Fly** to calculate.
@@ -122,9 +122,14 @@ Two controls, if you need them:
 |---|---|
 | `CAPVSAR_TILES_OFFLINE=1` | Never reach for the network. Serve only what is cached. Set this at a base you know is isolated, so the server does not spend a timeout on each missing tile. |
 | `CAPVSAR_PRECACHE_CHARTS=0` | Do not pre-download charts at startup. |
+| `CAPVSAR_DEFAULT_AIRPORT` | Airport used when the route box is empty and for the `.fms` and console exports (default `KSEE`). |
+| `CAPVSAR_DEFAULT_DATUM` | What the SAR dialog's datum box is pre-filled with (default `@33.1700,-117.0792`). A pre-fill only: the planner never plans on a datum you did not give it. |
 
 **Satellite** and **Street** are not cached and come straight from Esri and
-OpenStreetMap, so they need internet and will be blank without it. The FAA
+OpenStreetMap, so they need internet and will be blank without it. The server
+offers them only when `CAPVSAR_TILES_OFFLINE` is not set; if the planner cannot
+read its tile sources at all, the map stays empty with a message rather than
+quietly going to the internet. The FAA
 layers are the ones to brief from.
 
 ### 4.2 Plan mode (click-to-add)
@@ -323,7 +328,7 @@ Click the **SAR** button in the main toolbar. This opens the SAR Pattern Generat
 2. **Creeping Line (CS):**
    - Used when searching a route corridor, valley floor, or canyon where the target is likely located along a specific track.
    - Parameters: Start point, end point, sweep width (NM), track spacing (NM), and maximum legs.
-   - Generates alternating orthogonal cross-track sweeps advancing along the route axis.
+   - Generates alternating orthogonal cross-track sweeps advancing along the route axis. `CS01` is the left end of the first sweep and carries no leg of its own; the first sweep flies to the right.
 
 3. **Parallel Track (PS):**
    - Used for systematic grid searches covering large rectangular areas or CAP quadrangles.
@@ -331,8 +336,8 @@ Click the **SAR** button in the main toolbar. This opens the SAR Pattern Generat
    - Generates parallel search tracks stepped across the search area.
 
 ### 8.3 Route Integration & Search Sortie Metrics
-Clicking **Apply to Route** integrates the generated search waypoints (`SS01`, `CS01`, `PS01`...) into the active flight plan:
-- The route box is automatically populated with geodesic user coordinates (`@lat,lon`).
+Clicking **Apply to Route** integrates the generated search waypoints (`DATUM`, `SS01`, `CS01`, `PS01`...) into the active flight plan:
+- The route box is automatically populated with named coordinates (`NAME=@lat,lon`), `DATUM` included, so the nav log carries the leg that defines an expanding square and uses the same names as the `.fms` export.
 - The nav-log drawer recomputes fuel burn, time-on-station, and terrain clearances for the search pattern using the aircraft POH performance polar.
 - The map visualizes the search grid overlaid against FAA VFR Sectionals and IFR enroute charts.
 
@@ -340,6 +345,10 @@ Clicking **Apply to Route** integrates the generated search waypoints (`SS01`, `
 
 - **Export X-Plane 12 `.fms`:**
   Downloads a standard FMS format file (version 1100) compatible with X-Plane 11 and 12 G1000 / FMS navigation systems. Save directly to your simulator's `Output/FMS plans/` folder.
+  A file holds at most 99 pattern waypoints (the G1000 flight-plan size; the
+  real X-Plane limit has not been checked in the simulator). The pattern dialog
+  warns when a pattern is longer, and the export refuses it: split the pattern
+  into two files with fewer legs, wider spacing or a smaller area.
 - **Push to V-SAR Console (shared `https://ms01/` origin):**
   Transmits the planned search sortie directly into the CAP V-SAR training environment over LAN (`VSAR_CONSOLE_URL`).
   - Automatically creates the scenario in the exercise database with the datum, alert radius, and sortie notes.

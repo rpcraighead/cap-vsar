@@ -298,6 +298,8 @@ class TestSARRequestBounds(unittest.TestCase):
     def request(payload):
         return types.SimpleNamespace(
             json=payload,
+            get_json=lambda **kw: payload,
+            get_data=lambda: b'{}',
             is_json=True,
             headers={'Origin': 'http://localhost'},
             host_url='http://localhost/',
@@ -389,6 +391,8 @@ class TestPlannerSecurity(unittest.TestCase):
         return types.SimpleNamespace(
             cookies={},
             json=payload,
+            get_json=lambda **kw: payload,
+            get_data=lambda: b'{}',
             is_json=is_json,
             headers=headers,
             host_url='http://localhost/',
