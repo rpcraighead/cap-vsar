@@ -1,0 +1,133 @@
+{
+ "trial": "C182T expanding square, live, mission bridge",
+ "date": "2026-10-11",
+ "trace": "/home/ron/.cache/capvsar/ai-pilot/pattern_c182_ss_20261011.jsonl",
+ "trace_sha256": "2077c33abbf690220e06834e1f5322a601b01c927bf455f056a884e83efab569",
+ "commit": "ee990d7bc0cd36dc921eebebd2fc1086800172c8",
+ "dirty": false,
+ "aircraft": {
+  "path": "/home/ron/X-Plane 12/Aircraft/CAP/Cessna 182T NAV III/Cessna_182T_G1000.acf",
+  "sha256": "11ff17d1f15ed3c715ca248f797999b3bf583763dd65275a658ddfac09cd89d8",
+  "profile": "C182T"
+ },
+ "installed_bridge_sha256": {
+  "PI_capvsar_flight_control.py": "e448234921f5e61a62fda12839e7136ee5322252fc81a6c16a9da15ad0ce6786",
+  "capvsar_flight_control_core.py": "42d2e74685723a44ffc08aa098f7d9b2fa171356c5b3d19194ab46fd129aa121",
+  "capvsar_flight_control_mapping.py": "3d73b733242271873f9bdc9c14995991b3328c62c304457758200635ea19ba83",
+  "capvsar_telemetry.py": "1957f42f0ed27cff6774f9e2a619b2a4bae5a1c63173e8508607230026b1255c",
+  "capvsar_qualification.py": "7824a0d793324db3a783888621e59ad415e2b1d5c3897735be02fa6d3df74d7f",
+  "capvsar_mission.py": "6b8b5643f46d3321273b72b0de012719964d7d06b3a5268855d7e90b03ec0ca3"
+ },
+ "runner_sha256": "879fc7056127ad80a310d69c2a12e745d5abf6b7280425f0e1118bd64875605f",
+ "controller_sha256": "2b02eb9fbd9e8ba58f7caf29c321e654e78f817f0b7e3dca55eea83703870d11",
+ "profile_tuning_validated": false,
+ "pattern": "expanding_square",
+ "parameters": {
+  "lat": 32.7,
+  "lon": -117.3,
+  "heading": 0.0,
+  "spacing_nm": 1.0,
+  "legs": 6,
+  "turn": "right",
+  "length_nm": 4.0,
+  "width_nm": 3.0,
+  "altitude_ft": 2000.0
+ },
+ "track_nm": 11.999999718327455,
+ "criteria": {
+  "pass_nm": 0.35,
+  "altitude_tol_ft": 200.0,
+  "kias_band": [
+   80.0,
+   140.0
+  ],
+  "max_bank_deg": 32.0
+ },
+ "start": "lle_air_start 32.68N 117.31W, 2000 ft, 0 deg true, 100 kt; ISA calm; mixture full rich, prop full, autopilot off; paused, adopted by lab_reset",
+ "outcome": "PASS",
+ "reached": [
+  {
+   "waypoint": "DATUM",
+   "sim_time_s": 34.172508239746094,
+   "distance_nm": 0.3487139918179297,
+   "altitude_ft": 1994.335693359375,
+   "kias": 101.56236267089844
+  },
+  {
+   "waypoint": "SS01",
+   "sim_time_s": 68.5742416381836,
+   "distance_nm": 0.3495696970710601,
+   "altitude_ft": 1989.6827392578125,
+   "kias": 99.42442321777344
+  },
+  {
+   "waypoint": "SS02",
+   "sim_time_s": 98.60453033447266,
+   "distance_nm": 0.3496967809570677,
+   "altitude_ft": 1991.4825439453125,
+   "kias": 99.2665023803711
+  },
+  {
+   "waypoint": "SS03",
+   "sim_time_s": 163.59396362304688,
+   "distance_nm": 0.3491389046712293,
+   "altitude_ft": 2014.3338623046875,
+   "kias": 99.478759765625
+  },
+  {
+   "waypoint": "SS04",
+   "sim_time_s": 229.25416564941406,
+   "distance_nm": 0.3490593034873715,
+   "altitude_ft": 2006.36181640625,
+   "kias": 99.85427856445312
+  },
+  {
+   "waypoint": "SS05",
+   "sim_time_s": 329.3532409667969,
+   "distance_nm": 0.34929098022570043,
+   "altitude_ft": 2003.049072265625,
+   "kias": 99.80545806884766
+  },
+  {
+   "waypoint": "SS06",
+   "sim_time_s": 429.6691589355469,
+   "distance_nm": 0.34995168841410773,
+   "altitude_ft": 2008.29150390625,
+   "kias": 100.07069396972656
+  }
+ ],
+ "max_altitude_error_ft": 19.92919921875,
+ "max_bank_deg": 21.00470733642578,
+ "samples": 9856,
+ "stats": {
+  "altitude_ft": [
+   1980,
+   2029
+  ],
+  "kias": [
+   94.4,
+   105.1
+  ],
+  "kias_after_datum": [
+   96.2,
+   105.1
+  ],
+  "settled_cross_track_m": {
+   "median": 8.2,
+   "p95": 80.5,
+   "max": 113.3,
+   "n": 1311
+  },
+  "throttle_cmd": [
+   0.261,
+   0.86,
+   0.551
+  ]
+ },
+ "containment": {
+  "end_state": "PAUSED_FAULT",
+  "pause_confirmed": true,
+  "retired": true
+ },
+ "sim_time_s": 429.6
+}

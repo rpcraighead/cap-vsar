@@ -1,11 +1,12 @@
 # C182T port of the C172 AI pilot controllers (2026-10-11)
 
-Status: **implemented and tested offline; nothing has been flown on the C182T.**
-Branch `feat/c182-ai-pilot-baseline`, stacked on `feat/c172-taxi-takeoff-ifr`
-(the attended KSEE–KMYF C172 sortie of 2026-10-11). Suite:
-`services/ai_pilot/tests` 537 passed, 20 xfailed (was 496 / 20). No simulator
-was started for this work and no qualification claim is made. Simulator
-engineering only; not operating guidance for any real aircraft.
+Status: **implemented; first live C182T trial flown and passed (an expanding
+square on the mission bridge, 2026-10-11, see "Live trial 1" below).** Branch
+`feat/c182-ai-pilot-baseline`, stacked on `feat/c172-taxi-takeoff-ifr` and with
+`main` merged in. Suite: `services/ai_pilot/tests` 540 passed, 20 xfailed.
+`tuning_validated` stays False: one pattern flight does not validate the
+taxi, takeoff or landing constants. Simulator engineering only; not operating
+guidance for any real aircraft.
 
 ## Why this shape
 
@@ -90,25 +91,52 @@ point-mass fly-through in the tests completes all three patterns in order,
 passes within 0.35 NM of every waypoint, turns every corner the way the
 geometry says, and holds cross-track under 120 m on settled legs.
 
-What it is not: it has no runner script, no bridge integration, no envelope
-monitoring of its own (the bridge's `MissionLab` envelope and the experiment
-observers do that), and it has never been flown. `MissionController` still
+It is flown by `scripts/ai_pilot_pattern.py` on the mission bridge and scored by
+the independent `PatternObserver` (see Live trial 1). It has no envelope
+monitoring of its own; the bridge's `MissionLab` envelope does that. `MissionController` still
 carries its own copy of the cruise loop; moving it onto `CruiseLaw` is a
 refactor to do only with a regression flight behind it.
 
+## Live trial 1: expanding square, CAP 487, 2026-10-11
+
+| Item | Value |
+|---|---|
+| Aircraft | installed CAP 487 package, ACF SHA-256 `11ff17d1…cd89d8` (Cd 0.120 calibrated build, branch `fix/c182-a2-2026-10-11`) |
+| Code | commit `ee990d7`, clean tree; installed bridge byte-identical to `xplane/` |
+| Pattern | expanding square, datum 32.70 N 117.30 W, first leg 000°, 1 NM spacing, 6 legs, right turns, 12.0 NM |
+| Start | air start 32.68 N 117.31 W, 2,000 ft, 100 kt, ISA calm, full rich, AP off; paused and adopted by `lab_reset` |
+| Criteria | every waypoint within 0.35 NM, altitude ±200 ft, 80-140 KIAS, bank ≤ 32° |
+| Outcome | **PASS**: DATUM and SS01-SS06 reached in order, 430 s sim time |
+| Altitude | 1,980-2,029 ft (max error 20 ft) |
+| Speed after the datum | 96.2-105.1 KIAS |
+| Bank | max 21.0° |
+| Cross-track on settled legs | median 8 m, 95th percentile 81 m, max 113 m |
+| Throttle on straight legs | median 0.553 (profile `cruise_base_throttle` 0.55, inherited from the C172) |
+| Containment | ended `PAUSED_FAULT`, pause confirmed, overrides released, session retired |
+
+Evidence: `docs/evidence/ai_pilot_c182_pattern_20261011.json` (trace path and
+SHA-256 `2077c33a…`; the 5.5 MB trace stays in `~/.cache/capvsar/ai-pilot/`).
+
+Two things this run needed. The installed mission bridge at the time was the
+C172 KSEE-KMYF trial's uncommitted version, so `main` was merged in and the one
+bridge line that trial depends on (a 3 s reply window for `lab_start`) was
+committed here as `ee990d7`; the C172 worktree was not touched and its bridge
+was restored afterwards from `~/.cache/capvsar/bridge-backup-20261011`. And
+`lab_reset` refuses an aircraft whose indicated airspeed is still 0 straight
+after an air start, so the sim was run for 3 s before pausing.
+
 ## Follow-ups, in order
 
-1. **Runner flag.** `scripts/ai_pilot_ksee_kmyf.py`, `ai_pilot_surface.py` and
-   `experiment.Scenario` still name the C172. Add `--profile C182T`, pass it to
-   the controllers and observers, and make the manifest record the profile key
-   and `tuning_validated`.
+1. **Runner flag.** Done (`f8098a0`): `--profile` on the KSEE-KMYF, surface,
+   observe and pattern runners; manifests record the profile and
+   `tuning_validated`.
 2. **Bridge identity.** `xplane/capvsar_mission.py` / `capvsar_landing.py`
    envelopes (50–140 KIAS airborne, 40–145 in the landing lab) are wide enough
-   for the 182T; confirm `verify_identity` accepts the CAP 487 package before
-   any live run.
-3. **First live C182T trials, safest first:** a `SearchPatternController`
-   pattern at 1,500 ft over water (only the cruise loop is exercised; abort by
-   pause), then the H0-style cruise cycle (`experiment.Scenario` at 100 KIAS)
+   for the 182T. Done: the bridge accepts the built package by the SHA-256 the
+   stager pins (`aircraft_identity_ok`), proven live in trial 1.
+3. **First live C182T trials, safest first:** the pattern trial is done
+   (trial 1, PASS; it also confirms `cruise_base_throttle` 0.55 at 100 KIAS).
+   Next the H0-style cruise cycle (`experiment.Scenario` at 100 KIAS)
    to retune `cruise_base_throttle`, then taxi-only from East Transient
    Parking 12 (idle thrust of the IO-540 and the constant-speed prop will move
    the taxi throttle constants in `ground_guidance.py`, which are not in the
@@ -119,25 +147,38 @@ refactor to do only with a regression flight behind it.
 5. **Taxi constants into the profile** (`ground_guidance.py`,
    `runway_entry.py`: throttle .16 + .08·Δv, corner speeds) once trial 3 has
    numbers.
-6. **Pattern integration:** a `pattern` stage in a mission controller (enter
-   from a vector, fly, resume), a runner, and an observer that scores coverage
+6. **Pattern integration:** the runner and a waypoint observer exist. Still to
+   do: a `pattern` stage in a mission controller (enter from a vector, fly,
+   resume), and an observer that scores coverage
    (track spacing held, lane ends reached) the way `LandingObserver` scores a
    landing. The DF datarefs (`cap/df/*`) are available for a beacon-homing
    stage after that.
-7. **Flight model.** The package itself is uncalibrated (A-1; cruise −13 %,
-   climb −11 % at 3,100 lb) and `docs/C182T_REVIEW_2026-10-11.md` (branch
-   `review-c182-2026-10-11`) lists ACF defects found on 2026-10-11, including
-   the propeller disc still being the C172's 76-inch one. Controller tuning
-   done before those are fixed will drift when they are.
+7. **Flight model.** The C18 ACF defects are fixed and fuselage drag is
+   flight-calibrated on `fix/c182-a2-2026-10-11`: cruise is within 1 % of the
+   POH, climb at Vy is still about 18 % strong (A-1). Tune against that build
+   (ACF `11ff17d1…`); a later geometry fix for the climb will move the
+   approach and climb constants again.
 
 ## How to run what exists
 
 ```bash
-PYTHONPATH=. python3 -m pytest services/ai_pilot/tests -q          # 537 passed, 20 xfailed
+PYTHONPATH=. python3 -m pytest services/ai_pilot/tests -q          # 540 passed, 20 xfailed
 PYTHONPATH=. python3 - <<'PY'
 from services.ai_pilot.aircraft_profiles import C182T
 from services.ai_pilot.search_patterns import parallel_track, track_miles
 pts = parallel_track(33.10, -117.00, 25., 4., 1., 4, "right")
 print([w.name for w in pts], round(track_miles(pts), 1), "nm", C182T.search_kias, "KIAS")
 PY
+```
+
+Live pattern trial (sim paused and airborne inside the mission region, staged
+bridge installed; restore the previous bridge afterwards):
+
+```bash
+python3 scripts/ai_pilot_experiment.py stage-mission ~/.cache/capvsar/stage-<stamp> \
+    --aircraft "$HOME/X-Plane 12/Aircraft/CAP/Cessna 182T NAV III/Cessna_182T_G1000.acf"
+# copy the staged files into Resources/plugins/PythonPlugins, config mode 0600
+python3 scripts/ai_pilot_pattern.py --config <PythonPlugins>/capvsar_flight_control_config.json \
+    --output ~/.cache/capvsar/ai-pilot/pattern_c182_ss.jsonl --profile C182T \
+    --pattern expanding_square --lat 32.70 --lon -117.30 --spacing-nm 1 --legs 6 --altitude-ft 2000
 ```

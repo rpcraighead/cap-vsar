@@ -3,6 +3,24 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-10-11 — First live C182T AI pilot flight: expanding square passes (branch `feat/c182-ai-pilot-baseline`)
+
+Status: **flown once, passed; profile still `tuning_validated=False`.**
+
+`scripts/ai_pilot_pattern.py --profile C182T` flew a 6-leg, 1 NM expanding
+square (12 NM) at 2,000 ft and 100 KIAS off Point Loma in the calibrated CAP 487
+package (ACF `11ff17d1…`), on the expiring mission bridge with the controller on
+the primary controls. The independent observer scored every waypoint inside
+0.35 NM, altitude within 20 ft, bank at most 21°. Settled cross-track was a
+median 8 m. The run ended paused with overrides released. The C172's 0.55
+cruise throttle held 100 KIAS (straight-leg median 0.553). Details and caveats:
+`docs/C182T_AI_PILOT_PORT_2026-10-11.md` "Live trial 1"; evidence
+`docs/evidence/ai_pilot_c182_pattern_20261011.json`.
+
+`main` merged into the branch so the trial ran on the current bridge, and the
+3 s `lab_start` reply window that the C172 KSEE-KMYF trial carries uncommitted
+is committed here (`ee990d7`).
+
 ## 2026-10-11 — AI pilot: aircraft profiles, C182T port of the C172 controllers, search patterns (branch `feat/c182-ai-pilot-baseline`)
 
 Status: **implemented and tested offline; not flown.** Stacked on
