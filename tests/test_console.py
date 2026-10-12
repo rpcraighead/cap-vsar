@@ -135,6 +135,7 @@ def leak_endpoints(sid, oid):
         "/api/scenarios",
         "/api/sorties",
         f"/api/sorties/{oid}/track",
+        f"/api/sorties/{oid}/analysis",
         "/api/messages",
         "/api/health",
     ]
