@@ -9,8 +9,9 @@
 #      panel previews whose older versions embedded third-party artwork
 #   2. re-adds the CURRENT versions of those generated files in one final commit
 #   3. maps author/committer emails to the GitHub noreply address
-#   4. maps LAN addresses 192.0.2.N -> 192.0.2.N (RFC 5737 documentation range)
-#      in files, inside Word/PowerPoint documents, and in commit messages
+#   4. maps the lab's private LAN addresses into the RFC 5737 documentation range
+#      192.0.2.0/24 (same last octet) in files, inside Word/PowerPoint documents,
+#      and in commit messages
 #   5. verifies the result and exits non-zero if anything is off
 #
 #   usage: scripts/cap-vsar-github-sanitize.sh [DEST_DIR]
@@ -56,9 +57,9 @@ READD=(
 cat > "$WORK/capsan.py" <<'PY'
 """Shared by the filter-repo callbacks and the re-add step."""
 import io, re, zipfile
-IP = re.compile(rb"192\.168\.8\.(\d{1,3})")
+IP = re.compile(rb"192\.168\.8\.")      # the prefix itself, so prose like "x.x.x.N" cannot slip through
 def scrub_bytes(b):
-    return IP.sub(rb"192.0.2.\1", b)
+    return IP.sub(rb"192.0.2.", b)
 def scrub_zip(data):
     """Rewrite a docx/pptx/xlsx so addresses inside its XML parts are scrubbed."""
     if not data.startswith(b"PK\x03\x04"):
@@ -80,7 +81,7 @@ PY
 printf '%s\n' \
   "Ron Craighead <$NOREPLY> <<owner-email-2>>" \
   "Ron Craighead <$NOREPLY> <<owner-email>>" > "$WORK/mailmap"
-printf '%s\n' 'regex:192\.168\.8\.(\d{1,3})==>192.0.2.\1' > "$WORK/replace-text"
+printf '%s\n' 'regex:192\.168\.8\.==>192.0.2.' > "$WORK/replace-text"
 
 rm -rf "$DEST"
 git clone -q --no-local --single-branch --branch main "$SRC" "$DEST"
@@ -91,7 +92,7 @@ args=(); for p in "${PURGE[@]}" "${READD[@]}"; do args+=(--path "$p"); done
 PYTHONPATH="$WORK${PYTHONPATH:+:$PYTHONPATH}" $FILTER --force --invert-paths "${args[@]}" \
   --mailmap "$WORK/mailmap" --replace-text "$WORK/replace-text" \
   --blob-callback 'import capsan; blob.data = capsan.scrub_zip(blob.data)' \
-  --message-callback 'import re; message = re.sub(rb"192\.168\.8\.(\d{1,3})", rb"192.0.2.\1", message); message = re.sub(rb"<owner-email-2>|<owner-email>", rb"'"$NOREPLY"'", message)'
+  --message-callback 'import re; message = re.sub(rb"192\.168\.8\.", rb"192.0.2.", message); message = re.sub(rb"<owner-email-2>|<owner-email>", rb"'"$NOREPLY"'", message); return message'
 
 # Re-add the current generated documents and previews in one honest commit.
 for f in "${READD[@]}"; do
@@ -119,7 +120,7 @@ n=$(git log --all --name-only --format= | grep -cE 'RT600_|Becker_SARDF|TDFM136|
 [ "$n" = "0" ] || { echo "FAIL: $n purged path mentions in history"; fail=1; }
 echo "--- 2. no LAN address left in any commit (text, messages, Word/PowerPoint internals)"
 n=$(git log --all -p --no-color --format=%B | grep -ac '192\.168\.8\.' || true)
-[ "$n" = "0" ] || { echo "FAIL: $n lines still mention 192.0.2.x"; fail=1; }
+[ "$n" = "0" ] || { echo "FAIL: $n lines still mention a lab LAN address"; fail=1; }
 PYTHONPATH="$WORK" python3 - <<'PY' || fail=1
 import subprocess, io, zipfile, re, sys
 bad = 0
