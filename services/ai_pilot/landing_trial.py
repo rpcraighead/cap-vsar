@@ -1,8 +1,13 @@
-"""Bounded stock-C172 landing controller and independent engineering observer."""
+"""Bounded landing controller and independent engineering observer.
+
+Flown on the stock C172 (the default `AircraftProfile`); the C182T profile
+supplies that aircraft's speeds and acceptance windows to the same laws.
+"""
 from __future__ import annotations
 
 import math
 
+from .aircraft_profiles import AircraftProfile, C172SP
 from xplane.capvsar_landing import GLIDEPATH_AIMPOINT_M, RUNWAYS
 
 # The unflared glidepath intersects 25 ft beyond the displaced threshold.
@@ -21,11 +26,12 @@ def wrap180(x):
 class LandingController:
     FLARE_START_AGL_FT = 17.5
 
-    def __init__(self, runway="KMYF 28R"):
+    def __init__(self, runway="KMYF 28R", profile: AircraftProfile = C172SP):
         self.runway = RUNWAYS[runway]
+        self.profile = profile
         self.start_sim = None
         self.last_sim = None
-        self.last_throttle = .24
+        self.last_throttle = profile.approach_base_throttle - .04
         self.power_i = 0.
         self.speed_pitch_i = 0.
         self.trim = None
@@ -123,15 +129,11 @@ class LandingController:
                         "pitch": .08, "yaw": yaw, "throttle": 0., "flap": 1.,
                         "trim": clamp(snapshot["controls"]["trim"], -.6, .6), "brake": brake}
         else:
-            # The stock C172SP ACF has 0/10/20/30 degree detents. Start with
-            # 10 degrees, select 20 by 1 NM and 30 by 0.5 NM, with speed gates.
-            if along < -1852 or v["kias"] > 85:
-                flap = 1/3
-            elif along < -926 or v["kias"] > 75:
-                flap = 2/3
-            else:
-                flap = 1.
-            target_speed = 65. + 5. * clamp((-along - 900.) / 900., 0., 1.)
+            # Flap stages by distance and speed from the profile (C172: 10 deg,
+            # 20 by 1 NM, 30 by 0.5 NM; the C182T package shares the detents).
+            flap = self.profile.landing_flap_ratio(along, v["kias"])
+            target_speed = (self.profile.final_approach_kias
+                            + self.profile.final_speed_add_kias * clamp((-along - 900.) / 900., 0., 1.))
             # Runway cross-track is positive to the RIGHT. A left
             # displacement therefore needs a positive (right) heading change.
             if crosswind:
@@ -167,7 +169,7 @@ class LandingController:
                     # reposition. Truth TAS is already near 70 kt; hold the
                     # reset controls until the instrument settles.
                     pitch_target = v["pitch_deg"]
-                    throttle = .24
+                    throttle = self.profile.approach_base_throttle - .04
                 else:
                     # Pilot technique: pitch for indicated airspeed, power for
                     # the glidepath. Above path => reduce power. The vertical
@@ -182,13 +184,14 @@ class LandingController:
                         self.speed_pitch_i = candidate_speed_i
                     pitch_target = clamp(2. - speed_error * 1.0 + self.speed_pitch_i, -5., 8.)
                     candidate_i = clamp(self.power_i + alt_error_ft * .00016 * dt, -.25, .25)
-                    raw_power = (.28 + alt_error_ft * .004
+                    base = self.profile.approach_base_throttle
+                    raw_power = (base + alt_error_ft * .004
                                  + (desired_vvi - v["vvi_fpm"]) * .0001 + candidate_i)
                     if (0. < raw_power < .65 or
                             (raw_power >= .65 and candidate_i < self.power_i) or
                             (raw_power <= 0. and candidate_i > self.power_i)):
                         self.power_i = candidate_i
-                    raw_power = clamp(.28 + alt_error_ft * .004
+                    raw_power = clamp(base + alt_error_ft * .004
                                       + (desired_vvi - v["vvi_fpm"]) * .0001 + self.power_i,
                                       0., .65)
                     throttle = clamp(raw_power, self.last_throttle - .25 * dt,
@@ -259,8 +262,10 @@ class LandingController:
 
 class LandingObserver:
     """Scores measured runway position, touchdown, braking and complete stop."""
-    def __init__(self, wind_speed_kt=0., wind_from_offset_deg=0., runway="KMYF 28R"):
+    def __init__(self, wind_speed_kt=0., wind_from_offset_deg=0., runway="KMYF 28R",
+                 profile: AircraftProfile = C172SP):
         self.runway = RUNWAYS[runway]
+        self.profile = profile
         self.wind_speed_kt = wind_speed_kt
         self.wind_from_true_deg = (self.runway.heading_true_deg + wind_from_offset_deg) % 360.
         self.wind_side = (-1 if wind_from_offset_deg < -1 else
@@ -305,7 +310,7 @@ class LandingObserver:
             sim, wall, frame = v["sim_time_s"], s["wall_time_s"], s["frame"]
             if s["schema"] != "capvsar.telemetry.v1" or s["phase"] != "after_flight_model":
                 return self.fail("Invalid snapshot provenance")
-            if s["aircraft"]["name"] != "Cessna_172SP_G1000.acf":
+            if s["aircraft"]["name"] != self.profile.acf_name:
                 return self.fail("Wrong aircraft")
             numbers = (sim, wall, v["latitude_deg"], v["longitude_deg"], v["agl_m"],
                        v["kias"], v["groundspeed_mps"], v["vvi_fpm"],
@@ -351,17 +356,19 @@ class LandingObserver:
                 if self.wind_speed_kt and self.wind_side * c["roll"] > .01:
                     self.flare_aileron_samples += 1
             actual_flap = v["flap_actual"]
+            stage1, stage2, stage3 = self.profile.flap_stage_names
             if along < -1852 and .25 <= actual_flap <= .42:
-                self.flap_stages.add("10deg")
+                self.flap_stages.add(stage1)
             if -1852 <= along < -926 and .58 <= actual_flap <= .75:
-                self.flap_stages.add("20deg")
+                self.flap_stages.add(stage2)
             if -926 <= along <= 0 and actual_flap >= .90:
-                self.flap_stages.add("30deg")
+                self.flap_stages.add(stage3)
             if self.threshold is None and along >= 0:
                 self.threshold = {**self.last, "flap_actual": actual_flap}
-                if not 20 <= agl_ft <= 85 or not 62 <= v["kias"] <= 68:
+                low_kias, high_kias = self.profile.threshold_kias
+                if not 20 <= agl_ft <= 85 or not low_kias <= v["kias"] <= high_kias:
                     return self.fail("Threshold height or final speed outside window")
-                if actual_flap < .9 or self.flap_stages != {"10deg", "20deg", "30deg"}:
+                if actual_flap < .9 or self.flap_stages != {stage1, stage2, stage3}:
                     return self.fail("Flap schedule not observed")
             if abs(cross) > 80 or along < -2450 or along > RUNWAY_LENGTH_M + 10:
                 return self.fail("Left landing corridor")
@@ -387,9 +394,11 @@ class LandingObserver:
                                   "pre_touch_roll_deg": self.last_air_roll_deg,
                                   "wind_mps": v["wind_mps"],
                                   "wind_from_true_deg": wind_from}
-                if (not TOUCHDOWN_MIN_M <= along <= TOUCHDOWN_MAX_M or abs(cross) > 4 or gs_kt > 78
+                pitch_low, pitch_high = self.profile.touchdown_pitch_deg
+                if (not TOUCHDOWN_MIN_M <= along <= TOUCHDOWN_MAX_M or abs(cross) > 4
+                        or gs_kt > self.profile.touchdown_max_groundspeed_kt
                         or v["vvi_fpm"] < -600 or self.last_air_pitch_deg is None
-                        or not 5. <= self.last_air_pitch_deg <= 7.):
+                        or not pitch_low <= self.last_air_pitch_deg <= pitch_high):
                     return self.fail("Touchdown outside acceptance window")
                 if (self.wind_speed_kt and self.wind_side and
                     (self.last_air_heading_deg is None or

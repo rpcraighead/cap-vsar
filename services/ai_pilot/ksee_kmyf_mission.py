@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import math
 
+from .aircraft_profiles import AircraftProfile, C172SP
 from .landing_trial import LandingController
 from xplane.capvsar_landing import RUNWAYS
 
@@ -38,17 +39,18 @@ def bearing_distance(lat, lon, target):
 
 
 class MissionController:
-    def __init__(self, stage="runway_climb"):
+    def __init__(self, stage="runway_climb", profile: AircraftProfile = C172SP):
         if stage not in STAGES:
             raise ValueError("Unknown mission stage")
         self.stage = stage
+        self.profile = profile
         self.last_sim = None
         self.trim = None
         self.alt_i = 0.
         self.power_i = 0.
         self.vvi_lp = None
         self.ils_pitch_i = 0.
-        self.landing = LandingController("KMYF 28R")
+        self.landing = LandingController("KMYF 28R", profile=profile)
         self.last_diagnostics = {}
         self.transitions = []
 
@@ -71,76 +73,78 @@ class MissionController:
         if self.trim is None:
             self.trim = clamp(snapshot["controls"]["trim"], -.6, .6)
         variation = wrap180(v["heading_true_deg"]-v["heading_mag_deg"])
+        p = self.profile
+        climb_ias = p.vy_kias if alt < 2000 else p.climb_enroute_kias
         target_true = v["heading_true_deg"]
         target_alt = 5000.
-        target_ias = 100.
+        target_ias = p.cruise_kias
         distance = None
         if self.stage == "runway_climb":
             target_true = 281.
-            target_ias = 74.
+            target_ias = p.vy_kias
             if alt >= 790:
                 self._advance("pgy_intercept", v)
         if self.stage == "pgy_intercept":
             target_true = (62.+variation)%360
-            target_ias = 74. if alt < 2000 else 85.
+            target_ias = climb_ias
             # Cross the PGY R-348 north of the PGY10 fix, allowing turn lead.
             if lon >= -116.9727 and lat >= 32.831:
                 self._advance("pgy_inbound", v)
         if self.stage == "pgy_inbound":
             target_true, distance = bearing_distance(lat, lon, PGY10)
-            target_ias = 74. if alt < 2000 else 85.
+            target_ias = climb_ias
             if distance <= .35 or lat < PGY10[0]:
                 self._advance("mzb_inbound", v)
         if self.stage == "mzb_inbound":
             target_true, distance = bearing_distance(lat, lon, MZB)
-            target_ias = 74. if alt < 2000 else 85.
+            target_ias = climb_ias
             if distance <= .55:
                 if alt < 4800:
                     raise ValueError("MZB reached before 5000-foot climb gate")
                 self._advance("bakel_vector", v)
         if self.stage == "bakel_vector":
             target_true, distance = bearing_distance(lat, lon, BAKEL)
-            target_ias = 100.
+            target_ias = p.cruise_kias
             if distance <= .55:
                 self._advance("mibby", v)
         if self.stage == "missed_runway":
             target_true = RUNWAY.heading_true_deg
-            target_alt, target_ias = 3000., 74.
+            target_alt, target_ias = 3000., p.missed_kias
             if alt >= 1100:
                 self._advance("missed_270", v)
         if self.stage == "missed_270":
             target_true = (270.+variation)%360
-            target_alt, target_ias = 3500., 74.
+            target_alt, target_ias = 3500., p.vy_kias
             # Pilot-directed simulated vector replaces the published CARIF
             # segment once established in the climb at 3500 ft.
             if alt >= 3500:
                 self._advance("retry_bakel", v)
         if self.stage == "carif_inbound":
             target_true, distance = bearing_distance(lat, lon, CARIF)
-            target_alt, target_ias = 3000., 95.
+            target_alt, target_ias = 3000., p.approach_intermediate_kias
             if distance <= .55:
                 self._advance("retry_bakel", v)
         if self.stage == "retry_bakel":
             target_true, distance = bearing_distance(lat, lon, BAKEL)
-            target_alt, target_ias = 5000., 85. if alt < 4800 else 100.
+            target_alt, target_ias = 5000., p.climb_enroute_kias if alt < 4800 else p.cruise_kias
             if distance <= .55:
                 self._advance("mibby", v)
         if self.stage == "mibby":
             target_true, distance = bearing_distance(lat, lon, MIBBY)
             # First pass undershot 4200 by ~80 ft; retain a 100-ft margin.
-            target_alt, target_ias = 4300., 100.
+            target_alt, target_ias = 4300., p.approach_initial_kias
             if distance <= .35:
                 self._advance("nesty", v)
         if self.stage == "nesty":
             target_true, distance = bearing_distance(lat, lon, NESTY)
             # Keep a 100-ft margin above the charted 3600-ft segment floor;
             # the first descent demonstrated roughly 70 ft of undershoot.
-            target_alt, target_ias = 3750., 95.
+            target_alt, target_ias = 3750., p.approach_intermediate_kias
             if distance <= .35:
                 self._advance("penyy", v)
         if self.stage == "penyy":
             target_true, distance = bearing_distance(lat, lon, PENYY)
-            target_alt, target_ias = 2650., 90.
+            target_alt, target_ias = 2650., p.approach_intermediate_kias-5.
             if distance <= .3:
                 if v["nav1_frequency_10khz"] != 11195 or not v["nav1_lateral_valid"] or v["nav1_glideslope_flag"]:
                     raise ValueError("ILS signal not established at PENYY")
@@ -150,7 +154,7 @@ class MissionController:
             remaining_nm = max(0., -along/1852)
             target_true = RUNWAY.heading_true_deg-clamp(cross*.12, -12., 12.)
             target_alt = RUNWAY.airport_elev_ft + (RUNWAY.aimpoint_m-along)*math.tan(math.radians(3.))*3.28084
-            target_ias = 80. if remaining_nm > 3 else 73.
+            target_ias = p.approach_clean_kias if remaining_nm > 3 else p.ils_final_kias
             if remaining_nm <= 1.2:
                 if (abs(cross)>90 or abs(v["nav1_hdef_dots"])>1.
                         or abs(v["nav1_vdef_dots"])>1. or v["nav1_glideslope_flag"]):
@@ -169,7 +173,9 @@ class MissionController:
                 or self.stage == "missed_runway"
                 or self.stage == "missed_270" and alt < 3450
                 or self.stage == "retry_bakel" and alt < 4800):
-            target_ias = 74. if alt < 2000 or self.stage.startswith("missed_") else 85.
+            target_ias = (p.missed_kias if self.stage == "missed_runway"
+                          else p.vy_kias if alt < 2000 or self.stage == "missed_270"
+                          else p.climb_enroute_kias)
             pitch_target = clamp(7.+.4*(ias-target_ias), 3., 12.)
             throttle = 1.
         elif self.stage == "ils":
@@ -191,7 +197,7 @@ class MissionController:
             pitch_target = clamp(-2.+vvi_error*.006+self.ils_pitch_i, -6., 6.)
             speed_error = target_ias-ias
             self.power_i = clamp(self.power_i+speed_error*.001*dt*10., -.3, .3)
-            throttle = clamp(.48+speed_error*.02+self.power_i, .05, .75)
+            throttle = clamp(p.ils_base_throttle+speed_error*.02+self.power_i, .05, .75)
         else:
             alt_error = target_alt-alt
             target_vvi = clamp(alt_error*2., -650., 650.)
@@ -202,15 +208,15 @@ class MissionController:
                 self.alt_i = candidate
             speed_error = target_ias-ias
             candidate = clamp(self.power_i+speed_error*.0015*dt*10., -.35, .35)
-            trial = .55+speed_error*.020+candidate
+            trial = p.cruise_base_throttle+speed_error*.020+candidate
             if .12 < trial < 1. or (trial >= 1 and candidate < self.power_i) or (trial <= .12 and candidate > self.power_i):
                 self.power_i = candidate
-            throttle = clamp(.55+speed_error*.020+self.power_i, .12, 1.)
+            throttle = clamp(p.cruise_base_throttle+speed_error*.020+self.power_i, .12, 1.)
         pitch = clamp((pitch_target-v["pitch_deg"])*.09-v["pitch_rate_dps"]*.030, -.4, .45)
         self.trim = clamp(self.trim+clamp(pitch*.35*dt, -.06*dt, .06*dt), -.6, .6)
         yaw = clamp(.07*throttle*(100./max(ias, 40.))**2+roll*.25-v["beta_deg"]*.045, -.35, .35)
-        flap = (1/3 if self.stage == "ils" and target_ias <= 80 and ias <= 85
-                else 1/3 if self.stage == "missed_runway" and v["vvi_fpm"] < 200
+        flap = (p.ils_flap_ratio if self.stage == "ils" and target_ias <= p.ils_final_kias and ias <= p.ils_final_kias+5
+                else p.missed_flap_ratio if self.stage == "missed_runway" and v["vvi_fpm"] < 200
                 else 0.)
         command = {"roll": roll, "pitch": pitch, "yaw": yaw, "throttle": throttle,
                    "flap": flap, "trim": self.trim, "brake": 0.}
