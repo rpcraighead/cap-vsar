@@ -39,6 +39,7 @@ def inventory(xplane, include_landing=False, include_surface=False, include_miss
         sources.append(ROOT / "xplane/capvsar_surface.py")
     if include_mission:
         sources.append(ROOT / "xplane/capvsar_mission.py")
+        sources.append(ROOT / "xplane/capvsar_surface.py")
     installed = [plugins / path.name for path in sources]
     return {
         "repository": str(ROOT), "commit": git("rev-parse", "HEAD"),
@@ -70,7 +71,7 @@ def stage_observer(destination, qualification_aircraft=None, mode="qualification
              "capvsar_flight_control_mapping.py", "capvsar_telemetry.py", "capvsar_qualification.py")
     extras = (("capvsar_landing.py",) if mode == "landing" else
               ("capvsar_surface.py",) if mode == "surface" else
-              ("capvsar_mission.py",) if mode == "mission" else ())
+              ("capvsar_mission.py", "capvsar_surface.py") if mode == "mission" else ())
     for name in names + extras:
         shutil.copy2(ROOT / "xplane" / name, destination / name)
     session = secrets.token_hex(16)

@@ -32,7 +32,7 @@ class BridgeClient:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
             # Reset is restricted to paused/released state and may rebuild the
             # simulator's weather/engine setup. Never extend live-frame leases.
-            conn.settimeout(20.0 if action == "lab_reset" else 1.0)
+            conn.settimeout(20.0 if action == "lab_reset" else 3.0 if action == "lab_start" else 1.0)
             conn.connect(self.config["socket_path"])
             conn.sendall(json.dumps(payload, allow_nan=False).encode() + b"\n")
             raw = bytearray()

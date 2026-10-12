@@ -19,7 +19,7 @@ PENYY = (32.769802778, -117.021991667)
 CARIF = (33.038597222, -117.332705556)
 RUNWAY = RUNWAYS["KMYF 28R"]
 STAGES = ("runway_climb", "pgy_intercept", "pgy_inbound", "mzb_inbound",
-          "bakel_vector", "mibby", "nesty", "penyy", "ils", "landing",
+          "bakel_vector", "vector_heading", "mibby", "nesty", "penyy", "ils", "landing",
           "missed_runway", "missed_270", "carif_inbound", "retry_bakel")
 
 
@@ -51,12 +51,63 @@ class MissionController:
         self.landing = LandingController("KMYF 28R")
         self.last_diagnostics = {}
         self.transitions = []
+        self.vector_heading_mag = None
+        self.vector_alt_ft = None
+        self.missed_turn_alt_ft = 1100.
 
-    def _advance(self, new, v):
-        self.transitions.append({"from": self.stage, "to": new,
+    def retask(self, task, snapshot):
+        """Apply a bounded simulated vector on a live telemetry frame."""
+        v = snapshot["values"]
+        alt = v["altitude_indicated_ft"]
+        if (v["paused"] or v["on_ground"] or alt < 3000 or
+                self.stage not in ("pgy_inbound", "mzb_inbound", "bakel_vector",
+                                   "retry_bakel", "vector_heading")):
+            raise ValueError("Retask requires an airborne en-route segment above 3000 ft")
+        if not isinstance(task, dict) or type(task.get("kind")) is not str:
+            raise ValueError("Invalid retask request")
+        kind = task["kind"]
+        if kind == "direct":
+            if set(task) != {"kind", "fix", "altitude_ft"} or task["fix"] != "BAKEL":
+                raise ValueError("Only explicit direct BAKEL with altitude is supported")
+            target_alt = task["altitude_ft"]
+            if type(target_alt) not in (int, float) or not math.isfinite(target_alt) or not 4200 <= target_alt <= 6000:
+                raise ValueError("Direct BAKEL altitude outside 4200–6000 ft")
+            self.vector_heading_mag = None
+            self.vector_alt_ft = float(target_alt)
+            self._advance("retry_bakel", v)
+        elif kind == "heading":
+            if set(task) != {"kind", "heading_mag_deg", "altitude_ft"}:
+                raise ValueError("Heading vector requires heading and altitude")
+            heading, target_alt = task["heading_mag_deg"], task["altitude_ft"]
+            if (type(heading) not in (int, float) or not math.isfinite(heading) or not 0 <= heading < 360
+                    or type(target_alt) not in (int, float) or not math.isfinite(target_alt)
+                    or not 4200 <= target_alt <= 6000):
+                raise ValueError("Heading or altitude outside vector bounds")
+            self.vector_heading_mag = float(heading)
+            self.vector_alt_ft = float(target_alt)
+            self._advance("vector_heading", v)
+        elif kind == "altitude":
+            if set(task) != {"kind", "altitude_ft"}:
+                raise ValueError("Altitude request has unexpected fields")
+            target_alt = task["altitude_ft"]
+            if type(target_alt) not in (int, float) or not math.isfinite(target_alt) or not 4200 <= target_alt <= 6000:
+                raise ValueError("Altitude outside 4200–6000 ft")
+            self.vector_alt_ft = float(target_alt)
+        else:
+            raise ValueError("Unknown retask kind")
+        return {"kind": kind, "stage": self.stage, "heading_mag_deg": self.vector_heading_mag,
+                "altitude_ft": self.vector_alt_ft, "sim_time_s": v["sim_time_s"]}
+
+    def _advance(self, new, v, reason=None):
+        transition = {"from": self.stage, "to": new,
                                  "sim_time_s": v["sim_time_s"],
                                  "lat": v["latitude_deg"], "lon": v["longitude_deg"],
-                                 "altitude_ft": v["altitude_indicated_ft"]})
+                                 "altitude_ft": v["altitude_indicated_ft"]}
+        if reason is not None:
+            transition["reason"] = reason
+        self.transitions.append(transition)
+        if new == "missed_runway":
+            self.missed_turn_alt_ft = max(1100., v["altitude_indicated_ft"]+200.)
         self.stage = new
         self.alt_i = 0.
         self.power_i = 0.
@@ -103,10 +154,13 @@ class MissionController:
             target_ias = 100.
             if distance <= .55:
                 self._advance("mibby", v)
+        if self.stage == "vector_heading":
+            target_true = (self.vector_heading_mag+variation)%360
+            target_ias = 100.
         if self.stage == "missed_runway":
             target_true = RUNWAY.heading_true_deg
-            target_alt, target_ias = 3000., 74.
-            if alt >= 1100:
+            target_alt, target_ias = max(3000., self.missed_turn_alt_ft), 74.
+            if alt >= self.missed_turn_alt_ft:
                 self._advance("missed_270", v)
         if self.stage == "missed_270":
             target_true = (270.+variation)%360
@@ -124,6 +178,7 @@ class MissionController:
             target_true, distance = bearing_distance(lat, lon, BAKEL)
             target_alt, target_ias = 5000., 85. if alt < 4800 else 100.
             if distance <= .55:
+                self.vector_alt_ft = None
                 self._advance("mibby", v)
         if self.stage == "mibby":
             target_true, distance = bearing_distance(lat, lon, MIBBY)
@@ -143,9 +198,13 @@ class MissionController:
             target_alt, target_ias = 2650., 90.
             if distance <= .3:
                 if v["nav1_frequency_10khz"] != 11195 or not v["nav1_lateral_valid"] or v["nav1_glideslope_flag"]:
-                    raise ValueError("ILS signal not established at PENYY")
+                    self._advance("missed_runway", v, "ILS signal not established at PENYY")
+                    return self.step(snapshot)
                 self._advance("ils", v)
         if self.stage == "ils":
+            if not v["nav1_lateral_valid"] or v["nav1_glideslope_flag"]:
+                self._advance("missed_runway", v, "ILS signal lost on final")
+                return self.step(snapshot)
             along, cross = RUNWAY.coordinates(lat, lon)
             remaining_nm = max(0., -along/1852)
             target_true = RUNWAY.heading_true_deg-clamp(cross*.12, -12., 12.)
@@ -154,7 +213,8 @@ class MissionController:
             if remaining_nm <= 1.2:
                 if (abs(cross)>90 or abs(v["nav1_hdef_dots"])>1.
                         or abs(v["nav1_vdef_dots"])>1. or v["nav1_glideslope_flag"]):
-                    raise ValueError("ILS unstable at 1.2 NM; missed approach required")
+                    self._advance("missed_runway", v, "ILS unstable at 1.2 NM")
+                    return self.step(snapshot)
                 self._advance("landing", v)
         if self.stage == "landing":
             command = self.landing.step(snapshot)
@@ -162,6 +222,8 @@ class MissionController:
                                      "nav1_hdef_dots": v["nav1_hdef_dots"],
                                      "nav1_vdef_dots": v["nav1_vdef_dots"]}
             return command
+        if self.vector_alt_ft is not None and self.stage in ("pgy_inbound", "mzb_inbound", "vector_heading", "retry_bakel", "bakel_vector"):
+            target_alt = self.vector_alt_ft
         heading_error = wrap180(target_true-v["heading_true_deg"])
         bank_target = clamp(heading_error*1.1, -20., 20.)
         roll = clamp((bank_target-v["roll_deg"])*.020-v["roll_rate_dps"]*.022, -.35, .35)
@@ -170,11 +232,12 @@ class MissionController:
                 or self.stage == "missed_270" and alt < 3450
                 or self.stage == "retry_bakel" and alt < 4800):
             target_ias = 74. if alt < 2000 or self.stage.startswith("missed_") else 85.
-            pitch_target = clamp(7.+.4*(ias-target_ias), 3., 12.)
+            # The first KSEE sortie drifted to 79–80 KIAS near 1,800 ft,
+            # yielding a 493 ft/NM half-mile window. Hold the stock C172
+            # nearer its 74-KIAS Vy with more speed-error pitch authority.
+            pitch_target = clamp(8.+.8*(ias-target_ias), 3., 12.)
             throttle = 1.
         elif self.stage == "ils":
-            if not v["nav1_lateral_valid"] or v["nav1_glideslope_flag"]:
-                raise ValueError("ILS signal lost on final")
             # Glideslope deviation is the primary vertical guidance. In this
             # X-Plane instrument positive vdef is ABOVE the beam, established
             # by correlating the recorded aircraft altitude and geometry.
