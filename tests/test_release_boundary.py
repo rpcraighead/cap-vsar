@@ -73,26 +73,49 @@ class ReleaseBoundary(unittest.TestCase):
             self.assertIn(f"instruments/{name}/resources/faceplate.png", tracked_files())
 
 
-# B2-10: KNOWN-OPEN, deliberately not fixed in code. This render shows
-# Laminar's stock Cessna 172SP mesh in an N429CP livery - the same category of
-# question as D-5's stock-MFD tile - and no longer depicts the aircraft the
-# package ships. Whether it stays is the maintainer's call; until then it is
-# listed here so it is a recorded decision rather than an oversight. Resolving
-# it (replace or remove the figure) means deleting the entry, and the test
-# below then insists the list is kept honest.
-KNOWN_OPEN_THIRD_PARTY_ARTWORK = {
-    "docs/figures/manual/fig_c182t_aircraft.png":
-        "B2-10: render of Laminar's C172SP mesh; handbook figure 8",
-    "website/images/fig_c182t_aircraft.png":
-        "B2-10: same render, used by website/index.html",
-}
+# D-5 / B2-10, resolved 2026-10-12: third-party artwork that used to be tracked.
+# The Laminar C172SP render (handbook figure 8, website), the CAP iCUT review PDF
+# and any composite that embeds the stock Air Manager G1000 tile are gone, and the
+# documents that embedded the render were regenerated without it.
+REMOVED_THIRD_PARTY = (
+    "docs/figures/manual/fig_c182t_aircraft.png",
+    "website/images/fig_c182t_aircraft.png",
+    "docs/mission-base-radio/icut-review.pdf",
+)
 
 
-class KnownOpenItems(unittest.TestCase):
-    def test_known_open_artwork_is_listed_and_still_tracked(self):
+class ThirdPartyArtworkIsGone(unittest.TestCase):
+    def test_the_files_are_not_tracked(self):
         files = set(tracked_files())
-        for path, why in KNOWN_OPEN_THIRD_PARTY_ARTWORK.items():
-            self.assertIn(path, files, f"{path} is gone - resolved? remove it from the list ({why})")
+        for path in REMOVED_THIRD_PARTY:
+            self.assertNotIn(path, files, f"{path} is third-party material (D-5/B2-10)")
+
+    def test_nothing_still_points_at_them(self):
+        needles = ("fig_c182t_aircraft", "icut-review.pdf")
+        for path in tracked_files():
+            if not path.endswith((".html", ".md", ".py", ".js", ".css")):
+                continue
+            if path in ("CHANGELOG.md", "docs/BUG_TRACKER.md", "tests/test_release_boundary.py") \
+                    or path.startswith("docs/PROJECT_REVIEW"):
+                continue            # the record may name what was removed
+            text = (ROOT / path).read_text(errors="ignore")
+            for needle in needles:
+                self.assertNotIn(needle, text, f"{path} still references {needle}")
+
+    def test_generated_documents_do_not_embed_the_render(self):
+        import hashlib, zipfile
+        removed = {REMOVED_RENDER_SHA256}
+        for path in tracked_files():
+            if path.endswith((".docx", ".pptx")):
+                with zipfile.ZipFile(ROOT / path) as z:
+                    for name in z.namelist():
+                        if "/media/" in name:
+                            self.assertNotIn(hashlib.sha256(z.read(name)).hexdigest(), removed,
+                                             f"{path}:{name} embeds a removed third-party image")
+
+
+# sha-256 of the removed render is enough to recognise it; the bytes are not kept.
+REMOVED_RENDER_SHA256 = "037e7304d83aacf835bf753c79d7b3ff601a96482d9a991248d9764deecd176d"
 
 
 class DocsSiteDoesNotRepublishVendorManuals(unittest.TestCase):

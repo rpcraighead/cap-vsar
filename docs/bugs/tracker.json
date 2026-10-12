@@ -1472,7 +1472,7 @@
       "effort": "M",
       "component": "docs",
       "cluster": "C14",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "docs/figures/rt600_p08_front_panel-08.png",
         "docs/figures/tdfm_p11_front_panel-11.png",
@@ -1485,7 +1485,7 @@
         "cap-c182t-mo-station.zip"
       ],
       "problem": "Found while doing D-4. Untracking the manuals closed only half the question. Eight PNGs in docs/figures/ are page extracts from the same Becker/RHOTHETA/Technisonic/Garmin manuals (the -pNN- in each name is the source page), they are still tracked, and build_radio_reference_doc.py embeds three of them into a generated document. panels/cap-c182t-mo-station/preview.png and the root zip additionally embed the stock Air Manager G1000 instrument preview, a Sim Innovations asset. And git rm --cached does not rewrite history: the nine manuals D-4 untracked are still in every existing commit, so a push to a public remote publishes them anyway.",
-      "fix": "Decide each case: the figure extracts are drawing references and could be replaced by our own redrawn artwork (make_panel_artwork.py already redraws these panels) or kept locally like the manuals, but build_radio_reference_doc.py must stop embedding them either way. Regenerate the panel preview without the stock MFD tile. Before any public push, scrub history with git-filter-repo - untracking alone is not enough. PARTIALLY CLOSED 2026-09-15 (cca36e2): nine page extracts untracked and ignored; the radio reference document now embeds our own redrawn faceplates and BOTH tracked artifacts were regenerated (.docx 3,391,958 -> 1,374,133 bytes, .pdf 1,885,160 -> 728,782; the old PDF's 1653x2339 285-DPI page scans are gone); the station panel preview no longer composites the stock Sim Innovations MFD tile, and now renders on a machine with no Air Manager installed. Also found and closed: D-4's manual untracking had never landed on main - it exists only on the unmerged fix/claude-console-2026-09-13 branch - so nine vendor PDFs were still tracked while .gitignore listed them. STAYS OPEN: no history rewrite, so D-5's own verify criterion (a fresh public clone containing no manufacturer page image) is unmet until the scrub agreed in D-4 happens before sharing. tests/test_release_boundary.py enforces the rest.",
+      "fix": "Decide each case: the figure extracts are drawing references and could be replaced by our own redrawn artwork (make_panel_artwork.py already redraws these panels) or kept locally like the manuals, but build_radio_reference_doc.py must stop embedding them either way. Regenerate the panel preview without the stock MFD tile. Before any public push, scrub history with git-filter-repo - untracking alone is not enough. PARTIALLY CLOSED 2026-09-15 (cca36e2): nine page extracts untracked and ignored; the radio reference document now embeds our own redrawn faceplates and BOTH tracked artifacts were regenerated (.docx 3,391,958 -> 1,374,133 bytes, .pdf 1,885,160 -> 728,782; the old PDF's 1653x2339 285-DPI page scans are gone); the station panel preview no longer composites the stock Sim Innovations MFD tile, and now renders on a machine with no Air Manager installed. Also found and closed: D-4's manual untracking had never landed on main - it exists only on the unmerged fix/claude-console-2026-09-13 branch - so nine vendor PDFs were still tracked while .gitignore listed them. STAYS OPEN: no history rewrite, so D-5's own verify criterion (a fresh public clone containing no manufacturer page image) is unmet until the scrub agreed in D-4 happens before sharing. tests/test_release_boundary.py enforces the rest. 2026-10-12: the eight page-extract figures were already out of the tree; their history, the nine manuals and the Garmin text dump are purged from the public copy by scripts/cap-vsar-github-sanitize.sh (git-filter-repo, working tree unchanged). Panel previews draw the stock Air Manager tile as a placeholder (NOTICE updated).",
       "verify": "A fresh clone of the public repo contains no manufacturer page image, and git log --all -- docs/*.pdf returns nothing.",
       "depends_on": [
         "D-4"
@@ -4300,14 +4300,14 @@
       "effort": "S",
       "component": "docs",
       "cluster": "C16",
-      "status": "open",
+      "status": "fixed",
       "files": [
         "docs/figures/manual/fig_c182t_aircraft.png",
         "website/images/fig_c182t_aircraft.png"
       ],
       "problem": "See docs/PROJECT_REVIEW_2026-10-10.md section 8.",
-      "fix": "",
-      "notes": "Recorded in KNOWN_OPEN_THIRD_PARTY_ARTWORK in tests/test_release_boundary.py. Same category as D-5.",
+      "fix": "2026-10-12: fig_c182t_aircraft.png removed (docs and website); handbook figure 8 dropped and the handbook HTML/PDF regenerated; the radio-features docx/pdf regenerated without it; tests/test_release_boundary.py::ThirdPartyArtworkIsGone keeps it out. The CAP iCUT review PDF was removed at the same time.",
+      "notes": "",
       "depends_on": [],
       "done_when": null,
       "verify": ""

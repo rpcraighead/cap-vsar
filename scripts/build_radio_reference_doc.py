@@ -261,13 +261,6 @@ def build_documents():
     r_meta.font.size = Pt(9)
     r_meta.font.color.rgb = COLOR_MUTED
 
-    add_image_with_caption(
-        doc,
-        DOCS_DIR / "figures/manual/fig_c182t_aircraft.png",
-        "Figure 1: Civil Air Patrol Cessna 182T NAV III Airborne Direction Finding & Tactical Communications Platform.",
-        width_inches=5.8,
-    )
-
     # -------------------------------------------------------------
     # SECTION 1: EXECUTIVE OVERVIEW & DOCTRINAL FOUNDATION
     # -------------------------------------------------------------
@@ -337,7 +330,7 @@ def build_documents():
     add_image_with_caption(
         doc,
         ROOT / "instruments/cap-fm-tdfm-136b/resources/faceplate.png",
-        "Figure 2: CAP V-SAR rendering of the Technisonic TDFM-136B control head as simulated.",
+        "Figure 1: CAP V-SAR rendering of the Technisonic TDFM-136B control head as simulated.",
         width_inches=5.8,
     )
 
@@ -394,7 +387,7 @@ def build_documents():
     add_image_with_caption(
         doc,
         ROOT / "instruments/mo-audio-panel-gma1347/resources/faceplate.png",
-        "Figure 3: CAP V-SAR rendering of the GMA 1347 audio panel as simulated.",
+        "Figure 2: CAP V-SAR rendering of the GMA 1347 audio panel as simulated.",
         width_inches=1.8,
     )
 
@@ -448,7 +441,7 @@ def build_documents():
     add_image_with_caption(
         doc,
         ROOT / "instruments/becker-sar-df-517/resources/faceplate.png",
-        "Figure 4: CAP V-SAR rendering of the Becker SAR-DF 517 display control unit as simulated.",
+        "Figure 3: CAP V-SAR rendering of the Becker SAR-DF 517 display control unit as simulated.",
         width_inches=5.8,
     )
 
@@ -489,7 +482,7 @@ def build_documents():
     add_image_with_caption(
         doc,
         ROOT / "instruments/rhotheta-rt-600/resources/faceplate.png",
-        "Figure 5: CAP V-SAR rendering of the RHOTHETA RT-600 DCU 600 as simulated.",
+        "Figure 4: CAP V-SAR rendering of the RHOTHETA RT-600 DCU 600 as simulated.",
         width_inches=5.8,
     )
 
@@ -540,7 +533,7 @@ def build_documents():
     add_image_with_caption(
         doc,
         DOCS_DIR / "figures/manual/fig_radio_apx.png",
-        "Figure 6: Motorola APX Tactical VHF-FM Ground Control Head with CAP Zone/Channel Plan.",
+        "Figure 5: Motorola APX Tactical VHF-FM Ground Control Head with CAP Zone/Channel Plan.",
         width_inches=5.2,
     )
 
@@ -566,7 +559,7 @@ def build_documents():
     add_image_with_caption(
         doc,
         DOCS_DIR / "figures/manual/fig_radio_icom.png",
-        "Figure 7: Icom IC-A120 Ground Airband VHF-AM Base Station Transceiver.",
+        "Figure 6: Icom IC-A120 Ground Airband VHF-AM Base Station Transceiver.",
         width_inches=5.2,
     )
 
@@ -582,7 +575,7 @@ def build_documents():
     add_image_with_caption(
         doc,
         DOCS_DIR / "figures/manual/fig_radio_dual.png",
-        "Figure 8: Dual-Station Mission Base Console: Motorola APX Tactical VHF-FM & Icom IC-A120 Aeronautical SAR.",
+        "Figure 7: Dual-Station Mission Base Console: Motorola APX Tactical VHF-FM & Icom IC-A120 Aeronautical SAR.",
         width_inches=5.5,
     )
 

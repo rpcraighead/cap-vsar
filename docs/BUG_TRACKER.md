@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 218 items, 27 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 218 items, 25 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -209,7 +209,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [D-2](#d-2) | P2 | medium | README and website contradict the code | docs | C14 | M | — | fixed |
 | [D-3](#d-3) | P2 | medium | CONOPS and referenced infra docs are missing from the repo | docs | C14 | S | — | resolved |
 | [D-4](#d-4) | P2 | medium | No LICENSE despite deriving from Laminar assets | docs | C14 | S | O-1 | fixed |
-| [D-5](#d-5) | P2 | medium | Manufacturer artwork is still redistributed, as figure extracts and in git history | docs | C14 | M | D-4 | open |
+| [D-5](#d-5) | P2 | medium | Manufacturer artwork is still redistributed, as figure extracts and in git history | docs | C14 | M | D-4 | fixed |
 | [F-6](#f-6) | P2 | medium | Unescaped server strings in four views (HTML injection) | console-ui | C8 | S | — | fixed |
 | [F-7](#f-7) | P2 | medium | Legacy console: precedence bug and autoplay-blocked audio | console-ui | C9 | S | — | fixed |
 | [F-8](#f-8) | P2 | medium | No bearing intersection maths despite the README | console-ui | C8 | M | — | fixed |
@@ -246,7 +246,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [A2-9](#a2-9) | P3 | low | Builder hard-codes /home/ron paths | infra | C18 | S | — | fixed |
 | [AI-18](#ai-18) | P3 | low | SIGTERM skips every shutdown safeguard (red team RT-11) | infra | C15 | S | — | open |
 | [AI-19](#ai-19) | P3 | low | Advisory chat's no-action guard is a keyword list with no output filter (red team RT-13) | infra | C15 | S | — | open |
-| [B2-10](#b2-10) | P3 | low | Tracked fig_c182t_aircraft.png is a render of Laminar's C172 model | docs | C16 | S | — | open |
+| [B2-10](#b2-10) | P3 | low | Tracked fig_c182t_aircraft.png is a render of Laminar's C172 model | docs | C16 | S | — | fixed |
 | [B2-11](#b2-11) | P3 | low | c182t_corrections radial scale ignores the JSON axis | infra | C16 | S | — | fixed |
 | [B2-3](#b2-3) | P3 | low | Selection icon renders the literal text &bull; | infra | C16 | S | — | fixed |
 | [B2-6](#b2-6) | P3 | low | Flap animation range disagrees with patched travel | infra | C16 | S | — | fixed |
@@ -1662,11 +1662,11 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Manufacturer artwork is still redistributed, as figure extracts and in git history**
 
-`P2` · `medium` · `legal` · Docs / record · cluster C14 (Contract & documentation truth) · effort M · wave 3 · **open**
+`P2` · `medium` · `legal` · Docs / record · cluster C14 (Contract & documentation truth) · effort M · wave 3 · **fixed**
 
 - **Files:** `docs/figures/rt600_p08_front_panel-08.png`, `docs/figures/tdfm_p11_front_panel-11.png`, `docs/figures/gma1347_panel-04.png`, `docs/figures/gma1347_panel-05.png`, `docs/figures/b517_p29_bearing_controls-29.png`, `docs/figures/capdeck_p8-08.png`, `scripts/build_radio_reference_doc.py:326,383,478`, `panels/cap-c182t-mo-station/preview.png`, `cap-c182t-mo-station.zip`
 - **Problem:** Found while doing D-4. Untracking the manuals closed only half the question. Eight PNGs in docs/figures/ are page extracts from the same Becker/RHOTHETA/Technisonic/Garmin manuals (the -pNN- in each name is the source page), they are still tracked, and build_radio_reference_doc.py embeds three of them into a generated document. panels/cap-c182t-mo-station/preview.png and the root zip additionally embed the stock Air Manager G1000 instrument preview, a Sim Innovations asset. And git rm --cached does not rewrite history: the nine manuals D-4 untracked are still in every existing commit, so a push to a public remote publishes them anyway.
-- **Fix:** Decide each case: the figure extracts are drawing references and could be replaced by our own redrawn artwork (make_panel_artwork.py already redraws these panels) or kept locally like the manuals, but build_radio_reference_doc.py must stop embedding them either way. Regenerate the panel preview without the stock MFD tile. Before any public push, scrub history with git-filter-repo - untracking alone is not enough. PARTIALLY CLOSED 2026-09-15 (cca36e2): nine page extracts untracked and ignored; the radio reference document now embeds our own redrawn faceplates and BOTH tracked artifacts were regenerated (.docx 3,391,958 -> 1,374,133 bytes, .pdf 1,885,160 -> 728,782; the old PDF's 1653x2339 285-DPI page scans are gone); the station panel preview no longer composites the stock Sim Innovations MFD tile, and now renders on a machine with no Air Manager installed. Also found and closed: D-4's manual untracking had never landed on main - it exists only on the unmerged fix/claude-console-2026-09-13 branch - so nine vendor PDFs were still tracked while .gitignore listed them. STAYS OPEN: no history rewrite, so D-5's own verify criterion (a fresh public clone containing no manufacturer page image) is unmet until the scrub agreed in D-4 happens before sharing. tests/test_release_boundary.py enforces the rest.
+- **Fix:** Decide each case: the figure extracts are drawing references and could be replaced by our own redrawn artwork (make_panel_artwork.py already redraws these panels) or kept locally like the manuals, but build_radio_reference_doc.py must stop embedding them either way. Regenerate the panel preview without the stock MFD tile. Before any public push, scrub history with git-filter-repo - untracking alone is not enough. PARTIALLY CLOSED 2026-09-15 (cca36e2): nine page extracts untracked and ignored; the radio reference document now embeds our own redrawn faceplates and BOTH tracked artifacts were regenerated (.docx 3,391,958 -> 1,374,133 bytes, .pdf 1,885,160 -> 728,782; the old PDF's 1653x2339 285-DPI page scans are gone); the station panel preview no longer composites the stock Sim Innovations MFD tile, and now renders on a machine with no Air Manager installed. Also found and closed: D-4's manual untracking had never landed on main - it exists only on the unmerged fix/claude-console-2026-09-13 branch - so nine vendor PDFs were still tracked while .gitignore listed them. STAYS OPEN: no history rewrite, so D-5's own verify criterion (a fresh public clone containing no manufacturer page image) is unmet until the scrub agreed in D-4 happens before sharing. tests/test_release_boundary.py enforces the rest. 2026-10-12: the eight page-extract figures were already out of the tree; their history, the nine manuals and the Garmin text dump are purged from the public copy by scripts/cap-vsar-github-sanitize.sh (git-filter-repo, working tree unchanged). Panel previews draw the stock Air Manager tile as a placeholder (NOTICE updated).
 - **Done when:** A fresh clone of the public repo contains no manufacturer page image, and git log --all -- docs/*.pdf returns nothing.
 - **Depends on:** D-4
 
@@ -2074,11 +2074,11 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Tracked fig_c182t_aircraft.png is a render of Laminar's C172 model**
 
-`P3` · `low` · `bug` · Docs / record · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **open**
+`P3` · `low` · `bug` · Docs / record · cluster C16 (Project review 2026-10-10 (waves A-D)) · effort S · wave 3 · **fixed**
 
 - **Files:** `docs/figures/manual/fig_c182t_aircraft.png`, `website/images/fig_c182t_aircraft.png`
 - **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 8.
-- **Fix:** 
+- **Fix:** 2026-10-12: fig_c182t_aircraft.png removed (docs and website); handbook figure 8 dropped and the handbook HTML/PDF regenerated; the radio-features docx/pdf regenerated without it; tests/test_release_boundary.py::ThirdPartyArtworkIsGone keeps it out. The CAP iCUT review PDF was removed at the same time.
 - **Done when:** 
 
 ### B2-11

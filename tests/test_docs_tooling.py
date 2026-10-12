@@ -85,7 +85,7 @@ class GenerateManual(unittest.TestCase):
 
     def test_html_figure_links_are_relative_and_resolve(self):
         srcs = re.findall(r'<img[^>]+src="([^"]+)"', self.gm.HTML_CONTENT)
-        self.assertGreaterEqual(len(srcs), 8)
+        self.assertGreaterEqual(len(srcs), 7)       # 7 since the Laminar render (figure 8) was removed
         for src in srcs:
             self.assertFalse(src.startswith("/"), src)
             self.assertNotIn("://", src)
