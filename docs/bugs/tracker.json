@@ -4688,6 +4688,28 @@
       "verify": "Index exists and is linked from README.",
       "depends_on": [],
       "done_when": null
+    },
+    {
+      "id": "A2-12",
+      "title": "Empty weight is the POH sample aircraft, not a CAP 182T",
+      "type": "improvement",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 3,
+      "effort": "S",
+      "component": "infra",
+      "cluster": "C18",
+      "status": "open",
+      "files": [
+        "scripts/build_c182t_package.py",
+        "services/flightplanner/app.py",
+        "tests/test_loading_baseline.py"
+      ],
+      "problem": "1,924 lb is the handbook sample (the shared planner/simulator baseline chosen under L-7a); a CAP 182T NAV III with mission equipment is heavier.",
+      "fix": "If a squadron 182T weight-and-balance sheet is available, move builder and planner to it together.",
+      "verify": "test_loading_baseline.py passes with the new shared values.",
+      "depends_on": [],
+      "done_when": null
     }
   ]
 }

@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 217 items, 38 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 218 items, 39 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -10,15 +10,15 @@ IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split ou
 
 | | critical | high | medium | low | total |
 |---|---|---|---|---|---|
-| by severity | 14 | 58 | 79 | 66 | 217 |
+| by severity | 14 | 58 | 79 | 67 | 218 |
 
 | P0 | P1 | P2 | P3 |
 |---|---|---|---|
-| 20 | 58 | 76 | 63 |
+| 20 | 58 | 76 | 64 |
 
 | Component | Items |
 |---|---|
-| Deployment / infrastructure | 69 |
+| Deployment / infrastructure | 70 |
 | Flight planner | 31 |
 | Exercise console (backend) | 30 |
 | Air Manager instruments | 28 |
@@ -40,7 +40,7 @@ _Wave dates track the illustrative calendar in docs/USE_CASE_SAREX_REHEARSAL.md 
 - **Wave 0** (11 items) — Now — make the work safe to do at all.
 - **Wave 1** (27 items) — Before session 1 (base stand-up). Nothing flies; base, planner and comms must work.
 - **Wave 2** (46 items) — Before session 2 (full mission, three aircraft, injected effects).
-- **Wave 3** (109 items) — Before session 3 (dress rehearsal) and the live SAREX.
+- **Wave 3** (110 items) — Before session 3 (dress rehearsal) and the live SAREX.
 - **Wave 4** (24 items) — After the SAREX — architecture, tooling, CalTopo phase 2.
 
 ## Clusters
@@ -66,7 +66,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | C15 | Service boundaries (architecture) | AI-22, AI-11, AI-1, AI-10, AI-12, AI-13, AI-2, AI-21, AI-23, AI-24, AI-3, AI-5, AI-6, AI-8, AI-9, AI-14, AI-15, AI-16, AI-17, AI-20, AI-4, V2-8, AI-18, AI-19, C15-1, P-11, C15-2 | unassigned — after C2 and C7 settle |
 | C16 | Project review 2026-10-10 (waves A-D) | X2-1, O2-3, X2-2, B2-1, F2-1, I2-1, I2-3, L2-1, L2-4, O2-1, O2-2, O2-4, X2-3, X2-4, L2-6, P2-2, X2-8, F2-2, L2-13, B2-2, B2-4, B2-5, B2-7, B2-9, F2-3, F2-4, F2-5, F2-6, F2-7, I2-2, I2-4, L2-2, L2-3, L2-5, O2-5, O2-6, O2-7, O2-8, P2-1, P2-3, X2-5, X2-6, X2-7, A-1, L2-14, B2-10, B2-11, B2-3, B2-6, B2-8, F2-10, F2-11, F2-12, F2-8, F2-9, I2-5, I2-6, I2-7, I2-8, I2-9, L2-10, L2-11, L2-7, L2-8, L2-9, O2-10, O2-11, O2-12, O2-9, P2-4, P2-5, P2-6, P2-7, P2-8, P2-9, X2-10, X2-11, X2-12, X2-9, L2-12, O2-13, X2-13 | Claude (Sonnet 5.5) from docs/PROJECT_REVIEW_2026-10-10.md and docs/DECISIONS_2026-10-10.md |
 | C17 | UI walkthrough 2026-10-11 and UX proposal | AI-7, L-15, X-10, X-11, X-12, X-13, X-14, O-8, U-1, U-2, U-3, U-4 | Claude (Fable) from docs/UX_REVIEW_2026-10-11.md; proposal phases 1-3 and the CalTopo plan are not tracker rows until scheduled |
-| C18 | C182T package review 2026-10-11 | A2-2, A2-1, A2-10, A2-11, A2-13, A2-3, A2-4, A2-5, A2-14, A2-6, A2-7, A2-8, A2-9 | Claude (Fable) from docs/C182T_REVIEW_2026-10-11.md; AI pilot port on feat/c182-ai-pilot-baseline |
+| C18 | C182T package review 2026-10-11 | A2-2, A2-1, A2-10, A2-11, A2-13, A2-3, A2-4, A2-5, A2-12, A2-14, A2-6, A2-7, A2-8, A2-9 | Claude (Fable) from docs/C182T_REVIEW_2026-10-11.md; AI pilot port on feat/c182-ai-pilot-baseline |
 
 ## Board
 
@@ -238,6 +238,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [F-10](#f-10) | P2 | low | Mission base cannot monitor the airband SAR net | console-ui | C9 | L | — | fixed |
 | [I-11](#i-11) | P2 | low | TDFM memory table is 6 generic channels, not a CAP fleet plan | instruments | C12 | M | — | fixed |
 | [I-14](#i-14) | P2 | low | GMA 1347 ICS isolation and Split COM are lamp-only | instruments | C12 | L | — | fixed |
+| [A2-12](#a2-12) | P3 | low | Empty weight is the POH sample aircraft, not a CAP 182T | infra | C18 | S | — | open |
 | [A2-14](#a2-14) | P3 | low | C182T document index | infra | C18 | S | — | open |
 | [A2-6](#a2-6) | P3 | low | Package ships the C172 POM, G430/G530 and S-TEC manuals | infra | C18 | S | — | open |
 | [A2-7](#a2-7) | P3 | low | c182t_checklists.py says full flaps are 30 deg | infra | C18 | S | — | open |
@@ -1980,6 +1981,17 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Problem:** Raised by the 2026-09-08 radio ecosystem audit (Gemini), verified against the tree. cap_ics_isolation is written (ALL/PILOT/COPILOT/CREW) and Split COM de-asserts the FM audio and mic variables, but nothing consumes either: every crew member sits in one Mumble channel, so isolation changes a lamp and nothing else. The panel teaches a control that has no effect, which is worse than omitting it.
 - **Fix:** Fixed 2026-09-08. Wired GMA 1347 ICS isolation and Split COM states into published variables and Mumble radio backend. Published cap_ics_isolation, cap_ics_pilot_isolated, cap_ics_copilot_isolated, cap_ics_crew_isolated, and cap_split_com_active in instruments/mo-audio-panel-gma1347/logic.lua. Added ICS REST endpoints and audio filtering in services/exercise/app/radio.py to route pilot/copilot/crew audio isolation and isolate observer on Split COM. Verified in tests/test_am.py and tests/test_radio.py.
 - **Done when:** Selecting PILOT genuinely removes the MO from the crew audio path.
+
+### A2-12
+
+**Empty weight is the POH sample aircraft, not a CAP 182T**
+
+`P3` · `low` · `improvement` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort S · wave 3 · **open**
+
+- **Files:** `scripts/build_c182t_package.py`, `services/flightplanner/app.py`, `tests/test_loading_baseline.py`
+- **Problem:** 1,924 lb is the handbook sample (the shared planner/simulator baseline chosen under L-7a); a CAP 182T NAV III with mission equipment is heavier.
+- **Fix:** If a squadron 182T weight-and-balance sheet is available, move builder and planner to it together.
+- **Done when:** test_loading_baseline.py passes with the new shared values.
 
 ### A2-14
 
