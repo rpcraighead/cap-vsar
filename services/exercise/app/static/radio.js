@@ -400,6 +400,20 @@ function startTransmit() {
   }
 }
 
+// BEGIN F2-12 PURE KEY POLICY
+// Space keys the transmitter unless focus is somewhere Space already means
+// something. This used to exclude only INPUT, so tapping Space on a focused
+// select, button, textarea or an editable log cell keyed the radio and
+// swallowed the keystroke.
+function spaceKeysPtt(el) {
+  if (!el) return true;
+  if (['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(String(el.tagName || '').toUpperCase())) return false;
+  if (el.isContentEditable) return false;
+  const ce = el.getAttribute ? el.getAttribute('contenteditable') : null;
+  return !(ce !== null && ce !== 'false');
+}
+// END F2-12 PURE KEY POLICY
+
 function stopTransmit() {
   if (!transmitting) return;
   transmitting = false;
@@ -440,16 +454,26 @@ async function sendCommsMessage(text) {
     channelTag = `AM: ${freqVal.toFixed(3)} MHz`;
   }
 
-  // Dispatch to backend API
+  // Dispatch to backend API. F2-12: a message the console refused (expired
+  // session, no sortie, 503) or never received must not be written into the
+  // Form 110 as sent - that log is the operator's record of what went out.
+  let sent = false, failure = '';
   try {
     const res = await fetch('/api/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sender: senderTag, recipient, body: text })
     });
-    if (!res.ok) console.warn('Message send failed:', res.status);
+    sent = res.ok;
+    if (!sent) failure = `HTTP ${res.status}`;
   } catch (err) {
-    console.error('Error dispatching message:', err);
+    failure = 'the console is unreachable';
+  }
+  if (!sent) {
+    console.warn('Message send failed:', failure);
+    if (!$('msgBody').value) $('msgBody').value = text;   // let the operator resend it
+    alert(`That message was NOT sent (${failure}) and has not been logged.`);
+    return;
   }
 
   // Log locally into CAP Form 110 immediately
@@ -527,30 +551,10 @@ function exportCommLog() {
 // --------------------------------------------------------------------------
 
 function connectWebSocket() {
-  const wsUrl = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
-  const ws = new WebSocket(wsUrl);
-
-  ws.onopen = () => {
-    $('status').textContent = 'live';
-    $('status').className = 'status online';
-  };
-
-  ws.onclose = () => {
-    $('status').textContent = 'reconnecting';
-    $('status').className = 'status offline';
-    setTimeout(connectWebSocket, 2500);
-  };
-
-  ws.onmessage = e => {
-    try {
-      const msg = JSON.parse(e.data);
-      if (msg.type === 'message') {
-        handleIncomingRadioTraffic(msg);
-      }
-    } catch (err) {
-      console.warn('WS message parse error:', err);
-    }
-  };
+  // charts.js: reconnects with the shared backoff and keeps the status pill.
+  vsarConnect({
+    onMessage: msg => { if (msg.type === 'message') handleIncomingRadioTraffic(msg); },
+  });
 }
 
 function handleIncomingRadioTraffic(msg) {
@@ -831,22 +835,26 @@ function setupControls() {
     }
   });
 
-  // Keyboard Spacebar PTT shortcut (when not in text input)
+  // Keyboard Spacebar PTT shortcut (when not typing or operating a control)
+  let keyboardPtt = false;
   window.addEventListener('keydown', e => {
-    if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT') {
-      e.preventDefault();
-      if (!$('modeLatch').checked && !transmitting) {
-        startTransmit();
-      }
+    if (e.code !== 'Space' || !spaceKeysPtt(document.activeElement || e.target)) return;
+    e.preventDefault();
+    if (!$('modeLatch').checked && !transmitting) {
+      keyboardPtt = true;
+      startTransmit();
     }
   });
 
   window.addEventListener('keyup', e => {
-    if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT') {
-      e.preventDefault();
-      if (!$('modeLatch').checked && transmitting) {
-        stopTransmit();
-      }
+    if (e.code !== 'Space') return;
+    // A key that began a transmission always ends it, wherever focus has gone
+    // since; otherwise leave Space alone for whatever has focus.
+    if (!keyboardPtt && !spaceKeysPtt(document.activeElement || e.target)) return;
+    e.preventDefault();
+    keyboardPtt = false;
+    if (!$('modeLatch').checked && transmitting) {
+      stopTransmit();
     }
   });
 
@@ -915,9 +923,7 @@ document.addEventListener('DOMContentLoaded', () => {
   connectWebSocket();
 
   // Zulu Clock
-  setInterval(() => {
-    $('clock').textContent = new Date().toUTCString().slice(17, 25) + 'Z';
-  }, 1000);
+  vsarStartClock();
 
   // Pre-load recent messages from server
   fetch('/api/messages')

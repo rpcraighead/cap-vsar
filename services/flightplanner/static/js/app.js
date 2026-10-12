@@ -3,6 +3,9 @@
 // O-8: every application URL stays under the prefix supplied by the trusted
 // front door. The empty prefix preserves direct local test/development use.
 const plannerBase = document.documentElement.dataset.plannerBase || '';
+// The airport used when no route has been typed comes from the server
+// (CAPVSAR_DEFAULT_AIRPORT, via the page), not from a literal here.
+const defaultAirport = document.documentElement.dataset.defaultAirport || '';
 const plannerUrl = path => `${plannerBase}${path.startsWith('/') ? path : `/${path}`}`;
 
 // ── State ──────────────────────────────────────────────────────
@@ -24,13 +27,13 @@ let customReserve = 45;
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         const res = await fetch(plannerUrl('/api/tile-sources'));
+        if (!res.ok) throw new Error(`tile-sources ${res.status}`);
         tileSources = await res.json();
     } catch {
-        tileSources = {
-            vfr:      'https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/VFR_Sectional/MapServer/tile/{z}/{y}/{x}',
-            ifr_low:  'https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/IFR_AreaLow/MapServer/tile/{z}/{y}/{x}',
-            ifr_high: 'https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/IFR_High/MapServer/tile/{z}/{y}/{x}',
-        };
+        // L2-10: no hard-coded internet fallback. Going straight to ArcGIS or
+        // OSM would bypass the server-side tile cache, which is the only map
+        // source a base without internet has. Show an empty map and say why.
+        tileSources = null;
     }
     initMap();
     checkDbStatus();
@@ -85,23 +88,42 @@ function initMap() {
     // maxNativeZoom = deepest zoom the FAA cache actually has tiles for; beyond it
     // Leaflet upscales those tiles (blurry but visible) instead of requesting
     // nonexistent tiles that 404 and render as a black map background.
-    tileLayers.vfr = L.tileLayer(tileSources.vfr, {
+    // Every URL below comes from /api/tile-sources: the cached /tiles/ routes,
+    // plus the online-only Satellite and Street layers when the server says it
+    // is allowed to reach the internet (L2-10).
+    const src = tileSources || {};
+    const online = src.online_layers || {};
+    if (src.vfr) tileLayers.vfr = L.tileLayer(src.vfr, {
         attribution: '© FAA VFR Sectional', minZoom: 5, maxNativeZoom: 12, maxZoom: 15
     });
-    tileLayers.ifr_low = L.tileLayer(tileSources.ifr_low, {
+    if (src.ifr_low) tileLayers.ifr_low = L.tileLayer(src.ifr_low, {
         attribution: '© FAA IFR Low Enroute', minZoom: 4, maxNativeZoom: 10, maxZoom: 15
     });
-    tileLayers.ifr_high = L.tileLayer(tileSources.ifr_high || 'https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/IFR_High/MapServer/tile/{z}/{y}/{x}', {
+    if (src.ifr_high) tileLayers.ifr_high = L.tileLayer(src.ifr_high, {
         attribution: '© FAA IFR High Enroute', minZoom: 4, maxNativeZoom: 9, maxZoom: 15
     });
-    tileLayers.sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    if (online.sat) tileLayers.sat = L.tileLayer(online.sat, {
         attribution: '© Esri World Imagery', maxZoom: 18
     });
-    tileLayers.osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    if (online.osm) tileLayers.osm = L.tileLayer(online.osm, {
         attribution: '© OpenStreetMap', maxZoom: 19
     });
 
-    tileLayers.vfr.addTo(map);
+    // A layer with no source is not offered rather than offered and blank.
+    document.querySelectorAll('.layer-btn[data-layer]').forEach(btn => {
+        if (!tileLayers[btn.dataset.layer]) btn.style.display = 'none';
+    });
+    if (tileLayers.vfr) {
+        tileLayers.vfr.addTo(map);
+    } else {
+        const note = document.createElement('div');
+        note.id = 'map-tiles-error';
+        note.setAttribute('role', 'alert');
+        note.style.cssText = 'position:absolute;top:12px;left:50%;transform:translateX(-50%);' +
+            'z-index:1000;padding:6px 12px;border-radius:4px;background:#3a1d1d;color:#ffb4b4;font-size:13px';
+        note.textContent = 'Map tiles unavailable: the planner could not read its tile sources. Routes still work.';
+        map.getContainer().appendChild(note);
+    }
     L.control.scale({ imperial: true, metric: false }).addTo(map);
 
     map.on('click', async (e) => {
@@ -159,6 +181,7 @@ window.mapInsert = function(ident, role) {
 document.querySelectorAll('.layer-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const key = btn.dataset.layer;
+        if (!tileLayers[key]) return;
         Object.values(tileLayers).forEach(l => { if (map.hasLayer(l)) map.removeLayer(l); });
         tileLayers[key].addTo(map);
         document.querySelectorAll('.layer-btn').forEach(b => b.classList.remove('active'));
@@ -517,7 +540,9 @@ async function calculateRoute(alertOnError = true) {
         document.getElementById('s-dist').textContent  = data.totals.distance_nm;
         document.getElementById('s-time').textContent  = data.totals.time_minutes;
         document.getElementById('s-fuel').textContent  = data.totals.total_fuel;
-        document.getElementById('s-winds').textContent = `${w.direction}°/${w.speed}kt`;
+        // L2-5: say when the route was planned in still air for want of winds.
+        document.getElementById('s-winds').textContent = w.available === false
+            ? 'calm (no winds data)' : `${w.direction}°/${w.speed}kt`;
 
         // Segment table
         document.getElementById('log-tbody').innerHTML = data.segments.map(s => `
@@ -773,11 +798,17 @@ async function fetchTerrainProfile() {
     if (!data.success) return;
     terrainData = data;
 
-    document.getElementById('trn-max').textContent = data.max_terrain.toLocaleString();
-    document.getElementById('trn-clr').textContent = data.min_clearance.toLocaleString();
+    const fmt = v => (v === null || v === undefined) ? '—' : v.toLocaleString();
+    document.getElementById('trn-max').textContent = fmt(data.max_terrain);
+    document.getElementById('trn-clr').textContent = fmt(data.min_clearance);
 
     const badge = document.getElementById('trn-status-badge');
-    if      (data.min_clearance >= 2000) { badge.textContent = 'ADEQUATE';    badge.className = 'ok';     }
+    // L2-4: a failed elevation lookup must never read as a safe route.
+    if (data.terrain_known === false) {
+        badge.textContent = data.min_clearance === null ? 'NO TERRAIN DATA' : 'TERRAIN PARTLY UNKNOWN';
+        badge.className = 'danger';
+    }
+    else if (data.min_clearance >= 2000) { badge.textContent = 'ADEQUATE';    badge.className = 'ok';     }
     else if (data.min_clearance >= 1000) { badge.textContent = 'MIN VFR CLR'; badge.className = 'warn';   }
     else                                 { badge.textContent = 'INSUFFICIENT'; badge.className = 'danger'; }
 
@@ -803,7 +834,8 @@ function drawTerrainProfile() {
     const ctx = canvas.getContext('2d');
     ctx.scale(dpr, dpr);
 
-    const { profile, cruise_altitude: cruiseAlt, total_distance: totalDist, max_terrain: maxTerrain } = terrainData;
+    const { profile, cruise_altitude: cruiseAlt, total_distance: totalDist } = terrainData;
+    const maxTerrain = terrainData.max_terrain ?? 0;
     const yMax = Math.max(cruiseAlt + 800, maxTerrain + 1500);
     const mg   = { top: 18, right: 10, bottom: 28, left: 42 };
     const cW   = W - mg.left - mg.right;
@@ -1045,11 +1077,14 @@ function buildSarPayload() {
         }
         payload.sweep_width_nm = parseFloat(document.getElementById('sar-cs-width').value) || 3.0;
         payload.spacing_nm = parseFloat(document.getElementById('sar-cs-spacing').value) || 1.0;
+        payload.first_turn = document.getElementById('sar-cs-turn').value;
+        payload.num_legs = parseInt(document.getElementById('sar-cs-legs').value) || 12;
     } else if (patternType === 'parallel_track') {
         payload.length_nm = parseFloat(document.getElementById('sar-ps-length').value) || 5.0;
         payload.width_nm = parseFloat(document.getElementById('sar-ps-width').value) || 4.0;
         payload.axis_heading = parseFloat(document.getElementById('sar-ps-hdg').value) || 90.0;
         payload.spacing_nm = parseFloat(document.getElementById('sar-ps-spacing').value) || 1.0;
+        payload.turn_direction = document.getElementById('sar-ps-turn').value;
     }
     return payload;
 }
@@ -1110,7 +1145,12 @@ async function generateSarPattern() {
         map.fitBounds(poly.getBounds(), { padding: [40, 40] });
     }
 
-    if (statusEl) statusEl.textContent = `✓ Generated ${data.waypoints.length} waypoints (${data.total_distance_nm} NM)`;
+    if (statusEl) {
+        // L2-2: a pattern too long for one flight-plan file is flagged here.
+        statusEl.textContent = (data.warnings && data.warnings.length)
+            ? `⚠ ${data.warnings.join(' ')}`
+            : `✓ Generated ${data.waypoints.length} waypoints (${data.total_distance_nm} NM)`;
+    }
     return data;
 }
 
@@ -1132,8 +1172,8 @@ document.getElementById('sar-btn-apply').addEventListener('click', async () => {
         const routeInput = document.getElementById('route-input');
         const currentTokens = routeInput.value.trim().split(/\s+/).filter(Boolean);
         
-        let dep = 'KSEE';
-        let dest = 'KSEE';
+        let dep = defaultAirport;
+        let dest = defaultAirport;
         if (currentTokens.length >= 2) {
             dep = currentTokens[0];
             dest = currentTokens[currentTokens.length - 1];
@@ -1142,9 +1182,15 @@ document.getElementById('sar-btn-apply').addEventListener('click', async () => {
             dest = currentTokens[0];
         }
 
-        const sarPoints = pattern.waypoints
-            .filter(w => w.identifier !== 'DATUM')
-            .map(w => `@${w.lat.toFixed(5)},${w.lon.toFixed(5)}`);
+        // L2-7: keep every pattern point, DATUM included, and its name, so the
+        // nav log carries the leg that defines the square and the same labels
+        // as the .fms export. "NAME=@lat,lon" is the route-string form of a
+        // named coordinate point (see split_route_label in app.py).
+        const sarPoints = pattern.waypoints.map(w => {
+            const name = String(w.identifier || '').toUpperCase().replace(/[^A-Z0-9_]/g, '_').slice(0, 12);
+            const at = `@${w.lat.toFixed(5)},${w.lon.toFixed(5)}`;
+            return name ? `${name}=${at}` : at;
+        });
 
         const newRoute = [dep, ...sarPoints, dest].join(' ');
         routeInput.value = newRoute;
@@ -1163,8 +1209,8 @@ document.getElementById('sar-btn-fms').addEventListener('click', async () => {
         if (!pattern) pattern = await generateSarPattern();
 
         const currentTokens = document.getElementById('route-input').value.trim().split(/\s+/).filter(Boolean);
-        const dep = currentTokens[0] || 'KSEE';
-        const dest = currentTokens[currentTokens.length - 1] || 'KSEE';
+        const dep = currentTokens[0] || defaultAirport;
+        const dest = currentTokens[currentTokens.length - 1] || defaultAirport;
         const alt = parseInt(document.getElementById('alt-select').value) || 6500;
 
         const res = await fetch(plannerUrl('/api/sar/export-fms'), {
@@ -1204,11 +1250,11 @@ document.getElementById('sar-btn-vsar').addEventListener('click', async () => {
         if (!pattern) pattern = await generateSarPattern();
 
         const currentTokens = document.getElementById('route-input').value.trim().split(/\s+/).filter(Boolean);
-        const dep = currentTokens[0] || 'KSEE';
-        const dest = currentTokens[currentTokens.length - 1] || 'KSEE';
+        const dep = currentTokens[0] || defaultAirport;
+        const dest = currentTokens[currentTokens.length - 1] || defaultAirport;
 
         const statusEl = document.getElementById('sar-status-msg');
-        if (statusEl) statusEl.textContent = 'Pushing to V-SAR console on ms01...';
+        if (statusEl) statusEl.textContent = 'Pushing to the V-SAR console...';
 
         const res = await fetch(plannerUrl('/api/sar/export-vsar'), {
             method: 'POST',
@@ -1218,6 +1264,7 @@ document.getElementById('sar-btn-vsar').addEventListener('click', async () => {
                 // no longer accepted from the client - see sar_export_vsar().
                 pattern_type: pattern.pattern_type,
                 waypoints: pattern.waypoints,
+                search_centre: pattern.search_centre,
                 callsign: 'CAP 487',
                 departure: dep,
                 destination: dest

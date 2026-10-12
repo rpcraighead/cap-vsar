@@ -87,6 +87,28 @@ def build_app(db_path=None, **tokens):
     return main, TestClient(main.app), tmp.name
 
 
+def route_paths(app) -> set:
+    """Every route path, whichever FastAPI is installed (O2-1).
+
+    FastAPI 0.143 keeps include_router() results as lazy `_IncludedRouter`
+    entries with no `.path`; 0.115 flattens them. Walk into either form.
+    """
+    found = set()
+
+    def walk(routes):
+        for r in routes:
+            if getattr(r, "path", None) is not None:
+                found.add(r.path)
+            inner = getattr(r, "original_router", None) or getattr(r, "router", None)
+            if inner is not None:
+                walk(inner.routes)
+            elif getattr(r, "routes", None):
+                walk(r.routes)
+
+    walk(app.routes)
+    return found
+
+
 def run_sortie(main, client, *, reveal=False, headers=None):
     """Create a scenario, start a sortie on it, optionally reveal."""
     headers = headers or {}
@@ -113,6 +135,7 @@ def leak_endpoints(sid, oid):
         "/api/scenarios",
         "/api/sorties",
         f"/api/sorties/{oid}/track",
+        f"/api/sorties/{oid}/analysis",
         "/api/messages",
         "/api/health",
     ]
@@ -213,9 +236,10 @@ class TruthUnlock(unittest.TestCase):
 
     def test_wrong_token_does_not(self):
         run_sortie(self.main, self.client, headers={"X-CAPVSAR-Token": INSTRUCTOR})
-        rows = self.client.get("/api/scenarios",
-                               headers={"X-CAPVSAR-Token": "guess"}).json()
-        self.assertNotIn("beacon_lat", rows[-1])
+        # D1.3: a read needs a credential, and a wrong one is simply refused.
+        r = self.client.get("/api/scenarios", headers={"X-CAPVSAR-Token": "guess"})
+        self.assertEqual(r.status_code, 403)
+        self.assertNotIn("beacon_lat", r.text)
 
     def test_live_sortie_still_withheld_from_the_map_feed(self):
         """Unlocking definitions must not unlock the running exercise."""
@@ -301,9 +325,11 @@ class PluginTruthChannel(unittest.TestCase):
             self.assertAlmostEqual(body["scenario"]["beacon_lat"], BEACON["lat"], places=4)
             self.assertAlmostEqual(body["scenario"]["beacon_elev_ft"], BEACON["elev_ft"], places=1)
             # Same shape as /api/state, so the plugin only changes its URL.
-            self.assertEqual(set(body), set(client.get("/api/state").json()))
+            instr = {"X-CAPVSAR-Token": INSTRUCTOR}
+            self.assertEqual(set(body), set(client.get("/api/state", headers=instr).json()))
             # ...while the browser feed is still withholding.
-            self.assertNotIn("beacon_lat", client.get("/api/state").json()["scenario"])
+            self.assertNotIn("beacon_lat",
+                             client.get("/api/state", headers=instr).json()["scenario"])
         finally:
             os.unlink(db)
 
@@ -329,13 +355,15 @@ class PluginTruthChannel(unittest.TestCase):
         finally:
             os.unlink(db)
 
-    def test_query_parameter_also_accepted(self):
-        """The plugin can pass the key in the URL where a header is awkward."""
+    def test_query_parameter_is_no_longer_accepted(self):
+        """X2-10: a key in the URL lands in uvicorn and Caddy access logs."""
         main, client, db = build_app(plugin=PLUGIN, instructor=INSTRUCTOR)
         try:
             run_sortie(main, client, headers={"X-CAPVSAR-Token": INSTRUCTOR})
             r = client.get(f"/api/plugin/scenario?token={PLUGIN}")
-            self.assertEqual(r.status_code, 200)
+            self.assertEqual(r.status_code, 403)
+            self.assertEqual(client.get("/api/plugin/scenario",
+                                        headers={"X-CAPVSAR-Token": PLUGIN}).status_code, 200)
         finally:
             os.unlink(db)
 
@@ -481,7 +509,9 @@ class OfflineAssets(unittest.TestCase):
     pages ask for, and that no remote asset creeps back in.
     """
 
-    VIEWS = ("/", "/base", "/debrief")
+    # "/" is the participant portal, which carries its own inline styles and
+    # no script at all; the instructor console is /instructor.
+    VIEWS = ("/instructor", "/base", "/debrief", "/radio")
 
     def setUp(self):
         self.main, self.client, self.db = build_app()
@@ -495,7 +525,11 @@ class OfflineAssets(unittest.TestCase):
             r'<(?:script[^>]*\bsrc|link[^>]*\bhref)\s*=\s*"(https?://[^"]+)"',
             re.I)
         for view in self.VIEWS:
-            html = self.client.get(view).text
+            response = self.client.get(view)
+            html = response.text
+            self.assertEqual(response.status_code, 200, view)
+            # A page with no script of its own proves nothing about remote ones.
+            self.assertIn('/static/', html, f"{view} loads nothing from /static")
             self.assertEqual(pattern.findall(html), [],
                              f"{view} pulls an asset from the internet")
 
@@ -540,7 +574,6 @@ class F4Backfill(unittest.TestCase):
                 'INSERT INTO messages (sortie_id, t, sender, recipient, body)'
                 ' VALUES (?,?,?,?,?)',
                 (self.oid, when, 'MISSION BASE', 'ALL', body))
-        self.main.hub.messages.clear()
 
         rows = self.main.list_messages(since=1000.0)
         self.assertEqual([r['body'] for r in rows], ['missed'])
@@ -579,7 +612,12 @@ class F4Backfill(unittest.TestCase):
                   'services/exercise/app/static/base.js').read_text()
         self.assertIn('/api/messages?since=', source)
         self.assertIn('/api/bearings?since=', source)
-        self.assertRegex(source, r'ws\.onopen\s*=.*backfill')
+        # The socket itself is charts.js's vsarConnect, which calls onOpen from
+        # ws.onopen; base.js hands it backfill.
+        self.assertRegex(source, r'onOpen\s*:\s*\(\)\s*=>\s*backfill\(\)')
+        shared = (Path(__file__).resolve().parents[1] /
+                  'services/exercise/app/static/charts.js').read_text()
+        self.assertRegex(shared, r'ws\.onopen\s*=[\s\S]*?opts\.onOpen')
 
 
 class EffectsBelongToTheSortie(unittest.TestCase):
@@ -824,7 +862,7 @@ class Form110OnTheMumbleConsole(unittest.TestCase):
     def test_the_log_never_uses_innerhtml_for_traffic(self):
         """F-6 was the same class of bug in four other views, now escaped in
         ServerStringsAreEscaped. The log must not reintroduce it."""
-        body = self.js[self.js.index("function renderLog"):
+        body = self.js[self.js.index("// BEGIN F2-3 PURE FORM 110 VIEW"):
                        self.js.index("function pad(")]
         self.assertNotIn("innerHTML +=", body)
         self.assertIn("textContent", body)
@@ -867,7 +905,7 @@ class LegacyConsoleAudio(unittest.TestCase):
         """F-7 would close with /radio-legacy if it were retired. It is not:
         the airband station it carries has no replacement until F-10."""
         main, client, _ = build_app()
-        paths = {getattr(r, "path", None) for r in main.app.routes}
+        paths = route_paths(main.app)
         self.assertIn("/radio-legacy", paths)
 
 
@@ -907,7 +945,7 @@ class TheConsoleIsSplitUp(unittest.TestCase):
     def test_the_routes_all_survived_the_split(self):
         """The split must not have dropped an endpoint on the floor."""
         main, _, _ = build_app()
-        paths = {getattr(r, "path", None) for r in main.app.routes}
+        paths = route_paths(main.app)
         for path in ("/api/scenarios", "/api/sorties", "/api/sorties/stop",
                      "/api/sorties/reveal", "/api/sorties/effects",
                      "/api/sorties/{oid}/track", "/api/positions",
@@ -936,7 +974,13 @@ class ServerStringsAreEscaped(unittest.TestCase):
     where markup is inert.
     """
 
-    VIEWS = ("base.js", "app.js", "debrief.js", "radio.js", "setup.js")
+    VIEWS = ("base.js", "app.js", "debrief.js", "radio.js", "setup.js",
+             "mission-radio.js")
+    # Which page loads each view, so "the helper is defined" can also mean "the
+    # page loads charts.js, which now owns the shared esc()".
+    PAGES = {"base.js": "base.html", "app.js": "index.html",
+             "debrief.js": "debrief.html", "radio.js": "radio.html",
+             "setup.js": "setup.html", "mission-radio.js": "mission-radio.html"}
     # Server-controlled string fields. Numbers reach HTML through toFixed()
     # or Math.round(), neither of which can carry markup.
     TAINTED = ("body", "sender", "recipient", "note", "callsign", "name",
@@ -952,6 +996,17 @@ class ServerStringsAreEscaped(unittest.TestCase):
     def setUpClass(cls):
         static = Path(__file__).resolve().parents[1] / "services/exercise/app/static"
         cls.src = {name: (static / name).read_text() for name in cls.VIEWS}
+        cls.pages = {name: (static / page).read_text() for name, page in cls.PAGES.items()}
+        cls.charts = (static / "charts.js").read_text()
+
+    def _has_helper(self, name):
+        src = self.src[name]
+        if "const esc =" in src or "function escapeHtml" in src:
+            return True
+        # The shared esc() in charts.js, for a page that loads it before the view.
+        page = self.pages[name]
+        return ("/static/charts.js" in page and "const esc =" in self.charts and
+                page.index("/static/charts.js") < page.index("/static/" + name))
 
     @classmethod
     def _sink_statements(cls, src):
@@ -1001,11 +1056,18 @@ class ServerStringsAreEscaped(unittest.TestCase):
     def test_every_view_defines_an_escape_helper(self):
         for name, src in self.src.items():
             with self.subTest(view=name):
-                self.assertTrue("const esc =" in src or "function escapeHtml" in src,
-                                f"{name} has no escape helper")
-                # The quote matters: two setup.js values sit in attributes.
-                for entity in ("&amp;", "&lt;", "&gt;", "&quot;"):
-                    self.assertIn(entity, src, f"{name} does not produce {entity}")
+                if name == "mission-radio.js":
+                    # No escape helper because it never interpolates: every
+                    # HTML sink in it is a literal, and traffic goes through
+                    # textContent.
+                    for stmt in self._sink_statements(src):
+                        self.assertNotIn("${", stmt, "mission-radio.js builds HTML from a value")
+                    continue
+                self.assertTrue(self._has_helper(name), f"{name} has no escape helper")
+        # The quote matters: two setup.js values sit in attributes.
+        for entity in ("&amp;", "&lt;", "&gt;", "&quot;"):
+            self.assertIn(entity, self.charts + self.src["setup.js"] + self.src["radio.js"],
+                          f"no helper produces {entity}")
 
     def test_the_shared_helper_also_escapes_the_apostrophe(self):
         for name, src in self.src.items():
@@ -1013,6 +1075,7 @@ class ServerStringsAreEscaped(unittest.TestCase):
                 continue  # radio.js predates the shared helper
             with self.subTest(view=name):
                 self.assertIn("&#39;", src)
+        self.assertIn("&#39;", self.charts)
 
     def test_no_tainted_field_reaches_an_html_sink_unescaped(self):
         for name, src in self.src.items():
@@ -1254,12 +1317,135 @@ class DFTelemetryIsRecorded(unittest.TestCase):
     def test_it_is_withheld_before_reveal(self):
         _, oid = run_sortie(self.main, self.client, headers=self.instr)
         self.report()
-        track = self.client.get(f"/api/sorties/{oid}/track").json()
+        track = self.client.get(f"/api/sorties/{oid}/track", headers=self.instr).json()
         self.assertTrue(track["positions"])
         # bearing_true + distance_nm from a known position IS the beacon.
         for point in track["positions"]:
             self.assertNotIn("df", point, "DF telemetry leaked before reveal")
         self.assertIsNone(track["beacon"])
+
+
+class TruthBoundaryByViewer(unittest.TestCase):
+    """X2-1, X2-2, X2-8 (docs/DECISIONS_2026-10-10.md D1): the same endpoints
+    answer differently for different viewers, and the test walks all of them.
+
+    The September leak test (TruthContainment) never posted an aircraft, so the
+    live DF feed was invisible to it. This one reports a position carrying a
+    full DF dictionary first, and runs two sorties on one scenario.
+    """
+
+    FIX = ("bearing_true", "bearing_rel", "distance_nm", "signal")
+
+    def setUp(self):
+        self.main, self.client, self.db = build_app(
+            instructor=INSTRUCTOR, base=BASE, plugin=PLUGIN)
+        self.instr = {"X-CAPVSAR-Token": INSTRUCTOR}
+        self.base = {"X-CAPVSAR-Token": BASE}
+        self.plug = {"X-CAPVSAR-Token": PLUGIN}
+
+    def tearDown(self):
+        os.unlink(self.db)
+
+    def report(self):
+        r = self.client.post("/api/positions", headers=self.plug, json={
+            "callsign": "CAP-1", "lat": 33.1, "lon": -117.2, "alt_ft": 5500.0,
+            "hdg_true": 90.0,
+            "df": {"valid": True, "bearing_rel": 12.5, "bearing_true": 102.5,
+                   "signal": 0.42, "distance_nm": 9.2, "in_cone": False,
+                   "head_type": 1, "power": 1}})
+        self.assertEqual(r.status_code, 200, r.text)
+
+    def test_anonymous_reads_are_refused(self):
+        run_sortie(self.main, self.client, headers=self.instr)
+        for url in ("/api/state", "/api/scenarios", "/api/sorties",
+                    "/api/messages", "/api/bearings", "/api/radio/config"):
+            self.assertIn(self.client.get(url).status_code, (401, 403), url)
+
+    def test_base_never_sees_a_fix_on_the_beacon(self):
+        run_sortie(self.main, self.client, headers=self.instr)
+        self.report()
+        ac = self.client.get("/api/state", headers=self.base).json()["aircraft"]
+        self.assertTrue(ac)
+        for a in ac:
+            for k in self.FIX:
+                self.assertNotIn(k, a.get("df", {}), f"base saw df.{k}")
+        self.assertEqual(ac[0]["df"]["head_type"], 1)   # receiver state is allowed
+
+    def test_instructor_sees_live_df(self):
+        run_sortie(self.main, self.client, headers=self.instr)
+        self.report()
+        ac = self.client.get("/api/state", headers=self.instr).json()["aircraft"]
+        self.assertEqual(ac[0]["df"]["bearing_true"], 102.5)
+
+    def test_websocket_frames_follow_the_same_rule(self):
+        run_sortie(self.main, self.client, headers=self.instr)
+        self.report()
+        with self.client.websocket_connect("/ws", headers=self.base) as ws:
+            frame = ws.receive_json()
+        for k in self.FIX:
+            self.assertNotIn(k, frame["aircraft"][0]["df"])
+        with self.client.websocket_connect("/ws", headers=self.instr) as ws:
+            frame = ws.receive_json()
+        self.assertEqual(frame["aircraft"][0]["df"]["bearing_true"], 102.5)
+        with self.assertRaises(Exception):
+            with self.client.websocket_connect("/ws") as ws:   # no credential
+                ws.receive_json()
+
+    def test_ticker_style_broadcast_redacts_per_socket(self):
+        import asyncio
+        run_sortie(self.main, self.client, headers=self.instr)
+        self.report()
+        hub = self.main.hub
+
+        class Sock:
+            def __init__(self): self.sent = []
+            async def send_text(self, text): self.sent.append(json.loads(text))
+
+        seer, other = Sock(), Sock()
+        hub.clients = {seer, other}
+        hub.truth_clients = {seer}
+        asyncio.run(hub.broadcast_state())
+        self.assertEqual(seer.sent[0]["aircraft"][0]["df"]["bearing_true"], 102.5)
+        self.assertNotIn("bearing_true", other.sent[0]["aircraft"][0]["df"])
+
+    def test_notes_are_instructor_only_until_reveal(self):
+        run_sortie(self.main, self.client, headers=self.instr)
+        for h in (self.base, self.instr):
+            sc = self.client.get("/api/state", headers=h).json()["scenario"]
+            self.assertNotIn("notes", sc)       # the map feed never carries them
+        rows = self.client.get("/api/scenarios", headers=self.base).json()
+        self.assertNotIn("notes", rows[-1])
+        rows = self.client.get("/api/scenarios", headers=self.instr).json()
+        self.assertEqual(rows[-1]["notes"], "synthetic")
+
+    def test_a_revealed_old_sortie_does_not_reveal_the_one_being_flown(self):
+        sid, old = run_sortie(self.main, self.client, reveal=True, headers=self.instr)
+        self.client.post("/api/sorties/stop", headers=self.instr)
+        r = self.client.post("/api/sorties", json={"scenario_id": sid}, headers=self.instr)
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertIn("warning", r.json())           # D1.6
+        new = r.json()["id"]
+        track = self.client.get(f"/api/sorties/{old}/track", headers=self.base).json()
+        self.assertIsNone(track["beacon"])
+        self.assertTrue(track["withheld"])
+        for p in track["positions"]:
+            self.assertNotIn("df", p)
+        # The instructor still can; and once the live sortie is revealed so can base.
+        mine = self.client.get(f"/api/sorties/{old}/track", headers=self.instr).json()
+        self.assertAlmostEqual(mine["beacon"]["lat"], BEACON["lat"], places=4)
+        self.client.post("/api/sorties/reveal", headers=self.instr)
+        later = self.client.get(f"/api/sorties/{old}/track", headers=self.base).json()
+        self.assertAlmostEqual(later["beacon"]["lat"], BEACON["lat"], places=4)
+        self.assertNotEqual(old, new)
+
+    def test_a_sortie_keeps_the_beacon_it_flew(self):
+        sid, oid = run_sortie(self.main, self.client, reveal=True, headers=self.instr)
+        self.client.post("/api/sorties/stop", headers=self.instr)
+        with self.main.db() as c:                    # the scenario is edited later
+            c.execute("UPDATE scenarios SET beacon_lat=?, beacon_lon=? WHERE id=?",
+                      (10.0, 10.0, sid))
+        track = self.client.get(f"/api/sorties/{oid}/track", headers=self.base).json()
+        self.assertAlmostEqual(track["beacon"]["lat"], BEACON["lat"], places=4)
 
 
 class ConnectionPragmas(unittest.TestCase):
@@ -1276,3 +1462,10 @@ class ConnectionPragmas(unittest.TestCase):
             self.assertEqual(c.execute("PRAGMA journal_mode").fetchone()[0], "wal")
             self.assertEqual(c.execute("PRAGMA synchronous").fetchone()[0], 1,
                              "connection reverted to FULL: every commit fsyncs")
+
+    def test_auth_connections_are_normal_too(self):
+        """X2-6: auth_db() opens on every authenticated request and never set it."""
+        with self.main.access.auth_db() as c:
+            self.assertEqual(c.execute("PRAGMA synchronous").fetchone()[0], 1,
+                             "auth_db() connection is on FULL: every session write fsyncs")
+            self.assertGreaterEqual(c.execute("PRAGMA busy_timeout").fetchone()[0], 5000)

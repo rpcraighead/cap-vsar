@@ -28,7 +28,7 @@ Reviewed the local working tree on 2026-09-09. Other work is in progress; findin
 | `main.py`, `/ws`; `radio.py`, radio handshake | Origin checks do not establish identity. State streaming has no membership check, and radio can fall back to access-code/client-provided identity. | Authenticate and authorize state feeds and voice connections, with revocation during an open socket. |
 | `radio.py`, ICS and channel state | Shared process state and control endpoints need aircraft/exercise ownership checks. | Scope radio nets, ICS, callsigns, and control actions to server-assigned stations. |
 | `services/flightplanner/app.py`, `/api/sar/export-vsar` | Public-style planner requests can cause writes using server-held console credentials. | Authenticate the caller and authorize the target exercise and operation before any downstream write; remove global instructor credentials from ordinary planner requests. |
-| Compose and Caddy configuration | LAN ports 8700/8090/8743 and internal CA TLS are the current deployment model. | Dedicated production configuration, public certificates, and no directly exposed backend/database ports. |
+| Compose and Caddy configuration | LAN ports 8700/8080/8743 and internal CA TLS are the current deployment model. | Dedicated production configuration, public certificates, and no directly exposed backend/database ports. |
 
 Do not expose the current stack by adding a router forward. Leave existing lab/router/WireGuard services intact. Replace identities and rotate credentials as part of a controlled cutover, not by deleting the current deployment.
 

@@ -63,7 +63,18 @@ person, in the 10.0.0.10+ range to stay clear of the existing peers.
 
 Participant web traffic uses only `https://192.0.2.151/` on TCP 443 over the
 LAN or tunnel. Caddy routes `/planner/` to the planner and all other paths to
-the exercise service. Ports 8700 and 8090 are not published on the host.
+the exercise service. Caddy publishes exactly three listeners on the host, and
+**none of them is forwarded by the router** (see `docker-compose.yml` and
+`services/exercise/Caddyfile`):
+
+| Port | Purpose |
+|---|---|
+| 80 | Plaintext, but serves only `/radio-ca.crt` (CA bootstrap for new devices); everything else is a 308 to HTTPS. |
+| 443 | The participant front door: exercise console, browser radio, plugin API, `/planner/`. |
+| 8443 | The engineering listener: the agent coordination board only. LAN/WireGuard only. |
+
+The exercise console (8700), planner (8080) and board (8770) ports are
+container-internal and are not published on the host.
 
 Easiest path is the GL.iNet UI: **VPN -> WireGuard Server -> Add Client**,
 which generates the keypair and shows a QR code for the phone app.

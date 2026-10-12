@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CAP V-SAR - Exercise & Fleet Setup</title>
   <link rel="stylesheet" href="/static/style.css">
-  <script src="/static/vendor/qrcode.min.js"></script>
 </head>
 <body class="setup-body">
 
@@ -37,12 +36,7 @@
           <label for="exName">Exercise Name</label>
           <input id="exName" value="Civil Air Patrol SAREX Exercise" placeholder="e.g. CAWG Pauma Valley SAREX">
         </div>
-        <div>
-          <label for="exScenario">Target Exercise Scenario</label>
-          <select id="exScenario"></select>
-        </div>
       </div>
-      <div id="scenarioDesc" class="notes" style="margin-top:8px"></div>
     </div>
 
     <!-- Step 2: Fleet & Airplanes -->
@@ -115,7 +109,7 @@
         <div class="card-title">4. Participant Access Cards & Scannable QR Badges</div>
         <div class="roster-meta mono" id="rosterCount">0 Participants</div>
       </div>
-      <p class="hint">Participants can scan their assigned QR badge with their smartphone camera or enter the 6-character code at <code>/login</code> to instantly access their role console.</p>
+      <p class="hint">Participants can scan their assigned QR badge with their smartphone camera or enter the full code printed on it at <code>/login</code>. The QR carries the same code as a link.</p>
 
       <div id="rosterGrid" class="roster-grid"></div>
     </div>

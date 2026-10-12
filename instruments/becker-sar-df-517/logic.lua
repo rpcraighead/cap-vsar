@@ -149,17 +149,13 @@ local function scan_alternates()
     return vhf, uhf
 end
 
--- Air Manager's own log recorded this exact call throwing "You cannot call
--- canvas_draw within a draw callback", paired with a cascading "attempt to
--- call a number value" in the 250 ms tick below — the only place redraw() is
--- reached from a timer rather than a button/dataref callback, so it is the one
--- call site that can race the engine's own repaint. pcall keeps a lost race
--- from raising an unhandled error into the timer or the log; something else -
--- the next 250 ms tick, the next control that changes state - asks again
--- almost immediately, so a dropped redraw here is not a real staleness risk.
--- Best-effort: Air Manager's exact reentrancy rule is not documented, and
--- this could not be re-verified against the live application from this
--- environment - watch for a recurrence of that log line.
+-- Air Manager's own log once recorded this call throwing "You cannot call
+-- canvas_draw within a draw callback", paired with a cascading "attempt to call
+-- a number value" from the 250 ms tick below. This used to be wrapped in a
+-- pcall; I-2 removed it because a swallowed error hid the real fault. The call
+-- is direct now, so a recurrence of that log line is a fault to chase, not a
+-- race to paper over. Air Manager's exact reentrancy rule is not documented and
+-- could not be re-verified against the live application.
 local function redraw()
     if canvas_id then canvas_draw(canvas_id, draw_lcd) end
 end
@@ -570,10 +566,23 @@ local function set_page(page)
     redraw()
 end
 
+--- Everything on the screen that is a transient of the last session. The real
+--- head powers up clean: STORE's tone suppression, the REP bearing and the C/S
+--- frame on show do not survive a power cycle. Settings (volume, squelch,
+--- TIMEHOLD, offset, mounting) and the stored frame are kept.
+local function reset_volatile()
+    st.tone_suppressed = false
+    st.repeat_show     = false
+    st.repeat_bearing  = nil
+    st.repeat_signal   = nil
+    st.rep_held        = false
+    st.shown_msg       = nil
+end
+
 local function power_on()
     st.power   = true
     st.booting = true
-    st.repeat_show = false
+    reset_volatile()
     push_state()
     sync_audio()
     redraw()
@@ -594,32 +603,14 @@ local function power_off()
     if boot_timer then timer_stop(boot_timer); boot_timer = nil end
     st.power   = false
     st.booting = false
+    reset_volatile()
     df.set_power(false)
     df_audio.stop()
     redraw()
 end
 
-local MIN_BUS_VOLTS = 10.0
-local avionics_switch_on = false
-local bus_volts = 0.0
+-- Set by the cap_power watcher at the bottom of this file.
 local bus_powered = false
--- Mission-kit gating, independent of the airframe bus — see
--- docs/DATAREF_CONTRACT.md Part 6. Both default true so a panel without the
--- master switch / CB panel instruments behaves exactly as before.
-local mission_master_on = true
-local mission_cb_in = true
-
-local function update_bus_power()
-    local powered = avionics_switch_on and (bus_volts >= MIN_BUS_VOLTS)
-        and mission_master_on and mission_cb_in
-    if powered == bus_powered then return end
-    bus_powered = powered
-    if bus_powered then
-        power_on()
-    else
-        power_off()
-    end
-end
 
 -- ---------------------------------------------------------------- controls ---
 
@@ -800,22 +791,13 @@ end)
 df.set_power(false)
 df_audio.stop()
 
-xpl_dataref_subscribe("sim/cockpit2/switches/avionics_power_on", "INT", function(on)
-    avionics_switch_on = (on or 0) ~= 0
-    update_bus_power()
-end)
-
-xpl_dataref_subscribe("sim/cockpit2/electrical/bus_volts", "FLOAT[6]", function(val)
-    bus_volts = type(val) == "table" and (val[1] or 0.0) or (type(val) == "number" and val or 0.0)
-    update_bus_power()
-end)
-
-si_variable_subscribe("cap_mission_master_on", "BOOL", function(v)
-    mission_master_on = v and true or false
-    update_bus_power()
-end)
-
-si_variable_subscribe("cap_mission_cb_df_in", "BOOL", function(v)
-    mission_cb_in = v and true or false
-    update_bus_power()
+-- Bus power: avionics master, bus voltage, mission master and this breaker
+-- (lib/cap_power.lua; docs/DATAREF_CONTRACT.md Part 6).
+cap_power.watch("cap_mission_cb_df_in", function(powered)
+    bus_powered = powered
+    if powered then
+        power_on()
+    else
+        power_off()
+    end
 end)

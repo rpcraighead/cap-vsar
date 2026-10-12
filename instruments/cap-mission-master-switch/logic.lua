@@ -34,6 +34,12 @@ local function publish()
     si_variable_write(var_master, st.master_on)
 end
 
+-- Publish once at load. Air Manager keeps an si_variable's value across an
+-- instrument reload, so without this a reload draws the switch ON while the
+-- variable still says what it said before (and a consumer loaded earlier never
+-- hears the producer arrive). The drawn state is the truth; say so.
+publish()
+
 -- Layout: guard cage sits above the rocker switch when closed, hinges up and
 -- out of the way when open.
 local SWITCH_X, SWITCH_Y, SWITCH_W, SWITCH_H = 110, 74, 80, 56

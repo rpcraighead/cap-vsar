@@ -9,26 +9,21 @@ import hashlib
 import hmac
 import html
 import secrets
-import re
 from urllib.parse import parse_qs, quote
 
-import json
-import time
-import uuid
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
 from .. import access
-from ..hub import hub
-from ..roles import (base_or_instructor, instructor_only, plugin_only,
-                     public_scenario)
-from ..settings import log
-from ..store import _exec, _fetchone, db, db_call, row_to_scenario
 
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from ..models import LoginPayload, SetupPayload
 from ..settings import STATIC
+import io
+from urllib.parse import urlsplit
+
+import segno
 
 router = APIRouter()
 
@@ -41,8 +36,6 @@ def login_page():
     page = (STATIC / "login.html").read_text()
     page = page.replace('maxlength="12"', 'maxlength="128"').replace(
         'placeholder="e.g. OBS-423"', 'placeholder="Full code from your badge"')
-    page = re.sub(r'    <div class="login-shortcuts-section">.*?(?=    <div class="login-footer-notice">)',
-                  '', page, flags=re.S)
     return HTMLResponse(page, headers={"Cache-Control": "no-store"})
 
 
@@ -164,14 +157,45 @@ def api_get_setup(request: Request):
 
 
 
+@router.get("/api/setup/badge/{roster_id}.svg")
+def api_setup_badge(roster_id: str, origin: str, request: Request):
+    """The QR for one roster seat, rendered on the server (U-2).
+
+    The client used to draw these with a vendored "lightweight" QR library
+    whose Reed-Solomon table was truncated: every badge was blank, and the
+    levels that did render would have produced wrong error-correction
+    blocks. `segno` is a complete encoder.
+
+    `origin` is the scheme and host the page was loaded from (the single
+    front door, as the badge's link must survive being scanned from another
+    device); it must match the Host the request arrived on, so the instructor
+    cannot be made to mint a QR for someone else's domain.
+    """
+    access.enforce("instructor", request)
+    parts = urlsplit(origin)
+    if parts.scheme not in ("http", "https") or not parts.netloc:
+        raise HTTPException(400, "origin must be like https://host")
+    if parts.netloc != request.headers.get("host", ""):
+        raise HTTPException(400, "origin does not match this console")
+    row = next((r for r in access.get_roster() if r["id"] == roster_id), None)
+    if row is None:
+        raise HTTPException(404, "no such roster seat")
+    url = f"{parts.scheme}://{parts.netloc}/join/{quote(row['code'], safe='')}"
+    buf = io.BytesIO()
+    segno.make(url, error="m").save(buf, kind="svg", scale=4, border=2,
+                                     dark="#0B2545", light="#FFFFFF")
+    return Response(buf.getvalue(), media_type="image/svg+xml",
+                    headers={"Cache-Control": "private, no-store"})
+
+
 @router.post("/api/setup")
 def api_save_setup(payload: SetupPayload, request: Request):
     access.enforce("instructor", request)
     return access.save_exercise_setup(
         name=payload.name,
         num_aircraft=payload.num_aircraft,
-        aircraft_list=payload.aircraft,
-        staff_list=payload.staff
+        aircraft_list=[a.model_dump(exclude_none=True) for a in payload.aircraft],
+        staff_list=[st.model_dump(exclude_none=True) for st in payload.staff],
     )
 
 

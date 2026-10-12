@@ -62,6 +62,26 @@ class NoInternetInTheMarkup(unittest.TestCase):
                 self.assertNotIn(marker, html,
                                  f'{name} still loads {marker}')
 
+    def test_no_internet_tile_url_in_the_script(self):
+        # L2-10: app.js used to carry ArcGIS and OSM URLs as fallbacks for a
+        # failed /api/tile-sources, which sent the browser round the tile cache.
+        # It may only use what the server hands it.
+        with open(os.path.join(STATIC, 'js', 'app.js'), encoding='utf-8') as fh:
+            js = fh.read()
+        import re
+        code = re.sub(r'//[^\n]*', '', re.sub(r'/\*.*?\*/', '', js, flags=re.S))
+        for marker in CDN_MARKERS:
+            self.assertNotIn(marker, code, f'app.js still names {marker}')
+        self.assertIsNone(re.search(r'https?://', code),
+                          'app.js contains a hard-coded absolute URL')
+
+    def test_script_has_no_tile_url_to_fall_back_to(self):
+        with open(os.path.join(STATIC, 'js', 'app.js'), encoding='utf-8') as fh:
+            js = fh.read()
+        init = js[js.index('document.addEventListener(\'DOMContentLoaded\''):
+                  js.index('initMap();')]
+        self.assertIn('tileSources = null', init)
+
     def test_leaflet_is_vendored(self):
         for rel in ('vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css',
                     'vendor/leaflet/images/marker-icon.png'):
@@ -93,6 +113,14 @@ class TilesGoThroughTheCache(unittest.TestCase):
                             f'{key} is {body[key]!r}, not a local URL')
             for marker in CDN_MARKERS:
                 self.assertNotIn(marker, body[key])
+
+    def test_online_layers_come_from_tile_sources_and_only_when_allowed(self):
+        online = _client().get('/api/tile-sources').get_json()
+        self.assertEqual(set(online['online_layers']), {'sat', 'osm'})
+        with patch.dict(os.environ, {'CAPVSAR_TILES_OFFLINE': '1'}):
+            offline = _client().get('/api/tile-sources').get_json()
+        self.assertEqual(offline['online_layers'], {})
+        self.assertTrue(offline['offline'])
 
     def test_unknown_chart_type_is_rejected(self):
         # chart_type builds a path that is now written to as well as read, so

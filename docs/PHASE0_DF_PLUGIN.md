@@ -1,3 +1,11 @@
+> **Historical.** This is the Phase 0/1 bring-up note and several things in it
+> are out of date (it still says to edit `CONSOLE` and `CALLSIGN` at the top of
+> the plugin; they now come from `capvsar_station.ini`, built by
+> `scripts/build_station_kit.py`, and the default console is the TLS front door
+> `https://192.0.2.151`). Current references: `docs/DATAREF_CONTRACT.md` (the
+> datarefs and how the engine behaves), `docs/CONNECT.md` (station setup) and
+> the header of `xplane/PI_capvsar_df.py`.
+
 # Phase 0/1 - DF engine plugin
 
 `PI_capvsar_df.py` is the propagation engine. It runs inside X-Plane because

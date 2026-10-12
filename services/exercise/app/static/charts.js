@@ -85,46 +85,143 @@ function capvsarCharts(map, opts) {
   return {layers, select, current: () => active};
 }
 
-// Dynamically resolve flight planner navigation link to port 8090 on current host
-document.addEventListener("DOMContentLoaded", () => {
-  document.querySelectorAll("a.nav-planner").forEach(a => {
-    a.href = "//" + (location.hostname || "localhost") + ":8090/";
-  });
-});
+// F2-1: the Flight Planner link used to be rewritten here to port 8090, which
+// the Caddy consolidation stopped publishing. The pages' own href (/planner/)
+// is the front door and is left alone.
 
-// ---------------------------------------------------------------- role token
-// Controlling a sortie, logging a bearing or sending a message needs the role
-// token for that seat (CAPVSAR_TOKEN_INSTRUCTOR / _BASE on the console). The
-// operator is asked once and it is kept for this browser only.
-//
-// While no tokens are configured on the server nothing here is exercised: the
-// server answers those calls as before, and the operator is never prompted.
-const VSAR_TOKEN_KEY = 'vsar-role-token';
+// ------------------------------------------------------- shared view helpers
+// Each of the instructor, mission-base and debrief views used to carry its own
+// copy of these. They live here because every one of those pages already loads
+// this file; keep them free of page-specific ids so that stays true.
 
-function vsarToken() {
-  try { return localStorage.getItem(VSAR_TOKEN_KEY) || ''; } catch (e) { return ''; }
+// F-6: nothing escapes server strings on the way out, and any LAN client can
+// POST message bodies, bearing notes and callsigns. Escape every server value
+// interpolated into HTML. Values already passed through toFixed() or
+// Math.round() are provably numeric and are left alone.
+const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c =>
+  ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+
+const planeIcon = c => L.divIcon({className:'', iconSize:[26,26], html:
+  `<svg width="26" height="26" viewBox="0 0 24 24" style="transform:rotate(${c}deg)">
+     <path d="M12 2 L15 11 L22 13 L22 15 L13.5 14 L13 20 L16 22 L16 23 L12 22 L8 23 L8 22 L11 20 L10.5 14 L2 15 L2 13 L9 11 Z"
+       fill="#2e5496" stroke="#1f3864" stroke-width="0.8"/></svg>`});
+
+const fmtDur = s => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+
+// Same curve as mission-radio.js's scheduleReconnect (1 s doubling to a 30 s
+// ceiling); a test holds the two together. A fixed 2 s retry from every
+// console at once is what a restarted console gets hit with otherwise.
+function vsarBackoffMs(attempt) {
+  return Math.min(30000, 1000 * 2 ** Math.min(attempt, 5));
 }
 
-function vsarSetToken(v) {
-  try { v ? localStorage.setItem(VSAR_TOKEN_KEY, v) : localStorage.removeItem(VSAR_TOKEN_KEY); }
-  catch (e) { /* private window: token lives for this page only */ }
+// HH:MM:SSZ in the header. `el` defaults to #clock.
+function vsarStartClock(el) {
+  const node = () => el || document.getElementById('clock');
+  const tick = () => { const n = node(); if (n) n.textContent = new Date().toUTCString().slice(17, 25) + 'Z'; };
+  tick();
+  return setInterval(tick, 1000);
 }
 
-// fetch() plus the token header, retried once if the server rejects it so a
-// wrong or stale token can be corrected without a reload.
-async function vsarFetch(url, opts = {}, retry = true) {
-  const token = vsarToken();
-  const headers = Object.assign({}, opts.headers || {});
-  if (token) headers['X-CAPVSAR-Token'] = token;
-  const r = await fetch(url, Object.assign({}, opts, {headers}));
-  if (r.status === 403 && retry) {
-    const entered = prompt(token
-      ? 'That exercise token was refused. Enter the token for this seat:'
-      : 'This action needs the exercise token for this seat:');
-    if (entered) {
-      vsarSetToken(entered.trim());
-      return vsarFetch(url, opts, false);
-    }
+// The console's push socket, reconnecting with backoff. `onOpen(ws)` is where a
+// view backfills what it missed; `onMessage(frame)` receives parsed JSON (a
+// malformed frame is dropped rather than throwing out of the handler).
+function vsarConnect(opts) {
+  let attempt = 0;
+  const setStatus = (text, cls) => {
+    const el = document.getElementById('status');
+    if (el) { el.textContent = text; el.className = 'status ' + cls; }
+  };
+  function open() {
+    const ws = new WebSocket(
+      `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${opts.path || '/ws'}`);
+    ws.onopen = () => {
+      attempt = 0;
+      setStatus('live', 'online');
+      if (opts.onOpen) opts.onOpen(ws);
+    };
+    ws.onclose = () => {
+      setStatus('reconnecting', 'offline');
+      setTimeout(open, vsarBackoffMs(attempt++));
+    };
+    ws.onmessage = e => {
+      let frame;
+      try { frame = JSON.parse(e.data); } catch (err) { return; }
+      if (opts.onMessage) opts.onMessage(frame);
+    };
+    return ws;
   }
+  return open();
+}
+
+// Header badge and Log out button. `fallbackTitle` is shown when the session
+// carries no title of its own.
+async function vsarInitAuthBadge(fallbackTitle) {
+  const badge = document.getElementById('userBadge');
+  try {
+    const res = await fetch('/api/auth/me');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.authenticated && badge) {
+        const title = data.title || (data.role ? data.role.toUpperCase() : fallbackTitle);
+        const cs = data.callsign ? ` (${data.callsign})` : '';
+        badge.textContent = `👤 ${title}${cs}`;
+      }
+    }
+  } catch (e) { /* the badge keeps its static text */ }
+
+  const logout = document.getElementById('logoutBtn');
+  if (logout) {
+    logout.onclick = async () => {
+      try { await fetch('/api/auth/logout', {method: 'POST'}); } catch (e) { /* leaving anyway */ }
+      location.href = '/login';
+    };
+  }
+}
+
+// ------------------------------------------------------------ session gating
+// F2-5: this used to keep a shared role token in localStorage for the life of
+// the browser profile and ask for it in a browser dialog on any 403 - including from
+// roster users who merely lack the role (aircrew on /base). Since X-12/X-13
+// the session cookie is the credential, so a refusal means "log in as someone
+// who may do this", not "type a secret".
+function vsarLoginUrl(pathname, search) {
+  return '/login?next=' + encodeURIComponent((pathname || '/') + (search || ''));
+}
+
+function vsarGoToLogin() {
+  if (location.pathname === '/login') return;
+  location.href = vsarLoginUrl(location.pathname, location.search);
+}
+
+// fetch() that sends the page to /login on 401/403. The response is returned
+// either way, so callers keep their own ok-handling for the failures that are
+// not about the session.
+async function vsarFetch(url, opts = {}) {
+  const r = await fetch(url, opts);
+  if (r.status === 401 || r.status === 403) vsarGoToLogin();
   return r;
+}
+
+// F2-9: one message for every failed call used to say "that callsign is not
+// reporting a position yet", even for an expired session, a 503 or a 422.
+// This words the real failure from the server's own `detail`, with the status
+// in front of the operator. `what` is the sentence subject, e.g. 'Bearing not
+// logged'. A 401/403 has already sent the page to /login (vsarFetch), so it
+// returns '' rather than raising a dialog over the redirect.
+async function vsarFailureText(r, what) {
+  if (r.status === 401 || r.status === 403) return '';
+  let detail = '';
+  try {
+    const body = await r.json();
+    if (typeof body.detail === 'string') detail = body.detail;
+    else if (Array.isArray(body.detail))
+      detail = body.detail.map(d => (d && d.msg) || '').filter(Boolean).join('; ');
+  } catch (e) { /* not JSON */ }
+  return `${what} (HTTP ${r.status})${detail ? ': ' + detail : ''}.`;
+}
+
+async function vsarReportFailure(r, what) {
+  const text = await vsarFailureText(r, what);
+  if (text) alert(text);
 }

@@ -8,7 +8,8 @@ FlightLoop_Phase_AfterFlightModel = 1
 
 REFS = {}          # name -> dict of callbacks
 SIM = {"lat": 0.0, "lon": 0.0, "elev_m": 0.0, "psi": 0.0,
-       "phi": 0.0, "theta": 0.0}
+       "phi": 0.0, "theta": 0.0,
+       "paused": 0}      # sim/time/paused, which the engine freezes on (P2-6)
 TERRAIN_FT = 0.0   # flat ground unless a test raises it
 TERRAIN_FN = None  # optional callable (lat, lon) -> elevation in feet
 LOG = []
@@ -43,8 +44,44 @@ def getDataf(ref):
             "sim/flightmodel/position/theta": SIM["theta"]}[ref.name]
 
 
+def getDatai(ref):
+    return {"sim/time/paused": SIM["paused"]}[ref.name]
+
+
+# Which read callback each declared type may carry, and the Python type X-Plane
+# (via XPPython3) needs it to return. A float accessor that returns an int, or
+# an int accessor that returns a float, is the kind of mistake that only shows
+# up in the sim as a dead dataref, so the stub refuses it at the callback.
+_READ_FOR_TYPE = {Type_Int: "readInt", Type_Float: "readFloat",
+                  Type_Double: "readDouble", Type_Data: "readData"}
+_PY_TYPE_FOR_READ = {"readInt": int, "readFloat": float,
+                     "readDouble": float, "readData": int}   # readData -> count
+
+
+def _checked(name, key, fn):
+    want = _PY_TYPE_FOR_READ[key]
+
+    def read(*args, **kw):
+        value = fn(*args, **kw)
+        if type(value) is not want:     # bool and numpy scalars are not int/float
+            raise TypeError("%s: %s returned %s, the declared type needs %s"
+                            % (name, key, type(value).__name__, want.__name__))
+        return value
+    return read
+
+
 def registerDataAccessor(name, dataType=Type_Unknown, writable=-1, **kw):
-    REFS[name] = kw
+    """Record the declared type, and hold the read callback to it."""
+    if dataType in _READ_FOR_TYPE:
+        wanted = _READ_FOR_TYPE[dataType]
+        stray = [k for k in kw if k.startswith("read") and k != wanted]
+        if stray or (wanted not in kw):
+            raise TypeError("%s: declared type %d wants %s, got %s"
+                            % (name, dataType, wanted, sorted(kw)))
+    REFS[name] = {k: (_checked(name, k, v) if k in _PY_TYPE_FOR_READ else v)
+                  for k, v in kw.items()}
+    REFS[name]["dataType"] = dataType
+    REFS[name]["writable"] = writable
     return _Ref(name)
 
 

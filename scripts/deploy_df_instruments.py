@@ -22,7 +22,7 @@ INSTRUMENTS = {
 
 SHARED_TO_INSTRUMENTS = {
     "becker-sar-df-517": {
-        "lib": ["lcd.lua", "cap_df.lua", "cap_df_audio.lua", "dcu.lua"],
+        "lib": ["lcd.lua", "cap_df.lua", "cap_df_audio.lua", "dcu.lua", "cap_power.lua"],
         "resources": [
             "elt_analog_clean.wav",
             "elt_analog_df.wav",
@@ -31,7 +31,7 @@ SHARED_TO_INSTRUMENTS = {
         ],
     },
     "rhotheta-rt-600": {
-        "lib": ["lcd.lua", "cap_df.lua", "cap_df_audio.lua", "dcu.lua"],
+        "lib": ["lcd.lua", "cap_df.lua", "cap_df_audio.lua", "dcu.lua", "cap_power.lua"],
         "resources": [
             "elt_analog_clean.wav",
             "elt_analog_df.wav",
@@ -40,7 +40,11 @@ SHARED_TO_INSTRUMENTS = {
         ],
     },
     "cap-fm-tdfm-136b": {
-        "lib": ["lcd.lua"],
+        "lib": ["lcd.lua", "knob_push.lua", "cap_power.lua"],
+        "resources": [],
+    },
+    "mo-audio-panel-gma1347": {
+        "lib": ["knob_push.lua", "cap_power.lua"],
         "resources": [],
     },
 }

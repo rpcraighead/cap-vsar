@@ -1,0 +1,28 @@
+# Runs every suite that needs neither X-Plane nor Air Manager, on the Python the
+# service images use. The same script a developer runs: scripts/run_tests.sh.
+name: tests
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+            services/*/requirements.txt
+      # The Lua suites dlopen liblua5.4.so.0, hence --no-shim below.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends liblua5.4-0 git
+      - run: pip install -r requirements-dev.txt
+      - run: scripts/ci_local.sh --no-shim
+      - if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: ci-out
+          path: .ci-out/*.log

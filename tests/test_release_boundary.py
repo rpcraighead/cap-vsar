@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -69,6 +71,72 @@ class ReleaseBoundary(unittest.TestCase):
         for name in ("becker-sar-df-517", "rhotheta-rt-600",
                      "cap-fm-tdfm-136b", "mo-audio-panel-gma1347"):
             self.assertIn(f"instruments/{name}/resources/faceplate.png", tracked_files())
+
+
+# B2-10: KNOWN-OPEN, deliberately not fixed in code. This render shows
+# Laminar's stock Cessna 172SP mesh in an N429CP livery - the same category of
+# question as D-5's stock-MFD tile - and no longer depicts the aircraft the
+# package ships. Whether it stays is the maintainer's call; until then it is
+# listed here so it is a recorded decision rather than an oversight. Resolving
+# it (replace or remove the figure) means deleting the entry, and the test
+# below then insists the list is kept honest.
+KNOWN_OPEN_THIRD_PARTY_ARTWORK = {
+    "docs/figures/manual/fig_c182t_aircraft.png":
+        "B2-10: render of Laminar's C172SP mesh; handbook figure 8",
+    "website/images/fig_c182t_aircraft.png":
+        "B2-10: same render, used by website/index.html",
+}
+
+
+class KnownOpenItems(unittest.TestCase):
+    def test_known_open_artwork_is_listed_and_still_tracked(self):
+        files = set(tracked_files())
+        for path, why in KNOWN_OPEN_THIRD_PARTY_ARTWORK.items():
+            self.assertIn(path, files, f"{path} is gone - resolved? remove it from the list ({why})")
+
+
+class DocsSiteDoesNotRepublishVendorManuals(unittest.TestCase):
+    """B2-9: the site is served to participants; the manuals are not ours."""
+
+    VENDOR_NAME = re.compile(r"(RT600|TDFM136|GMA1347|Becker|SARDF517)", re.I)
+
+    def setUp(self):
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import build_docs_site
+        self.site = build_docs_site
+
+    def test_no_vendor_manual_is_in_any_copied_list(self):
+        for rel, _label in self.site.PROJECT_PDFS:
+            self.assertIsNone(self.VENDOR_NAME.search(rel), f"{rel} is a vendor document")
+
+    def test_every_vendor_manual_has_a_source_url_in_sources_md(self):
+        urls = self.site.source_urls(ROOT / "docs" / "SOURCES.md")
+        for rel, _label in self.site.VENDOR_PDFS:
+            self.assertIn(Path(rel).name, urls, f"docs/SOURCES.md has no URL for {rel}")
+            self.assertTrue(urls[Path(rel).name].startswith("https://"))
+
+    def test_built_site_has_no_vendor_pdf_even_when_the_files_are_on_disk(self):
+        with tempfile.TemporaryDirectory() as t:
+            fake = Path(t, "repo")
+            (fake / "docs").mkdir(parents=True)
+            for rel, _ in self.site.VENDOR_PDFS + self.site.PROJECT_PDFS:
+                (fake / rel).write_bytes(b"%PDF-1.4 fake")
+            (fake / "docs" / "SOURCES.md").write_text(
+                (ROOT / "docs" / "SOURCES.md").read_text(encoding="utf-8"), encoding="utf-8")
+            out = Path(t, "site")
+            original = (self.site.REPO, self.site.SECTIONS)
+            self.site.REPO, self.site.SECTIONS = fake, []
+            try:
+                self.site.build(out)
+            finally:
+                self.site.REPO, self.site.SECTIONS = original
+            copied = [p.name for p in out.rglob("*") if p.is_file()]
+            self.assertEqual([n for n in copied if self.VENDOR_NAME.search(n)], [], copied)
+            index = (out / "index.html").read_text(encoding="utf-8")
+            self.assertIn("Third-party documents, not hosted here", index)
+            self.assertIn("https://rhothetaamerica.com/pdfs/RT-600_Manual.pdf", index)
+            # project PDFs are still hosted
+            self.assertIn("CAP_V-SAR_AI_Mission_Pilot_CONOPS.pdf", copied)
 
 
 if __name__ == "__main__":

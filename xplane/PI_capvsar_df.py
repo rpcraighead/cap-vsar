@@ -79,9 +79,11 @@ import json
 import math
 import os
 import random
+import ssl
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 import xp
@@ -94,9 +96,30 @@ import xp
 # hash check keeps meaning something. A station with no ini - or a
 # pre-O-2 install that only ever had this file - gets exactly the old
 # hardcoded single-station defaults, so this is not a breaking change.
-_DEFAULT_CONSOLE = "http://192.0.2.151:8700"
+#
+# P2-3: the default is the console's front door (the TLS proxy on 443), which is
+# what scripts/build_station_kit.py writes into every kit. The old default,
+# http://192.0.2.151:8700, is a port O-8 closed to everything but the proxy,
+# so a plugin with no ini was deaf from the first poll.
+_DEFAULT_CONSOLE = "https://192.0.2.151"
 _DEFAULT_CALLSIGN = "CAP-1"
 STATION_INI = os.path.join(os.path.dirname(os.path.abspath(__file__)), "capvsar_station.ini")
+
+
+# Lines to log once XPluginStart can (xp.log is main-thread-only and this module
+# is imported before the sim hands us anything). _load_station_config appends;
+# XPluginStart drains. Deduplicated, so a re-read does not repeat itself.
+STARTUP_WARNINGS = []
+
+
+def _startup_warn(message):
+    if message not in STARTUP_WARNINGS:
+        STARTUP_WARNINGS.append(message)
+
+
+def _is_loopback_host(host):
+    host = (host or "").strip("[]").lower()
+    return host == "localhost" or host == "::1" or host.startswith("127.")
 
 
 def _load_station_config(path=STATION_INI):
@@ -119,6 +142,16 @@ def _load_station_config(path=STATION_INI):
             callsign = cfg.get("station", "callsign", fallback=callsign)
             if not plugin_key:
                 plugin_key = cfg.get("station", "plugin_key", fallback="")
+    # Q3: the plugin key rides in a header on every request, so over plain
+    # http it crosses the network in the clear. Loopback is the one place that
+    # is fine. Warn rather than refuse: a lab bench on an isolated switch is a
+    # legitimate (if poor) setup, and refusing would make the DF silent.
+    if console.lower().startswith("http://"):
+        host = urllib.parse.urlsplit(console).hostname
+        if not _is_loopback_host(host):
+            _startup_warn("console URL %s is plain http:// and not loopback - "
+                          "the plugin key and positions cross the network "
+                          "unencrypted; use https://" % console)
     return console, callsign, plugin_key
 
 
@@ -131,6 +164,13 @@ CONSOLE, CALLSIGN, PLUGIN_KEY = _load_station_config()
 POLL_S = 3.0            # scenario refresh
 REPORT_S = 2.0          # position report
 NET_TICK_S = 0.5        # network thread wake-up; both timers are checked on it
+# Improvement 8: a dead console used to cost a full urlopen (up to 4 s) per
+# attempt, per timer, so REPORT_S=2.0 was nominal again the moment the console
+# went away, and the thread hammered it at 2-3 s forever. After consecutive
+# transport failures the next attempt is pushed out: 2, 4, 8, 16, then 30 s.
+# The first success puts both timers back on their real cadence.
+NET_BACKOFF_BASE_S = 2.0
+NET_BACKOFF_MAX_S = 30.0
 LOOP_S = 0.25           # DF recompute
 R_NM = 3440.065
 M_PER_NM = 1852.0
@@ -561,12 +601,49 @@ def synth_hex15(lat, lon):
     return h.upper()[:15]
 
 
+def beacon_key(scn):
+    """Identity of the beacon a scenario describes (P2-2).
+
+    Position, channel and the C/S block: anything that makes held receiver
+    state belong to a different transmitter. Effects and power are not part of
+    it; changing those mid-sortie is a tweak, not a new beacon.
+    """
+    return (round(scn.get("lat", 0.0), 6), round(scn.get("lon", 0.0), 6),
+            scn.get("beacon_freq_hz"), scn.get("band"),
+            json.dumps(scn.get("cs") or {}, sort_keys=True, default=str))
+
+
+def _transport_failure(exc):
+    """The console could not be reached (as opposed to answering badly).
+
+    An HTTPError is a URLError subclass but proves the console is up.
+    """
+    return (isinstance(exc, (urllib.error.URLError, OSError))
+            and not isinstance(exc, urllib.error.HTTPError))
+
+
+class NetSchedule:
+    """When a network worker next polls and reports, and how often in a row the
+    console has failed it. One per worker thread."""
+    def __init__(self):
+        self.next_poll = 0.0
+        self.next_report = 0.0
+        self.failures = 0
+
+
 class PythonInterface:
     def __init__(self):
         self.probe = None
         self.loop = None
         self.accessors = []
         self.stop = threading.Event()
+        # P2-8: XPluginDisable after a failed XPluginEnable read self.net
+        # before anything had assigned it.
+        self.net = None
+        # P2-6: sim time is monotonic time less the time spent paused.
+        self.dr_paused = None
+        self.paused_total = 0.0
+        self.pause_began = None
 
         # published DF state
         self.valid = 0
@@ -613,19 +690,23 @@ class PythonInterface:
         self.samples = collections.deque()      # (t, rel, true)
         self.held = None                        # (t, rel, true)
         self.scan_hold_hz = None
+        # P2-2: which beacon the held bearing, averaging store, decoded ident
+        # and scan hold belong to. The scenario dict carries its own key, so the
+        # flight loop sees the key and the beacon it describes in one read.
+        self.applied_beacon_key = None
 
         # EN-5: XPPython3's API is main-thread-only, but the network thread had
         # two paths into xp.log() (truth_note, and now the poll-failure note).
         # Messages go on this queue instead and the flight loop drains it.
         self.log_queue = collections.deque(maxlen=64)
-        self.last_poll_complaint = 0.0
+        self.last_poll_complaint = -math.inf
 
         # scenario, replaced wholesale by the network thread - see
         # poll_scenario_once, which rebinds this attribute rather than
         # mutating the dict in place (EN-4)
         self.scn = {"active": 0, "lat": 0.0, "lon": 0.0, "elev_ft": 0.0,
                     "band": 121.5, "power": 1.0, "effects": {}}
-        self.started = time.time()
+        self.started = time.monotonic()
         self.pos = (0.0, 0.0, 0.0, 0.0)   # lat, lon, alt_ft, hdg_true
         # The flight loop fills self.pos; until it has run once, the placeholder
         # above is not a position and must not be reported. Posting it put every
@@ -647,6 +728,10 @@ class PythonInterface:
                        or xp.findDataRef("sim/flightmodel/position/psi"))
         self.dr_phi = xp.findDataRef("sim/flightmodel/position/phi")
         self.dr_theta = xp.findDataRef("sim/flightmodel/position/theta")
+        # P2-6: a pause-to-brief must not expire a held bearing or the decode.
+        self.dr_paused = xp.findDataRef("sim/time/paused")
+        for warning in STARTUP_WARNINGS:
+            self.log(warning)
 
         def f(name, get):
             self.accessors.append(
@@ -788,7 +873,8 @@ class PythonInterface:
         self.stop = threading.Event()
         self.loop = xp.createFlightLoop(self.flight_loop, xp.FlightLoop_Phase_AfterFlightModel)
         xp.scheduleFlightLoop(self.loop, LOOP_S)
-        self.net = threading.Thread(target=self.net_worker, daemon=True)
+        self.net = threading.Thread(target=self.net_worker, daemon=True,
+                                    name="capvsar-df-net")
         self.net.start()
         return 1
 
@@ -824,6 +910,30 @@ class PythonInterface:
             return None
         _, _, alt_m = xp.localToWorld(info.locationX, info.locationY, info.locationZ)
         return alt_m * FT_PER_M
+
+    def beacon_elevation(self, s, ground_ft):
+        """Beacon elevation in feet MSL, snapped to the ground when unset.
+
+        A scenario that gives beacon_elev_ft as 0 or null (the console stores
+        null as 0 here, via as_float) used to be modelled at sea level: in
+        mountains that is underground, and every line-of-sight ray then fails.
+        In that case the beacon is taken to be on the probed terrain. The snap
+        is remembered per beacon position, so it is made once per scenario
+        change and does not wander with the probe from tick to tick; if the
+        probe misses (scenery not loaded yet) the stated value stands for this
+        tick and the snap is tried again on the next.
+        """
+        elev = as_float(s.get("elev_ft"), 0.0)
+        if elev != 0.0:
+            return elev
+        where = (s.get("lat"), s.get("lon"))
+        snapped = getattr(self, "elev_snap", None)
+        if snapped and snapped[0] == where:
+            return snapped[1]
+        if ground_ft is None:
+            return elev
+        self.elev_snap = (where, ground_ft)
+        return ground_ft
 
     def los_sample_count(self, d_nm):
         """How many probes this path needs, at LOS_SPACING_NM where it can."""
@@ -903,10 +1013,57 @@ class PythonInterface:
                   + math.sin(phase * 2.7 + (now - self.started) / 30.0) * 0.4)
         return amplitude_deg * strength * wander
 
+    # ---------------------------------------------------------- sim clock
+    def sim_paused(self):
+        """True while X-Plane's sim/time/paused is 1 (P2-6).
+
+        An unreadable dataref reads as 'not paused': the engine then behaves as
+        it did before the dataref was consulted.
+        """
+        ref = getattr(self, "dr_paused", None)
+        if not ref:
+            return False
+        try:
+            return bool(xp.getDatai(ref))
+        except Exception:
+            return False
+
+    def sim_now(self):
+        """Monotonic time with the paused stretches taken out (P2-6).
+
+        Every interval and hold in the engine - the TIMEHOLD bearing, the
+        averaging window, the decode hold, the 406 burst phase - is measured on
+        this clock, so a pause to brief the crew does not age any of them, and a
+        wall-clock step (NTP, a manual change) cannot expire or extend one.
+        """
+        mono = time.monotonic()
+        began = getattr(self, "pause_began", None)
+        frozen = (mono - began) if began is not None else 0.0
+        return mono - getattr(self, "paused_total", 0.0) - frozen
+
+    def track_pause(self):
+        """Update the pause bookkeeping; returns True while paused."""
+        paused = self.sim_paused()
+        mono = time.monotonic()
+        if paused and self.pause_began is None:
+            self.pause_began = mono
+        elif not paused and self.pause_began is not None:
+            self.paused_total += mono - self.pause_began
+            self.pause_began = None
+        return paused
+
     # ---------------------------------------------------------- receiver
-    def beacon_hz(self):
-        """What the beacon is actually transmitting on."""
-        s = self.scn
+    def beacon_hz(self, s=None):
+        """What the beacon is actually transmitting on.
+
+        `s` is the tick's scenario (P2-4): compute() takes one reference per tick
+        and hands it down, so the EN-4 guarantee that a tick sees one scenario
+        holds for the frequency, the published band and the decode too. Callers
+        outside the flight loop (the dataref accessors) omit it and get the
+        current scenario.
+        """
+        if s is None:
+            s = self.scn
         hz = s.get("beacon_freq_hz")
         if hz:
             return float(hz)
@@ -919,15 +1076,15 @@ class PythonInterface:
 
     def burst_open(self):
         """True during the ~440 ms a 406 beacon is actually radiating."""
-        return (time.time() - self.started) % BURST_PERIOD_S < BURST_LEN_S
+        return (self.sim_now() - self.started) % BURST_PERIOD_S < BURST_LEN_S
 
-    def tuned_hz(self):
+    def tuned_hz(self, s=None):
         """The channel the crew has selected, ignoring any scan stepping."""
         if not self.panel_seen:
-            return self.beacon_hz()
-        return float(self.active_freq_hz) if self.active_freq_hz else self.beacon_hz()
+            return self.beacon_hz(s)
+        return float(self.active_freq_hz) if self.active_freq_hz else self.beacon_hz(s)
 
-    def effective_freq_hz(self):
+    def effective_freq_hz(self, s=None):
         """
         What the receiver is listening to this instant.
 
@@ -937,8 +1094,8 @@ class PythonInterface:
         the receiver is stepping between channels on its own.
         """
         if not self.panel_seen:
-            return self.beacon_hz()
-        tuned = self.tuned_hz()
+            return self.beacon_hz(s)
+        tuned = self.tuned_hz(s)
         if not self.scan_enable:
             return tuned
         # 517 3.3.3: surveil the COSPAS/SARSAT burst, and in the 5-45 s gap
@@ -956,14 +1113,16 @@ class PythonInterface:
             return tuned
         alt1 = float(self.scan_alt1_hz) or 121_500_000.0
         alt2 = float(self.scan_alt2_hz) or 243_000_000.0
-        phase = int((time.time() - self.started) / SCAN_DWELL_S) % 2
+        phase = int((self.sim_now() - self.started) / SCAN_DWELL_S) % 2
         return alt1 if phase == 0 else alt2
 
-    def published_band(self):
+    def published_band(self, s=None):
         """cap/df/band in MHz - what the head is on, not what the console picked."""
+        if s is None:
+            s = self.scn
         if not self.panel_seen:
-            return as_float(self.scn.get("band"), 121.5)
-        return self.effective_freq_hz() / 1e6
+            return as_float(s.get("band"), 121.5)
+        return self.effective_freq_hz(s) / 1e6
 
     def squelch_threshold(self):
         """Signal a station must beat to open the squelch, on the 0..1 scale."""
@@ -980,7 +1139,7 @@ class PythonInterface:
     def cs_msg_age(self):
         if self.cs_decoded_at is None:
             return 0.0
-        return time.time() - self.cs_decoded_at
+        return self.sim_now() - self.cs_decoded_at
 
     # ------------------------------------------------------------ main loop
     def log(self, message):
@@ -1037,7 +1196,11 @@ class PythonInterface:
             self.distance = 0.0
 
     def compute(self):
-        now = time.time()
+        if self.track_pause():
+            # P2-6: frozen. Nothing the receiver holds ages while the sim is
+            # paused, and the position it would be computed from is not moving.
+            return
+        now = self.sim_now()
         lat = xp.getDatad(self.dr_lat)
         lon = xp.getDatad(self.dr_lon)
         alt_ft = xp.getDatad(self.dr_elev) * FT_PER_M
@@ -1056,6 +1219,17 @@ class PythonInterface:
             self.clear_pending = False
 
         s = self.scn
+        key = s.get("beacon_key")
+        if key != self.applied_beacon_key:
+            # P2-2: the console swaps scenarios in one step while `running`
+            # stays true, so nothing else announces that this is a different
+            # beacon. Without this the panel kept the old relative bearing and
+            # the old hex ident (DECODE_HOLD_S = 120 s) while the distance
+            # already read the new one.
+            self.applied_beacon_key = key
+            self.silent()
+            self.clear_decode()
+            self.scan_hold_hz = None
         if not s.get("active"):
             self.silent()
             self.clear_decode()
@@ -1069,8 +1243,14 @@ class PythonInterface:
             self.scan_hold_hz = None
             return
 
-        b_lat, b_lon, b_ft = s["lat"], s["lon"], s["elev_ft"]
+        b_lat, b_lon = s["lat"], s["lon"]
         eff = s.get("effects", {})
+        # Terrain under each end, probed once per tick. The beacon's own
+        # elevation comes back from beacon_elevation(), which snaps a scenario
+        # that gave 0 or nothing to the ground it actually sits on.
+        ac_ground = self.terrain_ft(lat, lon)
+        b_ground = self.terrain_ft(b_lat, b_lon)
+        b_ft = self.beacon_elevation(s, b_ground)
 
         # Ground great-circle distance drives everything that is about
         # position over the earth: the radio horizon, the cone of confusion and
@@ -1084,32 +1264,41 @@ class PythonInterface:
         self.distance = slant_nm
         brg = bearing_true(lat, lon, b_lat, b_lon)
 
-        # Radio horizon. Both ends contribute: 1.23*(sqrt(h_ac) + sqrt(h_bcn)),
-        # heights in feet MSL. The old form used the aircraft's height *above
-        # the beacon*, which collapsed to zero the moment the beacon sat higher
-        # than the aircraft - so an aircraft in a valley below a ridge-top
-        # beacon a mile away heard nothing at all. Terrain between the two is a
-        # separate question, answered by the line-of-sight probe below.
+        # Radio horizon. Both ends contribute: 1.23*(sqrt(h_ac) + sqrt(h_bcn)).
+        # The old form used the aircraft's height *above the beacon*, which
+        # collapsed to zero the moment the beacon sat higher than the aircraft
+        # - so an aircraft in a valley below a ridge-top beacon a mile away
+        # heard nothing at all. Terrain between the two is a separate question,
+        # answered by the line-of-sight probe below.
+        #
+        # P2-5: the heights are above the ground at each end, not above sea
+        # level. In MSL terms a beacon on 9,000 ft ground was a beacon on a
+        # 9,000 ft tower, which handed it 117 NM of horizon of its own and meant
+        # the term almost never bit in mountains. Where a probe misses
+        # (unloaded scenery) that end falls back to its MSL height, which is
+        # the old behaviour for that end.
         if eff.get("radio_horizon", True):
-            horizon = 1.23 * (math.sqrt(max(alt_ft, 0.0)) + math.sqrt(max(b_ft, 0.0)))
+            h_ac = alt_ft - ac_ground if ac_ground is not None else alt_ft
+            h_b = b_ft - b_ground if b_ground is not None else b_ft
+            horizon = 1.23 * (math.sqrt(max(h_ac, 0.0)) + math.sqrt(max(h_b, 0.0)))
             if d > horizon:
                 self.silent(keep_distance=True)
-                self.decode_tick(False)
+                self.decode_tick(False, s)
                 return
 
         # Tuning. The head only hears the beacon if it is on the right channel
         # and physically able to receive it - which for a 406 channel depends on
         # which head is fitted.
-        listening_hz = self.effective_freq_hz()
+        listening_hz = self.effective_freq_hz(s)
         if self.panel_seen:
             if not head_can_receive(self.head_type, listening_hz, self.mode):
                 # A 517 parked on a C/S channel it does not have. The set looks
                 # perfectly healthy and hears nothing, which is the point.
                 self.silent(keep_distance=True)
-                self.decode_tick(False)
+                self.decode_tick(False, s)
                 return
-            if not tuned_to(listening_hz, self.beacon_hz(), self.rx_span_hz):
-                if self.scan_enable and listening_hz != self.tuned_hz():
+            if not tuned_to(listening_hz, self.beacon_hz(s), self.rx_span_hz):
+                if self.scan_enable and listening_hz != self.tuned_hz(s):
                     # Scan has stepped off the tuned channel between bursts
                     # (517 3.3.3). That is the receiver doing its job, not the
                     # signal going away, and TIMEHOLD is precisely what carries
@@ -1121,7 +1310,7 @@ class PythonInterface:
                 else:
                     # Genuinely parked on the wrong channel: nothing to hold.
                     self.silent(keep_distance=True)
-                self.decode_tick(False)
+                self.decode_tick(False, s)
                 self.scan_hold_hz = None
                 return
 
@@ -1141,7 +1330,7 @@ class PythonInterface:
         # before the 0..1 mapping is what lets a strong nearby beacon stay
         # audible through partial shielding while a weak distant one disappears
         # into the same null.
-        beacon_hz = self.beacon_hz()
+        beacon_hz = self.beacon_hz(s)
         prx_dbm = (beacon_erp_dbm(beacon_hz)
                    + power_ratio_db(s.get("power", 1.0))
                    - BEACON_GROUND_LOSS_DB
@@ -1182,14 +1371,14 @@ class PythonInterface:
             # would also release a scan hold the receiver is legitimately still
             # sitting on.
             self.hold_or_drop(now)
-            self.decode_tick(False)
+            self.decode_tick(False, s)
             return
 
         if signal < self.squelch_threshold():
             # Squelched, either by the noise floor or because the crew wound it
             # too far up. Either way the set is quiet and the needle is dead.
             self.hold_or_drop(now)
-            self.decode_tick(False)
+            self.decode_tick(False, s)
             if self.scan_enable:
                 self.scan_hold_hz = None
             return
@@ -1217,7 +1406,7 @@ class PythonInterface:
             # and decoding one here showed SYNC OK and a hex ident on a signal
             # that has no identity in it - the exact thing the 406 half of the
             # exercise is meant to teach.
-            self.decode_tick(signal >= DECODE_MIN_SIGNAL and on_406)
+            self.decode_tick(signal >= DECODE_MIN_SIGNAL and on_406, s)
             return
         self.in_cone = 0
 
@@ -1273,7 +1462,7 @@ class PythonInterface:
         # Reaching here already means a burst is being heard (or that the
         # scenario has switched the cadence off and the beacon is radiating
         # continuously), so the burst state is not re-tested.
-        self.decode_tick(signal >= DECODE_MIN_SIGNAL and on_406)
+        self.decode_tick(signal >= DECODE_MIN_SIGNAL and on_406, s)
 
     def hold_or_drop(self, now):
         """
@@ -1303,7 +1492,7 @@ class PythonInterface:
         self.cs_lat = self.cs_lon = 0.0
         self.cs_decoded_at = None
 
-    def decode_tick(self, frame_received):
+    def decode_tick(self, frame_received, s=None):
         """
         Hold, refresh or drop the decoded frame.
 
@@ -1312,13 +1501,13 @@ class PythonInterface:
         DECODE_HOLD_S so the page does not blink out between bursts.
         """
         if frame_received:
-            self.load_decode()
-            self.cs_decoded_at = time.time()
+            self.load_decode(s)
+            self.cs_decoded_at = self.sim_now()
             return
         if self.cs_decoded_at is not None and self.cs_msg_age() > DECODE_HOLD_S:
             self.clear_decode()
 
-    def load_decode(self):
+    def load_decode(self, s=None):
         """
         Populate the decode from the scenario.
 
@@ -1329,7 +1518,8 @@ class PythonInterface:
         406 ELT without GPS is both the commoner case and the more interesting
         search.
         """
-        s = self.scn
+        if s is None:
+            s = self.scn
         cs = s.get("cs") or {}
 
         self.cs_sync = 2 if cs.get("selftest") else 1
@@ -1383,9 +1573,9 @@ class PythonInterface:
             return st
         except urllib.error.HTTPError as e:
             if e.code == 404:
-                # Console predates the plugin truth channel. Fall back to the
-                # public state so the sortie flag still tracks, but that feed
-                # withholds the beacon, so the DF stays silent.
+                # Console predates the plugin truth channel. There is no
+                # fallback to the public state: that feed withholds the beacon,
+                # so the caller goes silent (active=0) rather than guess.
                 self.truth_note("legacy", "console has no /api/plugin/scenario "
                                           "- update it; DF has no beacon truth")
             elif e.code == 503:
@@ -1398,6 +1588,32 @@ class PythonInterface:
                 self.truth_note("http%d" % e.code,
                                 "console returned HTTP %d for beacon truth" % e.code)
             return None
+        except (urllib.error.URLError, OSError) as e:
+            # P2-3: an unreachable console and a TLS-untrusted one both used to
+            # fail without a word, which left a mis-provisioned station deaf
+            # with nothing in Log.txt. Logged through truth_note, so the first
+            # failure is one line and so is the recovery ("beacon truth channel
+            # open"), however many polls fail in between. The scenario in force
+            # is left alone - a console that is briefly down does not blank the
+            # DF - so this re-raises for poll_scenario_once to treat as
+            # transport trouble.
+            reason = getattr(e, "reason", e)
+            if isinstance(reason, ssl.SSLError):
+                # The class is the diagnosis: CertVerificationError is a CA the
+                # interpreter does not trust, a plain SSLError is a protocol or
+                # hostname mismatch. Once per class, not once per poll.
+                cls = type(reason).__name__
+                self.truth_note("tls:" + cls,
+                                "console TLS failed (%s: %s) - is the CA that signed "
+                                "it installed where this Python looks? "
+                                "ssl.get_default_verify_paths() = %s"
+                                % (cls, reason, ssl.get_default_verify_paths().cafile))
+            else:
+                self.truth_note("unreachable",
+                                "console %s unreachable (%s: %s) - DF keeps its last "
+                                "scenario until it answers"
+                                % (CONSOLE, type(reason).__name__, reason))
+            raise
 
     def net_worker(self):
         """Poll scenario truth and report position, each on its own cadence.
@@ -1407,18 +1623,45 @@ class PythonInterface:
         and the console's track and its dead-reckoning were paced off a figure
         the plugin never actually kept. Both deadlines are absolute, so a slow
         fetch is caught up rather than compounded.
-        """
-        last_poll = 0.0
-        last_report = 0.0
-        while not self.stop.is_set():
-            if time.time() - last_poll >= POLL_S:
-                last_poll = time.time()
-                self.poll_scenario_once()
 
-            if self.pos_seen and time.time() - last_report >= REPORT_S:
-                last_report = time.time()
-                self.report_position_once()
-            self.stop.wait(NET_TICK_S)
+        P2-1: the stop Event is captured here, once. XPluginEnable rebinds
+        self.stop to a fresh Event, so a worker that was still inside a 4 s
+        urlopen when the plugin was disabled used to wake up, read the *new*
+        (clear) event off the attribute and carry on forever - one more
+        duplicate position reporter per reload against a slow console. Held
+        locally, this worker only ever answers to the Event it was started with.
+        """
+        stop = self.stop
+        sched = NetSchedule()
+        while not stop.is_set():
+            self.net_tick(time.monotonic(), sched, stop)
+            stop.wait(NET_TICK_S)
+
+    @staticmethod
+    def net_backoff_s(failures):
+        """Extra delay after this many consecutive console failures."""
+        if failures <= 0:
+            return 0.0
+        return min(NET_BACKOFF_MAX_S, NET_BACKOFF_BASE_S * (2.0 ** (failures - 1)))
+
+    def net_tick(self, now, sched, stop=None):
+        """One pass over the two network timers.
+
+        `now` is monotonic and `sched` is the calling worker's own schedule, so
+        nothing here is shared between an old worker and its replacement.
+        """
+        def settle(ok):
+            sched.failures = 0 if ok else sched.failures + 1
+
+        if now >= sched.next_poll:
+            settle(self.poll_scenario_once())
+            sched.next_poll = now + POLL_S + self.net_backoff_s(sched.failures)
+
+        if stop is not None and stop.is_set():
+            return                    # disabled while the poll was in flight
+        if self.pos_seen and now >= sched.next_report:
+            settle(self.report_position_once())
+            sched.next_report = now + REPORT_S + self.net_backoff_s(sched.failures)
 
     def poll_scenario_once(self):
         """One scenario fetch. A console that is down is not an error here.
@@ -1445,6 +1688,7 @@ class PythonInterface:
                 # the honest state: a DF homing on a stale or null position
                 # teaches the crew something false.
                 nxt["active"] = 0
+                nxt["beacon_key"] = None
             else:
                 sc = st.get("scenario") or {}
                 so = st.get("sortie") or {}
@@ -1461,6 +1705,7 @@ class PythonInterface:
                                 "power": as_float(sc.get("power"), 1.0),
                                 "cs": sc.get("cs") or {},
                                 "effects": sc.get("effects") or {}})
+                    nxt["beacon_key"] = beacon_key(nxt)
                 elif running:
                     # Sortie running but no beacon in the payload: the
                     # scenario is incomplete. Effects still apply, but
@@ -1468,30 +1713,36 @@ class PythonInterface:
                     self.truth_note("no-beacon",
                                     "sortie running with no beacon position")
                     nxt["active"] = 0
+                    nxt["beacon_key"] = None
                     nxt["effects"] = sc.get("effects") or nxt.get("effects") or {}
                 else:
                     nxt["active"] = 0
+                    nxt["beacon_key"] = None
             self.scn = nxt                # single atomic rebind
+            return True
         except Exception as e:
             # Console offline is not an error and stays quiet. A console that
             # answers with something we cannot parse is a different thing: it
             # leaves the DF homing on the previous beacon, which nobody would
             # otherwise notice, so say so once and then rarely (EN-12).
             self.note_poll_failure(e)
+            # Only a transport failure counts towards the backoff: a reply we
+            # could not parse proves the console is up.
+            return not _transport_failure(e)
 
     def note_poll_failure(self, exc):
         """Log a malformed/unusable scenario response, rate-limited."""
-        if isinstance(exc, (urllib.error.URLError, OSError, TimeoutError)):
-            return                        # unreachable console: expected, silent
-        now = time.time()
-        if now - getattr(self, "last_poll_complaint", 0.0) < 60.0:
+        if _transport_failure(exc):
+            return                        # unreachable console: fetch_scenario already said so (P2-3)
+        now = time.monotonic()
+        if now - getattr(self, "last_poll_complaint", -math.inf) < 60.0:
             return
         self.last_poll_complaint = now
         self.log("scenario poll failed (%s: %s) - still using the previous "
                  "scenario" % (type(exc).__name__, exc))
 
     def report_position_once(self):
-        """One position report to the console."""
+        """One position report to the console. True unless the transport failed."""
         try:
             lat, lon, alt_ft, hdg = self.pos
             report = {"callsign": CALLSIGN, "lat": lat, "lon": lon,
@@ -1538,5 +1789,6 @@ class PythonInterface:
             req = urllib.request.Request(
                 CONSOLE + "/api/positions", data=body, headers=headers)
             urllib.request.urlopen(req, timeout=4).read()
-        except Exception:
-            pass
+            return True
+        except Exception as e:
+            return not _transport_failure(e)

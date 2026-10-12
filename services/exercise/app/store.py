@@ -118,6 +118,13 @@ def init_db():
         sortie_cols = {r["name"] for r in c.execute("PRAGMA table_info(sorties)")}
         if "effects" not in sortie_cols:
             c.execute("ALTER TABLE sorties ADD COLUMN effects TEXT")
+        # X2-2: the beacon a sortie flew is a property of the sortie. /track
+        # used to read it back from the scenario row, so a scenario that was
+        # edited or reused after the sortie answered with the wrong beacon,
+        # and a revealed old sortie disclosed the one now being flown.
+        # Sorties that predate the column fall back to the scenario row.
+        if "truth" not in sortie_cols:
+            c.execute("ALTER TABLE sorties ADD COLUMN truth TEXT")
         # V2-5: the recorded track held only where the aircraft was, never what
         # the direction finder was showing at the time. The debrief could
         # therefore score the bearings the crew *reported* but never compare
@@ -169,9 +176,21 @@ def prune_positions():
 
 
 
+def load_effects(raw) -> dict:
+    """Parse a stored effects blob, dropping anything JSON cannot carry (X2-3).
+
+    Rows written before the create route validated its body can hold a bare
+    NaN or Infinity (Python's json writes and reads them). One such row made
+    /api/scenarios and /api/state fail for everyone, so a non-finite value is
+    discarded here and the engine's own default applies.
+    """
+    effects = json.loads(raw or "{}", parse_constant=lambda _c: None)
+    return {k: v for k, v in effects.items() if v is not None}
+
+
 def row_to_scenario(r) -> dict:
     d = dict(r)
-    d["effects"] = json.loads(d["effects"] or "{}")
+    d["effects"] = load_effects(d["effects"])
     return d
 
 

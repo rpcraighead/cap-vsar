@@ -10,30 +10,16 @@ import math
 import sys
 import os
 import tempfile
+import types
 from datetime import datetime, timezone
 from unittest.mock import patch
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import types
-for mod in ['flask', 'requests']:
-    try:
-        __import__(mod)
-    except ImportError:
-        m = types.ModuleType(mod)
-        if mod == 'flask':
-            m.Flask = lambda *args, **kwargs: type('App', (), {'route': lambda *a, **kw: lambda fn: fn, 'run': lambda *a, **kw: None})()
-            m.request = type('Req', (), {'json': {}})()
-            m.jsonify = lambda d: d
-            m.send_from_directory = lambda *a, **kw: None
-            m.render_template = lambda *a, **kw: ''
-            m.abort = lambda *a, **kw: None
-        elif mod == 'requests':
-            m.get = lambda *a, **kw: type('Resp', (), {'status_code': 200, 'content': b'', 'json': lambda: {}})()
-            m.post = lambda *a, **kw: type('Resp', (), {'status_code': 200, 'json': lambda: {}})()
-        sys.modules[mod] = m
-
+# O2-2: this used to stub out flask and requests when they were missing. Both
+# are in requirements-dev.txt now, so the real ones are imported and a missing
+# dependency fails loudly instead of testing against a fake.
 from app import (
     destination_point,
     generate_expanding_square,
@@ -298,6 +284,8 @@ class TestSARRequestBounds(unittest.TestCase):
     def request(payload):
         return types.SimpleNamespace(
             json=payload,
+            get_json=lambda **kw: payload,
+            get_data=lambda: b'{}',
             is_json=True,
             headers={'Origin': 'http://localhost'},
             host_url='http://localhost/',
@@ -308,6 +296,7 @@ class TestSARRequestBounds(unittest.TestCase):
         for field in ('length_nm', 'width_nm'):
             payload = {
                 'pattern_type': 'parallel_track',
+                'datum': '@33.17,-117.08',
                 'spacing_nm': 1.0,
                 'length_nm': 5.0,
                 'width_nm': 4.0,
@@ -322,6 +311,7 @@ class TestSARRequestBounds(unittest.TestCase):
     def test_parallel_track_rejects_excessive_sweep_count(self):
         payload = {
             'pattern_type': 'parallel_track',
+            'datum': '@33.17,-117.08',
             'spacing_nm': 0.1,
             'length_nm': 5.0,
             'width_nm': 30.0,
@@ -387,6 +377,8 @@ class TestPlannerSecurity(unittest.TestCase):
         return types.SimpleNamespace(
             cookies={},
             json=payload,
+            get_json=lambda **kw: payload,
+            get_data=lambda: b'{}',
             is_json=is_json,
             headers=headers,
             host_url='http://localhost/',

@@ -1,0 +1,15 @@
+# Only for the document and artwork generators in scripts/ (B2-8). Not needed
+# to run any test suite; see requirements-dev.txt for that.
+#
+#   pip install -r requirements-docs.txt
+#
+# Also needs LibreOffice on PATH for generate_manual.py (ODT/DOCX/PDF) and for
+# the .docx pages of build_docs_site.py. generate_manual.py --html-only needs
+# neither LibreOffice nor anything below beyond Pillow.
+
+python-docx>=1.1,<2      # scripts/build_radio_reference_doc.py
+Markdown>=3.5,<4         # scripts/build_docs_site.py (the planner pins 3.10.2)
+Pillow>=10.0             # generate_manual.py, make_df_artwork.py, make_panel_artwork.py
+
+# scripts/adapt_cap_livery.py additionally imports numpy and scipy; it is a
+# one-off livery tool, not part of the docs build.

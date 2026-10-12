@@ -8,14 +8,25 @@ Produces completely self-contained, publication-ready:
   4. Formatted HTML (.html)
 """
 
+import argparse
 import os
 import re
+import shutil
 import zipfile
 import subprocess
+from pathlib import Path
 from PIL import Image
 
-MANUAL_DIR = "/home/ron/Projects/cap-vsar/docs/manual"
-FIGURES_DIR = "/home/ron/Projects/cap-vsar/docs/figures/manual"
+# B2-7: everything is relative to the checkout this script lives in. It used to
+# hard-code an absolute path into a different checkout, and baked that path
+# into the tracked HTML, so every figure was broken for anyone else (and in
+# the docs site built from it).
+REPO_ROOT = Path(__file__).resolve().parents[1]
+MANUAL_DIR = str(REPO_ROOT / "docs" / "manual")
+FIGURES_DIR = str(REPO_ROOT / "docs" / "figures" / "manual")
+# What the HTML says. Relative to the HTML file itself, so the page works from
+# a clone, from the docs site, and from a file:// open.
+FIGURES_HREF = "../figures/manual"
 
 HTML_PATH = os.path.join(MANUAL_DIR, "CAP_VSAR_Flight_Operations_Handbook.html")
 ODT_PATH = os.path.join(MANUAL_DIR, "CAP_VSAR_Flight_Operations_Handbook.odt")
@@ -274,7 +285,7 @@ polar calculations for the Cessna 182T / 172S NAV III.
 </p>
 
 <div class="figure-container">
-  <img class="figure-img" src="{FIGURES_DIR}/fig_flightplanner_main.png" style="width:6.2in;height:3.88in;" width="595" height="372" alt="Flight Planner Moving Map">
+  <img class="figure-img" src="{FIGURES_HREF}/fig_flightplanner_main.png" style="width:6.2in;height:3.88in;" width="595" height="372" alt="Flight Planner Moving Map">
   <div class="figure-caption">Figure 1: Flight Planner Moving Map with FAA Sectional Overlay & Nav-Log Drawer</div>
 </div>
 
@@ -335,7 +346,7 @@ workstation onto a single 1920&times;1080 canvas.
 </p>
 
 <div class="figure-container">
-  <img class="figure-img" src="{FIGURES_DIR}/fig_panel_becker517.png" style="width:6.2in;height:3.49in;" width="595" height="335" alt="MO Panel Layout 1">
+  <img class="figure-img" src="{FIGURES_HREF}/fig_panel_becker517.png" style="width:6.2in;height:3.49in;" width="595" height="335" alt="MO Panel Layout 1">
   <div class="figure-caption">Figure 2: Dedicated C182T MO Station &mdash; Layout 1 (Becker SAR-DF 517 & TDFM-136B)</div>
 </div>
 
@@ -391,7 +402,7 @@ between the legacy Becker 517 and the modern fleet-standard RHOTHETA RT-600:
 </p>
 
 <div class="figure-container">
-  <img class="figure-img" src="{FIGURES_DIR}/fig_panel_rt600.png" style="width:6.2in;height:3.49in;" width="595" height="335" alt="MO Panel Layout 2">
+  <img class="figure-img" src="{FIGURES_HREF}/fig_panel_rt600.png" style="width:6.2in;height:3.49in;" width="595" height="335" alt="MO Panel Layout 2">
   <div class="figure-caption">Figure 3: Dedicated C182T MO Station &mdash; Layout 2 (RHOTHETA RT-600 & TDFM-136B)</div>
 </div>
 
@@ -410,7 +421,7 @@ over simulated flight exercises, real-time aircraft tracking, and dynamic enviro
 </p>
 
 <div class="figure-container">
-  <img class="figure-img" src="{FIGURES_DIR}/fig_instructor_console.png" style="width:6.2in;height:3.88in;" width="595" height="372" alt="Instructor Console">
+  <img class="figure-img" src="{FIGURES_HREF}/fig_instructor_console.png" style="width:6.2in;height:3.88in;" width="595" height="372" alt="Instructor Console">
   <div class="figure-caption">Figure 4: Instructor Control Console with Sectional Basemap & Dynamic Failure Controls</div>
 </div>
 
@@ -450,7 +461,7 @@ Operator (MRO) and Air Operations Branch Director (AOBD). In accordance with CAP
 </p>
 
 <div class="figure-container">
-  <img class="figure-img" src="{FIGURES_DIR}/fig_mission_base.png" style="width:6.2in;height:3.88in;" width="595" height="372" alt="Mission Base Console">
+  <img class="figure-img" src="{FIGURES_HREF}/fig_mission_base.png" style="width:6.2in;height:3.88in;" width="595" height="372" alt="Mission Base Console">
   <div class="figure-caption">Figure 5: Mission Base Console with Aircraft Radar Track and Tactical Message Log</div>
 </div>
 
@@ -467,7 +478,7 @@ The debrief engine replays the recorded flight second-by-second against the unma
 </p>
 
 <div class="figure-container">
-  <img class="figure-img" src="{FIGURES_DIR}/fig_debrief_console.png" style="width:6.2in;height:3.88in;" width="595" height="372" alt="Debrief Replay Console">
+  <img class="figure-img" src="{FIGURES_HREF}/fig_debrief_console.png" style="width:6.2in;height:3.88in;" width="595" height="372" alt="Debrief Replay Console">
   <div class="figure-caption">Figure 6: Debrief Console with Flight Track Scoring & Bearing Error Analysis</div>
 </div>
 
@@ -497,7 +508,7 @@ the exercise radio service rather than a hard-coded frequency card.
 </ul>
 
 <div class="figure-container">
-  <img class="figure-img" src="{FIGURES_DIR}/fig_radio_console.png" style="width:6.2in;height:3.88in;" width="595" height="372" alt="Current Mission Base Radio Console">
+  <img class="figure-img" src="{FIGURES_HREF}/fig_radio_console.png" style="width:6.2in;height:3.88in;" width="595" height="372" alt="Current Mission Base Radio Console">
   <div class="figure-caption">Figure 7: Current Mission Base Radio Console with the APX 4500 O2 presentation selected</div>
 </div>
 
@@ -530,7 +541,7 @@ Garmin G1000 Manifold Pressure EIS instrumentation.
 </p>
 
 <div class="figure-container">
-  <img class="figure-img" src="{FIGURES_DIR}/fig_c182t_aircraft.png" style="width:6.2in;height:3.49in;" width="595" height="335" alt="Cessna 182T NAV III CAP Aircraft Selection">
+  <img class="figure-img" src="{FIGURES_HREF}/fig_c182t_aircraft.png" style="width:6.2in;height:3.49in;" width="595" height="335" alt="Cessna 182T NAV III CAP Aircraft Selection">
   <div class="figure-caption">Figure 8: Civil Air Patrol Cessna 182T NAV III (CAP 487) Aircraft Package & Selection Banner</div>
 </div>
 
@@ -932,11 +943,22 @@ def embed_and_resize_odt_images(odt_path, max_width_in=6.2):
     os.replace(temp_odt, odt_path)
     print(f"[+] ODT package finalized with embedded and clamped figures.")
 
-def main():
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Generate the Flight Operations Handbook.")
+    parser.add_argument("--html-only", action="store_true",
+                        help="write the HTML and stop (no LibreOffice needed)")
+    parser.add_argument("--copy-to", metavar="DIR",
+                        default=os.environ.get("CAPVSAR_MANUAL_COPY_DIR"),
+                        help="also copy the .odt/.docx/.pdf into DIR "
+                             "(default: $CAPVSAR_MANUAL_COPY_DIR, otherwise no copy)")
+    args = parser.parse_args(argv)
+
     print("[*] Generating HTML document with 6.2in-clamped image styling...")
     with open(HTML_PATH, "w", encoding="utf-8") as f:
         f.write(HTML_CONTENT)
     print(f"[+] Written: {HTML_PATH}")
+    if args.html_only:
+        return
 
     print("[*] Converting HTML to OpenDocument Text (.odt) via LibreOffice...")
     cmd_odt = [
@@ -964,15 +986,14 @@ def main():
     subprocess.check_call(cmd_pdf)
     print(f"[+] Written: {PDF_PATH}")
 
-    # Copy to user's Documents folder
-    user_docs = "/home/ron/Documents"
-    if os.path.isdir(user_docs):
+    # Opt-in only: this used to copy into one user's Documents folder unconditionally.
+    if args.copy_to:
+        dest = Path(args.copy_to).expanduser()
+        dest.mkdir(parents=True, exist_ok=True)
         for ext in [".odt", ".docx", ".pdf"]:
             src = os.path.join(MANUAL_DIR, f"CAP_VSAR_Flight_Operations_Handbook{ext}")
-            dst = os.path.join(user_docs, f"CAP_VSAR_Flight_Operations_Handbook{ext}")
-            import shutil
-            shutil.copy2(src, dst)
-        print(f"[+] Synchronized to {user_docs}")
+            shutil.copy2(src, dest / f"CAP_VSAR_Flight_Operations_Handbook{ext}")
+        print(f"[+] Copied to {dest}")
 
     print("\n[✓] All publication formats generated successfully!")
     for p in [ODT_PATH, DOCX_PATH, PDF_PATH, HTML_PATH]:

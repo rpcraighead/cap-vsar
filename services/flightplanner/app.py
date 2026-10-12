@@ -14,6 +14,7 @@ from io import StringIO
 import threading
 import time
 from urllib.parse import urlsplit
+from werkzeug.exceptions import HTTPException
 from werkzeug.http import dump_cookie
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -95,10 +96,45 @@ def _winds_cache_put(key, value):
 
 MAX_PARALLEL_DIMENSION_NM = 50.0
 MAX_PARALLEL_LEGS = 200
+# L2-2: the most ENTRIES one exported .fms may carry, departure and destination
+# airport records included, so a file never has more than this many lines of
+# type 1/28. 99 is the G1000 flight-plan size and sits just under the figure
+# usually quoted for X-Plane's FMS importer (100). The real X-Plane 12 limit has
+# NOT been verified against the simulator, so this is the conservative of the
+# two. The airports take two entries, which leaves the pattern 97.
+MAX_FMS_ENTRIES = 99
+FMS_AIRPORT_ENTRIES = 2
+MAX_FMS_WAYPOINTS = MAX_FMS_ENTRIES - FMS_AIRPORT_ENTRIES
+# D2: most legs (expanding square) / sweeps (creeping line) one request may ask
+# for. 60 is Garmin's range and the g1000-sar library's.
+MAX_PATTERN_LEGS = 60
+# Most points one terrain-profile or export request may carry.
+MAX_REQUEST_POINTS = 500
+
+# Where "no route typed" and the console push fall back to, and the sample
+# datum the SAR dialog is pre-filled with. These used to be literals scattered
+# through app.py, the template and app.js (review L2 improvement: hard-coded
+# defaults). Set CAPVSAR_DEFAULT_AIRPORT / CAPVSAR_DEFAULT_DATUM for another
+# base. The default datum is a pre-fill only: the server never plans on it
+# (L2-1).
+def _env_setting(name, fallback, upper=False):
+    value = (os.environ.get(name) or fallback).strip()
+    return value.upper() if upper else value
+
+
+DEFAULT_AIRPORT = _env_setting('CAPVSAR_DEFAULT_AIRPORT', 'KSEE', upper=True)
+DEFAULT_DATUM = _env_setting('CAPVSAR_DEFAULT_DATUM', '@33.1700,-117.0792')
 VSAR_EXPORT_RATE_LIMIT = 5
 VSAR_EXPORT_RATE_WINDOW_S = 60.0
 _vsar_export_attempts = {}
 _vsar_export_rate_lock = threading.Lock()
+
+# Online-only base layers (Satellite, Street), offered by /api/tile-sources
+# unless CAPVSAR_TILES_OFFLINE is set. Not cached by the planner.
+ONLINE_LAYER_SOURCES = {
+    'sat': 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    'osm': 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+}
 
 # FAA official tile sources via ArcGIS
 TILE_SOURCES = {
@@ -835,17 +871,35 @@ def _magnetic_headings(points):
     return points
 
 
+def local_offset(lat, lon, along_nm, across_nm, heading):
+    """The point `along_nm` ahead of and `across_nm` to the right of `lat, lon`,
+    measured against `heading` (true). Every pattern point is placed this way
+    from the pattern's own origin, exactly as the g1000-sar library's
+    offset() does, so the two agree to a few metres at any size (D2.5); walking
+    leg by leg along great circles instead drifts by ~100 m over a large square.
+    """
+    return destination_point(lat, lon, math.hypot(along_nm, across_nm),
+                             (heading + math.degrees(math.atan2(across_nm, along_nm))) % 360)
+
+
 def generate_expanding_square(datum_lat, datum_lon, spacing_nm=1.0, num_legs=8, initial_heading=0.0, turn_dir='right'):
-    """Generate Civil Air Patrol Expanding Square (SS) search pattern waypoints."""
+    """Generate Civil Air Patrol Expanding Square (SS) search pattern waypoints.
+
+    DATUM is the centre; SSnn is the END of leg nn (leg 1 = S, leg 2 = S,
+    leg 3 = 2S ...), the planner's numbering and, since D2, the library's.
+    """
     points = [{'identifier': 'DATUM', 'lat': round(datum_lat, 6), 'lon': round(datum_lon, 6), 'leg_dist_nm': 0.0, 'heading_true': initial_heading}]
-    cur_lat, cur_lon = datum_lat, datum_lon
+    turn = 1 if str(turn_dir).lower() == 'right' else -1
     cur_hdg = initial_heading
-    turn_angle = 90.0 if turn_dir.lower() == 'right' else -90.0
-    
+    along = across = 0.0
+    prev_lat, prev_lon = datum_lat, datum_lon
+
     for i in range(1, num_legs + 1):
         leg_len = ((i + 1) // 2) * spacing_nm
-        next_lat, next_lon = destination_point(cur_lat, cur_lon, leg_len, cur_hdg)
-        var = mag_var((cur_lat + next_lat)/2, (cur_lon + next_lon)/2)
+        d_along, d_across = ((1, 0), (0, turn), (-1, 0), (0, -turn))[(i - 1) % 4]
+        along, across = along + d_along * leg_len, across + d_across * leg_len
+        next_lat, next_lon = local_offset(datum_lat, datum_lon, along, across, initial_heading)
+        var = mag_var((prev_lat + next_lat)/2, (prev_lon + next_lon)/2)
         points.append({
             'identifier': f'SS{i:02d}',
             'lat': next_lat,
@@ -854,90 +908,189 @@ def generate_expanding_square(datum_lat, datum_lon, spacing_nm=1.0, num_legs=8, 
             'heading_true': round(cur_hdg % 360, 1),
             'heading_mag': round((cur_hdg - var) % 360, 1)
         })
-        cur_lat, cur_lon = next_lat, next_lon
-        cur_hdg = (cur_hdg + turn_angle) % 360
-        
+        prev_lat, prev_lon = next_lat, next_lon
+        cur_hdg = (cur_hdg + 90.0 * turn) % 360
+
     return _magnetic_headings(points)
 
-def generate_creeping_line(start_lat, start_lon, end_lat, end_lon, sweep_width_nm=3.0, spacing_nm=1.0, max_legs=12):
-    """Generate Civil Air Patrol Creeping Line (CS) search pattern waypoints."""
+
+def _side_bearings(axis, turn):
+    """(toward, away) bearings for a right/left turn off `axis`."""
+    right, left = (axis + 90) % 360, (axis - 90) % 360
+    return (right, left) if str(turn).lower() != 'left' else (left, right)
+
+
+def generate_creeping_line(start_lat, start_lon, end_lat, end_lon, sweep_width_nm=3.0, spacing_nm=1.0,
+                           max_legs=MAX_PATTERN_LEGS, first_turn='right'):
+    """Generate Civil Air Patrol Creeping Line (CS) search pattern waypoints.
+
+    The planner's input is a start and an end point; the axis runs between
+    them and sweeps are spacing_nm apart, the first half a spacing in
+    (see creeping_inputs_from_datum for the exact relation to the g1000-sar
+    datum). first_turn is the side the first sweep flies toward: 'right'
+    (default) flies CS01 on the left end to CS02 on the right end, 'left'
+    mirrors it.
+    """
     adv_brg = bearing(start_lat, start_lon, end_lat, end_lon)
     tot_dist = gc_dist(start_lat, start_lon, end_lat, end_lon)
     num_sweeps = min(max_legs, max(1, math.ceil(tot_dist / spacing_nm)))
-    
-    left_brg = (adv_brg - 90) % 360
-    right_brg = (adv_brg + 90) % 360
+
+    to_brg, from_brg = _side_bearings(adv_brg, first_turn)
+    to_sign = 1 if str(first_turn).lower() != 'left' else -1
     half_w = sweep_width_nm / 2.0
-    
+    # The centre of the first sweep: the library's datum.
+    ctr_lat, ctr_lon = destination_point(start_lat, start_lon, min(spacing_nm, tot_dist) / 2, adv_brg)
+
+    def at(sweep, side):      # side +1 = the `to` end, -1 = the `from` end
+        return local_offset(ctr_lat, ctr_lon, sweep * spacing_nm, to_sign * side * half_w, adv_brg)
+
     points = []
-    cur_axis_lat, cur_axis_lon = destination_point(start_lat, start_lon, min(spacing_nm, tot_dist) / 2, adv_brg)
-    
-    # Leg 1: Offset left
-    p1_lat, p1_lon = destination_point(cur_axis_lat, cur_axis_lon, half_w, left_brg)
-    points.append({'identifier': 'CS01', 'lat': p1_lat, 'lon': p1_lon, 'leg_dist_nm': round(half_w, 2), 'heading_true': round(left_brg, 1)})
-    
-    # Leg 2: Sweep right
-    p2_lat, p2_lon = destination_point(cur_axis_lat, cur_axis_lon, half_w, right_brg)
-    points.append({'identifier': 'CS02', 'lat': p2_lat, 'lon': p2_lon, 'leg_dist_nm': round(sweep_width_nm, 2), 'heading_true': round(right_brg, 1)})
-    
-    current_side = 'right'
+    # CS01 is where the pattern starts (the end of the first sweep opposite to
+    # the side it flies toward). Nothing is flown to reach it, so like PS01 it
+    # carries no leg length, and the heading it shows is that of the first real
+    # leg, CS01 -> CS02 (L2-8).
+    lat, lon = at(0, -1)
+    points.append({'identifier': 'CS01', 'lat': lat, 'lon': lon, 'leg_dist_nm': 0.0, 'heading_true': round(to_brg, 1)})
+    lat, lon = at(0, +1)
+    points.append({'identifier': 'CS02', 'lat': lat, 'lon': lon, 'leg_dist_nm': round(sweep_width_nm, 2), 'heading_true': round(to_brg, 1)})
+
+    side = +1        # the aircraft is on the `to` side after the first sweep
     wpt_idx = 3
     for i in range(1, num_sweeps):
-        cur_axis_lat, cur_axis_lon = destination_point(cur_axis_lat, cur_axis_lon, spacing_nm, adv_brg)
-        if current_side == 'right':
-            # Advance along right side
-            adv_lat, adv_lon = destination_point(cur_axis_lat, cur_axis_lon, half_w, right_brg)
-            points.append({'identifier': f'CS{wpt_idx:02d}', 'lat': adv_lat, 'lon': adv_lon, 'leg_dist_nm': round(spacing_nm, 2), 'heading_true': round(adv_brg, 1)})
-            wpt_idx += 1
-            # Cross to left side
-            cross_lat, cross_lon = destination_point(cur_axis_lat, cur_axis_lon, half_w, left_brg)
-            points.append({'identifier': f'CS{wpt_idx:02d}', 'lat': cross_lat, 'lon': cross_lon, 'leg_dist_nm': round(sweep_width_nm, 2), 'heading_true': round(left_brg, 1)})
-            wpt_idx += 1
-            current_side = 'left'
-        else:
-            # Advance along left side
-            adv_lat, adv_lon = destination_point(cur_axis_lat, cur_axis_lon, half_w, left_brg)
-            points.append({'identifier': f'CS{wpt_idx:02d}', 'lat': adv_lat, 'lon': adv_lon, 'leg_dist_nm': round(spacing_nm, 2), 'heading_true': round(adv_brg, 1)})
-            wpt_idx += 1
-            # Cross to right side
-            cross_lat, cross_lon = destination_point(cur_axis_lat, cur_axis_lon, half_w, right_brg)
-            points.append({'identifier': f'CS{wpt_idx:02d}', 'lat': cross_lat, 'lon': cross_lon, 'leg_dist_nm': round(sweep_width_nm, 2), 'heading_true': round(right_brg, 1)})
-            wpt_idx += 1
-            current_side = 'right'
-            
+        # Advance along the side the aircraft is on, then cross to the other.
+        lat, lon = at(i, side)
+        points.append({'identifier': f'CS{wpt_idx:02d}', 'lat': lat, 'lon': lon, 'leg_dist_nm': round(spacing_nm, 2), 'heading_true': round(adv_brg, 1)})
+        wpt_idx += 1
+        lat, lon = at(i, -side)
+        cross_brg = from_brg if side == +1 else to_brg
+        points.append({'identifier': f'CS{wpt_idx:02d}', 'lat': lat, 'lon': lon, 'leg_dist_nm': round(sweep_width_nm, 2), 'heading_true': round(cross_brg, 1)})
+        wpt_idx += 1
+        side = -side
+
     return _magnetic_headings(points)
 
-def generate_parallel_track(corner_lat, corner_lon, length_nm=5.0, width_nm=4.0, axis_heading=0.0, spacing_nm=1.0):
-    """Generate Civil Air Patrol Parallel Track (PS) search pattern waypoints."""
-    cross_heading = (axis_heading + 90) % 360
+
+def parallel_lane_count(width_nm, spacing_nm):
+    """Lanes in a box: ceil(width / spacing), with a hair of slack so that a
+    width that is a whole number of spacings (3 * 0.1 / 0.1) is not rounded
+    up to one lane more by floating point."""
+    return max(1, math.ceil(width_nm / spacing_nm - 1e-9))
+
+
+def generate_parallel_track(corner_lat, corner_lon, length_nm=5.0, width_nm=4.0, axis_heading=0.0, spacing_nm=1.0,
+                            turn='right'):
+    """Generate Civil Air Patrol Parallel Track (PS) search pattern waypoints.
+
+    The planner's input is a box: a corner, a length along the axis and a
+    width across it. The first lane starts half a spacing inside the corner;
+    lanes lie on the `turn` side of the axis ('right' by default, 'left'
+    for a left-handed box). See parallel_inputs_from_datum for the exact
+    relation to the g1000-sar datum.
+    """
+    cross_heading, _ = _side_bearings(axis_heading, turn)
+    side = 1 if str(turn).lower() != 'left' else -1
     opp_heading = (axis_heading + 180) % 360
-    num_sweeps = max(1, math.ceil(width_nm / spacing_nm))
-    
-    points = []
-    cur_lat, cur_lon = destination_point(corner_lat, corner_lon, min(spacing_nm, width_nm) / 2, cross_heading)
-    points.append({'identifier': 'PS01', 'lat': cur_lat, 'lon': cur_lon, 'leg_dist_nm': 0.0, 'heading_true': axis_heading})
-    
+    num_sweeps = parallel_lane_count(width_nm, spacing_nm)
+
+    # PS01: the first lane's start, half a spacing inside the corner. It is the
+    # origin lanes are measured from (the library's datum).
+    org_lat, org_lon = destination_point(corner_lat, corner_lon, min(spacing_nm, width_nm) / 2, cross_heading)
+    points = [{'identifier': 'PS01', 'lat': org_lat, 'lon': org_lon, 'leg_dist_nm': 0.0, 'heading_true': axis_heading}]
+
     wpt_idx = 2
     for i in range(num_sweeps):
-        # Fly length of box
-        curr_sweep_hdg = axis_heading if i % 2 == 0 else opp_heading
-        next_lat, next_lon = destination_point(cur_lat, cur_lon, length_nm, curr_sweep_hdg)
-        points.append({'identifier': f'PS{wpt_idx:02d}', 'lat': next_lat, 'lon': next_lon, 'leg_dist_nm': round(length_nm, 2), 'heading_true': curr_sweep_hdg})
+        # Fly the length of the box, then step across to the next lane.
+        forward = i % 2 == 0
+        curr_sweep_hdg = axis_heading if forward else opp_heading
+        lat, lon = local_offset(org_lat, org_lon, length_nm if forward else 0.0,
+                                side * i * spacing_nm, axis_heading)
+        points.append({'identifier': f'PS{wpt_idx:02d}', 'lat': lat, 'lon': lon, 'leg_dist_nm': round(length_nm, 2), 'heading_true': curr_sweep_hdg})
         wpt_idx += 1
-        cur_lat, cur_lon = next_lat, next_lon
-        
+
         if i < num_sweeps - 1:
-            # Step laterally across track
-            next_lat, next_lon = destination_point(cur_lat, cur_lon, spacing_nm, cross_heading)
-            points.append({'identifier': f'PS{wpt_idx:02d}', 'lat': next_lat, 'lon': next_lon, 'leg_dist_nm': round(spacing_nm, 2), 'heading_true': cross_heading})
+            lat, lon = local_offset(org_lat, org_lon, length_nm if forward else 0.0,
+                                    side * (i + 1) * spacing_nm, axis_heading)
+            points.append({'identifier': f'PS{wpt_idx:02d}', 'lat': lat, 'lon': lon, 'leg_dist_nm': round(spacing_nm, 2), 'heading_true': cross_heading})
             wpt_idx += 1
-            cur_lat, cur_lon = next_lat, next_lon
-            
+
     return _magnetic_headings(points)
+
+
+# ---- D2: front-end conversions -------------------------------------------
+#
+# The g1000-sar library describes every pattern from its DATUM with no inset
+# (D2.2): parallel track = first lane start, creeping line = centre of the
+# first sweep, expanding square = centre. The planner's people think in
+# boxes and start/end points, so its generators take those and put the first
+# lane / sweep half a spacing inside the box (D2.3). These pure functions are
+# that relation, in both directions; the fixture test
+# (tests/test_pattern_conventions.py) drives the generators through the
+# datum -> box direction and asserts the library's names and positions.
+
+def parallel_inputs_from_datum(datum_lat, datum_lon, axis_heading, spacing_nm, legs, turn='right'):
+    """Library parallel track (datum = first lane start) -> planner box inputs.
+
+    corner = the datum moved spacing/2 across the axis, AWAY from the turn
+    side (so the first lane lies spacing/2 inside the box edge, on the turn
+    side); width = legs * spacing, so ceil(width / spacing) == legs.
+    Returns {'corner_lat', 'corner_lon', 'width_nm', 'axis_heading', 'turn'}.
+    """
+    _, away = _side_bearings(axis_heading, turn)
+    lat, lon = destination_point(datum_lat, datum_lon, spacing_nm / 2.0, away)
+    return {'corner_lat': lat, 'corner_lon': lon, 'width_nm': legs * spacing_nm,
+            'axis_heading': axis_heading % 360.0, 'turn': turn}
+
+
+def parallel_datum_from_box(corner_lat, corner_lon, width_nm, axis_heading, spacing_nm, turn='right'):
+    """Planner box -> library parallel track: (datum_lat, datum_lon, legs).
+
+    The inverse of parallel_inputs_from_datum: datum = the corner moved
+    min(spacing, width)/2 toward the turn side, legs = ceil(width / spacing).
+    """
+    toward, _ = _side_bearings(axis_heading, turn)
+    lat, lon = destination_point(corner_lat, corner_lon, min(spacing_nm, width_nm) / 2.0, toward)
+    return lat, lon, parallel_lane_count(width_nm, spacing_nm)
+
+
+def creeping_inputs_from_datum(datum_lat, datum_lon, heading, spacing_nm, legs):
+    """Library creeping line (datum = centre of the first sweep) -> planner start/end.
+
+    The generator puts the first sweep min(spacing, distance)/2 along the
+    axis from the start, and runs ceil(distance / spacing) sweeps. Choosing
+    distance = (legs - 0.5) * spacing makes that count exactly `legs` (it can
+    never sit on a rounding boundary) and the inset min(spacing, distance)/2;
+    start = datum moved back by that inset, end = start + distance along the
+    heading. Returns {'start_lat', 'start_lon', 'end_lat', 'end_lon'}.
+    """
+    dist = (legs - 0.5) * spacing_nm
+    inset = min(spacing_nm, dist) / 2.0
+    start = destination_point(datum_lat, datum_lon, inset, (heading + 180) % 360)
+    end = destination_point(start[0], start[1], dist, heading % 360.0)
+    return {'start_lat': start[0], 'start_lon': start[1], 'end_lat': end[0], 'end_lon': end[1]}
+
+
+def creeping_datum_from_endpoints(start_lat, start_lon, end_lat, end_lon, spacing_nm):
+    """Planner start/end -> library creeping line: (datum_lat, datum_lon, heading, legs)."""
+    heading = bearing(start_lat, start_lon, end_lat, end_lon)
+    dist = gc_dist(start_lat, start_lon, end_lat, end_lon)
+    lat, lon = destination_point(start_lat, start_lon, min(spacing_nm, dist) / 2.0, heading)
+    return lat, lon, heading, max(1, math.ceil(dist / spacing_nm))
+
+
+def fms_waypoint_limit_message(count):
+    return (f'This flight plan has {count} waypoints, {count + FMS_AIRPORT_ENTRIES} entries '
+            f'with the departure and destination; a file may hold at most '
+            f'{MAX_FMS_ENTRIES} ({MAX_FMS_WAYPOINTS} waypoints), the G1000 flight-plan '
+            f'size and just under X-Plane\'s FMS limit. '
+            f'Split the pattern into two files: fewer legs, wider spacing, '
+            f'or a smaller area per file.')
+
 
 def generate_xplane_fms_content(departure, destination, waypoints, cruise_alt=6500):
     """Generate X-Plane 11/12 standard .fms text file."""
     departure, destination = departure.strip().upper(), destination.strip().upper()
+    if len(waypoints) > MAX_FMS_WAYPOINTS:
+        raise ValueError(fms_waypoint_limit_message(len(waypoints)))
     airports = []
     for role, ident in (('ADEP', departure), ('ADES', destination)):
         airport = get_airport(ident)
@@ -966,7 +1119,7 @@ def generate_xplane_fms_content(departure, destination, waypoints, cruise_alt=65
         # Type 28 uses lat/lon in columns 5/6; column 2 is the identifier.
         # Use a conservative ASCII token subset; never change the coordinates
         # to obtain a name. Preserve coordinate names for unlabelled points.
-        ident = re.sub(r'[^A-Z0-9_]', '_', str(wpt.get('identifier') or '').upper()).strip('_')
+        ident = fms_identifier(wpt.get('identifier'))
         ident = ident or f"{lat:+.3f}_{lon:+.3f}"
         lines.append(f"28 {ident} DRCT {float(cruise_alt):.6f} {lat:.6f} {lon:.6f}")
         
@@ -1028,6 +1181,27 @@ def get_navaid(nid):
     if r: return {'id':r[0],'name':r[1],'type':r[2],'latitude':r[3],'longitude':r[4]}
     return None
 
+def fms_identifier(text):
+    """The token an .fms record carries for a label (see generate_xplane_fms_content)."""
+    return re.sub(r'[^A-Z0-9_]', '_', str(text or '').upper()).strip('_')
+
+
+def split_route_label(token):
+    """'DATUM=@33.1,-117.0' -> ('DATUM', '@33.1,-117.0'); 'KSEE' -> (None, 'KSEE').
+
+    L2-7: lets "Apply to Route" hand the planner a coordinate point together
+    with the name the pattern gave it. Only coordinate points can be named,
+    and the name is reduced to the same characters the .fms export keeps, so
+    the nav log and the flight-plan file agree.
+    """
+    if '=' in token:
+        name, _, ident = token.partition('=')
+        label = fms_identifier(name)[:12]
+        if label and ident.startswith('@'):
+            return label, ident
+    return None, token
+
+
 def get_coords(ident):
     # User-dropped waypoint: "@lat,lon" (from the map rubber-band "user waypoint" option)
     if ident.startswith('@'):
@@ -1085,10 +1259,19 @@ def get_climb(fr, to):
     ac = AIRCRAFT_DATABASE[DEFAULT_AIRCRAFT]
     cd = ac['climb_performance']
     alts = sorted(cd.keys())
-    f = min(alts, key=lambda x: abs(x-fr))
-    t = min(alts, key=lambda x: abs(x-to))
-    fd, td = cd[f], cd[t]
-    return {'time_minutes': max(0,td[0]-fd[0]), 'fuel_gallons': max(0,td[1]-fd[1]), 'distance_nm': max(0,td[2]-fd[2])}
+
+    def at(altitude):
+        # L2-11: interpolate between table rows (as get_cruise does) instead of
+        # snapping to the nearest 2000 ft; outside the table, hold the end row.
+        altitude = max(alts[0], min(alts[-1], altitude))
+        low, high = _bracket(alts, altitude)
+        fraction = (altitude - low) / (high - low) if high != low else 0
+        return _lerp_tuple(cd[low], cd[high], fraction)
+
+    fd, td = at(fr), at(to)
+    return {'time_minutes': round(max(0, td[0]-fd[0]), 1),
+            'fuel_gallons': round(max(0, td[1]-fd[1]), 2),
+            'distance_nm': round(max(0, td[2]-fd[2]), 1)}
 
 def calc_takeoff(wt, alt, temp, hw=0):
     ac = AIRCRAFT_DATABASE[DEFAULT_AIRCRAFT]
@@ -1182,13 +1365,136 @@ def _request_security_error(require_json=False):
 
 
 def _limited_text(data, field, default, maximum):
-    value = data.get(field, default)
+    return _text(data, field, default, maximum)
+
+class RequestError(ValueError):
+    """A request the caller got wrong. Always a 400 with this exact message."""
+
+
+def _body():
+    """The JSON object a POST sent. Anything else is the caller's mistake."""
+    data = request.get_json(silent=True, force=True)
+    if data is None:
+        if request.get_data():
+            raise RequestError('The request body is not valid JSON')
+        return {}
+    if not isinstance(data, dict):
+        raise RequestError('The request body must be a JSON object')
+    return data
+
+
+def _num(data, key, default, lo, hi, integer=False, clamp=False):
+    """L2-3: one place that turns a request field into a number.
+
+    Rejects what is not a finite number (text that does not parse, null,
+    true/false, lists), names the field in the message, and either refuses
+    values outside lo..hi or, with clamp=True, pulls them back inside (for
+    fields the UI has always clamped rather than refused). A missing field
+    yields the default untouched.
+    """
+    if key not in data:
+        return default
+    raw = data[key]
+    if isinstance(raw, bool) or not isinstance(raw, (int, float, str)):
+        raise RequestError(f'{key} must be a number')
+    try:
+        value = float(raw)
+    except ValueError:
+        raise RequestError(f'{key} must be a number') from None
+    if not math.isfinite(value):
+        raise RequestError(f'{key} must be a finite number')
+    if integer:
+        if value != int(value) and not clamp:
+            raise RequestError(f'{key} must be a whole number')
+        value = int(value)
+    if clamp:
+        value = max(lo, min(hi, value))
+    elif not lo <= value <= hi:
+        raise RequestError(f'{key} must be between {lo:g} and {hi:g}')
+    return value
+
+
+def _text(data, key, default, maximum=200):
+    """A string field (stripped, length-limited). Not text is a 400."""
+    value = data.get(key, default)
     if not isinstance(value, str):
-        raise ValueError(f'{field} must be text')
+        raise RequestError(f'{key} must be text')
     value = value.strip()
     if len(value) > maximum:
-        raise ValueError(f'{field} must be at most {maximum} characters')
+        raise RequestError(f'{key} must be at most {maximum} characters')
     return value
+
+
+def _text_list(data, key, maximum=MAX_REQUEST_POINTS):
+    """A list of strings (blank entries dropped)."""
+    value = data.get(key, [])
+    if not isinstance(value, list) or len(value) > maximum:
+        raise RequestError(f'{key} must be a list of at most {maximum} entries')
+    out = []
+    for item in value:
+        if not isinstance(item, str):
+            raise RequestError(f'{key} entries must be text')
+        if item.strip():
+            out.append(item.strip())
+    return out
+
+
+def _points(data, key, minimum=0, maximum=MAX_REQUEST_POINTS):
+    """A list of {lat, lon[, identifier]} objects with checked coordinates."""
+    value = data.get(key, [])
+    if not isinstance(value, list):
+        raise RequestError(f'{key} must be a list of points')
+    if len(value) > maximum:
+        raise RequestError(f'{key} must contain at most {maximum} points')
+    if len(value) < minimum:
+        raise RequestError(f'{key} needs at least {minimum} points')
+    out = []
+    for index, item in enumerate(value):
+        if not isinstance(item, dict):
+            raise RequestError(f'{key}[{index}] must be an object with lat and lon')
+        if 'lat' not in item or 'lon' not in item:
+            raise RequestError(f'{key}[{index}] needs lat and lon')
+        point = dict(item)
+        point['lat'] = _num(item, 'lat', None, -90, 90)
+        point['lon'] = _num(item, 'lon', None, -180, 180)
+        ident = item.get('identifier')
+        if ident is not None and not isinstance(ident, str):
+            raise RequestError(f'{key}[{index}].identifier must be text')
+        point['identifier'] = (ident or '')[:64]
+        out.append(point)
+    return out
+
+
+def _is_api_request():
+    return request.path.startswith('/api/') or request.path.startswith('/planner/api/')
+
+
+@app.errorhandler(Exception)
+def _json_errors(exc):
+    """L2-3: the API never answers with Werkzeug's HTML error page.
+
+    HTTP errors keep their own status (404, 405, 413, 415 ...). Our own
+    RequestError is a 400 carrying its message. Anything else is a bug: log it
+    here and tell the caller only that the request failed, never the Python
+    text ("Unknown format code 'f' for object of type 'str'") behind it.
+    Pages (everything outside /api/) keep the standard HTML errors.
+    """
+    if isinstance(exc, HTTPException):
+        if not _is_api_request():
+            return exc
+        response = exc.get_response(request.environ)
+        response.set_data(json.dumps({'success': False,
+                                      'error': exc.description or exc.name}))
+        response.mimetype = 'application/json'
+        return response
+    if isinstance(exc, RequestError):
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    app.logger.exception('Unhandled error on %s %s', request.method, request.path)
+    if not _is_api_request():
+        from werkzeug.exceptions import InternalServerError
+        return InternalServerError()
+    return jsonify({'success': False,
+                    'error': 'The planner could not process that request'}), 500
 
 
 def _allow_vsar_export(client):
@@ -1238,7 +1544,8 @@ def health():
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', default_airport=DEFAULT_AIRPORT,
+                           default_datum=DEFAULT_DATUM)
 
 def _resolve_doc(slug):
     """Map a URL slug (or raw '.md' filename) to a docs entry."""
@@ -1289,11 +1596,17 @@ def get_tile_sources():
     has been cached.
     """
     prefix = request.script_root.rstrip('/')
+    offline = tiles_offline()
     return jsonify({
         'vfr': f'{prefix}/tiles/vfr/{{z}}/{{x}}/{{y}}.png',
         'ifr_low': f'{prefix}/tiles/ifr_low/{{z}}/{{x}}/{{y}}.png',
         'ifr_high': f'{prefix}/tiles/ifr_high/{{z}}/{{x}}/{{y}}.png',
-        'offline': tiles_offline(),
+        # L2-10: the online-only Satellite and Street layers. They go straight
+        # from the browser to the provider (not through the cache), so they are
+        # only offered when this station is allowed to use the internet, and
+        # only ever from here - never as literals in the JavaScript.
+        'online_layers': {} if offline else dict(ONLINE_LAYER_SOURCES),
+        'offline': offline,
     })
 
 # ---------------------------------------------------------------- tiles (L-8)
@@ -1479,29 +1792,36 @@ def airport_info(icao):
 
 @app.route('/api/calculate-route', methods=['POST'])
 def calc_route():
-    d = request.json
-    dep, dest = d.get('departure','').upper(), d.get('destination','').upper()
-    wpts = [w.upper() for w in d.get('waypoints', []) if w.strip()]
-    alt, rpm = int(d.get('cruise_altitude', 6500)), int(d.get('rpm', 2400))
-    reserve_minutes = max(15, min(120, int(d.get('reserve_minutes', 45))))
-    
+    d = _body()
+    dep = _text(d, 'departure', '', 64).upper()
+    dest = _text(d, 'destination', '', 64).upper()
+    wpts = [w.upper() for w in _text_list(d, 'waypoints')]
+    alt = _num(d, 'cruise_altitude', 6500, 0, 60000, integer=True)
+    rpm = _num(d, 'rpm', 2400, 0, 10000, integer=True)
+    reserve_minutes = _num(d, 'reserve_minutes', 45, 15, 120, integer=True, clamp=True)
+    manifold_pressure = _num(d, 'manifold_pressure', 20, 0, 100)
+
     ac = AIRCRAFT_DATABASE[DEFAULT_AIRCRAFT]
     pts = [dep] + wpts + [dest]
-    
+
     coords = []
     user_n = 0
     for p in pts:
-        c = get_coords(p)
+        label, ident = split_route_label(p)
+        c = get_coords(ident)
         if not c: return jsonify({'success': False, 'error': f'Not found: {p}'})
-        if c[2] == 'user':
-            user_n += 1
-            label = f'USR{user_n}'
-        else:
-            label = p
+        # L2-7: a named point ("DATUM=@33.1,-117.0") keeps its name, so the
+        # nav log shows the same labels the .fms export carries.
+        if not label:
+            if c[2] == 'user':
+                user_n += 1
+                label = f'USR{user_n}'
+            else:
+                label = ident
         coords.append({'identifier': label, 'lat': c[0], 'lon': c[1], 'type': c[2], 'data': c[3]})
-    
+
     try:
-        cruise = get_cruise(alt, rpm, float(d.get('manifold_pressure', 20)))
+        cruise = get_cruise(alt, rpm, manifold_pressure)
     except ValueError as exc:
         return jsonify({'success': False, 'error': str(exc)}), 400
     mid = coords[len(coords)//2]
@@ -1513,6 +1833,14 @@ def calc_route():
         nrst = min(lvls, key=lambda x: abs(x-alt))
         wdir = winds['levels'][nrst]['direction']
         wspd = winds['levels'][nrst]['speed']
+    # L2-5: simulate_winds() invents 15-30 kt from a hash of the position. It
+    # is fine for a briefing placeholder but headings, groundspeeds, times and
+    # fuel for every leg would carry a fictitious wind with nothing on the nav
+    # log saying so. Without real winds the route is planned in still air and
+    # says that it was.
+    winds_available = bool(winds) and 'levels' in winds and not winds.get('simulated', False)
+    if not winds_available:
+        wdir, wspd = 0, 0
     
     segs = []
     tot_dist, tot_time, tot_fuel = 0, 0, 0
@@ -1538,7 +1866,7 @@ def calc_route():
             'ground_speed': round(gs,0), 'time_minutes': round(lt,0), 'fuel_gallons': round(lf,1)})
         tot_dist += dist; tot_time += lt; tot_fuel += lf
     
-    dep_elev = coords[0]['data'].get('elevation', 0) if coords[0]['data'] else 0
+    dep_elev = (coords[0]['data'] or {}).get('elevation') or 0
     climb = get_climb(dep_elev, alt)
     taxi = ac['taxi_fuel']
     reserve = (reserve_minutes / 60.0) * cruise['fuel_flow_gph']
@@ -1546,8 +1874,10 @@ def calc_route():
     return jsonify({
         'success': True, 'route_points': coords, 'segments': segs,
         'winds_aloft': {'altitude': alt, 'direction': wdir, 'speed': wspd,
-                        'source': winds.get('station', 'estimated'),
-                        'simulated': winds.get('simulated', True)},
+                        'source': (winds.get('station', 'estimated')
+                                   if winds_available else 'none - planned in still air'),
+                        'simulated': winds.get('simulated', True),
+                        'available': winds_available},
         'aircraft': ac['name'],
         'cruise': dict(cruise, altitude=alt, rpm=rpm),
         'full_fuel_endurance_hours': round(max(0, (ac['usable_fuel'] - taxi - climb['fuel_gallons'] - reserve) / cruise['fuel_flow_gph']) + climb['time_minutes'] / 60, 2),
@@ -1563,10 +1893,11 @@ def calc_route():
 
 @app.route('/api/weather-briefing', methods=['POST'])
 def weather_briefing():
+    d = _body()
+    dep = _text(d, 'departure', '', 64).upper()
+    dest = _text(d, 'destination', '', 64).upper()
+    wpts = [w.upper() for w in _text_list(d, 'waypoints')]
     try:
-        d = request.json
-        dep, dest = d.get('departure','').upper(), d.get('destination','').upper()
-        wpts = [w.upper() for w in d.get('waypoints', []) if w.strip()]
         apts = [a for a in [dep] + wpts + [dest] if a]
         
         briefing = {
@@ -1589,34 +1920,45 @@ def weather_briefing():
         briefing['tfrs'] = [{'notam_id': 'INFO', 'type': 'INFO', 'description': 'Check tfr.faa.gov'}]
         
         return jsonify({'success': True, 'briefing': briefing})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+    except Exception:
+        # L2-3: the cause goes to the log, not to the caller.
+        app.logger.exception('weather briefing failed')
+        return jsonify({'success': False,
+                        'error': 'The weather briefing could not be built'}), 502
 
 @app.route('/api/performance/takeoff', methods=['POST'])
 def perf_to():
     try:
-        d = request.json
-        return jsonify(calc_takeoff(int(d.get('weight',3100)), int(d.get('pressure_altitude',0)),
-                                    int(d.get('temperature',15)), int(d.get('headwind',0))))
+        d = _body()
+        return jsonify(calc_takeoff(_num(d, 'weight', 3100, 0, 10000, integer=True),
+                                    _num(d, 'pressure_altitude', 0, -2000, 60000, integer=True),
+                                    _num(d, 'temperature', 15, -100, 100, integer=True),
+                                    _num(d, 'headwind', 0, -200, 200, integer=True)))
     except (ValueError, TypeError) as exc:
         return jsonify({'success': False, 'error': str(exc)}), 400
 
 @app.route('/api/performance/landing', methods=['POST'])
 def perf_land():
     try:
-        d = request.json
-        return jsonify(calc_landing(int(d.get('pressure_altitude',0)), int(d.get('temperature',15)), int(d.get('headwind',0))))
+        d = _body()
+        return jsonify(calc_landing(_num(d, 'pressure_altitude', 0, -2000, 60000, integer=True),
+                                    _num(d, 'temperature', 15, -100, 100, integer=True),
+                                    _num(d, 'headwind', 0, -200, 200, integer=True)))
     except (ValueError, TypeError) as exc:
         return jsonify({'success': False, 'error': str(exc)}), 400
 
 @app.route('/api/weight-balance', methods=['POST'])
 def wb():
-    d = request.json
+    d = _body()
     ac = AIRCRAFT_DATABASE[DEFAULT_AIRCRAFT]
     arms = ac['arms']
-    ew = float(d.get('empty_weight', ac['empty_weight']))
-    em = float(d.get('empty_moment', ac['empty_weight_moment']))
-    p, f, r, b, fu = float(d.get('pilot_weight',0)), float(d.get('front_passenger_weight',0)), float(d.get('rear_passenger_weight',0)), float(d.get('baggage_weight',0)), float(d.get('fuel_gallons',0))
+    ew = _num(d, 'empty_weight', ac['empty_weight'], 0, 10000)
+    em = _num(d, 'empty_moment', ac['empty_weight_moment'], 0, 100000)
+    p = _num(d, 'pilot_weight', 0, 0, 2000)
+    f = _num(d, 'front_passenger_weight', 0, 0, 2000)
+    r = _num(d, 'rear_passenger_weight', 0, 0, 2000)
+    b = _num(d, 'baggage_weight', 0, 0, 2000)
+    fu = _num(d, 'fuel_gallons', 0, 0, 1000)
 
     warnings = []
     if fu > ac['usable_fuel']:
@@ -1658,13 +2000,30 @@ def wb():
 # d-TPP airport diagram cache
 dtpp_cache = {'cycle': None, 'diagrams': {}, 'loading': False}
 
+# L2-9: FAA d-TPP cycles are 28-day, AIRAC-style: 13 a year, each named YYNN
+# where NN counts the cycles that take effect in that year, starting at 01.
+# 2601 took effect on 2026-01-22 and every other cycle is a multiple of 28 days
+# from it. (The old code used the calendar month, so for most of the year it
+# asked the FAA for a cycle that does not exist.)
+DTPP_ANCHOR = datetime(2026, 1, 22, tzinfo=timezone.utc).date()
+DTPP_CYCLE_DAYS = 28
+
+
+def dtpp_cycle_for(day):
+    """The d-TPP cycle id (YYNN) in effect on `day` (a date, taken as UTC)."""
+    steps = (day - DTPP_ANCHOR).days // DTPP_CYCLE_DAYS
+    effective = DTPP_ANCHOR + timedelta(days=DTPP_CYCLE_DAYS * steps)
+    # First cycle that takes effect on or after 1 January of that year.
+    jan1 = effective.replace(month=1, day=1)
+    first = effective - timedelta(
+        days=DTPP_CYCLE_DAYS * ((effective - jan1).days // DTPP_CYCLE_DAYS))
+    number = (effective - first).days // DTPP_CYCLE_DAYS + 1
+    return f'{effective.year % 100:02d}{number:02d}'
+
+
 def get_dtpp_cycle():
-    """Compute current FAA d-TPP cycle string (YYMM format)."""
-    from datetime import date
-    today = date.today()
-    # Try current and recent cycle codes
-    # Cycles are YYMM where MM is the month-ish (not exact, but close enough)
-    return f'{today.year % 100:02d}{today.month:02d}'
+    """The current FAA d-TPP cycle string (YYNN), by UTC date."""
+    return dtpp_cycle_for(get_utc_now().date())
 
 def load_dtpp_diagrams():
     """Download and parse the FAA d-TPP metafile to build airport diagram index."""
@@ -1744,12 +2103,12 @@ def terrain_profile():
     """Sample terrain elevation along a route using USGS Elevation Point Query Service."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    d = request.json
-    route_points = d.get('route_points', [])
-    cruise_altitude = int(d.get('cruise_altitude', 6000))
+    d = _body()
+    route_points = _points(d, 'route_points')
+    cruise_altitude = _num(d, 'cruise_altitude', 6000, -2000, 60000, integer=True)
 
     if len(route_points) < 2:
-        return jsonify({'success': False, 'error': 'Need at least 2 route points'})
+        return jsonify({'success': False, 'error': 'Need at least 2 route points'}), 400
 
     # Generate sample points along the route
     samples = []
@@ -1816,9 +2175,11 @@ def terrain_profile():
             if r.status_code == 200:
                 elev = float(r.json().get('value', 0))
                 return idx, max(0, elev) if elev > -1000 else 0
-        except:
+        except Exception:
             pass
-        return idx, 0
+        # L2-4: "could not look it up" is not "sea level". Offline, every
+        # route used to report 0 ft terrain and a green ADEQUATE clearance.
+        return idx, None
 
     # Fetch all elevations with 10 parallel workers
     with ThreadPoolExecutor(max_workers=10) as pool:
@@ -1829,9 +2190,17 @@ def terrain_profile():
             results[idx] = elev
 
     max_elevation = 0
+    unknown_samples = 0
     for i, sample in enumerate(samples):
-        sample['elevation_ft'] = round(results.get(i, 0))
-        max_elevation = max(max_elevation, sample['elevation_ft'])
+        elev = results.get(i)
+        sample['elevation_known'] = elev is not None
+        if elev is None:
+            unknown_samples += 1
+        # Unknown samples keep a numeric 0 so the profile can still be drawn
+        # and the climb computed, but never count towards terrain or clearance.
+        sample['elevation_ft'] = round(elev) if elev is not None else 0
+        if elev is not None:
+            max_elevation = max(max_elevation, sample['elevation_ft'])
 
     # Compute flight path with climb and descent profiles
     ac = AIRCRAFT_DATABASE[DEFAULT_AIRCRAFT]
@@ -1901,20 +2270,29 @@ def terrain_profile():
 
         clearance = sample['flight_alt'] - sample['elevation_ft']
         # Skip departure/destination points for min clearance (on the ground)
-        if dist > 0.5 and dist < cumulative_dist - 0.5:
+        if dist > 0.5 and dist < cumulative_dist - 0.5 and sample['elevation_known']:
             min_clearance = min(min_clearance, clearance)
 
+    terrain_known = unknown_samples == 0
     if min_clearance == float('inf'):
-        min_clearance = cruise_altitude - max_elevation
+        min_clearance = (cruise_altitude - max_elevation
+                         if unknown_samples < len(samples) else None)
 
     return jsonify({
         'success': True,
         'profile': samples,
         'cruise_altitude': cruise_altitude,
-        'max_terrain': round(max_elevation),
-        'min_clearance': round(min_clearance),
-        'vfr_clearance_ok': min_clearance >= 1000,
-        'ifr_mea_margin': min_clearance >= 2000,
+        'terrain_known': terrain_known,
+        'terrain_unknown_samples': unknown_samples,
+        'max_terrain': round(max_elevation) if unknown_samples < len(samples) else None,
+        'min_clearance': round(min_clearance) if min_clearance is not None else None,
+        # None means "cannot say": a failed lookup must not read as adequate.
+        'vfr_clearance_ok': (None if min_clearance is None
+                             else (False if min_clearance < 1000
+                                   else (True if terrain_known else None))),
+        'ifr_mea_margin': (None if min_clearance is None
+                           else (False if min_clearance < 2000
+                                 else (True if terrain_known else None))),
         'total_distance': round(cumulative_dist, 1),
         'climb_distance': round(climb_dist, 1),
         'descent_distance': round(descent_dist, 1),
@@ -1927,68 +2305,108 @@ def terrain_profile():
 # Civil Air Patrol Search and Rescue (SAR) & V-SAR Integration API
 # =============================================================================
 
+def pattern_search_centre(wpts, datum):
+    """Where the search area is centred, for the alert circle and the beacon.
+
+    The expanding square is built around its datum. A parallel track's first
+    waypoint is a lane start half a spacing inside one edge of the box and a
+    creeping line's is the end of its first sweep, so neither is the centre
+    (L2-6). The middle of the bounding box is, to well inside the accuracy a
+    briefing needs for areas of tens of miles.
+    """
+    if not wpts:
+        return {'lat': datum[0], 'lon': datum[1]}
+    if wpts[0].get('identifier') == 'DATUM':
+        return {'lat': wpts[0]['lat'], 'lon': wpts[0]['lon']}
+    lats = [p['lat'] for p in wpts]
+    lons = [p['lon'] for p in wpts]
+    return {'lat': round((min(lats) + max(lats)) / 2, 6),
+            'lon': round((min(lons) + max(lons)) / 2, 6)}
+
+
 @app.route('/api/sar/generate-pattern', methods=['POST'])
 def sar_generate():
-    data = request.json or {}
-    ptype = data.get('pattern_type', 'expanding_square')
-    
+    data = _body()
+    ptype = _text(data, 'pattern_type', 'expanding_square', 40)
+
     # Resolve datum
-    datum_input = data.get('datum', '').strip()
+    # L2-1: an unresolvable datum used to fall through to a hard-coded point
+    # near KSEE and return success, so a mistyped identifier planned (and
+    # exported, and pushed to the console) a search 10 NM from where the
+    # crew meant. Say so instead.
+    raw_datum = data.get('datum', '')
+    if not isinstance(raw_datum, str):
+        return jsonify({'success': False, 'error': 'datum must be an identifier or @lat,lon'}), 400
+    datum_input = raw_datum.strip()
     datum_coords = None
     if datum_input:
         c = get_coords(datum_input)
-        if c:
-            datum_coords = (c[0], c[1])
-    if not datum_coords:
+        if not c:
+            return jsonify({'success': False, 'error':
+                f'Datum "{datum_input}" was not found. Check the identifier, '
+                f'use @lat,lon, or wait for the aviation database to finish loading.'}), 400
+        datum_coords = (c[0], c[1])
+    elif 'datum_lat' in data and 'datum_lon' in data:
         try:
-            datum_coords = (float(data.get('datum_lat', 33.17)), float(data.get('datum_lon', -117.0792)))
-        except (ValueError, TypeError):
-            datum_coords = (33.17, -117.0792)
+            datum_coords = (_num(data, 'datum_lat', None, -90, 90),
+                            _num(data, 'datum_lon', None, -180, 180))
+        except RequestError as exc:
+            return jsonify({'success': False, 'error':
+                f'datum_lat and datum_lon must be numbers in range ({exc})'}), 400
+    else:
+        return jsonify({'success': False, 'error':
+            'A datum is required: an airport, navaid, @lat,lon, or datum_lat and datum_lon.'}), 400
             
     # The UI's <input min/max> only constrains the form; this is a public POST
     # endpoint anyone can call directly, so the same bounds are enforced here.
     # spacing_nm floors above zero (both creeping_line and parallel_track
     # divide by it - 0 was an unhandled ZeroDivisionError) and num_legs caps
     # to keep one request from generating an unbounded waypoint list.
-    try:
-        spacing = max(0.1, min(20.0, float(data.get('spacing_nm', 1.0))))
-        legs = max(1, min(40, int(data.get('num_legs', 8))))
-        init_hdg = float(data.get('initial_heading', 0.0)) % 360.0
-    except (TypeError, ValueError):
-        return jsonify({'success': False, 'error': 'spacing_nm, num_legs and initial_heading must be numbers'}), 400
+    spacing = _num(data, 'spacing_nm', 1.0, 0.1, 20.0, clamp=True)
+    legs = _num(data, 'num_legs', 8, 1, MAX_PATTERN_LEGS, integer=True, clamp=True)
+    init_hdg = _num(data, 'initial_heading', 0.0, -36000, 36000) % 360.0
     coverage_truncated = False
-    turn_dir = data.get('turn_direction', 'right')
+    turn_dir = _text(data, 'turn_direction', 'right', 10).lower()
+    if turn_dir not in ('left', 'right'):
+        raise RequestError('turn_direction must be "left" or "right"')
+    # Creeping line: the side the first sweep flies toward (D2.4).
+    first_turn = _text(data, 'first_turn', 'right', 10).lower()
+    if first_turn not in ('left', 'right'):
+        raise RequestError('first_turn must be "left" or "right"')
 
     try:
         if ptype == 'expanding_square':
             wpts = generate_expanding_square(datum_coords[0], datum_coords[1], spacing, legs, init_hdg, turn_dir)
         elif ptype == 'creeping_line':
-            end_lat = float(data.get('end_lat', datum_coords[0] + 0.15))
-            end_lon = float(data.get('end_lon', datum_coords[1] + 0.15))
-            sweep_w = max(0.1, min(50.0, float(data.get('sweep_width_nm', 3.0))))
+            end_lat = _num(data, 'end_lat', datum_coords[0] + 0.15, -90, 90)
+            end_lon = _num(data, 'end_lon', datum_coords[1] + 0.15, -180, 180)
+            sweep_w = _num(data, 'sweep_width_nm', 3.0, 0.1, 50.0, clamp=True)
             coverage_truncated = math.ceil(gc_dist(*datum_coords, end_lat, end_lon) / spacing) > legs
-            wpts = generate_creeping_line(datum_coords[0], datum_coords[1], end_lat, end_lon, sweep_w, spacing, legs)
+            wpts = generate_creeping_line(datum_coords[0], datum_coords[1], end_lat, end_lon, sweep_w, spacing, legs, first_turn)
         elif ptype == 'parallel_track':
-            box_len = max(0.1, float(data.get('length_nm', 5.0)))
+            box_len = max(0.1, _num(data, 'length_nm', 5.0, 0, 1e6))
             if box_len > MAX_PARALLEL_DIMENSION_NM:
                 return jsonify({'success': False, 'error':
                     f'length_nm must be at most {MAX_PARALLEL_DIMENSION_NM:g}'}), 400
-            box_w = max(0.1, float(data.get('width_nm', 4.0)))
+            box_w = max(0.1, _num(data, 'width_nm', 4.0, 0, 1e6))
             if box_w > MAX_PARALLEL_DIMENSION_NM:
                 return jsonify({'success': False, 'error':
                     f'width_nm must be at most {MAX_PARALLEL_DIMENSION_NM:g}'}), 400
-            sweeps = max(1, math.ceil(box_w / spacing))
+            sweeps = parallel_lane_count(box_w, spacing)
             leg_count = 2 * sweeps - 1
             if leg_count > MAX_PARALLEL_LEGS:
                 return jsonify({'success': False, 'error':
                     f'width_nm with spacing_nm would generate {sweeps} sweeps '
                     f'({leg_count} legs); maximum is {MAX_PARALLEL_LEGS} legs'}), 400
-            axis_hdg = float(data.get('axis_heading', 0.0)) % 360.0
-            wpts = generate_parallel_track(datum_coords[0], datum_coords[1], box_len, box_w, axis_hdg, spacing)
+            axis_hdg = _num(data, 'axis_heading', 0.0, -36000, 36000) % 360.0
+            wpts = generate_parallel_track(datum_coords[0], datum_coords[1], box_len, box_w, axis_hdg, spacing, turn_dir)
         else:
             return jsonify({'success': False, 'error': f'Unknown pattern: {ptype}'}), 400
-    except (TypeError, ValueError):
-        return jsonify({'success': False, 'error': 'One or more pattern parameters were not valid numbers'}), 400
+    except (TypeError, ValueError) as exc:
+        if isinstance(exc, RequestError):
+            raise
+        app.logger.exception('pattern generation failed')
+        return jsonify({'success': False, 'error': 'One or more pattern parameters were not valid'}), 400
 
     tot_dist = 0.0
     for i in range(len(wpts) - 1):
@@ -2001,11 +2419,21 @@ def sar_generate():
     
     route_fragment = " ".join(f"@{p['lat']:.5f},{p['lon']:.5f}" for p in wpts)
     
+    # L2-2: say now, at preview time, that this pattern cannot be exported as
+    # one flight plan, rather than at the export button.
+    fms_over = len(wpts) > MAX_FMS_WAYPOINTS
+    warnings = [fms_waypoint_limit_message(len(wpts))] if fms_over else []
+
     return jsonify({
         'success': True,
         'pattern_type': ptype,
         'coverage_truncated': coverage_truncated,
+        'fms_waypoint_count': len(wpts),
+        'fms_waypoint_limit': MAX_FMS_WAYPOINTS,
+        'exceeds_fms_limit': fms_over,
+        'warnings': warnings,
         'datum': {'lat': datum_coords[0], 'lon': datum_coords[1]},
+        'search_centre': pattern_search_centre(wpts, datum_coords),
         'waypoints': wpts,
         'total_distance_nm': round(tot_dist, 1),
         'estimated_time_minutes': round(est_time_min, 0),
@@ -2015,19 +2443,19 @@ def sar_generate():
 
 @app.route('/api/sar/export-fms', methods=['POST'])
 def sar_export_fms():
-    data = request.json or {}
-    dep = data.get('departure', 'KSEE')
-    dest = data.get('destination', 'KSEE')
-    wpts = data.get('waypoints', [])
-    alt = int(data.get('altitude', 6500))
+    data = _body()
+    dep = _text(data, 'departure', DEFAULT_AIRPORT, 8)
+    dest = _text(data, 'destination', DEFAULT_AIRPORT, 8)
+    wpts = _points(data, 'waypoints')
+    alt = _num(data, 'altitude', 6500, -2000, 60000, integer=True)
     try:
         fms_text = generate_xplane_fms_content(dep, dest, wpts, alt)
     except ValueError as exc:
         return jsonify({'success': False, 'error': str(exc)}), 400
-    
+
     return jsonify({
         'success': True,
-        'filename': f"{dep}_{dest}_SAR.fms",
+        'filename': f"{fms_identifier(dep)}_{fms_identifier(dest)}_SAR.fms",
         'content': fms_text
     })
 
@@ -2096,12 +2524,12 @@ def sar_export_vsar():
                         'error': 'V-SAR export rate limit exceeded; try again shortly'}), 429
 
     vsar_url = VSAR_CONSOLE_URL
-    data = request.json or {}
+    data = _body()
     try:
         pattern_type = _limited_text(data, 'pattern_type', 'Search Pattern', 40)
         callsign = _limited_text(data, 'callsign', 'CAP 487', 24)
-        dep = _limited_text(data, 'departure', 'KSEE', 8)
-        dest = _limited_text(data, 'destination', 'KSEE', 8)
+        dep = _limited_text(data, 'departure', DEFAULT_AIRPORT, 8)
+        dest = _limited_text(data, 'destination', DEFAULT_AIRPORT, 8)
     except ValueError as e:
         return jsonify({'success': False, 'error': str(e)}), 400
     waypoints = data.get('waypoints', [])
@@ -2114,10 +2542,20 @@ def sar_export_vsar():
 
     try:
         datum = waypoints[0]
-        datum_lat = float(datum['lat'])
-        datum_lon = float(datum['lon'])
-    except (KeyError, TypeError, ValueError, IndexError):
-        return jsonify({'success': False, 'error': 'waypoints[0] must have numeric lat/lon'}), 400
+        float(datum['lat']); float(datum['lon'])
+        centre = data.get('search_centre')
+        if isinstance(centre, dict):
+            datum_lat, datum_lon = float(centre['lat']), float(centre['lon'])
+        else:
+            c = pattern_search_centre(
+                [{'identifier': w.get('identifier'), 'lat': float(w['lat']),
+                  'lon': float(w['lon'])} for w in waypoints], (0.0, 0.0))
+            datum_lat, datum_lon = c['lat'], c['lon']
+        if not (-90 <= datum_lat <= 90 and -180 <= datum_lon <= 180):
+            raise ValueError('search centre out of range')
+    except (KeyError, TypeError, ValueError, IndexError, AttributeError):
+        return jsonify({'success': False, 'error':
+            'waypoints must have numeric lat/lon (and search_centre, if sent, too)'}), 400
 
     # L-9: the beacon does not sit on the planned datum, and it is not at sea
     # level. Both of those handed the exercise away - the first tells the crew
@@ -2138,9 +2576,10 @@ def sar_export_vsar():
         'band': '121.5',
         'power': 1.0,
         'alert_kind': 'Planned CAP Search Sortie',
-        # The ALERT is the planned datum - that is what the crew is briefed on
-        # and what the search area is drawn around. Only the beacon moves.
-        'alert_text': f"{callsign} search corridor: {len(waypoints)} waypoints. Initial point: {datum_lat}, {datum_lon}.",
+        # The ALERT is the centre of the planned search area - what the crew is
+        # briefed on and what it is drawn around (L2-6: not waypoints[0], which
+        # is a box edge for a parallel track). Only the beacon moves.
+        'alert_text': f"{callsign} search area: {len(waypoints)} waypoints. Centre: {datum_lat:.4f}, {datum_lon:.4f}.",
         'alert_lat': datum_lat,
         'alert_lon': datum_lon,
         'alert_radius_nm': 5.0

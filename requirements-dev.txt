@@ -1,0 +1,30 @@
+# Everything needed to run every test suite in this repository (O2-2).
+#
+#   python3.12 -m venv .venv && . .venv/bin/activate
+#   pip install -r requirements-dev.txt
+#   scripts/run_tests.sh
+#
+# Use Python 3.12: that is what all three service images run, and the pins
+# below are the ones those images install. A newer interpreter with newer
+# fastapi/starlette/pydantic is a different environment from production (the
+# route-enumeration tests broke on exactly that, O2-1).
+#
+# Why the suites cannot share one process: services/exercise/app (a package),
+# services/board/app (a package) and services/flightplanner/app.py (a module)
+# are all imported as "app". scripts/run_tests.sh runs each in its own pytest.
+
+-r services/exercise/requirements.txt      # fastapi 0.115.6, pydantic 2.10.4, opuslib, protobuf
+# Same commit as services/exercise/requirements-pymumble.txt, WITHOUT its hash:
+# a hash anywhere would put this whole install in --require-hashes mode. The
+# image installs it hash-checked; a test keeps the two commits identical.
+pymumble @ https://github.com/azlux/pymumble/archive/a560e6013dfbccb3666ce8756e1ca6b790bf05c8.tar.gz
+-r services/flightplanner/requirements.txt # Flask, Werkzeug, requests, pygeomag, Markdown, gunicorn
+-r services/board/requirements.txt         # fastapi, uvicorn, pydantic (same pins as exercise)
+
+pytest>=8.0,<10
+httpx>=0.27,<1.0        # fastapi.testclient (starlette 0.41) needs it
+
+# Root-suite imports: tests/test_propagation.py (numpy), the faceplate and
+# panel artwork tests (Pillow).
+numpy>=1.26
+Pillow>=10.0

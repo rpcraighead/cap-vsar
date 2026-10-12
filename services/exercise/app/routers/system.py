@@ -6,28 +6,26 @@ Split out of main.py under C15-1.
 from __future__ import annotations
 
 import json
-import time
-import uuid
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
 from .. import access
 from ..hub import hub
-from ..roles import (base_or_instructor, instructor_only, plugin_only,
-                     public_scenario)
 from ..settings import log
-from ..store import _exec, _fetchone, db, db_call, row_to_scenario
+from ..roles import any_role
+from ..store import db
 
 import os
 from urllib.parse import urlsplit
 
 from fastapi import WebSocket, WebSocketDisconnect
+from starlette.concurrency import run_in_threadpool
 
 router = APIRouter()
 
-@router.get("/api/state")
-def state():
-    return hub.snapshot()
+@router.get("/api/state", dependencies=[any_role])
+def state(request: Request):
+    return hub.snapshot(include_df=access.is_instructor(request))
 
 
 @router.get("/api/plugin/scenario")
@@ -110,14 +108,38 @@ async def ws(sock: WebSocket):
     if origin and urlsplit(origin).netloc != sock.headers.get("host"):
         await sock.close(code=1008)
         return
-    await sock.accept()
-    hub.clients.add(sock)
+    # D1.3: a live feed of the exercise needs a login, and the login decides
+    # which rendering of the state this socket receives. The handshake carries
+    # the session cookie because the page and the socket share an origin.
+    # Both lookups hit SQLite, so they run in a worker thread (X2-5).
+    def admit():
+        access.enforce_read(sock)
+        return access.is_instructor(sock), access.get_session_from_request(sock)
     try:
-        await sock.send_text(json.dumps({"type": "state", **hub.snapshot()}))
+        sees_truth, sess = await run_in_threadpool(admit)
+    except HTTPException:
+        await sock.close(code=1008)
+        return
+    await sock.accept()
+    # D5.10: the socket is how the Ready room knows who is here. Anonymous
+    # viewers on an open dev console are one shared "DEV" presence.
+    presence_key = (sess or {}).get("code") or "DEV"
+    hub.touch_presence(presence_key, page=sock.query_params.get("page", ""),
+                       role=(sess or {}).get("role", ""), socket=True)
+    hub.clients.add(sock)
+    if sees_truth:
+        hub.truth_clients.add(sock)
+    try:
+        await sock.send_text(json.dumps(
+            {"type": "state", **hub.snapshot(include_df=sees_truth)},
+            allow_nan=False))
         while True:
             await sock.receive_text()
     except WebSocketDisconnect:
         pass
     finally:
         hub.clients.discard(sock)
+        hub.truth_clients.discard(sock)
+        if presence_key in hub.presence:
+            hub.touch_presence(presence_key, socket=False)
 

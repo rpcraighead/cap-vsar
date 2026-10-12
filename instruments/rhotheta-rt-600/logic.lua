@@ -371,9 +371,16 @@ canvas_id = canvas_add(LCD_X, LCD_Y, dcu.LCD_W, dcu.LCD_H, draw_lcd)
 
 -- ------------------------------------------------------------- behaviour -----
 
+--- Transients of the last session. The real head powers up clean, so a REP
+--- bearing or an open decode window does not survive a power cycle.
+local function reset_volatile()
+    st.repeat_show, st.decode_open = false, false
+    st.repeat_bearing, st.repeat_signal = nil, nil
+end
+
 local function power_on()
     st.power, st.booting = true, true
-    st.repeat_show, st.decode_open = false, false
+    reset_volatile()
     push_state(); sync_audio(); redraw()
 
     if boot_timer then timer_stop(boot_timer) end
@@ -395,32 +402,14 @@ local function power_off()
         st.long_fired[k] = false
     end
     st.power, st.booting, st.dim_mode = false, false, false
+    reset_volatile()
     df.set_power(false)
     df_audio.stop()
     redraw()
 end
 
-local MIN_BUS_VOLTS = 10.0
-local avionics_switch_on = false
-local bus_volts = 0.0
+-- Set by the cap_power watcher at the bottom of this file.
 local bus_powered = false
--- Mission-kit gating, independent of the airframe bus — see
--- docs/DATAREF_CONTRACT.md Part 6. Both default true so a panel without the
--- master switch / CB panel instruments behaves exactly as before.
-local mission_master_on = true
-local mission_cb_in = true
-
-local function update_bus_power()
-    local powered = avionics_switch_on and (bus_volts >= MIN_BUS_VOLTS)
-        and mission_master_on and mission_cb_in
-    if powered == bus_powered then return end
-    bus_powered = powered
-    if bus_powered then
-        power_on()
-    else
-        power_off()
-    end
-end
 
 --- §2.1.4: DIM mode falls back to the prior page after ~3 s of inactivity.
 local function enter_dim_mode()
@@ -612,22 +601,13 @@ end)
 df.set_power(false)
 df_audio.stop()
 
-xpl_dataref_subscribe("sim/cockpit2/switches/avionics_power_on", "INT", function(on)
-    avionics_switch_on = (on or 0) ~= 0
-    update_bus_power()
-end)
-
-xpl_dataref_subscribe("sim/cockpit2/electrical/bus_volts", "FLOAT[6]", function(val)
-    bus_volts = type(val) == "table" and (val[1] or 0.0) or (type(val) == "number" and val or 0.0)
-    update_bus_power()
-end)
-
-si_variable_subscribe("cap_mission_master_on", "BOOL", function(v)
-    mission_master_on = v and true or false
-    update_bus_power()
-end)
-
-si_variable_subscribe("cap_mission_cb_df_in", "BOOL", function(v)
-    mission_cb_in = v and true or false
-    update_bus_power()
+-- Bus power: avionics master, bus voltage, mission master and this breaker
+-- (lib/cap_power.lua; docs/DATAREF_CONTRACT.md Part 6).
+cap_power.watch("cap_mission_cb_df_in", function(powered)
+    bus_powered = powered
+    if powered then
+        power_on()
+    else
+        power_off()
+    end
 end)

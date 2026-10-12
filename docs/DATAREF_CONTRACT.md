@@ -233,9 +233,10 @@ unchanged.
 The engine now averages. Each 250 ms tick takes one un-averaged bearing with
 scatter proportional to how weak the signal is; the published `bearing_rel` is
 the circular mean over a window of roughly two seconds, stretching to six on a
-weak signal, which is what both manuals describe. `spread` is the maximum
-deviation across that window — measured from the un-averaged stream, which is
-precisely why it could not be faked in the faceplate.
+weak signal, which is what both manuals describe. `spread` is the peak-to-peak
+width of that window's un-averaged bearings (highest deviation from the mean minus
+lowest), the same figure the table above defines — measured from the un-averaged
+stream, which is precisely why it could not be faked in the faceplate.
 
 The consequences fall out rather than being written in: a rapid course change
 produces the manuals' drag error, and `cap/df/clear_average` throws the store
@@ -297,7 +298,7 @@ The Technisonic TDFM-136B airborne FM transceiver (`instruments/cap-fm-tdfm-136b
 
 | Variable | Type | Default | Producer | Consumers | Description |
 |---|---|---|---|---|---|
-| `cap_fm_power_on` | BOOL | false | TDFM-136B | GMA 1347, Voice Agent | Radio master power status (toggled by Main encoder press/hold). |
+| `cap_fm_power_on` | BOOL | false | TDFM-136B | GMA 1347, Voice Agent | Radio master power status (Main encoder push on, push and hold 1.5 s off). **Consumers must gate every other `cap_fm_*` value on this one** — see the rule below the table. |
 | `cap_fm_frequency_hz` | INT | 0 | TDFM-136B | Voice Agent, Console | Active transmit/receive RF frequency in Hz (Main or Guard depending on MN/GD switch). |
 | `cap_fm_channel` | INT | 0 | TDFM-136B | Voice Agent, Console | Active memory/channel index (1–200 for Main memories, 101/102 for GD1/GD2). |
 | `cap_fm_channel_name` | STRING | "" | TDFM-136B | Voice Agent, Logger | 8-character channel alphanumeric tag (e.g. `TAC 1`, `AIR 1`). |
@@ -313,6 +314,17 @@ The Technisonic TDFM-136B airborne FM transceiver (`instruments/cap-fm-tdfm-136b
 | `cap_fm_guard_p25_nac` | INT | 0 | TDFM-136B | Voice Agent | Guard receiver P25 NAC in hex (0 if analog). |
 | `cap_fm_main_volume` | FLOAT | 1.0 | TDFM-136B | Audio Mixer | Main receiver volume potentiometer position (0.0–1.0). |
 | `cap_fm_guard_volume` | FLOAT | 1.0 | TDFM-136B | Audio Mixer | Guard receiver volume potentiometer position (0.0–1.0). |
+
+**Power gating rule (`cap_fm_power_on`).** When the radio is off, the TDFM publishes
+`cap_fm_power_on = false` and `cap_fm_transmitting = false` and nothing else: the channel,
+frequency, name, tone, NAC, guard and volume variables keep the values they had when it
+went dark, and the receive flags (`cap_fm_main_rx`, `cap_fm_guard_rx`) are driven by the
+voice agent, not the radio. They are therefore **stale, not zero**, whenever
+`cap_fm_power_on` is false. Every consumer must read `cap_fm_power_on` first and ignore
+the rest while it is false. The GMA 1347 does this for the clearance recorder (a dark
+radio hears nothing, so a carrier on `cap_fm_main_rx` is not recorded); the voice agent
+must do the same before moving the Mumble client to `cap_fm_frequency_hz`. The TDFM does
+not zero the fields because a re-powered radio resumes on the channel it was left on.
 
 ### GMA 1347 Audio Panel State (Published)
 
@@ -332,7 +344,7 @@ The Technisonic TDFM-136B airborne FM transceiver (`instruments/cap-fm-tdfm-136b
 
 | Variable | Type | Default | Producer | Consumers | Description |
 |---|---|---|---|---|---|
-| `cap_fm_ptt` | BOOL | false | Air Manager Touch/Key, Copilot PTT, Voice Agent | TDFM-136B | Observer Push-To-Talk input. Also synchronised from X-Plane dataref `sim/cockpit2/radios/actuators/audio_panel_copilot_ptt`. |
+| `cap_fm_ptt` | BOOL | false | Air Manager Touch/Key, Voice Agent | TDFM-136B | Observer Push-To-Talk input. This variable is the only PTT path: X-Plane has no copilot PTT dataref (nothing containing "ptt" is in `DataRefs.txt`) and no copilot PTT command (`Commands.txt` has only the pilot's `sim/operation/contact_atc_ptt`, the ATC network key, which must not key the mission radio). |
 | `cap_fm_main_rx` | BOOL | false | Voice Agent / Mumble Bridge | TDFM-136B, GMA 1347 | Main receiver carrier/squelch open. Drives upper squelch LED and feeds GMA clearance recorder. |
 | `cap_fm_guard_rx` | BOOL | false | Voice Agent / Mumble Bridge | TDFM-136B | Guard receiver carrier/squelch open. Drives lower squelch LED. Gated by radio power. |
 | `cap_fm_audio_selected` | BOOL | false | GMA 1347 | TDFM-136B, Headset Audio | COM3 audio monitor enabled. When false, observer headset is muted for FM, but squelch LEDs still illuminate on receive. |

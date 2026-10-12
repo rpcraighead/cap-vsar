@@ -11,8 +11,10 @@ Roles:
 Authentication modes:
 1. Session Cookie (`capvsar_session`) or Bearer Token: established via participant
    short codes or QR code mobile scan (/join/<code>).
-2. Shared-secret environment tokens (`CAPVSAR_TOKEN_*`) via `X-CAPVSAR-Token` header
-   or `?token=` query param (preserved for backward compatibility with scripts/plugin).
+2. Shared-secret environment tokens (`CAPVSAR_TOKEN_*`) via the `X-CAPVSAR-Token`
+   header only. X2-10: a `?token=` query parameter used to work as well, and so
+   put role tokens (including the plugin key on the one route that serves beacon
+   truth) into uvicorn and Caddy access logs. It is no longer read.
 """
 from __future__ import annotations
 
@@ -30,12 +32,67 @@ from fastapi import HTTPException, Request
 
 TOKEN_HEADER = "X-CAPVSAR-Token"
 SESSION_COOKIE = "capvsar_session"
-ROLES = ("instructor", "base", "aircrew", "ground_team", "plugin")
+ROLES = ("instructor", "evaluator", "base", "aircrew", "ground_team", "plugin")
+
+# D5: seats are the unit of membership; the role is the permission class a
+# seat maps to. This is the only list of seats in the code. `kind` says what a
+# seat belongs to, which is what the Ready room groups tiles by.
+SEATS: dict[str, dict] = {
+    "director":  {"role": "instructor",  "label": "Exercise Director",     "kind": "exercise", "lands": "/instructor"},
+    "ic":        {"role": "base",        "label": "Incident Commander",    "kind": "base",     "lands": "/base?mode=ic"},
+    "aobd":      {"role": "base",        "label": "Air Ops Branch Director", "kind": "base",   "lands": "/base?mode=aobd"},
+    "mro":       {"role": "base",        "label": "Mission Radio Operator", "kind": "base",    "lands": "/radio"},
+    "base":      {"role": "base",        "label": "Base staff",            "kind": "base",     "lands": "/base"},
+    "evaluator": {"role": "evaluator",   "label": "Evaluator (SET)",       "kind": "exercise", "lands": "/debrief"},
+    "pilot":     {"role": "aircrew",     "label": "Mission Pilot",         "kind": "aircraft", "lands": "/base"},
+    "observer":  {"role": "aircrew",     "label": "Mission Observer",      "kind": "aircraft", "lands": "/base"},
+    "scanner":   {"role": "aircrew",     "label": "Mission Scanner",       "kind": "aircraft", "lands": "/base"},
+    "udf":       {"role": "ground_team", "label": "Ground team / UDF",     "kind": "ground",   "lands": "/radio"},
+    "station":   {"role": "plugin",      "label": "Simulator station",     "kind": "aircraft", "lands": ""},
+}
+
+
+def seat_of(row: dict) -> str:
+    """The seat a roster row holds (D5). Rows written before the `seat`
+    column get it from their title and assigned name, the same words the
+    radio's crew classification already keys on; rows with a `seat` field
+    use it."""
+    seat = (row.get("seat") or "").strip().lower()
+    if seat in SEATS:
+        return seat
+    role = row.get("role", "")
+    text = " ".join(str(row.get(k) or "") for k in ("title", "assigned_name")).upper()
+    if role == "instructor":
+        return "director"
+    if role == "evaluator":
+        return "evaluator"
+    if role == "base":
+        if "RADIO" in text or "MRO" in text:
+            return "mro"
+        if "AIR OP" in text or "AOBD" in text:
+            return "aobd"
+        if "INCIDENT" in text or " IC" in text or text.startswith("IC"):
+            return "ic"
+        return "base"
+    if role == "aircrew":
+        if "PILOT" in text:
+            return "pilot"
+        if "SCANNER" in text:
+            return "scanner"
+        return "observer"
+    if role == "ground_team":
+        return "udf"
+    if role == "plugin":
+        return "station"
+    return "base"
+
 
 # Which roles/tokens satisfy an access requirement.
 # An instructor may act in any role; base staff can direct ground teams.
 SATISFIED_BY: dict[str, tuple[str, ...]] = {
     "instructor": ("instructor",),
+    # D5: a read-only seat; satisfies reads (any_role) and nothing else.
+    "evaluator": ("evaluator", "instructor"),
     "base": ("base", "instructor"),
     "aircrew": ("aircrew", "instructor"),
     "ground_team": ("ground_team", "base", "instructor"),
@@ -50,6 +107,12 @@ def auth_db():
     db_file = os.environ.get("CAPVSAR_DB", DB_PATH_ENV)
     c = sqlite3.connect(db_file, timeout=5.0)
     c.row_factory = sqlite3.Row
+    # X2-6: same pairing as store.db() (FE-9). `synchronous` is per connection,
+    # and this one opens on every authenticated request, so left at FULL each
+    # session write fsynced. busy_timeout is stated rather than left to the
+    # connect() argument so a lock wait here is bounded the same way.
+    c.execute("PRAGMA busy_timeout=5000")
+    c.execute("PRAGMA synchronous=NORMAL")
     try:
         yield c
         c.commit()
@@ -61,7 +124,13 @@ def auth_db():
 
 
 def init_auth_db() -> None:
-    """Ensure roster, session, and exercise configuration tables exist."""
+    """Ensure roster, session, and exercise configuration tables exist.
+
+    X2-6: run once, from store.init_db() at startup. It used to run, migrations
+    and a write transaction included, on every authenticated request. Nothing
+    on the request path calls it now; a caller that builds its own database
+    (a test, a script) calls it explicitly.
+    """
     with auth_db() as c:
         c.executescript("""
         CREATE TABLE IF NOT EXISTS roster (
@@ -133,6 +202,13 @@ def init_auth_db() -> None:
             )
 
 
+def sweep_expired_sessions() -> int:
+    """Delete expired session rows. Called from the ticker, not per request."""
+    with auth_db() as c:
+        return c.execute("DELETE FROM sessions WHERE expires<=?",
+                         (time.time(),)).rowcount
+
+
 def _credential_row(row: tuple) -> tuple:
     """The public badge label alone is never a credential; require its random token."""
     return (row[0], row[1] + "-" + row[7], *row[2:])
@@ -166,9 +242,8 @@ def dev_open() -> bool:
 
 
 def presented(request: Request) -> str:
-    return (request.headers.get(TOKEN_HEADER)
-            or request.query_params.get("token")
-            or "").strip()
+    # Header only (X2-10): a token in the URL ends up in access logs.
+    return (request.headers.get(TOKEN_HEADER) or "").strip()
 
 
 def _matches(supplied: str, accepted: list[str]) -> bool:
@@ -207,11 +282,15 @@ def get_session_from_request(request: Request) -> dict | None:
     if not sess_id:
         return None
 
-    init_auth_db()
     now = time.time()
     with auth_db() as c:
+        # One indexed read (X2-6). assigned_name comes from the roster row the
+        # session was minted for, so the radio can tell a pilot from an
+        # observer by what the roster says rather than by the callsign.
         row = c.execute(
-            "SELECT code, role, title, callsign, aircraft_id, target_url, expires "
+            "SELECT code, role, title, callsign, aircraft_id, target_url, expires, "
+            "(SELECT assigned_name FROM roster WHERE roster.code=sessions.code) "
+            "AS assigned_name "
             "FROM sessions WHERE session_id=? AND expires>?",
             (_session_hash(sess_id), now)
         ).fetchone()
@@ -225,7 +304,6 @@ def get_session_from_request(request: Request) -> dict | None:
 def create_session(code: str, role: str, title: str, callsign: str = "",
                    aircraft_id: str = "", target_url: str = "") -> str:
     """Create a persistent session token lasting 24 hours."""
-    init_auth_db()
     sess_id = secrets.token_urlsafe(32)
     now = time.time()
     expires = now + 86400.0  # 24 hours
@@ -239,14 +317,12 @@ def create_session(code: str, role: str, title: str, callsign: str = "",
 
 
 def delete_session(sess_id: str) -> None:
-    init_auth_db()
     with auth_db() as c:
         c.execute("DELETE FROM sessions WHERE session_id=?", (_session_hash(sess_id),))
 
 
 def authenticate_code(code: str) -> tuple[dict, str] | None:
     """Validate a participant access code (case-insensitive) and return (roster_row, session_id)."""
-    init_auth_db()
     clean_code = code.strip().upper()
     now = time.time()
 
@@ -283,7 +359,6 @@ def authenticate_code(code: str) -> tuple[dict, str] | None:
 
 
 def get_roster() -> list[dict]:
-    init_auth_db()
     with auth_db() as c:
         rows = c.execute(
             "SELECT id, code, role, title, callsign, aircraft_id, assigned_name, token, target_url, created, last_login "
@@ -293,7 +368,6 @@ def get_roster() -> list[dict]:
 
 
 def get_exercise_setup() -> dict:
-    init_auth_db()
     with auth_db() as c:
         row = c.execute(
             "SELECT id, name, num_aircraft, config_json, updated FROM exercise_config WHERE active=1 ORDER BY updated DESC LIMIT 1"
@@ -329,7 +403,6 @@ def get_exercise_setup() -> dict:
 
 def save_exercise_setup(name: str, num_aircraft: int, aircraft_list: list[dict], staff_list: list[dict]) -> dict:
     """Save exercise configuration and generate participant roster with codes and invite URLs."""
-    init_auth_db()
     now = time.time()
     config_obj = {"aircraft": aircraft_list, "staff": staff_list}
     config_json = json.dumps(config_obj)
@@ -359,7 +432,10 @@ def save_exercise_setup(name: str, num_aircraft: int, aircraft_list: list[dict],
         for ac_idx, ac in enumerate(aircraft_list, 1):
             ac_id = ac.get("id") or f"ac-{ac_idx}"
             callsign = ac.get("callsign") or f"CAP {420 + ac_idx}"
-            tail = ac.get("tail") or "CAP 487"
+            tail = (ac.get("tail") or "").strip()
+            # A tail number is shown only when there is one; this used to fall
+            # back to a fixed callsign and print "CAP 487 (CAP 487)" on badges.
+            tail_part = f" ({tail})" if tail and tail != callsign else ""
             df_model = ac.get("df_model") or "Becker SAR-DF 517"
             num_suffix = callsign.split()[-1] if " " in callsign else str(ac_idx)
 
@@ -367,19 +443,19 @@ def save_exercise_setup(name: str, num_aircraft: int, aircraft_list: list[dict],
             if "pilot" in crew_roles:
                 new_roster.append((
                     f"r-plt-{uuid.uuid4().hex[:6]}", f"PLT-{num_suffix}", "aircrew",
-                    f"{callsign} ({tail}) SAR Mission Pilot", callsign, ac_id, "Mission Pilot",
+                    f"{callsign}{tail_part} SAR Mission Pilot", callsign, ac_id, "Mission Pilot",
                     secrets.token_hex(16).upper(), "/base", now
                 ))
             if "observer" in crew_roles:
                 new_roster.append((
                     f"r-obs-{uuid.uuid4().hex[:6]}", f"OBS-{num_suffix}", "aircrew",
-                    f"{callsign} ({tail}) Mission Observer [{df_model}]", callsign, ac_id, "Mission Observer",
+                    f"{callsign}{tail_part} Mission Observer [{df_model}]", callsign, ac_id, "Mission Observer",
                     secrets.token_hex(16).upper(), "/base", now
                 ))
             if "scanner" in crew_roles:
                 new_roster.append((
                     f"r-scn-{uuid.uuid4().hex[:6]}", f"SCN-{num_suffix}", "aircrew",
-                    f"{callsign} ({tail}) Mission Scanner", callsign, ac_id, "Mission Scanner",
+                    f"{callsign}{tail_part} Mission Scanner", callsign, ac_id, "Mission Scanner",
                     secrets.token_hex(16).upper(), "/base", now
                 ))
 
@@ -438,6 +514,25 @@ def enforce(role: str, request: Request) -> None:
                  f"Send it in the {TOKEN_HEADER} header or log in at /login.")
 
 
+def enforce_read(request: Request) -> None:
+    """Admit any authenticated viewer to a read endpoint (X2-1, D1.3).
+
+    Reads used to need nothing at all, which was tolerable while they carried
+    no truth. They now carry state a participant should only see in redacted
+    form, and "redacted for whom" needs to know who is asking. Any roster
+    session or configured token will do; an open dev console (explicit
+    CAPVSAR_DEV_OPEN) lets everyone in, as it does for writes, and an
+    anonymous dev viewer is shown the redacted form.
+    """
+    if get_session_from_request(request):
+        return
+    if dev_open():
+        return
+    raise HTTPException(
+        403, "Log in at /login (or send a role token in the "
+             f"{TOKEN_HEADER} header) to read exercise state.")
+
+
 def is_instructor(request: Request) -> bool:
     """True for an authenticated instructor session or matching instructor token."""
     sess = get_session_from_request(request)
@@ -445,6 +540,10 @@ def is_instructor(request: Request) -> bool:
         return True
     token = token_for("instructor")
     if not token:
+        # Deliberately not widened for an open dev console (U-3 considered
+        # it): X-1's invariant is that an anonymous viewer never receives
+        # truth, dev console or not. The instructor page renders a redacted
+        # DF dictionary gracefully instead.
         return False
     supplied = presented(request)
     return bool(supplied) and hmac.compare_digest(supplied.encode(), token.encode())

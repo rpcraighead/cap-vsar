@@ -459,10 +459,10 @@ class OfflineAssetComplianceTests(unittest.TestCase):
             remote = pattern.findall(html)
             self.assertEqual(remote, [], f"{path} requests remote assets: {remote}")
 
-    def test_vendored_qrcode_is_served(self):
-        r = self.client.get("/static/vendor/qrcode.min.js")
-        self.assertEqual(r.status_code, 200)
-        self.assertIn(b"QRCode", r.content)
+    def test_badges_are_rendered_on_the_server(self):
+        """U-2: the vendored QR library never rendered a badge; segno does."""
+        self.assertEqual(self.client.get("/static/vendor/qrcode.min.js").status_code, 404)
+        self.assertNotIn("qrcode.min.js", self.client.get("/setup").text)
 
 
 if __name__ == "__main__":
@@ -635,6 +635,8 @@ class HardenedCredentialTests(unittest.TestCase):
         with self.access.auth_db() as db:
             db.execute('UPDATE sessions SET expires=0')
         self.assertFalse(other.get('/api/auth/me', headers={'Authorization': 'Bearer ' + secret}).json()['authenticated'])
+        # X2-6: the lookup no longer reclaims expired rows; the ticker does.
+        self.access.sweep_expired_sessions()
         with self.access.auth_db() as db:
             self.assertEqual(db.execute('SELECT COUNT(*) FROM sessions').fetchone()[0], 0)
 
@@ -685,3 +687,9 @@ class HardenedCredentialTests(unittest.TestCase):
         page = self.client.get('/login').text
         self.assertIn('maxlength="128"', page)
         self.assertNotIn('data-code="INSTR-1"', page)
+        # F: the shortcuts are gone from the file itself, not stripped on the
+        # way out. The static mount serves the raw file to anyone.
+        raw = self.client.get('/static/login.html').text
+        for code in ('INSTR-1', 'MRO-1', 'OBS-423', 'UDF-1', 'login-shortcuts-section'):
+            self.assertNotIn(code, raw)
+        self.assertIn('maxlength="128"', raw)

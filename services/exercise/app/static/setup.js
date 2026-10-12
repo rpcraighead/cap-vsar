@@ -21,12 +21,9 @@
             { role: "ground_team", title: "Ground Search Team 1", callsign: "UDF 1" }
         ]
     };
-    let scenarios = [];
 
     // DOM Elements
     const exNameInput = document.getElementById("exName");
-    const exScenarioSelect = document.getElementById("exScenario");
-    const scenarioDesc = document.getElementById("scenarioDesc");
     const aircraftGrid = document.getElementById("aircraftGrid");
     const saveSetupBtn = document.getElementById("saveSetupBtn");
     const resetSetupBtn = document.getElementById("resetSetupBtn");
@@ -38,7 +35,6 @@
 
     async function init() {
         await checkAuth();
-        await loadScenarios();
         await loadSetup();
         bindEvents();
     }
@@ -58,32 +54,6 @@
             }
         } catch (e) {
             console.error("Auth check failed", e);
-        }
-    }
-
-    async function loadScenarios() {
-        try {
-            const res = await fetch("/api/scenarios");
-            scenarios = await res.json();
-            exScenarioSelect.innerHTML = "";
-            scenarios.forEach(sc => {
-                const opt = document.createElement("option");
-                opt.value = sc.id;
-                opt.textContent = sc.name;
-                exScenarioSelect.appendChild(opt);
-            });
-            updateScenarioDesc();
-        } catch (e) {
-            console.error("Failed to load scenarios", e);
-        }
-    }
-
-    function updateScenarioDesc() {
-        const sc = scenarios.find(s => s.id === exScenarioSelect.value);
-        if (sc) {
-            scenarioDesc.textContent = (sc.notes || "") + (sc.band ? ` | Band: ${sc.band} MHz` : "");
-        } else {
-            scenarioDesc.textContent = "";
         }
     }
 
@@ -111,8 +81,6 @@
     }
 
     function bindEvents() {
-        exScenarioSelect.addEventListener("change", updateScenarioDesc);
-
         // Aircraft Count Stepper buttons
         document.querySelectorAll(".btn-stepper").forEach(btn => {
             btn.addEventListener("click", () => {
@@ -317,7 +285,8 @@
             card.className = `roster-badge-card role-${item.role}`;
 
             const joinUrl = `${protocol}//${host}${port}/join/${item.code}`;
-            const qrId = `qr-${item.code.replace(/[^a-zA-Z0-9]/g, "_")}`;
+            // U-2: the badge is drawn by the server; the page only says which seat.
+            const badgeSrc = `/api/setup/badge/${encodeURIComponent(item.id)}.svg?origin=${encodeURIComponent(protocol + "//" + host + port)}`;
 
             let roleBadgeClass = "badge-aircrew";
             if (item.role === "instructor") roleBadgeClass = "badge-instructor";
@@ -326,43 +295,35 @@
             // Escape once, here, so the template below holds no raw server value.
             const roleLabel = esc(String(item.role == null ? "" : item.role).toUpperCase());
 
+            // The card reads top-down the way a printed badge is used: who it
+            // is for, the QR to scan, then the code to type if there is no
+            // camera. The code wraps in its own block; it never shares a line.
             card.innerHTML = `
                 <div class="badge-top">
                     <span class="role-badge ${roleBadgeClass}">${roleLabel}</span>
-                    <span class="badge-code mono">${esc(item.code)}</span>
+                    <span class="badge-callsign mono">${esc(item.callsign || "")}</span>
                 </div>
                 <div class="badge-title">${esc(item.title)}</div>
-                <div class="badge-meta mono">Callsign: <b>${esc(item.callsign || "-")}</b></div>
+                <div class="badge-meta">${esc(item.assigned_name || "")}</div>
 
                 <div class="badge-qr-container">
-                    <div id="${qrId}" class="qr-canvas"></div>
-                    <span class="qr-label">Scan with camera to join</span>
+                    <img class="qr-canvas" width="150" height="150" alt="QR badge for ${esc(item.callsign)}" src="${esc(badgeSrc)}">
+                    <span class="qr-label">Scan to join · opens ${esc(item.target_url || "/")}</span>
                 </div>
 
-                <div class="badge-dest-info">
-                    <span class="dest-tag">Target: <b>${esc(item.target_url || "/")}</b></span>
+                <div class="badge-code-block">
+                    <span class="badge-code-label">Access code, if there is no camera</span>
+                    <code class="badge-code">${esc(item.code)}</code>
                 </div>
 
                 <div class="badge-actions no-print">
-                    <button class="ghost btn-sm btn-copy" data-url="${esc(joinUrl)}">Copy Invite Link</button>
-                    <a href="${esc(joinUrl)}" target="_blank" class="navlink" style="color:var(--blue);border-color:var(--line);text-align:center;font-size:11px">Open</a>
+                    <button class="ghost btn-sm btn-copy" data-url="${esc(joinUrl)}">Copy link</button>
+                    <button class="ghost btn-sm btn-copy" data-url="${esc(item.code)}">Copy code</button>
+                    <a href="${esc(joinUrl)}" target="_blank" class="navlink badge-open">Open</a>
                 </div>
             `;
             rosterGrid.appendChild(card);
 
-            // Render vector QR code
-            setTimeout(() => {
-                if (window.QRCode) {
-                    new QRCode(qrId, {
-                        text: joinUrl,
-                        width: 130,
-                        height: 130,
-                        colorDark: "#0B2545",
-                        colorLight: "#FFFFFF",
-                        correctLevel: 1
-                    });
-                }
-            }, 10);
         });
 
         // Copy button handlers

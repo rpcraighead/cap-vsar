@@ -2,6 +2,12 @@
 import unittest
 from tests.am import AirManager
 
+# Knob pushes are transparent buttons over the knob centre (knob_push in the
+# shared lib; Air Manager's dial_add has no press callback). Geometry from
+# lib/tdfm_panel.lua: MAIN_ENC x=80 y=202 w=76 h=76, GUARD_ENC x=188 y=202.
+MAIN_ENC_CENTRE = (118, 240)
+GUARD_ENC_CENTRE = (226, 240)
+
 
 class TestTDFM136B(unittest.TestCase):
     def test_tot_timer_unkeys_at_60s(self):
@@ -10,9 +16,6 @@ class TestTDFM136B(unittest.TestCase):
             am.load_instrument("cap-fm-tdfm-136b")
             am.set_avionics_power(True, 28.0)
 
-            # Turn on radio power via Main encoder press (x=80, y=202)
-            am.press_dial_matching(x=80, y=202)
-            am.release_dial_matching(x=80, y=202)
             self.assertTrue(am.read_si_variable("cap_fm_power_on"))
 
             # MO selects COM3 MIC on GMA 1347
@@ -49,23 +52,97 @@ class TestTDFM136B(unittest.TestCase):
             am.write_si_variable("cap_fm_ptt", True)
             self.assertTrue(am.read_si_variable("cap_fm_transmitting"))
 
-    def test_copilot_ptt_xplane_dataref(self):
-        """X-Plane copilot PTT dataref keys TDFM transmission when powered and COM3 MIC selected."""
+    def test_ptt_comes_from_the_mission_net_variable_only(self):
+        """I2-2: X-Plane has no copilot PTT dataref, so the radio keys on cap_fm_ptt alone.
+
+        The dataref this used to subscribe (audio_panel_copilot_ptt) does not
+        exist in DataRefs.txt; the harness now refuses the name outright.
+        """
         with AirManager() as am:
             am.load_instrument("cap-fm-tdfm-136b")
             am.set_avionics_power(True, 28.0)
-            am.press_dial_matching(x=80, y=202)  # Power ON
             am.write_si_variable("cap_fm_mic_selected", True)
-
             self.assertFalse(am.read_si_variable("cap_fm_transmitting"))
 
-            # Press copilot PTT via X-Plane dataref
-            am.write_dataref("sim/cockpit2/radios/actuators/audio_panel_copilot_ptt", "INT", 1)
+            with self.assertRaises(RuntimeError) as ctx:
+                am.write_dataref("sim/cockpit2/radios/actuators/audio_panel_copilot_ptt", "INT", 1)
+            self.assertIn("allowlist", str(ctx.exception))
+            self.assertFalse(am.read_si_variable("cap_fm_transmitting"))
+
+            am.write_si_variable("cap_fm_ptt", True)
             self.assertTrue(am.read_si_variable("cap_fm_transmitting"))
-
-            # Release copilot PTT
-            am.write_dataref("sim/cockpit2/radios/actuators/audio_panel_copilot_ptt", "INT", 0)
+            am.write_si_variable("cap_fm_ptt", False)
             self.assertFalse(am.read_si_variable("cap_fm_transmitting"))
+
+    def test_main_encoder_hold_powers_off_and_press_powers_on(self):
+        """I2-3: power on/off is a push on a button over the knob, not a dial_add callback."""
+        with AirManager() as am:
+            am.load_instrument("cap-fm-tdfm-136b")
+            am.set_avionics_power(True, 28.0)
+            self.assertTrue(am.read_si_variable("cap_fm_power_on"))
+
+            # A short press does nothing to a powered radio.
+            am.press_at(*MAIN_ENC_CENTRE)
+            am.step_time(1000)
+            am.release_at(*MAIN_ENC_CENTRE)
+            am.step_time(1000)
+            self.assertTrue(am.read_si_variable("cap_fm_power_on"))
+
+            # Holding 1.5 s switches it off.
+            am.press_at(*MAIN_ENC_CENTRE)
+            am.step_time(1400)
+            self.assertTrue(am.read_si_variable("cap_fm_power_on"))
+            am.step_time(200)
+            self.assertFalse(am.read_si_variable("cap_fm_power_on"))
+            am.release_at(*MAIN_ENC_CENTRE)
+
+            # A push on the unpowered radio (bus still up) switches it on.
+            am.click_at(*MAIN_ENC_CENTRE)
+            self.assertTrue(am.read_si_variable("cap_fm_power_on"))
+
+    def test_main_encoder_push_is_inert_on_a_dead_bus(self):
+        with AirManager() as am:
+            am.load_instrument("cap-fm-tdfm-136b")
+            am.click_at(*MAIN_ENC_CENTRE)
+            self.assertFalse(am.read_si_variable("cap_fm_power_on"))
+
+    def test_knob_push_does_not_steal_the_turn(self):
+        """The push button is smaller than the knob and sits above it; turning the
+        knob still reaches the dial, as on the stock G1000 layering."""
+        with AirManager() as am:
+            am.load_instrument("cap-fm-tdfm-136b")
+            am.set_avionics_power(True, 28.0)
+            dial = am.dial_at(*MAIN_ENC_CENTRE)
+            button = am.button_at(*MAIN_ENC_CENTRE)
+            self.assertIsNotNone(dial)
+            self.assertIsNotNone(button)
+            self.assertGreater(button, dial, "the push button must be added after (above) the dial")
+            b = am.get_buttons()[button]
+            d = am.get_dials()[dial]
+            self.assertLess(b["w"], d["w"])
+            self.assertLess(b["h"], d["h"])
+            am.turn_at(*MAIN_ENC_CENTRE, 1)
+            self.assertGreater(am.read_si_variable("cap_fm_main_volume"), 0.6)
+
+    def test_guard_encoder_push_is_squelch_defeat(self):
+        """I2-3: the Guard encoder press/release is a button over the knob centre."""
+        with AirManager() as am:
+            am.load_instrument("cap-fm-tdfm-136b")
+            am.set_avionics_power(True, 28.0)
+            # squelch_defeat is internal display state with no output, so assert
+            # the wiring: a transparent button above the guard dial, with both
+            # a press and a release callback, that runs without error.
+            dial = am.dial_at(*GUARD_ENC_CENTRE)
+            btn = am.button_at(*GUARD_ENC_CENTRE)
+            self.assertIsNotNone(btn)
+            self.assertGreater(btn, dial)
+            rec = am.get_buttons()[btn]
+            self.assertIsNone(rec.get("up_img"))
+            self.assertIsNone(rec.get("down_img"))
+            self.assertTrue(am.eval(f"return _AM.buttons[{btn}].press_cb ~= nil"))
+            self.assertTrue(am.eval(f"return _AM.buttons[{btn}].release_cb ~= nil"))
+            am.press_at(*GUARD_ENC_CENTRE)
+            am.release_at(*GUARD_ENC_CENTRE)
 
     def test_squelch_leds_rx(self):
         """cap_fm_main_rx and cap_fm_guard_rx drive squelch indicator LEDs, gated by radio power."""
@@ -114,7 +191,7 @@ class TestTDFM136B(unittest.TestCase):
         with AirManager() as am:
             am.load_instrument("cap-fm-tdfm-136b")
             am.set_avionics_power(True, 28.0)
-            am.press_dial_matching(x=80, y=202)  # Power ON
+            self.assertTrue(am.read_si_variable("cap_fm_power_on"))
 
             # Default channel is 1 (TAC 1, 148.1500 MHz, CTCSS 110.9 Hz)
             self.assertEqual(am.read_si_variable("cap_fm_channel"), 1)
@@ -159,7 +236,7 @@ class TestTDFM136B(unittest.TestCase):
         with AirManager() as am:
             am.load_instrument("cap-fm-tdfm-136b")
             am.set_avionics_power(True, 28.0)
-            am.press_dial_matching(x=80, y=202)  # Power ON
+            self.assertTrue(am.read_si_variable("cap_fm_power_on"))
 
             # Main receiver is on TAC 1 (148.150 MHz)
             self.assertEqual(am.read_si_variable("cap_fm_channel"), 1)
@@ -198,8 +275,7 @@ class TestTDFM136B(unittest.TestCase):
         with AirManager() as am:
             am.load_instrument("cap-fm-tdfm-136b")
             am.set_avionics_power(True, 28.0)
-            am.press_dial_matching(x=80, y=202)  # Power ON
-            am.release_dial_matching(x=80, y=202)
+            self.assertTrue(am.read_si_variable("cap_fm_power_on"))
 
             self.assertEqual(am.read_si_variable("cap_fm_channel"), 1)
 

@@ -18,9 +18,28 @@ local sounds = {
 
 local playing = nil
 
+-- Air Manager restarts a sound that is told to loop while it is already
+-- looping, so sound_loop/sound_stop are only issued on a transition. update()
+-- runs every time the engine publishes a changed frame, several times a second
+-- on a weak signal, and re-issuing sound_loop(noise) each time would make the
+-- hiss stutter in exactly the case it exists for (I-17, I2-4).
+local noise_playing = false
+
+local function noise_on()
+    if noise_playing then return end
+    sound_loop(sounds.noise)
+    noise_playing = true
+end
+
+local function noise_off()
+    if not noise_playing then return end
+    sound_stop(sounds.noise)
+    noise_playing = false
+end
+
 local function stop_current()
     if playing then sound_stop(sounds[playing]) end
-    if sounds.noise then sound_stop(sounds.noise) end
+    noise_off()
     playing = nil
 end
 
@@ -73,7 +92,7 @@ function M.update(ready, rx_open, band_mhz, volume, suppress_doppler, signal)
             sound_loop(sounds[wanted])
         end
         if noise_gain > 0.01 then
-            sound_loop(sounds.noise)
+            noise_on()
         end
         playing = wanted
     else
@@ -81,9 +100,9 @@ function M.update(ready, rx_open, band_mhz, volume, suppress_doppler, signal)
         sound_volume(sounds.noise, noise_gain)
         -- volume knob drives receiver gain: sound_volume(sounds[wanted], gain)
         if noise_gain > 0.01 then
-            sound_loop(sounds.noise)
+            noise_on()
         else
-            sound_stop(sounds.noise)
+            noise_off()
         end
     end
 end

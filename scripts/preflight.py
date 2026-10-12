@@ -77,7 +77,7 @@ def check_front_door(host: str) -> None:
 
 
 def check_backends_private(host: str) -> None:
-    for port, name in ((8700, "exercise"), (8090, "planner")):
+    for port, name in ((8700, "exercise"), (8080, "planner")):
         try:
             with socket.create_connection((host, port), timeout=1):
                 open_to_host = True

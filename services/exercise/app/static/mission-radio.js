@@ -109,9 +109,121 @@ function notice(message='') { $('notice').textContent=message; $('notice').hidde
    to use could not produce the one document the role exists to produce. On a
    voice net the log records transmissions - who keyed, on which net, when -
    and the operator writes in what was passed, which is how a real Form 110 is
-   kept. Entries are held in the page only; nothing is sent to the console.  */
-const commLog = [];
+   kept. Nothing is sent to the console; the entries live in the page and are
+   autosaved to sessionStorage (F2-4), so a reload, a back-swipe or iOS
+   evicting the tab does not take a multi-hour log with it.  */
+
+// BEGIN F2-4 PURE FORM 110 STORE
+const COMMLOG_KEY = 'capvsar.form110.v1';
 const LOG_LIMIT = 500;
+
+function serializeCommLog(log, limit = LOG_LIMIT) {
+  return JSON.stringify({v: 1, entries: log.slice(0, limit)});
+}
+
+// Anything unreadable restores as an empty log rather than throwing: this runs
+// at page load, before the radio is usable. Entries are re-built field by
+// field so nothing stored can introduce a shape the renderer does not expect.
+function restoreCommLog(raw, limit = LOG_LIMIT) {
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch (e) { return []; }
+  const rows = parsed && parsed.v === 1 && Array.isArray(parsed.entries) ? parsed.entries : [];
+  const text = (v, fallback) => (typeof v === 'string' ? v : fallback);
+  return rows.filter(r => r && typeof r === 'object' && Number.isFinite(r.t)).slice(0, limit).map(r => ({
+    id: text(r.id, `e${Math.round(r.t * 1000).toString(36)}`),
+    t: r.t, from: text(r.from, ''), to: text(r.to, 'ALL'), traffic: text(r.traffic, ''),
+    outgoing: r.outgoing === true, net: text(r.net, 'MISSION NET'),
+    seconds: Number.isFinite(r.seconds) ? r.seconds : null,
+  }));
+}
+
+function saveCommLog(storage, log) {
+  try { storage.setItem(COMMLOG_KEY, serializeCommLog(log)); return true; }
+  catch (e) { return false; }   // private window, quota, or storage blocked
+}
+
+function loadCommLog(storage) {
+  try { return restoreCommLog(storage.getItem(COMMLOG_KEY)); }
+  catch (e) { return []; }
+}
+// END F2-4 PURE FORM 110 STORE
+
+// BEGIN F2-3 PURE FORM 110 VIEW
+// The table used to be torn down and rebuilt on every transmission, which
+// threw the MRO out of the traffic cell they were typing in whenever anyone on
+// the net keyed. A new entry is now inserted as one row, and a full rebuild
+// refuses to run while a traffic cell has focus. `doc` is the document (passed
+// in so this can be exercised without a browser).
+function form110Row(doc, entry, onEdit) {
+  const when = new Date(entry.t * 1000);
+  const row = doc.createElement('tr');
+  row.className = entry.outgoing ? 'tx' : 'rx';
+  const cells = [
+    ['mono', when.toISOString().slice(0, 10)],
+    ['mono dir', when.toISOString().slice(11, 19) + 'Z'],
+    ['net', entry.net],
+    ['', entry.from + (entry.seconds ? ` (${entry.seconds.toFixed(0)}s)` : '')],
+    ['', entry.to],
+  ];
+  for (const [cls, text] of cells) {
+    const td = doc.createElement('td');
+    if (cls) td.className = cls;
+    td.textContent = text;          // textContent, never innerHTML (F-6)
+    row.appendChild(td);
+  }
+  const traffic = doc.createElement('td');
+  traffic.className = 'traffic';
+  traffic.contentEditable = 'true';
+  traffic.spellcheck = false;
+  traffic.textContent = entry.traffic;
+  traffic.addEventListener('input', () => {
+    entry.traffic = traffic.textContent.trim();
+    if (onEdit) onEdit(entry);
+  });
+  row.appendChild(traffic);
+  return row;
+}
+
+function form110Empty(doc) {
+  const row = doc.createElement('tr');
+  row.className = 'commlog-empty';
+  const td = doc.createElement('td');
+  td.colSpan = 6;
+  td.textContent = 'No traffic logged yet.';
+  row.appendChild(td);
+  return row;
+}
+
+// Newest first, so a new entry goes on top. Returns the row it added.
+function form110Insert(doc, body, entry, onEdit, limit = LOG_LIMIT) {
+  const first = body.firstChild;
+  if (first && first.className === 'commlog-empty') body.removeChild(first);
+  const row = form110Row(doc, entry, onEdit);
+  body.insertBefore(row, body.firstChild);
+  while (body.children.length > limit) body.removeChild(body.lastChild);
+  return row;
+}
+
+// Returns false (and touches nothing) when the operator is typing in a cell.
+function form110Rebuild(doc, body, log, onEdit) {
+  const active = doc.activeElement;
+  if (active && active.className === 'traffic' && body.contains(active)) return false;
+  body.textContent = '';
+  if (!log.length) { body.appendChild(form110Empty(doc)); return true; }
+  for (const entry of log) body.appendChild(form110Row(doc, entry, onEdit));
+  return true;
+}
+// END F2-3 PURE FORM 110 VIEW
+
+const commLog = loadCommLog(sessionStorageOrNull());
+
+function sessionStorageOrNull() {
+  try { return window.sessionStorage; } catch (e) { return null; }   // blocked storage throws on access
+}
+function persistCommLog() {
+  const storage = sessionStorageOrNull();
+  if (storage) saveCommLog(storage, commLog);
+}
 
 function logEntry({from, to = 'ALL', net, outgoing = false, seconds = null, traffic = ''}) {
   const entry = {
@@ -122,44 +234,15 @@ function logEntry({from, to = 'ALL', net, outgoing = false, seconds = null, traf
   };
   commLog.unshift(entry);
   if (commLog.length > LOG_LIMIT) commLog.length = LOG_LIMIT;
-  renderLog();
+  const body = $('commLogBody');
+  if (body) form110Insert(document, body, entry, persistCommLog, LOG_LIMIT);
+  persistCommLog();
   return entry;
 }
 
 function renderLog() {
   const body = $('commLogBody');
-  if (!body) return;
-  if (!commLog.length) {
-    body.innerHTML = '<tr class="commlog-empty"><td colspan="6">No traffic logged yet.</td></tr>';
-    return;
-  }
-  body.textContent = '';
-  for (const entry of commLog) {
-    const when = new Date(entry.t * 1000);
-    const row = document.createElement('tr');
-    row.className = entry.outgoing ? 'tx' : 'rx';
-    const cells = [
-      ['mono', when.toISOString().slice(0, 10)],
-      ['mono dir', when.toISOString().slice(11, 19) + 'Z'],
-      ['net', entry.net],
-      ['', entry.from + (entry.seconds ? ` (${entry.seconds.toFixed(0)}s)` : '')],
-      ['', entry.to],
-    ];
-    for (const [cls, text] of cells) {
-      const td = document.createElement('td');
-      if (cls) td.className = cls;
-      td.textContent = text;          // textContent, never innerHTML (F-6)
-      row.appendChild(td);
-    }
-    const traffic = document.createElement('td');
-    traffic.className = 'traffic';
-    traffic.contentEditable = 'true';
-    traffic.spellcheck = false;
-    traffic.textContent = entry.traffic;
-    traffic.addEventListener('input', () => { entry.traffic = traffic.textContent.trim(); });
-    row.appendChild(traffic);
-    body.appendChild(row);
-  }
+  if (body) form110Rebuild(document, body, commLog, persistCommLog);
 }
 
 function pad(value, width) {
@@ -567,7 +650,7 @@ function openAirbandSocket(generation) {
   socket.addEventListener('message',event=>{if(airband.ws===socket)receive(event.data,'airband');});
   socket.addEventListener('close',()=>{if(airband.ws===socket)airbandLost('Airband radio disconnected.');});
   socket.addEventListener('error',()=>{if(airband.ws===socket)airbandLost('Could not reach the airband radio.');});
-  airband.timeout=setTimeout(()=>{if(airband.joining&&airband.ws===socket)connectionLost('The airband connection timed out.');},15000);
+  airband.timeout=setTimeout(()=>{if(airband.joining&&airband.ws===socket)airbandLost('The airband connection timed out.');},15000);  // F2-2: this radio only
 }
 async function connect(automatic=false) {
   if(state.joining) return;
@@ -664,7 +747,11 @@ function receive(data,receiver='main') {
     }
     return;
   }
-  let message; try{message=JSON.parse(data);}catch{disconnect();notice('Invalid response from the voice server.');return;}
+  let message; try{message=JSON.parse(data);}catch{  // F2-11: the old handler cleared wantOnline, so FE-5 never retried
+    const text='Invalid response from the voice server.';
+    if(failureScope(receiver)==='airband')airbandLost(text);else connectionLost(text);
+    return;
+  }
   if(message.type==='tuned') {
     clearTimeout(radioState.timeout);radioState.timeout=null;
     radioState.online=true;radioState.joining=false;radioState.tuning=false;radioState.epoch=message.epoch;
@@ -723,7 +810,7 @@ function receive(data,receiver='main') {
 $('logExport')?.addEventListener('click',exportLog);
 $('logClear')?.addEventListener('click',()=>{
   if(!commLog.length||confirm('Clear the communications log? Export it first if you need the record.')) {
-    commLog.length=0; renderLog();
+    commLog.length=0; persistCommLog(); renderLog();
   }
 });
 $('logAdd')?.addEventListener('click',()=>{
@@ -766,13 +853,16 @@ window.addEventListener('keydown',event=>{
 window.addEventListener('keyup',event=>{if(event.code==='Space'&&state.held.has('keyboard')){event.preventDefault();release('keyboard');}});
 window.addEventListener('blur',()=>releaseAll());
 document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseAll();});
-window.addEventListener('pagehide',disconnect);
+// Release PTT, but do not disconnect(): that clears wantOnline, so a page the
+// browser restores from its back/forward cache (iOS Safari backgrounding) would
+// come back dark with no retry. The watchdog notices the dead sockets instead.
+window.addEventListener('pagehide',()=>releaseAll());
 navigator.mediaDevices?.addEventListener('devicechange',()=>devices().catch(()=>{}));
 setInterval(()=>{
   $('clock').textContent=new Date().toISOString().slice(11,19)+' Z';
   if(state.online) {
     if(Date.now()-state.lastPong>6000){connectionLost('Mission voice stopped responding.');return;}
-    if(airband.online&&Date.now()-airband.lastPong>6000){connectionLost('Airband radio stopped responding.');return;}
+    if(airband.online&&Date.now()-airband.lastPong>6000)airbandLost('Airband radio stopped responding.');  // F2-2: this radio only
     send({action:'ping'});if(airband.online)sendRadio('airband',{action:'ping'});
     if(state.tx)sendRadio(state.txReceiver,{action:'keepalive'});
     if(state.tx)$('pttHint').textContent=`${Math.floor((Date.now()-state.started)/1000)}s / 60s · release to listen`;
