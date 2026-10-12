@@ -115,6 +115,6 @@
     "outcome": "PASS",
     "sha256": "df3011cbacdeb95d1baa471c7672956fcd1902750955d40b931fe2dfc2bc9a67"
   },
-  "raw_root": "/home/ron/.cache/capvsar/ai-pilot/sol-campaign-20261010-c",
-  "restored_backup": "/home/ron/X-Plane 12/Output/capvsar-backups/ai-pilot-sol-requal-20261010"
+  "raw_root": "~/.cache/capvsar/ai-pilot/sol-campaign-20261010-c",
+  "restored_backup": "~/X-Plane 12/Output/capvsar-backups/ai-pilot-sol-requal-20261010"
 }

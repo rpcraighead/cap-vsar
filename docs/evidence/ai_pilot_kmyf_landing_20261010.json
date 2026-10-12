@@ -4,7 +4,7 @@
   "runs": [
     {
       "name": "26-crosswind-left12-45",
-      "trace_path": "/home/ron/.cache/capvsar/ai-pilot/kmyf-landing-trial-26-crosswind-left12-45-20261010.jsonl",
+      "trace_path": "~/.cache/capvsar/ai-pilot/kmyf-landing-trial-26-crosswind-left12-45-20261010.jsonl",
       "trace_sha256": "6ce7b46af7f2bb3065f958361306f9dd8553d539c640c1dc3181a34fb54dc9fa",
       "entry": {
         "lateral_offset": 0.0,
@@ -66,7 +66,7 @@
     },
     {
       "name": "27-crosswind-left12-45-repeat",
-      "trace_path": "/home/ron/.cache/capvsar/ai-pilot/kmyf-landing-trial-27-crosswind-left12-45-repeat-20261010.jsonl",
+      "trace_path": "~/.cache/capvsar/ai-pilot/kmyf-landing-trial-27-crosswind-left12-45-repeat-20261010.jsonl",
       "trace_sha256": "1c3e90213441de26625a89047b6d2b934c81c3d3d592c634908ed3b76dd3e9ea",
       "entry": {
         "lateral_offset": 0.0,
@@ -128,7 +128,7 @@
     },
     {
       "name": "28-calm-regression",
-      "trace_path": "/home/ron/.cache/capvsar/ai-pilot/kmyf-landing-trial-28-calm-regression-20261010.jsonl",
+      "trace_path": "~/.cache/capvsar/ai-pilot/kmyf-landing-trial-28-calm-regression-20261010.jsonl",
       "trace_sha256": "74d9e7ef476171695814ea8a973f1f8bbc340e25f4ed58e6358d04662c5903e3",
       "entry": {
         "lateral_offset": 0.0,

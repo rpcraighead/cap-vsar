@@ -20,7 +20,7 @@
   "mixture": 0.6
  },
  "throttle": 0.9546792221069338,
- "c2_capture": "capturing card C2 run a2-c2-cd0100 for 120 s at 20 Hz - fly the point now\n\n--- card C2 run a2-c2-cd0100: 2396 samples ---\n  rate         20.0 Hz effective (requested 20), max interval 0.054 s, 0 gaps\n  weight       3095 lb\n  KIAS         min 133.9  max 134.1\n  alt ft       min 6225  max 6225\n  AGL ft       min 6214  max 6214\n  alpha deg    min -0.92  max -0.90\n  Nz g         min 0.999  max 0.999\n  flap actual  min 0.000  max 0.000\n\nReduce against docs/C182T_FLIGHT_TEST_CARD.md and record the real numbers,\nincluding misses, in CHANGELOG.md.\ntrace: /home/ron/.cache/capvsar/flight-tests/C2_runa2-c2-cd0100_20261011-220203.jsonl\n",
+ "c2_capture": "capturing card C2 run a2-c2-cd0100 for 120 s at 20 Hz - fly the point now\n\n--- card C2 run a2-c2-cd0100: 2396 samples ---\n  rate         20.0 Hz effective (requested 20), max interval 0.054 s, 0 gaps\n  weight       3095 lb\n  KIAS         min 133.9  max 134.1\n  alt ft       min 6225  max 6225\n  AGL ft       min 6214  max 6214\n  alpha deg    min -0.92  max -0.90\n  Nz g         min 0.999  max 0.999\n  flap actual  min 0.000  max 0.000\n\nReduce against docs/C182T_FLIGHT_TEST_CARD.md and record the real numbers,\nincluding misses, in CHANGELOG.md.\ntrace: ~/.cache/capvsar/flight-tests/C2_runa2-c2-cd0100_20261011-220203.jsonl\n",
  "c2_engine_mean": {
   "mp": 23.00021562576294,
   "rpm": 2400.0075887044272,

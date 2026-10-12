@@ -38,6 +38,12 @@ KNOWN_LOCAL_PATH_DOCS = {
     "docs/bugs/tracker.json",
     "docs/ragd/ragd_ingest.py",
     "docs/ragd/vaultnotes/AsBuilt_CAPVSAR.md",
+    # Hash-chained trial records: the KSAN proceed record cites the landing
+    # record's SHA-256 and the restart record cites proceed's, so these two
+    # cannot be edited without breaking that chain. Every other evidence file
+    # had its workstation paths rewritten to ~/ on 2026-10-12.
+    "docs/evidence/ai_pilot_ksan_landing_20261010.json",
+    "docs/evidence/ai_pilot_ksan_proceed_20261010.json",
 }
 
 

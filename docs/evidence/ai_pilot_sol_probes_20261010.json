@@ -100,10 +100,10 @@
     }
   ],
   "native_probe": {
-    "trace": "/home/ron/.cache/capvsar/ai-pilot/20261010-sol-native-probe4.json",
+    "trace": "~/.cache/capvsar/ai-pilot/20261010-sol-native-probe4.json",
     "sha256": "99c6c59d917cff4d2b2491e9d9bd188bcfea4e8132eca01b5db0717cdff5499a",
     "outcome": "PASS"
   },
   "simulator_restored": true,
-  "simulator_backup": "/home/ron/X-Plane 12/Output/capvsar-backups/ai-pilot-sol-20261010"
+  "simulator_backup": "~/X-Plane 12/Output/capvsar-backups/ai-pilot-sol-20261010"
 }

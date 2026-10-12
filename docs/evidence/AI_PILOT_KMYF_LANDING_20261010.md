@@ -57,7 +57,7 @@ attempts and did not complete scored landings. All are preserved as raw traces.
 The [machine-readable evidence](ai_pilot_kmyf_landing_20261010.json) gives
 trace paths, SHA-256 hashes, aircraft/scenery identities and independently
 replayed outcomes. Raw JSONL traces are under
-`/home/ron/.cache/capvsar/ai-pilot/`. Focused controller/bridge tests and the
+`~/.cache/capvsar/ai-pilot/`. Focused controller/bridge tests and the
 full AI-pilot suite passed: 464 tests, 22 expected failures, 60 subtests.
 
 This work does not enable production live control or qualify the custom C182,
@@ -67,4 +67,4 @@ time-limited laboratory mode pinned to the stock C172. After the trials,
 X-Plane was stopped, temporary plugin files and socket were removed, and the
 original preferences, stock C172 preferences and scenery configuration were
 restored byte-for-byte. The simulator backup is at
-`/home/ron/X-Plane 12/Output/capvsar-backups/ai-pilot-kmyf-landing-20261010/`.
+`~/X-Plane 12/Output/capvsar-backups/ai-pilot-kmyf-landing-20261010/`.

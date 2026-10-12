@@ -76,8 +76,8 @@ plugin/config files were removed from the active directory and archived under
 [full replay report](ai_pilot_sol_campaign_20261010_report.json), and
 [fault-probe evidence](ai_pilot_sol_probes_20261010.json) contain hashes for
 all raw records. Raw JSONL traces and trial stdout are under
-`/home/ron/.cache/capvsar/ai-pilot/sol-campaign-20261010-a/`.
-The paused native probe is under `/home/ron/.cache/capvsar/ai-pilot/`.
+`~/.cache/capvsar/ai-pilot/sol-campaign-20261010-a/`.
+The paused native probe is under `~/.cache/capvsar/ai-pilot/`.
 
 The next architecture step is separate: implement and qualify taxi, takeoff,
 landing, stall/recovery and then the custom C182 with appropriate aircraft

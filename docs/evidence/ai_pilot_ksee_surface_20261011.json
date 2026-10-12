@@ -15,7 +15,7 @@
   },
   "taxi_only": {
     "outcome": "PASS",
-    "trace": "/home/ron/.cache/capvsar/ai-pilot/ksee_surface_taxi_20261011_trial8.jsonl",
+    "trace": "~/.cache/capvsar/ai-pilot/ksee_surface_taxi_20261011_trial8.jsonl",
     "sha256": "583682755525b39937aec698abd6fd467a87baf243b338587e14be056e325a30",
     "hold_latitude_deg": 32.825955,
     "hold_longitude_deg": -116.964434
@@ -23,12 +23,12 @@
   "diagnostic_checkpoint_takeoff": {
     "outcome": "PASS",
     "start_at": "D8 hold diagnostic checkpoint",
-    "trace": "/home/ron/.cache/capvsar/ai-pilot/ksee_hold_takeoff_20261011_trial4.jsonl",
+    "trace": "~/.cache/capvsar/ai-pilot/ksee_hold_takeoff_20261011_trial4.jsonl",
     "sha256": "485b1a354b1ef60ab1e9f9c3477a5e45d77596043ff9a7130383b5765f58192e"
   },
   "continuous_parking_to_takeoff": {
     "outcome": "PASS",
-    "trace": "/home/ron/.cache/capvsar/ai-pilot/ksee_parking_to_takeoff_20261011_trial2.jsonl",
+    "trace": "~/.cache/capvsar/ai-pilot/ksee_parking_to_takeoff_20261011_trial2.jsonl",
     "sha256": "dbb6b582cfb321442100013d5e4c2415bdff5f0874792b853d9239c733c27346",
     "sample_count": 10788,
     "hold_groundspeed_mps": 0.49,

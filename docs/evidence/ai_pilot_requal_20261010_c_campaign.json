@@ -11,7 +11,7 @@
     "services/ai_pilot/qualification_entries.json": "74454d224deb86002eea03b1ac72f7af6944831ba7d7dde1ae017c90e29151d2"
   },
   "plan_sha256": "74454d224deb86002eea03b1ac72f7af6944831ba7d7dde1ae017c90e29151d2",
-  "aircraft_path": "/home/ron/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
+  "aircraft_path": "~/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
   "attempts": [
     {
       "name": "baseline_01",

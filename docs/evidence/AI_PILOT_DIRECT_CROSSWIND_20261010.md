@@ -21,9 +21,9 @@ aileron as rollout speed falls.
 | Sound-enabled alternating sequence | First attempt ended before touchdown during startup. The next completed right-crosswind landing missed the 5° rollout-heading limit by 0.045°. The following eight completed landings, alternating left/right, all passed. |
 
 The two machine-readable ledgers are
-`/home/ron/.cache/capvsar/ai-pilot/kmyf-direct15-gate-a-20261010-ledger.json`
+`~/.cache/capvsar/ai-pilot/kmyf-direct15-gate-a-20261010-ledger.json`
 and
-`/home/ron/.cache/capvsar/ai-pilot/kmyf-direct15-gate-b-sound-20261010-ledger.json`.
+`~/.cache/capvsar/ai-pilot/kmyf-direct15-gate-b-sound-20261010-ledger.json`.
 They contain the predeclared wind plan, per-trial results, raw JSONL trace
 paths and SHA-256 hashes. Both record controller source SHA-256
 `5778c01b7e98181c3556eab0b7b467e63fc17e5c6b12700020b2459dd1bda966`.
@@ -38,5 +38,5 @@ or takeoff trials were started in this session.
 
 X-Plane was closed afterward. Original simulator preferences, stock C172
 preferences and scenery configuration were restored byte-for-byte from
-`/home/ron/X-Plane 12/Output/capvsar-backups/ai-pilot-direct-crosswind-20261010/`.
+`~/X-Plane 12/Output/capvsar-backups/ai-pilot-direct-crosswind-20261010/`.
 The temporary bridge plugin files and socket were removed.

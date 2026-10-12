@@ -1,12 +1,12 @@
 {
  "trial": "C182T expanding square, live, mission bridge",
  "date": "2026-10-11",
- "trace": "/home/ron/.cache/capvsar/ai-pilot/pattern_c182_ss_20261011.jsonl",
+ "trace": "~/.cache/capvsar/ai-pilot/pattern_c182_ss_20261011.jsonl",
  "trace_sha256": "2077c33abbf690220e06834e1f5322a601b01c927bf455f056a884e83efab569",
  "commit": "ee990d7bc0cd36dc921eebebd2fc1086800172c8",
  "dirty": false,
  "aircraft": {
-  "path": "/home/ron/X-Plane 12/Aircraft/CAP/Cessna 182T NAV III/Cessna_182T_G1000.acf",
+  "path": "~/X-Plane 12/Aircraft/CAP/Cessna 182T NAV III/Cessna_182T_G1000.acf",
   "sha256": "11ff17d1f15ed3c715ca248f797999b3bf583763dd65275a658ddfac09cd89d8",
   "profile": "C182T"
  },

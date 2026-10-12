@@ -80,7 +80,7 @@ override release and toe-brake release. Earlier runs exposed a parking-brake
 reset defect, a brake dataref that did not apply during the roll, and two sharp
 corners that needed full nosewheel steering and early turn anticipation. The
 passing trace is
-`/home/ron/.cache/capvsar/ai-pilot/ksee_surface_taxi_20261011_trial8.jsonl`.
+`~/.cache/capvsar/ai-pilot/ksee_surface_taxi_20261011_trial8.jsonl`.
 This is an engineering diagnostic using explicit **simulated** taxi authority;
 it does not represent an ATC clearance or a complete sortie. A subsequent
 taxi-plus-takeoff run stopped at D8, entered 27R and lined up near runway
@@ -94,7 +94,7 @@ along-track 509 m, and ended at 300.2 ft AGL and 72.8 KIAS. During the ground
 roll the maximum centerline offset was 5.6 m and heading error was 7.0°.
 At 0.3 NM airborne, climb from the 388 ft field elevation was about
 653 ft/NM. The complete trace is
-`/home/ron/.cache/capvsar/ai-pilot/ksee_parking_to_takeoff_20261011_trial2.jsonl`
+`~/.cache/capvsar/ai-pilot/ksee_parking_to_takeoff_20261011_trial2.jsonl`
 (SHA-256 `dbb6b582cfb321442100013d5e4c2415bdff5f0874792b853d9239c733c27346`).
 The bridge confirmed pause and released overrides on completion. The hold-point
 checkpoint is marked as an intervention and is not part of this continuous

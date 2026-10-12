@@ -58,8 +58,8 @@
       "renopt_SSAO_04": 0,
       "renopt_MSAA": 0
     },
-    "original_graphics_backup": "/home/ron/X-Plane 12/Output/capvsar-backups/ai-pilot-ksan-timing-20261010",
-    "intermediate_graphics_backup": "/home/ron/X-Plane 12/Output/capvsar-backups/ai-pilot-ksan-timing-b-20261010",
+    "original_graphics_backup": "~/X-Plane 12/Output/capvsar-backups/ai-pilot-ksan-timing-20261010",
+    "intermediate_graphics_backup": "~/X-Plane 12/Output/capvsar-backups/ai-pilot-ksan-timing-b-20261010",
     "scenery_warnings": [
       "KSAN references missing static aircraft objects.",
       "A scenery texture-loading warning was logged on the final launch."
@@ -76,11 +76,11 @@
     "controller_tuning_changed": false,
     "source_frozen_during_campaign": true
   },
-  "prior_evidence": "/home/ron/Projects/cap-vsar-ai-pilot/docs/evidence/ai_pilot_ksan_proceed_20261010.json",
+  "prior_evidence": "~/Projects/cap-vsar-ai-pilot/docs/evidence/ai_pilot_ksan_proceed_20261010.json",
   "prior_evidence_sha256": "57752a6ae9ce1bfce1f548fd8d555e2b26f17c8cb9781d8b7bc9e33ae6158c61",
-  "unscored_weather_setup": "/home/ron/.cache/capvsar/ai-pilot/ksan27-restart-weather-setup-20261010.json",
+  "unscored_weather_setup": "~/.cache/capvsar/ai-pilot/ksan27-restart-weather-setup-20261010.json",
   "unscored_weather_setup_sha256": "0a157cc51e15cd3cdc0f57d51482be39dae4973bfb75d96bb37f2cd97426c8db",
-  "campaign_ledger": "/home/ron/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-ledger.json",
+  "campaign_ledger": "~/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-ledger.json",
   "campaign_ledger_sha256": "f0f1686f0126a391c25238aec973e935c68d4442ebce4e6442db8ebc4dbd6115",
   "campaign": {
     "created_utc": "2026-10-11T03:11:33.544885+00:00",
@@ -176,7 +176,7 @@
           "kias": 0.0,
           "groundspeed_kt": 1.9601030704307556
         },
-        "trace": "/home/ron/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-01.jsonl",
+        "trace": "~/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-01.jsonl",
         "trace_sha256": "4d45a249f8e1d9a6801fe63b27b5fef3bb1eaf98f7a86a441788c0278e44d895"
       },
       {
@@ -218,7 +218,7 @@
           "kias": 0.0,
           "groundspeed_kt": 1.7649505121517182
         },
-        "trace": "/home/ron/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-02.jsonl",
+        "trace": "~/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-02.jsonl",
         "trace_sha256": "bc467415af4aec7505a057089d231e931e153b3f64f1f30324c28f2f273279e6"
       },
       {
@@ -260,7 +260,7 @@
           "kias": 0.0,
           "groundspeed_kt": 1.9201966428661346
         },
-        "trace": "/home/ron/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-03.jsonl",
+        "trace": "~/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-03.jsonl",
         "trace_sha256": "0f5d3ccab77f7bc30f3f42bb40969d801499ab0a17cc70495924ba237177d450"
       },
       {
@@ -302,7 +302,7 @@
           "kias": 0.0,
           "groundspeed_kt": 1.870402561378479
         },
-        "trace": "/home/ron/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-04.jsonl",
+        "trace": "~/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-04.jsonl",
         "trace_sha256": "dbf3f8a59f6205abc8cc7c54e1d9f5a1fe23347a3738c040dd4d3a40682a20d5"
       },
       {
@@ -344,7 +344,7 @@
           "kias": 0.0,
           "groundspeed_kt": 1.9879794418144225
         },
-        "trace": "/home/ron/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-05.jsonl",
+        "trace": "~/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-05.jsonl",
         "trace_sha256": "27485c62031e7472a5a1240fba0fe62291a7e90d64f4c7ed62ed7d8e57ffabcc"
       },
       {
@@ -386,7 +386,7 @@
           "kias": 0.0,
           "groundspeed_kt": 1.7425944965076448
         },
-        "trace": "/home/ron/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-06.jsonl",
+        "trace": "~/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-06.jsonl",
         "trace_sha256": "71264601075a616d0a26a802a4c2e989c261498df839ae365cce637eab1f913e"
       },
       {
@@ -428,7 +428,7 @@
           "kias": 0.0,
           "groundspeed_kt": 1.8939037559700012
         },
-        "trace": "/home/ron/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-07.jsonl",
+        "trace": "~/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-07.jsonl",
         "trace_sha256": "584a0168d13b936cd371483b3df524cac6d4582ced89401bc314ffc1561eb762"
       },
       {
@@ -456,7 +456,7 @@
           "kias": 62.655357360839844,
           "groundspeed_kt": 63.24731286071778
         },
-        "trace": "/home/ron/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-08.jsonl",
+        "trace": "~/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-08.jsonl",
         "trace_sha256": "2aa834b7314e65871c851c8ba80b99f5aaec52ddb0abe89d0ca0549b18863ca6"
       },
       {
@@ -498,7 +498,7 @@
           "kias": 0.0,
           "groundspeed_kt": 1.7311121194934844
         },
-        "trace": "/home/ron/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-09.jsonl",
+        "trace": "~/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-09.jsonl",
         "trace_sha256": "e86a8b3882925596e2ffbbd925d9e1b0ef882c9bf70a49dccf6df1b6b731e064"
       },
       {
@@ -511,7 +511,7 @@
         "threshold": null,
         "touchdown": null,
         "last": null,
-        "trace": "/home/ron/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-10.jsonl",
+        "trace": "~/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-10.jsonl",
         "trace_sha256": "b00b98b59b6995523e9ffdb05d68f7af7587538bc59bb49ace99176be22d29c5"
       }
     ]
@@ -528,13 +528,13 @@
       "trial": 1,
       "classification": "completed_passing_landing",
       "scored_snapshot_count": 1786,
-      "trace": "/home/ron/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-01.jsonl",
+      "trace": "~/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-01.jsonl",
       "trace_sha256": "4d45a249f8e1d9a6801fe63b27b5fef3bb1eaf98f7a86a441788c0278e44d895",
       "manifest": {
         "purpose": "KSAN-27-moderate-braking",
         "created_utc": "2026-10-11T03:11:33.675152+00:00",
         "inventory": {
-          "repository": "/home/ron/Projects/cap-vsar-ai-pilot",
+          "repository": "~/Projects/cap-vsar-ai-pilot",
           "commit": "afea98795d428ee1d84e44ed751791e4564dd810",
           "dirty": false,
           "source_sha256": {
@@ -556,7 +556,7 @@
             "capvsar_landing.py": "581510302945b42db9421f2771e7a9dbadc498dd884148e18f04becf6e76d893"
           },
           "aircraft": {
-            "path": "/home/ron/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
+            "path": "~/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
             "sha256": "b9c3c35c956ac5bee8c74fc9cbf933c6ecdfab73db9ad22862022aa3a20ab847"
           },
           "scenery_packs_sha256": "0101f4ad3f2546dc63baa5e2ca0e0c907c9f732310efce325d5aaca1874036df",
@@ -733,13 +733,13 @@
       "trial": 2,
       "classification": "completed_passing_landing",
       "scored_snapshot_count": 1776,
-      "trace": "/home/ron/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-02.jsonl",
+      "trace": "~/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-02.jsonl",
       "trace_sha256": "bc467415af4aec7505a057089d231e931e153b3f64f1f30324c28f2f273279e6",
       "manifest": {
         "purpose": "KSAN-27-moderate-braking",
         "created_utc": "2026-10-11T03:13:09.263340+00:00",
         "inventory": {
-          "repository": "/home/ron/Projects/cap-vsar-ai-pilot",
+          "repository": "~/Projects/cap-vsar-ai-pilot",
           "commit": "afea98795d428ee1d84e44ed751791e4564dd810",
           "dirty": false,
           "source_sha256": {
@@ -761,7 +761,7 @@
             "capvsar_landing.py": "581510302945b42db9421f2771e7a9dbadc498dd884148e18f04becf6e76d893"
           },
           "aircraft": {
-            "path": "/home/ron/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
+            "path": "~/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
             "sha256": "b9c3c35c956ac5bee8c74fc9cbf933c6ecdfab73db9ad22862022aa3a20ab847"
           },
           "scenery_packs_sha256": "0101f4ad3f2546dc63baa5e2ca0e0c907c9f732310efce325d5aaca1874036df",
@@ -938,13 +938,13 @@
       "trial": 3,
       "classification": "completed_passing_landing",
       "scored_snapshot_count": 1801,
-      "trace": "/home/ron/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-03.jsonl",
+      "trace": "~/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-03.jsonl",
       "trace_sha256": "0f5d3ccab77f7bc30f3f42bb40969d801499ab0a17cc70495924ba237177d450",
       "manifest": {
         "purpose": "KSAN-27-moderate-braking",
         "created_utc": "2026-10-11T03:14:45.068510+00:00",
         "inventory": {
-          "repository": "/home/ron/Projects/cap-vsar-ai-pilot",
+          "repository": "~/Projects/cap-vsar-ai-pilot",
           "commit": "afea98795d428ee1d84e44ed751791e4564dd810",
           "dirty": false,
           "source_sha256": {
@@ -966,7 +966,7 @@
             "capvsar_landing.py": "581510302945b42db9421f2771e7a9dbadc498dd884148e18f04becf6e76d893"
           },
           "aircraft": {
-            "path": "/home/ron/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
+            "path": "~/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
             "sha256": "b9c3c35c956ac5bee8c74fc9cbf933c6ecdfab73db9ad22862022aa3a20ab847"
           },
           "scenery_packs_sha256": "0101f4ad3f2546dc63baa5e2ca0e0c907c9f732310efce325d5aaca1874036df",
@@ -1143,13 +1143,13 @@
       "trial": 4,
       "classification": "completed_passing_landing",
       "scored_snapshot_count": 1782,
-      "trace": "/home/ron/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-04.jsonl",
+      "trace": "~/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-04.jsonl",
       "trace_sha256": "dbf3f8a59f6205abc8cc7c54e1d9f5a1fe23347a3738c040dd4d3a40682a20d5",
       "manifest": {
         "purpose": "KSAN-27-moderate-braking",
         "created_utc": "2026-10-11T03:16:21.528960+00:00",
         "inventory": {
-          "repository": "/home/ron/Projects/cap-vsar-ai-pilot",
+          "repository": "~/Projects/cap-vsar-ai-pilot",
           "commit": "afea98795d428ee1d84e44ed751791e4564dd810",
           "dirty": false,
           "source_sha256": {
@@ -1171,7 +1171,7 @@
             "capvsar_landing.py": "581510302945b42db9421f2771e7a9dbadc498dd884148e18f04becf6e76d893"
           },
           "aircraft": {
-            "path": "/home/ron/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
+            "path": "~/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
             "sha256": "b9c3c35c956ac5bee8c74fc9cbf933c6ecdfab73db9ad22862022aa3a20ab847"
           },
           "scenery_packs_sha256": "0101f4ad3f2546dc63baa5e2ca0e0c907c9f732310efce325d5aaca1874036df",
@@ -1348,13 +1348,13 @@
       "trial": 5,
       "classification": "completed_passing_landing",
       "scored_snapshot_count": 1829,
-      "trace": "/home/ron/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-05.jsonl",
+      "trace": "~/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-05.jsonl",
       "trace_sha256": "27485c62031e7472a5a1240fba0fe62291a7e90d64f4c7ed62ed7d8e57ffabcc",
       "manifest": {
         "purpose": "KSAN-27-moderate-braking",
         "created_utc": "2026-10-11T03:17:57.668905+00:00",
         "inventory": {
-          "repository": "/home/ron/Projects/cap-vsar-ai-pilot",
+          "repository": "~/Projects/cap-vsar-ai-pilot",
           "commit": "afea98795d428ee1d84e44ed751791e4564dd810",
           "dirty": false,
           "source_sha256": {
@@ -1376,7 +1376,7 @@
             "capvsar_landing.py": "581510302945b42db9421f2771e7a9dbadc498dd884148e18f04becf6e76d893"
           },
           "aircraft": {
-            "path": "/home/ron/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
+            "path": "~/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
             "sha256": "b9c3c35c956ac5bee8c74fc9cbf933c6ecdfab73db9ad22862022aa3a20ab847"
           },
           "scenery_packs_sha256": "0101f4ad3f2546dc63baa5e2ca0e0c907c9f732310efce325d5aaca1874036df",
@@ -1553,13 +1553,13 @@
       "trial": 6,
       "classification": "completed_passing_landing",
       "scored_snapshot_count": 1809,
-      "trace": "/home/ron/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-06.jsonl",
+      "trace": "~/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-06.jsonl",
       "trace_sha256": "71264601075a616d0a26a802a4c2e989c261498df839ae365cce637eab1f913e",
       "manifest": {
         "purpose": "KSAN-27-moderate-braking",
         "created_utc": "2026-10-11T03:19:33.816501+00:00",
         "inventory": {
-          "repository": "/home/ron/Projects/cap-vsar-ai-pilot",
+          "repository": "~/Projects/cap-vsar-ai-pilot",
           "commit": "afea98795d428ee1d84e44ed751791e4564dd810",
           "dirty": false,
           "source_sha256": {
@@ -1581,7 +1581,7 @@
             "capvsar_landing.py": "581510302945b42db9421f2771e7a9dbadc498dd884148e18f04becf6e76d893"
           },
           "aircraft": {
-            "path": "/home/ron/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
+            "path": "~/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
             "sha256": "b9c3c35c956ac5bee8c74fc9cbf933c6ecdfab73db9ad22862022aa3a20ab847"
           },
           "scenery_packs_sha256": "0101f4ad3f2546dc63baa5e2ca0e0c907c9f732310efce325d5aaca1874036df",
@@ -1758,13 +1758,13 @@
       "trial": 7,
       "classification": "completed_passing_landing",
       "scored_snapshot_count": 1774,
-      "trace": "/home/ron/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-07.jsonl",
+      "trace": "~/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-07.jsonl",
       "trace_sha256": "584a0168d13b936cd371483b3df524cac6d4582ced89401bc314ffc1561eb762",
       "manifest": {
         "purpose": "KSAN-27-moderate-braking",
         "created_utc": "2026-10-11T03:21:10.107249+00:00",
         "inventory": {
-          "repository": "/home/ron/Projects/cap-vsar-ai-pilot",
+          "repository": "~/Projects/cap-vsar-ai-pilot",
           "commit": "afea98795d428ee1d84e44ed751791e4564dd810",
           "dirty": false,
           "source_sha256": {
@@ -1786,7 +1786,7 @@
             "capvsar_landing.py": "581510302945b42db9421f2771e7a9dbadc498dd884148e18f04becf6e76d893"
           },
           "aircraft": {
-            "path": "/home/ron/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
+            "path": "~/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
             "sha256": "b9c3c35c956ac5bee8c74fc9cbf933c6ecdfab73db9ad22862022aa3a20ab847"
           },
           "scenery_packs_sha256": "0101f4ad3f2546dc63baa5e2ca0e0c907c9f732310efce325d5aaca1874036df",
@@ -1963,13 +1963,13 @@
       "trial": 8,
       "classification": "watchdog_interruption",
       "scored_snapshot_count": 1544,
-      "trace": "/home/ron/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-08.jsonl",
+      "trace": "~/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-08.jsonl",
       "trace_sha256": "2aa834b7314e65871c851c8ba80b99f5aaec52ddb0abe89d0ca0549b18863ca6",
       "manifest": {
         "purpose": "KSAN-27-moderate-braking",
         "created_utc": "2026-10-11T03:22:45.728205+00:00",
         "inventory": {
-          "repository": "/home/ron/Projects/cap-vsar-ai-pilot",
+          "repository": "~/Projects/cap-vsar-ai-pilot",
           "commit": "afea98795d428ee1d84e44ed751791e4564dd810",
           "dirty": false,
           "source_sha256": {
@@ -1991,7 +1991,7 @@
             "capvsar_landing.py": "581510302945b42db9421f2771e7a9dbadc498dd884148e18f04becf6e76d893"
           },
           "aircraft": {
-            "path": "/home/ron/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
+            "path": "~/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
             "sha256": "b9c3c35c956ac5bee8c74fc9cbf933c6ecdfab73db9ad22862022aa3a20ab847"
           },
           "scenery_packs_sha256": "0101f4ad3f2546dc63baa5e2ca0e0c907c9f732310efce325d5aaca1874036df",
@@ -2193,13 +2193,13 @@
       "trial": 9,
       "classification": "completed_passing_landing",
       "scored_snapshot_count": 1822,
-      "trace": "/home/ron/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-09.jsonl",
+      "trace": "~/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-09.jsonl",
       "trace_sha256": "e86a8b3882925596e2ffbbd925d9e1b0ef882c9bf70a49dccf6df1b6b731e064",
       "manifest": {
         "purpose": "KSAN-27-moderate-braking",
         "created_utc": "2026-10-11T03:24:07.261269+00:00",
         "inventory": {
-          "repository": "/home/ron/Projects/cap-vsar-ai-pilot",
+          "repository": "~/Projects/cap-vsar-ai-pilot",
           "commit": "afea98795d428ee1d84e44ed751791e4564dd810",
           "dirty": false,
           "source_sha256": {
@@ -2221,7 +2221,7 @@
             "capvsar_landing.py": "581510302945b42db9421f2771e7a9dbadc498dd884148e18f04becf6e76d893"
           },
           "aircraft": {
-            "path": "/home/ron/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
+            "path": "~/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
             "sha256": "b9c3c35c956ac5bee8c74fc9cbf933c6ecdfab73db9ad22862022aa3a20ab847"
           },
           "scenery_packs_sha256": "0101f4ad3f2546dc63baa5e2ca0e0c907c9f732310efce325d5aaca1874036df",
@@ -2398,13 +2398,13 @@
       "trial": 10,
       "classification": "not_started_stale_startup_snapshot",
       "scored_snapshot_count": 0,
-      "trace": "/home/ron/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-10.jsonl",
+      "trace": "~/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-10.jsonl",
       "trace_sha256": "b00b98b59b6995523e9ffdb05d68f7af7587538bc59bb49ace99176be22d29c5",
       "manifest": {
         "purpose": "KSAN-27-moderate-braking",
         "created_utc": "2026-10-11T03:25:42.729154+00:00",
         "inventory": {
-          "repository": "/home/ron/Projects/cap-vsar-ai-pilot",
+          "repository": "~/Projects/cap-vsar-ai-pilot",
           "commit": "afea98795d428ee1d84e44ed751791e4564dd810",
           "dirty": false,
           "source_sha256": {
@@ -2426,7 +2426,7 @@
             "capvsar_landing.py": "581510302945b42db9421f2771e7a9dbadc498dd884148e18f04becf6e76d893"
           },
           "aircraft": {
-            "path": "/home/ron/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
+            "path": "~/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
             "sha256": "b9c3c35c956ac5bee8c74fc9cbf933c6ecdfab73db9ad22862022aa3a20ab847"
           },
           "scenery_packs_sha256": "0101f4ad3f2546dc63baa5e2ca0e0c907c9f732310efce325d5aaca1874036df",
@@ -2591,6 +2591,6 @@
     "simulator_running": true,
     "landing_runner_running": false
   },
-  "runtime_log": "/home/ron/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-xplane.log.txt",
+  "runtime_log": "~/.cache/capvsar/ai-pilot/ksan27-restart-left15-20261010-xplane.log.txt",
   "runtime_log_sha256": "9e6fdcc450370be2d54d048c10ebdfc4f803928913475d14a923198acc8e658b"
 }

@@ -3,7 +3,7 @@
   "date": "2026-10-10",
   "cycles": [
     {
-      "trace": "/home/ron/.cache/capvsar/ai-pilot/20261010-cycle01.jsonl",
+      "trace": "~/.cache/capvsar/ai-pilot/20261010-cycle01.jsonl",
       "sha256": "8b4bf2a56dba8b6f1abbf499ed42c0da01f4adddf423b03fb13acfb2c88ad2a5",
       "entry": {
         "heading_offset": 0,
@@ -16,7 +16,7 @@
       "end_pause_confirmed": false
     },
     {
-      "trace": "/home/ron/.cache/capvsar/ai-pilot/20261010-cycle02.jsonl",
+      "trace": "~/.cache/capvsar/ai-pilot/20261010-cycle02.jsonl",
       "sha256": "0f8812d472fe9535f9847a8f587b476a01860774332bd0ca7fade7d7c28ed055",
       "entry": {
         "heading_offset": 0,
@@ -29,7 +29,7 @@
       "end_pause_confirmed": true
     },
     {
-      "trace": "/home/ron/.cache/capvsar/ai-pilot/20261010-cycle03.jsonl",
+      "trace": "~/.cache/capvsar/ai-pilot/20261010-cycle03.jsonl",
       "sha256": "606ab0c09330dad9ab6fa57aca1bc9a5fe5d92bc341cecbc85740aafd513001c",
       "entry": {
         "heading_offset": 0,
@@ -70,7 +70,7 @@
       }
     },
     {
-      "trace": "/home/ron/.cache/capvsar/ai-pilot/20261010-cycle04.jsonl",
+      "trace": "~/.cache/capvsar/ai-pilot/20261010-cycle04.jsonl",
       "sha256": "2a5f548732b1666b46aefca550c67f147b72f3432f521aea591703cc57bf3125",
       "entry": {
         "heading_offset": 0,
@@ -111,7 +111,7 @@
       }
     },
     {
-      "trace": "/home/ron/.cache/capvsar/ai-pilot/20261010-cycle05.jsonl",
+      "trace": "~/.cache/capvsar/ai-pilot/20261010-cycle05.jsonl",
       "sha256": "7868b9fe98bcfc871fa28bb13b2f010ab5c691618999cecc4e85c070e4b27f73",
       "entry": {
         "heading_offset": -10.0,
@@ -155,7 +155,7 @@
   "fault_probes": [
     {
       "probe": "loss",
-      "trace": "/home/ron/.cache/capvsar/ai-pilot/20261010-flight-loss.jsonl",
+      "trace": "~/.cache/capvsar/ai-pilot/20261010-flight-loss.jsonl",
       "sha256": "5b847d199b6c42631622253de1b9cbd5e797c43bc3ab22f4c4e911d5595c580c",
       "outcome": "PROBE_PASS",
       "observed_state": "PAUSED_FAULT",
@@ -166,7 +166,7 @@
     },
     {
       "probe": "takeover",
-      "trace": "/home/ron/.cache/capvsar/ai-pilot/20261010-flight-takeover.jsonl",
+      "trace": "~/.cache/capvsar/ai-pilot/20261010-flight-takeover.jsonl",
       "sha256": "9fac39e2a6858f577c9d68835e665f8bd6f302c7db4d816dc6a36a9e7178b259",
       "outcome": "PROBE_PASS",
       "observed_state": "MANUAL",

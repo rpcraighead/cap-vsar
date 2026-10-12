@@ -47,7 +47,7 @@ Evidence: [campaign B ledger](ai_pilot_requal_20261010_b_campaign.json),
 [C replay report](ai_pilot_requal_20261010_c_report.json), and
 [fault probe hashes](ai_pilot_requal_20261010_probes.json).
 Raw traces and stdout are under
-`/home/ron/.cache/capvsar/ai-pilot/sol-campaign-20261010-{b,c}/`.
+`~/.cache/capvsar/ai-pilot/sol-campaign-20261010-{b,c}/`.
 
 This qualification covers the stock C172 establish/turn/recover maneuver only.
 Landing, physical takeover, and the custom C182 require their own criteria and

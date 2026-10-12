@@ -8,7 +8,7 @@ records the timing fix, an intermediate 19/20 campaign, and a fresh 20/20
 campaign on the fixed build.
 
 2026-10-10. Recommended next model: **Sol High**.
-Worktree: `/home/ron/Projects/cap-vsar-ai-pilot`.
+Worktree: `~/Projects/cap-vsar-ai-pilot`.
 Branch: `feat/ai-pilot-first-cycle`. Remote: Gitea `ron/capvsar`.
 
 The architecture now has a measured end-to-end demonstration on the stock C172:
@@ -61,7 +61,7 @@ recorded as setup and cannot satisfy the observer's maneuver criteria.
 Machine-readable trial results and hashes are in
 [the evidence summary](evidence/ai_pilot_first_cycles_20261010.json).
 Raw JSONL and probe JSON files are under
-`/home/ron/.cache/capvsar/ai-pilot/`. Each flight manifest records source,
+`~/.cache/capvsar/ai-pilot/`. Each flight manifest records source,
 controller, runner, installed bridge, aircraft and scenery hashes. These were
 development runs from a dirty worktree; their hashes identify the tested
 versions. The final pre-flight identity guard received a subsequent offline
@@ -140,7 +140,7 @@ configuration retains mode 0600. Original scenery and preferences remain under:
 Start a fresh expiring session rather than reusing its old private config.
 
 ```sh
-cd /home/ron/Projects/cap-vsar-ai-pilot
+cd ~/Projects/cap-vsar-ai-pilot
 python3 scripts/ai_pilot_experiment.py stage-qualification /tmp/capvsar-lab-new \
   --aircraft "$HOME/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf"
 ```
@@ -179,7 +179,7 @@ Never copy or commit the socket secret into Git. After testing, exit X-Plane,
 restore the backed-up settings, and remove the temporary plugin/config.
 
 Offline validation uses
-`/home/ron/Projects/cap-vsar-integration/.venv/bin/python -m pytest`.
+`~/Projects/cap-vsar-integration/.venv/bin/python -m pytest`.
 The final full run produced **955 passed, 22 expected failures, one skip and the
 same two known console-route failures**, plus 97 passed subtests. The focused
 controller/bridge/qualification/observer run passed all 65 tests. The existing

@@ -23,8 +23,9 @@ is committed here (`ee990d7`).
 
 ## 2026-10-11 — AI pilot: aircraft profiles, C182T port of the C172 controllers, search patterns (branch `feat/c182-ai-pilot-baseline`)
 
-Status: **implemented and tested offline; not flown.** Stacked on
-`feat/c172-taxi-takeoff-ifr`; `main` not moved.
+Status: **implemented; merged to main 2026-10-12 with the C172 AI pilot branches it
+was stacked on (`feat/c172-taxi-takeoff-ifr` and its predecessors).** First live
+flight: the entry above.
 
 Ron's direction was to use the C172 autopilot code as the baseline for the 182.
 Rather than fork the three flown controllers, every operational number they

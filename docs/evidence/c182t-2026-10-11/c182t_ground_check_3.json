@@ -54,28 +54,28 @@
  "shots": [
   {
    "label": "idle",
-   "file": "/home/ron/.cache/capvsar/flight-tests/c182t_shots/c182t_cockpit_idle.png",
+   "file": "~/.cache/capvsar/flight-tests/c182t_shots/c182t_cockpit_idle.png",
    "rpm": 513.7772827148438,
    "prop_is_disc": 1.0,
    "view": "cockpit"
   },
   {
    "label": "runup",
-   "file": "/home/ron/.cache/capvsar/flight-tests/c182t_shots/c182t_cockpit_runup.png",
+   "file": "~/.cache/capvsar/flight-tests/c182t_shots/c182t_cockpit_runup.png",
    "rpm": 1602.93115234375,
    "prop_is_disc": 1.0,
    "view": "cockpit"
   },
   {
    "label": "full",
-   "file": "/home/ron/.cache/capvsar/flight-tests/c182t_shots/c182t_cockpit_full.png",
+   "file": "~/.cache/capvsar/flight-tests/c182t_shots/c182t_cockpit_full.png",
    "rpm": 2307.20751953125,
    "prop_is_disc": 1.0,
    "view": "cockpit"
   },
   {
    "label": "full",
-   "file": "/home/ron/.cache/capvsar/flight-tests/c182t_shots/c182t_outside_full.png",
+   "file": "~/.cache/capvsar/flight-tests/c182t_shots/c182t_outside_full.png",
    "view": "chase"
   }
  ],
