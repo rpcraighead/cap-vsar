@@ -285,7 +285,8 @@
             card.className = `roster-badge-card role-${item.role}`;
 
             const joinUrl = `${protocol}//${host}${port}/join/${item.code}`;
-            const qrId = `qr-${item.code.replace(/[^a-zA-Z0-9]/g, "_")}`;
+            // U-2: the badge is drawn by the server; the page only says which seat.
+            const badgeSrc = `/api/setup/badge/${encodeURIComponent(item.id)}.svg?origin=${encodeURIComponent(protocol + "//" + host + port)}`;
 
             let roleBadgeClass = "badge-aircrew";
             if (item.role === "instructor") roleBadgeClass = "badge-instructor";
@@ -303,7 +304,7 @@
                 <div class="badge-meta mono">Callsign: <b>${esc(item.callsign || "-")}</b></div>
 
                 <div class="badge-qr-container">
-                    <div id="${qrId}" class="qr-canvas"></div>
+                    <img class="qr-canvas" width="130" height="130" alt="QR badge for ${esc(item.callsign)}" src="${esc(badgeSrc)}">
                     <span class="qr-label">Scan with camera to join</span>
                 </div>
 
@@ -318,19 +319,6 @@
             `;
             rosterGrid.appendChild(card);
 
-            // Render vector QR code
-            setTimeout(() => {
-                if (window.QRCode) {
-                    new QRCode(qrId, {
-                        text: joinUrl,
-                        width: 130,
-                        height: 130,
-                        colorDark: "#0B2545",
-                        colorLight: "#FFFFFF",
-                        correctLevel: 1
-                    });
-                }
-            }, 10);
         });
 
         // Copy button handlers

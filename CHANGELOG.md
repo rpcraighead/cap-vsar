@@ -3,6 +3,14 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-10-11 — UI walkthrough, UX proposal, CalTopo integration plan
+
+Status: **review documents written; four defects fixed on local `main`** (see the push note on the entry below).
+
+`docs/UX_REVIEW_2026-10-11.md`: every page walked in a browser against a seeded sortie (screenshots in `docs/evidence/ux-2026-10-11/`), findings organised by the question a participant asks (getting in, who is here, what each aircraft is doing, what happened), and a proposal built around the exercise lifecycle: one shell, seat-based invitations with short codes and a boarding pass, a Ready room with readiness checks, live dashboards for director, base, aircrew, ground team and a wall board, a debrief with scoring charts, cross-session comparison, a SET sheet and exports; an events table, presence and assignment objects underneath. `docs/CALTOPO_INTEGRATION_PLAN.md` supersedes the phasing of the 2026-09-08 plan: console stays the system of record, CalTopo the shared map; 2a (GeoJSON) ships with UX phase 1.
+
+Fixed (tracker C17): U-1 the planner's SAR generator could never open (unclosed div); U-2 setup QR badges never rendered (defective vendored library; now server-side SVG via `segno`); U-3 instructor DF line printed NaN when redacted; U-4 wording. Root suite 1196 passed; planner 192.
+
 ## 2026-10-10 / 2026-10-11 — Project review and waves A-D (merged to local `main`)
 
 Status: **implemented and merged to local `main`; not pushed (Gitea refused SSH on 192.0.2.121:2222 when this was written).** Ron asked for the merge and for waves B, C and D.

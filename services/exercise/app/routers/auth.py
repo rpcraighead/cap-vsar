@@ -20,6 +20,10 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from ..models import LoginPayload, SetupPayload
 from ..settings import STATIC
+import io
+from urllib.parse import urlsplit
+
+import segno
 
 router = APIRouter()
 
@@ -151,6 +155,37 @@ def api_get_setup(request: Request):
     access.enforce("instructor", request)
     return access.get_exercise_setup()
 
+
+
+@router.get("/api/setup/badge/{roster_id}.svg")
+def api_setup_badge(roster_id: str, origin: str, request: Request):
+    """The QR for one roster seat, rendered on the server (U-2).
+
+    The client used to draw these with a vendored "lightweight" QR library
+    whose Reed-Solomon table was truncated: every badge was blank, and the
+    levels that did render would have produced wrong error-correction
+    blocks. `segno` is a complete encoder.
+
+    `origin` is the scheme and host the page was loaded from (the single
+    front door, as the badge's link must survive being scanned from another
+    device); it must match the Host the request arrived on, so the instructor
+    cannot be made to mint a QR for someone else's domain.
+    """
+    access.enforce("instructor", request)
+    parts = urlsplit(origin)
+    if parts.scheme not in ("http", "https") or not parts.netloc:
+        raise HTTPException(400, "origin must be like https://host")
+    if parts.netloc != request.headers.get("host", ""):
+        raise HTTPException(400, "origin does not match this console")
+    row = next((r for r in access.get_roster() if r["id"] == roster_id), None)
+    if row is None:
+        raise HTTPException(404, "no such roster seat")
+    url = f"{parts.scheme}://{parts.netloc}/join/{quote(row['code'], safe='')}"
+    buf = io.BytesIO()
+    segno.make(url, error="m").save(buf, kind="svg", scale=4, border=2,
+                                     dark="#0B2545", light="#FFFFFF")
+    return Response(buf.getvalue(), media_type="image/svg+xml",
+                    headers={"Cache-Control": "private, no-store"})
 
 
 @router.post("/api/setup")

@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 200 items, 25 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 204 items, 25 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -10,19 +10,19 @@ IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split ou
 
 | | critical | high | medium | low | total |
 |---|---|---|---|---|---|
-| by severity | 14 | 55 | 72 | 59 | 200 |
+| by severity | 14 | 57 | 72 | 61 | 204 |
 
 | P0 | P1 | P2 | P3 |
 |---|---|---|---|
-| 20 | 55 | 69 | 56 |
+| 20 | 57 | 69 | 58 |
 
 | Component | Items |
 |---|---|
 | Deployment / infrastructure | 56 |
-| Flight planner | 30 |
+| Flight planner | 31 |
 | Exercise console (backend) | 30 |
 | Air Manager instruments | 28 |
-| Exercise console (frontend) | 24 |
+| Exercise console (frontend) | 27 |
 | X-Plane plugin / engine | 21 |
 | Docs / record | 11 |
 
@@ -38,9 +38,9 @@ IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split ou
 _Wave dates track the illustrative calendar in docs/USE_CASE_SAREX_REHEARSAL.md (T-14/T-7/T-2 before a 17 Oct 2026 SAREX). Re-anchor to the real exercise date._
 
 - **Wave 0** (11 items) — Now — make the work safe to do at all.
-- **Wave 1** (25 items) — Before session 1 (base stand-up). Nothing flies; base, planner and comms must work.
+- **Wave 1** (27 items) — Before session 1 (base stand-up). Nothing flies; base, planner and comms must work.
 - **Wave 2** (46 items) — Before session 2 (full mission, three aircraft, injected effects).
-- **Wave 3** (94 items) — Before session 3 (dress rehearsal) and the live SAREX.
+- **Wave 3** (96 items) — Before session 3 (dress rehearsal) and the live SAREX.
 - **Wave 4** (24 items) — After the SAREX — architecture, tooling, CalTopo phase 2.
 
 ## Clusters
@@ -65,7 +65,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | C14 | Contract & documentation truth | D-1, D-2, D-3, D-4, D-5, P-10, I-9b | docs only, safe in parallel |
 | C15 | Service boundaries (architecture) | AI-22, AI-11, AI-1, AI-10, AI-12, AI-13, AI-2, AI-21, AI-23, AI-24, AI-3, AI-5, AI-6, AI-8, AI-9, AI-14, AI-15, AI-16, AI-17, AI-20, AI-4, V2-8, AI-18, AI-19, C15-1, P-11, C15-2 | unassigned — after C2 and C7 settle |
 | C16 | Project review 2026-10-10 (waves A-D) | X2-1, O2-3, X2-2, B2-1, F2-1, I2-1, I2-3, L2-1, L2-4, O2-1, O2-2, O2-4, X2-3, X2-4, L2-6, P2-2, X2-8, F2-2, L2-13, B2-2, B2-4, B2-5, B2-7, B2-9, F2-3, F2-4, F2-5, F2-6, F2-7, I2-2, I2-4, L2-2, L2-3, L2-5, O2-5, O2-6, O2-7, O2-8, P2-1, P2-3, X2-5, X2-6, X2-7, A-1, L2-14, B2-10, B2-11, B2-3, B2-6, B2-8, F2-10, F2-11, F2-12, F2-8, F2-9, I2-5, I2-6, I2-7, I2-8, I2-9, L2-10, L2-11, L2-7, L2-8, L2-9, O2-10, O2-11, O2-12, O2-9, P2-4, P2-5, P2-6, P2-7, P2-8, P2-9, X2-10, X2-11, X2-12, X2-9, L2-12, O2-13, X2-13 | Claude (Sonnet 5.5) from docs/PROJECT_REVIEW_2026-10-10.md and docs/DECISIONS_2026-10-10.md |
-| C17 | Identity, single sign-on & service front door | AI-7, L-15, X-10, X-11, X-12, X-13, X-14, O-8 | Gemini - console and deck auth; Codex - planner deputy (L-15) |
+| C17 | UI walkthrough 2026-10-11 and UX proposal | AI-7, L-15, X-10, X-11, X-12, X-13, X-14, O-8, U-1, U-2, U-3, U-4 | Claude (Fable) from docs/UX_REVIEW_2026-10-11.md; proposal phases 1-3 and the CalTopo plan are not tracker rows until scheduled |
 
 ## Board
 
@@ -108,6 +108,8 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [O2-1](#o2-1) | P1 | high | Two console route tests fail on FastAPI 0.143 | infra | C16 | S | — | fixed |
 | [O2-2](#o2-2) | P1 | high | No reproducible test environment; planner and board suites not run | infra | C16 | M | — | fixed |
 | [O2-4](#o2-4) | P1 | high | CAPVSAR_ENV never set so the production guard is inert | infra | C16 | S | — | fixed |
+| [U-1](#u-1) | P1 | high | Planner SAR pattern generator cannot be opened (modal nested inside the hidden DB modal) | planner | C17 | S | — | fixed |
+| [U-2](#u-2) | P1 | high | Setup QR badges never render (vendored QR library has a truncated Reed-Solomon table) | console-ui | C17 | M | — | fixed |
 | [X2-3](#x2-3) | P1 | high | ScenarioIn.effects accepts NaN and unknown keys; one scenario breaks every client | console-api | C16 | S | — | fixed |
 | [X2-4](#x2-4) | P1 | high | Radio stream and pages fail open on a roster-only console | console-api | C16 | S | — | fixed |
 | [L2-6](#l2-6) | P1 | medium | Console push anchors the alert and beacon offset on waypoints[0] | planner | C16 | S | — | fixed |
@@ -260,6 +262,8 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [P2-7](#p2-7) | P3 | low | fetch_scenario comment promises an unimplemented fallback | plugin | C16 | S | — | fixed |
 | [P2-8](#p2-8) | P3 | low | self.net not initialised | plugin | C16 | S | — | fixed |
 | [P2-9](#p2-9) | P3 | low | Pause freezing and TLS trust of the plugin unverified in X-Plane | plugin | C16 | S | — | open |
+| [U-3](#u-3) | P3 | low | Instructor console prints BRG NaN when the DF dictionary is redacted | console-ui | C17 | S | — | fixed |
+| [U-4](#u-4) | P3 | low | Setup page says codes are 6 characters; they are 40 | console-ui | C17 | S | — | fixed |
 | [X2-10](#x2-10) | P3 | low | Role tokens accepted as ?token= and logged in access logs | console-api | C16 | S | — | fixed |
 | [X2-11](#x2-11) | P3 | low | Deleting a scenario with a running sortie strands it | console-api | C16 | S | — | fixed |
 | [X2-12](#x2-12) | P3 | low | /api/setup accepts untyped fields and mints arbitrary roles | console-api | C16 | S | — | fixed |
@@ -300,7 +304,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **AI Pilot web deck binds 0.0.0.0:8088 with no auth and permissive CORS**
 
-`P0` · `critical` · `bug` · Deployment / infrastructure · cluster C17 (Identity, single sign-on & service front door) · effort M · wave 0 · **fixed**
+`P0` · `critical` · `bug` · Deployment / infrastructure · cluster C17 (UI walkthrough 2026-10-11 and UX proposal) · effort M · wave 0 · **fixed**
 
 - **Files:** `services/ai_pilot/static/board.html:558-566`, `services/ai_pilot/web_server.py:156-199`, `services/ai_pilot/web_server.py:388-389`, `services/ai_pilot/web_server.py:406`, `services/ai_pilot/web_server.py:58-68`, `services/ai_pilot/web_server.py:65`, `services/ai_pilot/web_server.py:70-87`, `services/ai_pilot/web_server.py:90-96`
 - **Problem:** web_server.py binds 0.0.0.0:8088 by default with no authentication on any route, and returns Access-Control-Allow-Origin: * on every JSON response with a matching permissive do_OPTIONS. Any website loaded in any browser on the network can therefore read and drive it cross-origin. The mutating endpoints are consequential: POST /api/board/raw overwrites docs/BOARD.md wholesale, /api/board/task and /api/board/toggle rewrite the agent dispatch queue that Claude, Codex and Gemini execute from, /api/chat drives the LLM agent, and /api/fdr/start|stop|analyze control the flight data recorder. This is an ENGINEERING surface, not a participant one, and it is a different trust domain from the exercise console: it should not be placed behind the participant portal. It is also not containerized and not in docker-compose, so deploy-time hardening does not reach it. maneuver_server.py on 127.0.0.1:8089 is bound to loopback, which is its only real control; it has an Origin and content-type check plus a lease gate, but no identity. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35. SEPARATELY OBSERVED 2026-09-13: the same two response paths send no cache headers at all and reply HTTP/1.0 - _send_json() (web_server.py:58-68) and _send_file() (web_server.py:70-87) set no Cache-Control, ETag or Last-Modified. With nothing telling it otherwise a browser may serve /api/board from cache heuristically, so the board UI can show stale data and the Refresh Board button appears to do nothing. This was reproduced against a live board tab where the disk, the API and the served page all agreed at 9 tasks. The failure is silent in both directions because fetchBoard() (static/board.html:558-566) swallows a failed fetch into console.error and returns, leaving the last-rendered board on screen with no indication it has stopped updating - the UI cannot distinguish 'nothing changed' from 'I am showing you a cached or failed answer'.
@@ -311,7 +315,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Flight planner is an unauthenticated confused deputy holding instructor credentials**
 
-`P0` · `critical` · `bug` · Flight planner · cluster C17 (Identity, single sign-on & service front door) · effort M · wave 0 · **fixed**
+`P0` · `critical` · `bug` · Flight planner · cluster C17 (UI walkthrough 2026-10-11 and UX proposal) · effort M · wave 0 · **fixed**
 
 - **Files:** `services/flightplanner/app.py:1098-1113`, `services/flightplanner/app.py:1138-1143`, `services/flightplanner/app.py:1298`, `services/flightplanner/app.py:1993`
 - **Problem:** The planner holds CAPVSAR_TOKEN_INSTRUCTOR and CAPVSAR_TOKEN_BASE in its own environment and attaches them to server-side POSTs into the exercise console via _console_headers(). It has no sessions, no login and no import of access.py; only 2 of its 21 routes check anything, and that check accepts either a matching token OR merely an Origin header whose netloc equals the request host, which a non-browser client sets freely. An unauthenticated caller who can reach the planner can therefore create scenarios and broadcast messages to every console with INSTRUCTOR privilege. The fallback at app.py:1141 makes it worse: a missing _BASE token silently falls back to the _INSTRUCTOR token, so a misconfiguration escalates rather than fails. This is an architectural property, not a dev shortcut - putting single sign-on in front of the planner does not fix it, because the privilege comes from a server-held credential rather than from the caller. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35.
@@ -334,7 +338,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Literal codes ADMIN and INSTRUCTOR mint an instructor session without the token**
 
-`P0` · `critical` · `bug` · Exercise console (backend) · cluster C17 (Identity, single sign-on & service front door) · effort S · wave 0 · **fixed**
+`P0` · `critical` · `bug` · Exercise console (backend) · cluster C17 (UI walkthrough 2026-10-11 and UX proposal) · effort S · wave 0 · **fixed**
 
 - **Files:** `services/exercise/app/access.py:211-215`, `services/exercise/app/routers/auth.py:36-54`, `services/exercise/app/routers/auth.py:82-97`
 - **Problem:** authenticate_code() treats the literal strings ADMIN and INSTRUCTOR as valid participant codes whenever CAPVSAR_TOKEN_INSTRUCTOR is set in the environment. It checks only that the token EXISTS; it never compares the caller's input against it. GET /join/ADMIN is therefore a plain unauthenticated URL that mints an Exercise Director session, sets the cookie and redirects to /. Because instructor satisfies every other role in SATISFIED_BY, this grants sortie control, scenario deletion, effects injection and truth reveal. It defeats X-1: that fix gates beacon_lat/lon behind 'a presented instructor token', but an instructor SESSION is obtainable without presenting one, so any LAN or WireGuard participant can read the beacon before reveal. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35.
@@ -345,7 +349,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **enforce() fails open and /api/auth/me reports instructor to anonymous callers**
 
-`P0` · `critical` · `bug` · Exercise console (backend) · cluster C17 (Identity, single sign-on & service front door) · effort S · wave 0 · **fixed**
+`P0` · `critical` · `bug` · Exercise console (backend) · cluster C17 (UI walkthrough 2026-10-11 and UX proposal) · effort S · wave 0 · **fixed**
 
 - **Files:** `services/exercise/app/access.py:361-379`, `services/exercise/app/routers/auth.py:57-68`, `services/exercise/app/main.py:107-112`, `.env.example:26-28`
 - **Problem:** access.enforce() returns (allowing the call) when no matching env token is configured and no session is active - an explicit 'open for local dev' branch. Every gated mutating endpoint therefore accepts anonymous requests in that state. .env.example ships all three CAPVSAR_TOKEN_* values blank, so the default deployment is unauthenticated; main.py logs a warning naming the open roles but starts anyway. Compounding it, GET /api/auth/me actively reports {authenticated: true, role: instructor} to any anonymous caller in the same state, so the UI renders full instructor controls for a stranger. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35.
@@ -389,7 +393,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Session cookie lacks Secure, session id is returned to JavaScript, and a GET creates the session**
 
-`P1` · `high` · `bug` · Exercise console (backend) · cluster C17 (Identity, single sign-on & service front door) · effort S · wave 0 · **fixed**
+`P1` · `high` · `bug` · Exercise console (backend) · cluster C17 (UI walkthrough 2026-10-11 and UX proposal) · effort S · wave 0 · **fixed**
 
 - **Files:** `services/exercise/app/routers/auth.py:42-54`, `services/exercise/app/routers/auth.py:82-97`, `services/exercise/app/access.py:159-165`
 - **Problem:** Three separate weaknesses in one flow. (1) The capvsar_session cookie is set httponly/samesite=lax but WITHOUT secure=True, and because exercise :8700 stays published in plaintext alongside Caddy (see O-8) the cookie crosses the wire in the clear on the default path. (2) POST /api/auth/login also returns session_id in the JSON body, handing JavaScript a bearer secret that httponly was meant to withhold. (3) GET /join/{code} is a state-changing request that creates a session and sets a cookie - no POST confirmation and no CSRF protection, and the code sits in the URL path where it lands in browser history and proxy logs. access.py additionally accepts the session id as a ?session= query parameter. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35.
@@ -401,7 +405,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Roster codes are guessable, sessions are stored unhashed, and roster regeneration does not revoke them**
 
-`P1` · `high` · `bug` · Exercise console (backend) · cluster C17 (Identity, single sign-on & service front door) · effort M · wave 0 · **fixed**
+`P1` · `high` · `bug` · Exercise console (backend) · cluster C17 (UI walkthrough 2026-10-11 and UX proposal) · effort M · wave 0 · **fixed**
 
 - **Files:** `services/exercise/app/access.py:284-358`, `services/exercise/app/access.py:176-202`
 - **Problem:** save_exercise_setup() generates participant codes that are sequential and derived from public callsigns - INSTR-1, PLT-423, OBS-423, SCN-423, MRO-1, UDF-1 - so anyone who knows the aircraft callsign can guess the aircrew and instructor codes, and codes are matched case-insensitively. A per-row random token column is generated and stored but never read by any code path, so the one unguessable credential in the schema is dead. Separately, session ids are stored in the sessions table in plaintext rather than hashed, expired rows are filtered on read but never deleted so the table grows without bound, and save_exercise_setup() does DELETE FROM roster without cascading to sessions - regenerating a roster invalidates every code while leaving the sessions minted from them valid for their full 24 hours. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35.
@@ -412,7 +416,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **POST /api/radio/ics mutates shared radio state with no authorization**
 
-`P1` · `high` · `bug` · Exercise console (backend) · cluster C17 (Identity, single sign-on & service front door) · effort S · wave 0 · **fixed**
+`P1` · `high` · `bug` · Exercise console (backend) · cluster C17 (UI walkthrough 2026-10-11 and UX proposal) · effort S · wave 0 · **fixed**
 
 - **Files:** `services/exercise/app/radio.py:85`
 - **Problem:** POST /api/radio/ics changes shared ICS and channel state for the whole exercise and carries no access.enforce() call and no session check. Any participant, or any host that can reach :8700, can rewrite the net structure mid-exercise. Neighbouring radio reads (/api/radio/config, /api/radio/rx) are likewise ungated, and the /ws and /api/radio/stream sockets authenticate with a same-origin header check that is skipped entirely when Origin is absent, which is the normal case for a non-browser client. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35.
@@ -592,7 +596,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **No single front door: Caddy fronts one backend and is bypassable on the LAN**
 
-`P1` · `high` · `task` · Deployment / infrastructure · cluster C17 (Identity, single sign-on & service front door) · effort M · wave 1 · **fixed**
+`P1` · `high` · `task` · Deployment / infrastructure · cluster C17 (UI walkthrough 2026-10-11 and UX proposal) · effort M · wave 1 · **fixed**
 
 - **Files:** `services/exercise/Caddyfile:9-12`, `docker-compose.yml:67`, `docker-compose.yml:105`, `docker-compose.yml:146`, `scripts/firewall.sh:10-14`, `infra/ROUTER.md:24-29`
 - **Problem:** The Caddy container is a single-purpose proxy - reverse_proxy exercise:8700, with tls internal and site names hardcoded to ms01, ms01.local and 192.0.2.151 - existing to give tablets a trusted secure context for microphone access. flightplanner has no TLS front at all and is not in the Caddyfile. Because exercise :8700 and flightplanner :8090 remain published as plaintext HTTP on the LAN, the TLS front is bypassable and the non-Secure session cookie and any header or query-parameter token cross the wire in the clear on the default path. firewall.sh notes that Docker's iptables rules precede ufw's, so ufw does not filter published container ports and the router forward list is the real boundary. There is consequently no one place a user can log in once and reach the console, the mission base view and the planner. Sources: docs/WEB_HOSTING_AND_IDENTITY_PLAN.md section 2 (2026-09-09) and a five-service auth audit on 2026-09-13. Verified present in the working tree at commit 6690d35. INVESTIGATED 2026-09-13: path-mounting the planner behind one hostname is NOT viable without changing the planner first, which is what the identity plan warned about when it said to use a separate subdomain if the planner's URL construction makes path mounting brittle. Measured: services/flightplanner/static/js/app.js issues 13 absolute fetches rooted at / (lines 21, 63, 373, 396, 498, 667, 757, 903, 921, 939, 1057, 1165, 1208 - /api/tile-sources, /api/calculate-route, /api/sar/export-vsar and the rest), and templates/index.html and guide.html carry absolute hrefs (href="/", href="/guide", href="/guide/quickstart"). Mounted under /planner/ every one of those would resolve against the console instead. The exercise console has no such problem.
@@ -631,6 +635,28 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Files:** `docker-compose.yml`
 - **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 7.
 - **Fix:** CAPVSAR_ENV: production.
+- **Done when:** 
+
+### U-1
+
+**Planner SAR pattern generator cannot be opened (modal nested inside the hidden DB modal)**
+
+`P1` · `high` · `bug` · Flight planner · cluster C17 (UI walkthrough 2026-10-11 and UX proposal) · effort S · wave 1 · **fixed**
+
+- **Files:** `services/flightplanner/templates/index.html`
+- **Problem:** The DB-update modal's div was never closed, so #modal-sar sat inside a display:none element; the SAR button did nothing. Pre-dates the 2026-10-10 review.
+- **Fix:** Closed the div; tests/test_ux_fixes.py parses the template and asserts every modal is a child of body.
+- **Done when:** 
+
+### U-2
+
+**Setup QR badges never render (vendored QR library has a truncated Reed-Solomon table)**
+
+`P1` · `high` · `bug` · Exercise console (frontend) · cluster C17 (UI walkthrough 2026-10-11 and UX proposal) · effort M · wave 1 · **fixed**
+
+- **Files:** `services/exercise/app/routers/auth.py`, `services/exercise/app/static/setup.js`, `services/exercise/requirements.txt`
+- **Problem:** qrcode.min.js threw 'code length overflow' for every join URL; the levels that did render used fallback ECC blocks and would not scan.
+- **Fix:** Badges are rendered server-side as SVG by segno at /api/setup/badge/{id}.svg (instructor-gated, origin must match the Host); the client library is deleted.
 - **Done when:** 
 
 ### X2-3
@@ -2212,6 +2238,28 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 - **Files:** `xplane/PI_capvsar_df.py`
 - **Problem:** See docs/PROJECT_REVIEW_2026-10-10.md section 5.
 - **Fix:** 
+- **Done when:** 
+
+### U-3
+
+**Instructor console prints BRG NaN when the DF dictionary is redacted**
+
+`P3` · `low` · `bug` · Exercise console (frontend) · cluster C17 (UI walkthrough 2026-10-11 and UX proposal) · effort S · wave 3 · **fixed**
+
+- **Files:** `services/exercise/app/static/app.js`
+- **Problem:** After D1 an anonymous viewer on an open dev console receives receiver state only; the page rendered the missing numbers as NaN.
+- **Fix:** The line renders only the fields present ('receiving · bearing withheld for this seat'). X-1's invariant (anonymous never sees truth) is kept on purpose.
+- **Done when:** 
+
+### U-4
+
+**Setup page says codes are 6 characters; they are 40**
+
+`P3` · `low` · `bug` · Exercise console (frontend) · cluster C17 (UI walkthrough 2026-10-11 and UX proposal) · effort S · wave 3 · **fixed**
+
+- **Files:** `services/exercise/app/static/setup.html`
+- **Problem:** Wording.
+- **Fix:** Wording fixed; short codes are proposed in the UX review §4.2.
 - **Done when:** 
 
 ### X2-10

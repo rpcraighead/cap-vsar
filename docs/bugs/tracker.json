@@ -86,8 +86,8 @@
       "owner_hint": "Claude (Sonnet 5.5) from docs/PROJECT_REVIEW_2026-10-10.md and docs/DECISIONS_2026-10-10.md"
     },
     "C17": {
-      "name": "Identity, single sign-on & service front door",
-      "owner_hint": "Gemini - console and deck auth; Codex - planner deputy (L-15)"
+      "name": "UI walkthrough 2026-10-11 and UX proposal",
+      "owner_hint": "Claude (Fable) from docs/UX_REVIEW_2026-10-11.md; proposal phases 1-3 and the CalTopo plan are not tracker rows until scheduled"
     }
   },
   "issues": [
@@ -4328,6 +4328,88 @@
       "depends_on": [],
       "done_when": null,
       "verify": ""
+    },
+    {
+      "id": "U-1",
+      "title": "Planner SAR pattern generator cannot be opened (modal nested inside the hidden DB modal)",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 1,
+      "effort": "S",
+      "component": "planner",
+      "cluster": "C17",
+      "status": "fixed",
+      "files": [
+        "services/flightplanner/templates/index.html"
+      ],
+      "problem": "The DB-update modal's div was never closed, so #modal-sar sat inside a display:none element; the SAR button did nothing. Pre-dates the 2026-10-10 review.",
+      "fix": "Closed the div; tests/test_ux_fixes.py parses the template and asserts every modal is a child of body.",
+      "verify": "",
+      "depends_on": [],
+      "done_when": null
+    },
+    {
+      "id": "U-2",
+      "title": "Setup QR badges never render (vendored QR library has a truncated Reed-Solomon table)",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 1,
+      "effort": "M",
+      "component": "console-ui",
+      "cluster": "C17",
+      "status": "fixed",
+      "files": [
+        "services/exercise/app/routers/auth.py",
+        "services/exercise/app/static/setup.js",
+        "services/exercise/requirements.txt"
+      ],
+      "problem": "qrcode.min.js threw 'code length overflow' for every join URL; the levels that did render used fallback ECC blocks and would not scan.",
+      "fix": "Badges are rendered server-side as SVG by segno at /api/setup/badge/{id}.svg (instructor-gated, origin must match the Host); the client library is deleted.",
+      "verify": "",
+      "depends_on": [],
+      "done_when": null
+    },
+    {
+      "id": "U-3",
+      "title": "Instructor console prints BRG NaN when the DF dictionary is redacted",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 3,
+      "effort": "S",
+      "component": "console-ui",
+      "cluster": "C17",
+      "status": "fixed",
+      "files": [
+        "services/exercise/app/static/app.js"
+      ],
+      "problem": "After D1 an anonymous viewer on an open dev console receives receiver state only; the page rendered the missing numbers as NaN.",
+      "fix": "The line renders only the fields present ('receiving · bearing withheld for this seat'). X-1's invariant (anonymous never sees truth) is kept on purpose.",
+      "verify": "",
+      "depends_on": [],
+      "done_when": null
+    },
+    {
+      "id": "U-4",
+      "title": "Setup page says codes are 6 characters; they are 40",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 3,
+      "effort": "S",
+      "component": "console-ui",
+      "cluster": "C17",
+      "status": "fixed",
+      "files": [
+        "services/exercise/app/static/setup.html"
+      ],
+      "problem": "Wording.",
+      "fix": "Wording fixed; short codes are proposed in the UX review §4.2.",
+      "verify": "",
+      "depends_on": [],
+      "done_when": null
     }
   ]
 }

@@ -99,9 +99,15 @@ function render() {
         detail.push(`airframe ${Number(d.airframe_attenuation_db || 0).toFixed(0)} dB`);
       if (d.rx_open === false && d.valid) detail.push('RX closed / bearing held');
       const suffix = detail.length ? ` &middot; ${detail.join(' &middot; ')}` : '';
+      // U-3: a redacted dictionary (receiver state only) has no bearing,
+      // distance or signal; show what is there rather than "NaN".
+      const nm  = d.distance_nm ? ` &middot; ${esc(d.distance_nm)} nm` : '';
+      const sig = Number.isFinite(d.signal) ? ` &middot; sig ${(d.signal*100).toFixed(0)}%` : '';
       df = d.valid
-        ? `<span class="ok">BRG ${Number(d.bearing_rel).toFixed(0)}&deg; rel</span> &middot; ${esc(d.distance_nm)} nm &middot; sig ${(d.signal*100).toFixed(0)}%${suffix}${d.note ? ` <span class="tag">${esc(d.note)}</span>` : ''}`
-        : `<span class="no">${esc(d.note || 'no signal')}</span> &middot; ${esc(d.distance_nm)} nm${suffix}`;
+        ? (Number.isFinite(d.bearing_rel)
+            ? `<span class="ok">BRG ${Number(d.bearing_rel).toFixed(0)}&deg; rel</span>${nm}${sig}${suffix}${d.note ? ` <span class="tag">${esc(d.note)}</span>` : ''}`
+            : `<span class="ok">receiving</span> &middot; <span class="no">bearing withheld for this seat</span>${suffix}`)
+        : `<span class="no">${esc(d.note || 'no signal')}</span>${nm}${suffix}`;
     }
     return `<div class="ac"><b>${esc(a.callsign)}</b> <span class="df">${a.alt_ft.toFixed(0)} ft &middot; hdg ${a.hdg_true.toFixed(0)}&deg;</span>
             <div class="df">${df}</div></div>`;

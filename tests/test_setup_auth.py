@@ -459,10 +459,10 @@ class OfflineAssetComplianceTests(unittest.TestCase):
             remote = pattern.findall(html)
             self.assertEqual(remote, [], f"{path} requests remote assets: {remote}")
 
-    def test_vendored_qrcode_is_served(self):
-        r = self.client.get("/static/vendor/qrcode.min.js")
-        self.assertEqual(r.status_code, 200)
-        self.assertIn(b"QRCode", r.content)
+    def test_badges_are_rendered_on_the_server(self):
+        """U-2: the vendored QR library never rendered a badge; segno does."""
+        self.assertEqual(self.client.get("/static/vendor/qrcode.min.js").status_code, 404)
+        self.assertNotIn("qrcode.min.js", self.client.get("/setup").text)
 
 
 if __name__ == "__main__":

@@ -482,6 +482,10 @@ def is_instructor(request: Request) -> bool:
         return True
     token = token_for("instructor")
     if not token:
+        # Deliberately not widened for an open dev console (U-3 considered
+        # it): X-1's invariant is that an anonymous viewer never receives
+        # truth, dev console or not. The instructor page renders a redacted
+        # DF dictionary gracefully instead.
         return False
     supplied = presented(request)
     return bool(supplied) and hmac.compare_digest(supplied.encode(), token.encode())
