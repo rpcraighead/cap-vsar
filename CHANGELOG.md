@@ -3,6 +3,25 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-10-11 — C182T package review (branch `review-c182-2026-10-11`)
+
+Review only; nothing in the package or builder changed. `docs/C182T_REVIEW_2026-10-11.md`
+diffs the built CAP 487 ACF parameter by parameter against the Laminar C172SP it
+derives from and checks it against the 182T NAV III handbook (P/N 182TPHBUS,
+re-fetched, hash matches the dimension master) and the EASA 182 TCDS. Every
+V-speed, weight, fuel, control-travel and CG value the builder patches checks
+out. Nine defects and five improvements are tracker cluster C18 (`A2-1`…`A2-14`).
+The ones that matter: the physics propeller is still the C172's 76-inch disc
+while the mesh was corrected to 79 in (A2-2, P1, and a candidate for the
+recorded 13 % cruise shortfall), the gear physics track is the C172's 8.2 ft
+under a mesh moved to 9 ft (A2-3), four cylinders (A2-1), and the N429CP
+default paint on a CAP 487 aircraft (A2-5). The calibration order should be
+propeller and gear first, then the staged fuselage-Cd experiment (A2-11).
+
+The AI pilot side of the same request is on `feat/c182-ai-pilot-baseline`:
+the C172 controllers now take an aircraft profile, with a sourced C182T record
+and CAP search-pattern flying; see that branch's CHANGELOG entry.
+
 ## 2026-10-11 — D5 seats, D6 tokens and shell, the Ready room reference screen
 
 Status: **implemented on local `main` and pushed.**
