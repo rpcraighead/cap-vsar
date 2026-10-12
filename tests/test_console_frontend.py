@@ -77,6 +77,7 @@ function makeEl(id) {
 const document = {
   getElementById: id => els[id],
   createElement: () => makeEl('created'),
+  createTextNode: text => makeEl('text'),   // shell.js and debrief.js build with text nodes
   activeElement: null,
   querySelector: () => null, querySelectorAll: () => [],
   addEventListener() {},
@@ -176,8 +177,9 @@ class SharedViewHelpers(unittest.TestCase):
         """Classic scripts share one global lexical scope: a view that still
         declares esc/planeIcon/fmtDur would be a SyntaxError that kills the
         whole page."""
+        # debrief.html loads shell.js and viz.js between charts.js and debrief.js.
         for views in (["charts.js", "geodesy.js", "app.js"], ["charts.js", "geodesy.js", "base.js"],
-                      ["charts.js", "debrief.js"], ["charts.js", "radio.js"]):
+                      ["charts.js", "shell.js", "viz.js", "debrief.js"], ["charts.js", "radio.js"]):
             with self.subTest(views=views):
                 self.assertEqual(run(views, "return 'loaded';"), "loaded")
 
@@ -474,7 +476,8 @@ class Debrief(unittest.TestCase):
     """F2-7."""
 
     def test_selecting_a_sortie_with_no_positions_does_not_leave_the_old_aircraft(self):
-        out = run(["charts.js", "debrief.js"], DEBRIEF_FIXTURE + r"""
+        # viz.js: debrief.html loads it before debrief.js, which draws its chart with it.
+        out = run(["charts.js", "viz.js", "debrief.js"], DEBRIEF_FIXTURE + r"""
           await loadList(); for (let i = 0; i < 5; i++) await api.flush();   // loadList() -> load('s1')
           const loaded = api.run('order.length');
           await api.run("load('s2')");
@@ -490,7 +493,8 @@ class Debrief(unittest.TestCase):
         self.assertIn("no positions", out["info"])
 
     def test_failed_fetches_are_reported_not_thrown(self):
-        out = run(["charts.js", "debrief.js"], r"""
+        # viz.js: debrief.html loads it before debrief.js, which draws its chart with it.
+        out = run(["charts.js", "viz.js", "debrief.js"], r"""
           api.setRoutes(() => ({ok: false, status: 503, json: async () => { throw new Error('html'); }}));
           await api.run('loadList()');
           const list = api.els.sortieInfo.textContent;

@@ -301,5 +301,359 @@ class AnalysisEndpoint(unittest.TestCase):
         self.assertIn("Radio horizon", labels)
 
 
+# -------------------------------------------------------------- static files
+def src(name):
+    return (STATIC / name).read_text()
+
+
+class DashboardFiles(unittest.TestCase):
+
+    def test_the_page_is_on_the_shell_and_the_tokens(self):
+        html = src("debrief.html")
+        self.assertIn('<header id="shell"></header>', html)
+        for sheet in ("/static/tokens.css", "/static/vendor/fonts/fonts.css",
+                      "/static/shell.css", "/static/debrief.css"):
+            self.assertIn(f'href="{sheet}"', html)
+        self.assertNotIn("style.css", html)        # the old visual system
+        self.assertIn('id="sortieSel"', html.split("<main")[0])   # the picker stays in the sidebar
+        order = [html.index(f"/static/{f}") for f in ("charts.js", "shell.js", "viz.js", "debrief.js")]
+        self.assertEqual(order, sorted(order))
+        self.assertEqual(re.findall(r'(?:src|href)="(https?://[^"]+)"', html), [])
+
+    def test_no_literal_colours(self):
+        for name in ("debrief.css", "viz.js", "debrief.js"):
+            with self.subTest(name=name):
+                text = src(name)
+                self.assertEqual(re.findall(r"#[0-9a-fA-F]{3,8}\b", text), [])
+                self.assertIsNone(re.search(r"\brgba?\(|\bhsla?\(", text))
+
+    def test_aircraft_and_truth_wear_their_tokens(self):
+        css = src("debrief.css")
+        for n in (1, 2, 3, 4):
+            self.assertIn(f"var(--ac-{n})", css)
+        self.assertNotIn("--ac-5", css + src("viz.js"))
+        self.assertIn(".viz-zero { stroke: var(--truth)", css)
+        self.assertIn("tok('--truth')", src("debrief.js"))
+
+    def test_server_strings_never_become_markup(self):
+        viz = src("viz.js")
+        self.assertNotRegex(viz, r"innerHTML|outerHTML|insertAdjacentHTML")
+        self.assertNotRegex(viz, r"\bfetch\(|https?://(?!www\.w3\.org/2000/svg)")
+        dbf = src("debrief.js")
+        # One HTML sink is left: the sortie picker's <option> list, built with esc().
+        self.assertEqual(len(re.findall(r"\.innerHTML\s*=", dbf)), 1)
+        self.assertIn("$('sortieSel').innerHTML", dbf)
+
+
+# ---------------------------------------------------------- the JS, under Node
+# A small DOM that keeps attributes and children, so the SVG viz.js builds can
+# be inspected (and printed: `serialize(node)`). Leaflet is a recording stub.
+MINI_DOM = r"""
+const vm = require('vm'), fs = require('fs');
+const STATIC = process.argv[1], files = JSON.parse(process.argv[2]), scenario = process.argv[3];
+const rec = {fetches: [], polylines: [], circles: []};
+let routes = () => ({ok: false, status: 503, json: async () => ({})});
+class El {
+  constructor(tag, ns) { this.tagName = tag; this.ns = ns || null; this.attrs = {}; this.children = [];
+    this.style = {}; this.listeners = {}; this._text = ''; this.hidden = false; this.className = '';
+    this.dataset = {}; this.value = ''; this.id = ''; }
+  setAttribute(k, v) { this.attrs[k] = String(v); }
+  getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; }
+  append(...ns) { for (const n of ns) this.children.push(typeof n === 'string' ? new Text(n) : n); }
+  appendChild(n) { this.append(n); return n; }
+  prepend(...ns) { this.children.unshift(...ns); }
+  replaceChildren(...ns) { this.children = []; this._text = ''; this.append(...ns); }
+  get firstChild() { return this.children[0] || null; }
+  set textContent(v) { this.children = []; this._text = String(v); }
+  get textContent() { return this._text + this.children.map(c => c.textContent).join(''); }
+  set innerHTML(v) { this.children = []; this._text = ''; this.html = String(v); }
+  addEventListener(k, fn) { (this.listeners[k] ||= []).push(fn); }
+  fire(k, ev) { (this.listeners[k] || []).forEach(f => f(ev || {preventDefault() {}})); }
+  get classList() { const s = this; return {add: c => { s.className += ' ' + c; }, remove() {}, toggle() {},
+    contains: c => s.className.split(/\s+/).includes(c)}; }
+  getBoundingClientRect() { return {left: 0, top: 0, width: Number(this.attrs.width) || 900, height: 260}; }
+  get clientWidth() { return 900; }
+  focus() {}
+  get selectedOptions() { return [{text: '2026-10-11 10:00Z — Dashboard test (6 pts)'}]; }
+  cls() { return (this.attrs.class || this.className || '').trim(); }
+  all(pred, out = []) { for (const c of this.children) if (c instanceof El) { if (pred(c)) out.push(c); c.all(pred, out); } return out; }
+  byClass(c) { return this.all(n => n.cls().split(/\s+/).includes(c)); }
+}
+class Text { constructor(t) { this.data = String(t); } get textContent() { return this.data; } }
+const escText = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function serialize(n) {
+  if (n instanceof Text) return escText(n.data);
+  const a = Object.entries(n.attrs).map(([k, v]) => ` ${k}="${escText(v).replace(/"/g, '&quot;')}"`).join('');
+  const style = Object.entries(n.style).filter(([, v]) => v !== '' && v != null).map(([k, v]) => `${k}:${v}`).join(';');
+  const cls = n.className && !n.attrs.class ? ` class="${n.className.trim()}"` : '';
+  return `<${n.tagName}${a}${cls}${style ? ` style="${style}"` : ''}${n.hidden ? ' hidden' : ''}>` +
+         escText(n._text) + n.children.map(serialize).join('') + `</${n.tagName}>`;
+}
+const els = {};
+const document = {
+  getElementById: id => els[id] || (els[id] = Object.assign(new El('div'), {id})),
+  createElement: t => new El(t), createElementNS: (ns, t) => new El(t, ns),
+  createTextNode: t => new Text(t), activeElement: null, documentElement: new El('html'),
+};
+const chain = new Proxy(function () {}, {
+  get: (t, k) => k === 'then' ? undefined : k === 'getLatLng' ? () => ({lat: 0, lng: 0}) : chain,
+  apply: () => chain,
+});
+const L = new Proxy({}, {get: (t, k) => {
+  if (k === 'polyline') return (pts, opts) => { rec.polylines.push({n: pts.length, color: opts.color}); return chain; };
+  if (k === 'circleMarker') return (ll, opts) => { rec.circles.push(opts.color); return chain; };
+  return () => chain;
+}});
+const ctx = {document, L, console, JSON, Math, Date, Promise, Set, Map, Object, Array, Number, String,
+  parseFloat, isNaN, isFinite, encodeURIComponent, URL, URLSearchParams,
+  location: {pathname: '/debrief', search: '', set href(v) {}, get href() { return '/debrief'; }},
+  getComputedStyle: () => ({getPropertyValue: n => 'tok(' + n + ')'}),
+  fetch: async url => { rec.fetches.push(String(url)); return routes(String(url)); },
+  setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
+  localStorage: {getItem: () => null, setItem() {}}, alert() {}};
+ctx.window = ctx; ctx.globalThis = ctx;
+vm.createContext(ctx);
+for (const f of files) vm.runInContext(fs.readFileSync(STATIC + '/' + f, 'utf8'), ctx, {filename: f});
+ctx.api = {rec, els, serialize, El, setRoutes: r => { routes = r; }, run: s => vm.runInContext(s, ctx),
+           flush: () => new Promise(r => setImmediate(r))};
+(async () => {
+  const out = await vm.runInContext('(async () => {' + scenario + '\n})()', ctx);
+  console.log(JSON.stringify(out === undefined ? null : out));
+})().catch(e => { console.error(e && e.stack || String(e)); process.exit(1); });
+"""
+
+
+def node_run(files, scenario):
+    if NODE is None:
+        raise unittest.SkipTest("node is not installed")
+    proc = subprocess.run([NODE, "-e", MINI_DOM, str(STATIC), json.dumps(files), scenario],
+                          capture_output=True, text=True, timeout=30)
+    if proc.returncode != 0:
+        raise AssertionError(proc.stderr)
+    return json.loads(proc.stdout)
+
+
+# Two aircraft over ten minutes: CAP 423 converges on the truth with a
+# multipath excursion and a wrap through +/-180; CAP 424 sits right of it and
+# stops reporting for two minutes. Times are epoch seconds like the server's.
+CHART_DATA = r"""
+  const T0 = 1760000000;
+  const a = [], b = [];
+  for (let s = 0; s <= 600; s += 5) {
+    let v = 30 * Math.exp(-s / 200) * Math.cos(s / 40);
+    if (s >= 300 && s < 340) v = 38;                      // multipath swing
+    if (s === 420) v = 170; if (s === 425) v = -175;      // through the tail: a wrap, not a 345 degree swing
+    a.push({t: T0 + s, v});
+    if (s < 200 || s > 320) b.push({t: T0 + s, v: 6 + 3 * Math.sin(s / 30)});
+  }
+  const spec = {x0: T0, x1: T0 + 600, fmtT: t => fmtDur(t - T0), band: 10, onSeek: t => { api.sought = t; },
+    note: 'Effects on at the end of the sortie: Multipath (40° offset).',
+    series: [{label: 'CAP 423', slot: 1, line: a, dots: [{t: T0 + 120, v: 14, detail: '187°T'}, {t: T0 + 500, v: -3, detail: '<b>x</b>'}]},
+             {label: 'CAP 424', slot: 2, line: b, dots: []}]};
+"""
+
+TRACK_AND_SCORES = r"""
+  const T0 = 1760000000;
+  const pos = (cs, t, lat) => ({callsign: cs, t: T0 + t, lat, lon: -117, hdg_true: 180});
+  const track = {positions: [pos('CAP 425', 0, 34.3), pos('ALPHA 1', 0, 34.4), pos('CAP 425', 60, 34.28),
+                             pos('ALPHA 1', 60, 34.38), pos('CAP 425', 120, 34.26), pos('ALPHA 1', 120, 34.36)],
+                 bearings: [{callsign: 'CAP 425', t: T0 + 50, lat: 34.3, lon: -117, bearing_true: 181, note: '<img src=x onerror=alert(1)>'}],
+                 messages: [{t: T0 + 90, sender: 'MRO 1', recipient: 'CAP 425', body: 'orbit'}],
+                 revealed: true, withheld: false, beacon: {lat: 34.2345, lon: -116.8765}, next_since: null};
+  const ac = (callsign, slot, extra) => Object.assign({callsign, slot, flown_nm: 2.4,
+    counts: {positions: 3, bearings: 0, messages: 0}, df_error: [], df_error_stats: null, df_invalid: 0,
+    bearing_error: [], bearing_error_stats: null, cpa: {nm: 3.2, t: T0 + 120}, first_good_cut: null,
+    track: {flown_nm: 2.4, direct_nm: 5.1, efficiency_pct: 212.5}}, extra || {});
+  const scores = {id: 's1', revealed: true, withheld: false, good_cut_deg: 10, t0: T0, t1: T0 + 120,
+    effects: {multipath: true}, effects_active: [{key: 'multipath', label: 'Multipath (40° offset)'}],
+    counts: {positions: 6, bearings: 1, messages: 1},
+    aircraft: [ac('ALPHA 1', 1), ac('CAP 425', 3, {counts: {positions: 3, bearings: 1, messages: 1},
+      df_error: [{t: T0, error: 12}, {t: T0 + 60, error: -4, in_cone: true}, {t: T0 + 120, error: 1}],
+      df_error_stats: {n: 3, mean_abs: 5.67, max_abs: 12, good: 2},
+      bearing_error: [{t: T0 + 50, error: 4.2, bearing_true: 181, note: '<img src=x onerror=alert(1)>'}],
+      bearing_error_stats: {n: 1, mean_abs: 4.2, max_abs: 4.2, good: 1},
+      cpa: {nm: 0.4, t: T0 + 120}, first_good_cut: {t: T0 + 50, error: 4.2}})]};
+  document.getElementById('sortieSel').value = 's1';
+  api.setRoutes(url => {
+    if (url === '/api/sorties') return {ok: true, status: 200, json: async () => [{id: 's1', started: T0, name: 'Dashboard test', points: 6}]};
+    if (url.includes('/track')) return {ok: true, status: 200, json: async () => JSON.parse(JSON.stringify(track))};
+    if (url.includes('/analysis')) return {ok: true, status: 200, json: async () => scores};
+    return {ok: false, status: 503, json: async () => ({})};
+  });
+"""
+
+
+class VizPure(unittest.TestCase):
+    """The BEGIN/END VIZ PURE block of viz.js."""
+
+    def run_pure(self, expr):
+        text = src("viz.js")
+        block = text[text.index("// BEGIN VIZ PURE"):text.index("// END VIZ PURE")]
+        return node_run([], block + f"\nreturn {expr};")
+
+    def test_error_axis_is_symmetric_on_navigator_steps(self):
+        out = self.run_pure("[vizErrorDomain(7), vizErrorDomain(35), vizErrorDomain(500)]")
+        self.assertEqual(out[0], {"max": 10, "ticks": [-10, -5, 0, 5, 10]})
+        self.assertEqual(out[1], {"max": 45, "ticks": [-45, -30, -15, 0, 15, 30, 45]})
+        self.assertEqual(out[2], {"max": 180, "ticks": [-180, -90, 0, 90, 180]})
+
+    def test_lines_break_at_gaps_and_at_the_wrap(self):
+        out = self.run_pure("""vizRuns([{t: 0, v: 1}, {t: 5, v: 2}, {t: 90, v: 3}, {t: 95, v: 179},
+                                       {t: 100, v: -179}], 15).map(r => r.length)""")
+        self.assertEqual(out, [2, 2, 1])
+
+    def test_direct_labels_keep_their_order_and_spacing(self):
+        out = self.run_pure("vizSpread([100, 104, 98, 250], 16, 10, 240)")
+        self.assertEqual(sorted(out, key=lambda y: y)[0], out[2])         # 98 stays the top one
+        ys = sorted(out)
+        self.assertTrue(all(b - a >= 16 - 1e-9 for a, b in zip(ys, ys[1:])), out)
+        self.assertLessEqual(max(out), 240)
+
+    def test_nearest_and_signed(self):
+        out = self.run_pure("""[vizNearest([{t: 0}, {t: 10}, {t: 20}], 14), vizNearest([], 3),
+                                vizSigned(-3), vizSigned(4.25), vizSigned(-0.01), vizClip('CAP 423 LONGNAME', 8)]""")
+        self.assertEqual(out, [1, -1, "−3.0°", "+4.3°", "0.0°", "CAP 423…"])
+
+
+class VizChart(unittest.TestCase):
+    """vizErrorChart under the small DOM: the marks the dataviz method asks for."""
+
+    def test_the_chart_has_its_marks_legend_and_table(self):
+        out = node_run(["charts.js", "viz.js"], CHART_DATA + r"""
+          const host = document.getElementById('host');
+          const c = vizErrorChart(host, spec);
+          const svg = host.all(n => n.tagName === 'svg')[0];
+          const lines1 = svg.byClass('viz-line').filter(n => n.cls().includes('viz-s1'));
+          const lines2 = svg.byClass('viz-line').filter(n => n.cls().includes('viz-s2'));
+          const zero = svg.byClass('viz-zero')[0], band = svg.byClass('viz-band')[0];
+          const legend = host.byClass('viz-legend')[0].children.map(li => li.textContent);
+          const labels = svg.byClass('viz-label').map(n => n.textContent);
+          const dots = svg.byClass('viz-dot').length;
+          // hover: the crosshair snaps to a sample, and the tooltip lists every series
+          svg.fire('pointermove', {clientX: 400});
+          const tip = host.byClass('viz-tip')[0];
+          const tipRows = tip.byClass('viz-tip-row').length;
+          const cross = svg.byClass('viz-cross')[0];
+          svg.fire('click', {clientX: 400});
+          c.setCursor(T0 + 300);
+          const replayX = Number(/translate\(([\d.]+)/.exec(svg.byClass('viz-replay')[0].getAttribute('transform'))[1]);
+          const notes = host.byClass('viz-note').map(n => n.hidden ? null : n.textContent);
+          c.showTable(true);
+          const tables = host.byClass('viz-data');
+          const head = tables[0].all(n => n.tagName === 'th').map(n => n.textContent);
+          const logged = tables[1].all(n => n.tagName === 'td').map(n => n.textContent);
+          return {lines1: lines1.length, lines2: lines2.length, zeroY: Number(zero.getAttribute('y1')),
+                  bandTop: Number(band.getAttribute('y')), bandH: Number(band.getAttribute('height')),
+                  legend, labels, dots, tipRows, tipHidden: tip.hidden, crossShown: cross.style.display === '',
+                  sought: api.sought, replayX, notes, plotHidden: host.byClass('viz-plot')[0].hidden, head, logged,
+                  aria: svg.getAttribute('aria-label'), tabindex: svg.getAttribute('tabindex'),
+                  ticks: svg.byClass('viz-ticks')[0].children.map(n => n.textContent)};
+        """)
+        # CAP 423: the wrap through 180 splits its line; CAP 424's two-minute silence splits its own.
+        self.assertEqual(out["lines1"], 2)
+        self.assertEqual(out["lines2"], 2)
+        # 260 px tall, 10 top and 28 bottom margins: zero is the middle of 10..232.
+        self.assertAlmostEqual(out["zeroY"], 121.0, places=1)
+        self.assertGreater(out["bandH"], 0)
+        self.assertAlmostEqual(out["bandTop"] + out["bandH"] / 2, out["zeroY"], places=1)
+        self.assertEqual(out["legend"], ["CAP 423", "CAP 424", "logged bearing",
+                                         "±10° good cut", "true bearing (0°)"])
+        self.assertEqual(out["labels"], ["CAP 423", "CAP 424"])
+        self.assertEqual(out["dots"], 2)
+        self.assertGreaterEqual(out["tipRows"], 2)
+        self.assertFalse(out["tipHidden"])
+        self.assertTrue(out["crossShown"])
+        self.assertIsNotNone(out["sought"])
+        self.assertGreater(out["replayX"], 48)
+        self.assertTrue(out["plotHidden"])
+        self.assertEqual(out["head"], ["Time", "CAP 423", "CAP 424"])
+        self.assertIn("<b>x</b>", out["logged"])          # a note stays text, in the table too
+        self.assertIn("table view", out["aria"])
+        self.assertEqual(out["tabindex"], "0")
+        # The scale follows the bulk of the readings: the multipath swing (38) sets
+        # it; the two readings through the tail run off it, and the note says so.
+        self.assertIn("+45°", out["ticks"])
+        self.assertNotIn("+180°", out["ticks"])
+        self.assertIn("2 of 219 readings lie beyond ±45°", out["notes"][1])
+        self.assertIn("00:00", out["ticks"])
+
+    def test_an_empty_chart_says_why(self):
+        out = node_run(["charts.js", "viz.js"], r"""
+          const host = document.getElementById('host');
+          vizErrorChart(host, {x0: 0, x1: 10, series: [], empty: 'not revealed yet'});
+          return {svg: host.all(n => n.tagName === 'svg').length, text: host.textContent};
+        """)
+        self.assertEqual(out["svg"], 0)
+        self.assertIn("not revealed yet", out["text"])
+
+
+class DebriefPage(unittest.TestCase):
+    """charts.js + viz.js + debrief.js driven with a track and its analysis."""
+
+    def test_cards_chart_marks_and_map_follow_the_slots(self):
+        out = node_run(["charts.js", "viz.js", "debrief.js"], TRACK_AND_SCORES + r"""
+          await loadList(); for (let i = 0; i < 5; i++) await api.flush();
+          const cards = api.els.summary.children;
+          const marks = api.els.marks.children;
+          marks[0].fire('click');
+          const sliderAfterMark = Number(api.els.slider.value);
+          const svg = api.els.errChart.all(n => n.tagName === 'svg')[0];
+          return {order: api.run('order'), cards: cards.map(c => c.className),
+                  titles: cards.map(c => c.byClass('ac-head')[0].textContent),
+                  tiles: cards[1].byClass('stat-label').map(n => n.textContent),
+                  values: cards[1].byClass('stat-value').map(n => n.textContent),
+                  notRecorded: cards[0].byClass('stat-value').filter(n => n.textContent === 'not recorded').length,
+                  marks: marks.map(m => m.className), markLabel: marks[0].getAttribute('aria-label'),
+                  sliderAfterMark, lines: svg.byClass('viz-line').map(n => n.cls()),
+                  polylineColours: [...new Set(api.rec.polylines.map(p => p.color))],
+                  beacon: api.rec.circles, note: api.els.errChart.byClass('viz-note')[0].textContent,
+                  events: api.els.events.textContent, info: api.els.sortieInfo.textContent};
+        """)
+        self.assertEqual(out["order"], ["ALPHA 1", "CAP 425"])
+        self.assertEqual(out["cards"], ["ac-card s1", "ac-card s3"])     # colour follows the slot, not the rank
+        self.assertIn("overhead the beacon", out["titles"][1])
+        self.assertEqual(out["tiles"], ["Needle error", "Logged bearing error", "Closest approach",
+                                        "First good cut", "Track efficiency", "Ops-normal timing",
+                                        "Rejected cuts", "Change since last session"])
+        self.assertEqual(out["values"][:5], ["5.7°", "4.2°", "0.40 nm", "00:50", "213%"])
+        self.assertEqual(out["notRecorded"], 4)          # no DF on ALPHA 1, plus the three unrecorded measures
+        self.assertEqual(out["marks"], ["mark brg s3", "mark msg"])
+        self.assertIn("CAP 425 bearing 181", out["markLabel"])
+        self.assertAlmostEqual(out["sliderAfterMark"], 50 / 120 * 100, places=3)
+        self.assertEqual(out["lines"], ["viz-line viz-s3"])
+        self.assertEqual(sorted(out["polylineColours"]), ["tok(--ac-1)", "tok(--ac-3)"])
+        self.assertEqual(out["beacon"], ["tok(--truth)"])
+        self.assertIn("Multipath (40° offset)", out["note"])
+        self.assertIn("<img src=x onerror=alert(1)>", out["events"])   # as text, not as an element
+        self.assertIn("6 position reports", out["info"])
+
+    def test_before_reveal_the_cards_say_so(self):
+        out = node_run(["charts.js", "viz.js", "debrief.js"], TRACK_AND_SCORES + r"""
+          scores.revealed = false;
+          scores.aircraft.forEach(a => { for (const k of ['df_error', 'df_error_stats', 'bearing_error',
+            'bearing_error_stats', 'cpa', 'first_good_cut', 'track']) a[k] = null; });
+          track.beacon = null; track.revealed = false;
+          await loadList(); for (let i = 0; i < 5; i++) await api.flush();
+          return {values: api.els.summary.children[0].byClass('stat-value').map(n => n.textContent),
+                  chart: api.els.errChart.textContent};
+        """)
+        self.assertEqual(out["values"][:5], ["after reveal"] * 5)
+        self.assertIn("not revealed", out["chart"])
+
+    def test_withheld_says_withheld(self):
+        out = node_run(["charts.js", "viz.js", "debrief.js"], TRACK_AND_SCORES + r"""
+          Object.assign(scores, {revealed: false, withheld: true});
+          scores.aircraft.forEach(a => { for (const k of ['df_error', 'df_error_stats', 'bearing_error',
+            'bearing_error_stats', 'cpa', 'first_good_cut', 'track']) a[k] = null; });
+          Object.assign(track, {beacon: null, revealed: false, withheld: true});
+          await loadList(); for (let i = 0; i < 5; i++) await api.flush();
+          return {values: api.els.summary.children[0].byClass('stat-value').map(n => n.textContent),
+                  chart: api.els.errChart.textContent, beacon: api.rec.circles.length};
+        """)
+        self.assertEqual(out["values"][:5], ["withheld"] * 5)
+        self.assertIn("being flown in a live sortie", out["chart"])
+        self.assertEqual(out["beacon"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
