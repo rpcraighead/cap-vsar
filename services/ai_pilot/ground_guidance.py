@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
+from .aircraft_profiles import AircraftProfile, C172SP
 from .taxi import TaxiCoordinator, TaxiRoute
 
 
@@ -65,7 +66,8 @@ class TaxiGuidance:
     """Stop at each named point; never cross a corridor or authority boundary."""
 
     def __init__(self, coordinator: TaxiCoordinator, route: TaxiRoute,
-                 points: dict[str, TaxiPoint], corridor_half_width_m: float = 5.):
+                 points: dict[str, TaxiPoint], corridor_half_width_m: float = 5.,
+                 profile: AircraftProfile = C172SP):
         if coordinator.route != route:
             raise ValueError("coordinator must own this route")
         if not 2 <= corridor_half_width_m <= 10:
@@ -81,6 +83,7 @@ class TaxiGuidance:
         self.route = route
         self.points = dict(points)
         self.corridor_half_width_m = corridor_half_width_m
+        self.profile = profile
         self.fault: str | None = None
 
     def step(self, o: GroundObservation) -> GroundCommand:
@@ -138,6 +141,6 @@ class TaxiGuidance:
                 return GroundCommand(brake=.15, reason="slow for taxi corner")
             desired_speed = min(desired_speed, 1.)
         yaw = clamp(.025*heading_error-.06*cross, -1., 1.)
-        throttle = clamp(.16+.08*(desired_speed-o.groundspeed_mps), 0., .28)
+        throttle = self.profile.taxi_throttle(desired_speed, o.groundspeed_mps)
         return GroundCommand(yaw=yaw, throttle=throttle,
                              reason=directive.action)

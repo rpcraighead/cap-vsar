@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import math
 
 from .ground_guidance import GroundCommand, GroundObservation, TaxiPoint, clamp, wrap180
+from .aircraft_profiles import AircraftProfile, C172SP
 from .taxi import TaxiCoordinator, TaxiPhase
 
 
@@ -29,10 +30,11 @@ class RunwayEntryGeometry:
 
 class RunwayEntryGuidance:
     def __init__(self, taxi: TaxiCoordinator, geometry: RunwayEntryGeometry,
-                 runway: str = "27R"):
+                 runway: str = "27R", profile: AircraftProfile = C172SP):
         self.taxi = taxi
         self.geometry = geometry
         self.runway = runway
+        self.profile = profile
         self.phase = "hold"
         self.fault: str | None = None
 
@@ -101,5 +103,5 @@ class RunwayEntryGuidance:
             return GroundCommand(brake=clamp(.12*(o.groundspeed_mps-speed), .05, .35),
                                  reason="slow for 27R line-up")
         yaw = clamp(.025*error, -1., 1.)
-        throttle = clamp(.16+.08*(speed-o.groundspeed_mps), 0., .28)
+        throttle = self.profile.taxi_throttle(speed, o.groundspeed_mps)
         return GroundCommand(yaw=yaw, throttle=throttle, reason=self.phase)

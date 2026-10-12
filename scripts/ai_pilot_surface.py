@@ -21,6 +21,7 @@ from services.ai_pilot.runway_entry import RunwayEntryGuidance
 from services.ai_pilot.takeoff_guidance import TakeoffGuidance, TakeoffObservation
 from services.ai_pilot.taxi import ClearanceSource, TaxiCoordinator, TaxiPhase
 from scripts.ai_pilot_experiment import inventory
+from services.ai_pilot.aircraft_profiles import PROFILES
 
 
 def run(args):
@@ -38,12 +39,14 @@ def run(args):
             raise ValueError("D8 hold diagnostic checkpoint requires takeoff phase")
         for _ in route.legs:
             taxi.complete_leg()
-    taxi_guide = TaxiGuidance(taxi, route, points, corridor_half_width_m=10.)
-    entry_guide = RunwayEntryGuidance(taxi, survey.entry_geometry())
+    profile = PROFILES[args.profile]
+    taxi_guide = TaxiGuidance(taxi, route, points, corridor_half_width_m=10., profile=profile)
+    entry_guide = RunwayEntryGuidance(taxi, survey.entry_geometry(), profile=profile)
     heading, length, _entry_along = survey.runway_frame()
     takeoff = TakeoffGuidance(taxi, runway="27R", runway_heading_true_deg=heading,
-                              runway_length_m=length, field_elevation_ft=388.)
-    inv = inventory(args.xplane, include_surface=True)
+                              runway_length_m=length, field_elevation_ft=388., profile=profile)
+    inv = inventory(args.xplane, include_surface=True, profile=args.profile)
+    inv["profile_tuning_validated"] = profile.tuning_validated
     for name, installed in inv["installed_bridge_sha256"].items():
         if installed != inv["source_sha256"]["xplane/"+name]:
             raise ValueError("Installed surface bridge mismatch: " + name)
@@ -244,6 +247,8 @@ def main():
     parser.add_argument("--phase", choices=("taxi", "takeoff"), default="taxi")
     parser.add_argument("--start-at", choices=("parking", "hold"), default="parking")
     parser.add_argument("--max-wall-s", type=float, default=600.)
+    parser.add_argument("--profile", choices=sorted(PROFILES), default="C172SP",
+                        help="aircraft profile; C182T tuning is not yet validated")
     args = parser.parse_args()
     if not 30 <= args.max_wall_s <= 900:
         parser.error("Surface trial wall deadline outside 30–900 seconds")

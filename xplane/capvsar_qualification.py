@@ -10,6 +10,22 @@ import time
 
 STOCK_SHA256 = "b9c3c35c956ac5bee8c74fc9cbf933c6ecdfab73db9ad22862022aa3a20ab847"
 STOCK_NAME = "Cessna_172SP_G1000.acf"
+# The CAP 487 package is rebuilt locally, so its hash cannot be pinned in code.
+# The stager hashes the file it was given into the configuration
+# (`aircraft_sha256`) and the plugin re-hashes the file at load: a rebuilt or
+# swapped package refuses to start rather than flying unrecorded geometry.
+BUILT_PACKAGE_NAMES = frozenset({"Cessna_182T_G1000.acf"})
+
+
+def aircraft_identity_ok(path, config_sha256=None):
+    """True for the pinned stock C172, or a known built package whose bytes match
+    the hash recorded at staging."""
+    name = Path(path).name
+    digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    if name == STOCK_NAME:
+        return digest == STOCK_SHA256
+    return (name in BUILT_PACKAGE_NAMES and isinstance(config_sha256, str)
+            and len(config_sha256) == 64 and digest == config_sha256)
 AUTHORITY = {"roll": (-.35, .35), "pitch": (-.4, .4), "yaw": (-.35, .35),
              "throttle": (.15, 1), "flap": (0, 0), "trim": (-.6, .6)}
 
@@ -19,10 +35,9 @@ class QualificationLab:
         self.xp, self.sink = xp, sink
         self.aircraft = str(Path(config["aircraft_path"]).resolve())
         self.expires = config["expires_unix_s"]
-        if (Path(self.aircraft).name != STOCK_NAME
-                or hashlib.sha256(Path(self.aircraft).read_bytes()).hexdigest() != STOCK_SHA256
+        if (not aircraft_identity_ok(self.aircraft, config.get("aircraft_sha256"))
                 or not time.time() < self.expires <= time.time() + 14400):
-            raise ValueError("Qualification requires pinned stock C172 and a <=4 hour lease")
+            raise ValueError("Laboratory requires a pinned aircraft and a <=4 hour lease")
         self.trial_started = None
         self.previous_sim = None
         self.resume_pending = False

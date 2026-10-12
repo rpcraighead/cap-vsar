@@ -178,3 +178,23 @@ def test_lab_start_failure_after_activation_pauses_and_retires(monkeypatch, tmp_
     assert "resume failed" in reply.get_nowait()["error"]
     assert plugin.core.retired and plugin.core.pause_confirmed
     assert xp.refs["sim/operation/override/override_joystick"] == 0
+
+
+def test_built_cap_package_is_accepted_only_with_its_staged_hash(monkeypatch, tmp_path):
+    """The C182T package is rebuilt locally, so the stager records its hash and
+    the lab re-hashes the file: a rebuilt or swapped package refuses to start."""
+    xp, plugin = load_plugin(monkeypatch, tmp_path)
+    aircraft = tmp_path / "Cessna_182T_G1000.acf"
+    aircraft.write_text("cap 487 build")
+    digest = hashlib.sha256(aircraft.read_bytes()).hexdigest()
+    base = {"aircraft_path": str(aircraft), "expires_unix_s": time.time() + 1000}
+    for config in (base, {**base, "aircraft_sha256": "0" * 64}, {**base, "aircraft_sha256": "short"}):
+        with pytest.raises(ValueError, match="pinned aircraft"):
+            lab_module.QualificationLab(xp, plugin.core.sink, config)
+    lab_module.QualificationLab(xp, plugin.core.sink, {**base, "aircraft_sha256": digest})
+    aircraft.write_text("rebuilt package")
+    with pytest.raises(ValueError, match="pinned aircraft"):
+        lab_module.QualificationLab(xp, plugin.core.sink, {**base, "aircraft_sha256": digest})
+    other = tmp_path / "SomethingElse.acf"
+    other.write_text("x")
+    assert not lab_module.aircraft_identity_ok(other, hashlib.sha256(b"x").hexdigest())

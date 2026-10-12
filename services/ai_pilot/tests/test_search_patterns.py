@@ -187,3 +187,35 @@ def test_controller_refuses_out_of_envelope_speed_and_lost_pattern():
     far["values"].update(sim_time_s=1., latitude_deg=33.30)
     with pytest.raises(ValueError, match="lost"):
         controller.step(far)
+
+
+def observer_snapshot(t, lat, lon, alt=1500., kias=100., roll=0., frame=None, paused=0):
+    return {"frame": frame if frame is not None else int(t * 10) + 1,
+            "aircraft": {"name": "Cessna_182T_G1000.acf"},
+            "values": {"sim_time_s": t, "latitude_deg": lat, "longitude_deg": lon,
+                       "altitude_indicated_ft": alt, "kias": kias, "roll_deg": roll,
+                       "paused": paused, "on_ground": 0}}
+
+
+def test_observer_scores_a_fly_through_independently():
+    from services.ai_pilot.search_patterns import PatternObserver
+    pts = expanding_square(33.10, -117.30, 0., 1., 4, "right")
+    controller = SearchPatternController(pts, altitude_indicated_ft=1500., profile=C182T)
+    samples = fly(controller, 33.09, -117.30, 0., kias=controller.kias)
+    observer = PatternObserver(pts, altitude_indicated_ft=1500., aircraft_name="Cessna_182T_G1000.acf")
+    report = None
+    for i, (t, lat, lon, _, roll, _) in enumerate(samples):
+        report = observer.observe(observer_snapshot(t, lat, lon, roll=roll, frame=i + 1))
+    assert report["outcome"] == "PASS", report
+    assert [r["waypoint"] for r in report["reached"]] == [w.name for w in pts]
+
+
+def test_observer_fails_altitude_excursion_and_wrong_aircraft():
+    from services.ai_pilot.search_patterns import PatternObserver
+    pts = expanding_square(33.10, -117.30, 0., 1., 2)
+    o = PatternObserver(pts, altitude_indicated_ft=1500.)
+    o.observe(observer_snapshot(1., pts[0].lat, pts[0].lon))
+    assert o.observe(observer_snapshot(1.1, pts[0].lat + .001, pts[0].lon, alt=1750.))["reason"] == \
+        "Altitude outside tolerance on the pattern"
+    wrong = PatternObserver(pts, altitude_indicated_ft=1500., aircraft_name="Cessna_172SP_G1000.acf")
+    assert wrong.observe(observer_snapshot(1., 33., -117.))["reason"] == "Wrong aircraft"

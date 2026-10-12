@@ -385,3 +385,90 @@ class SearchPatternController:
                                  "forced_turn": self.forced_turn, "target_true_deg": target_true,
                                  "target_alt_ft": self.altitude_ft, "target_kias": self.kias, **diag}
         return frame
+
+
+class PatternObserver:
+    """Independent scoring of a flown pattern from aircraft snapshots only.
+
+    It never reads the controller's state. A waypoint counts as reached when the
+    aircraft passes within `pass_nm` of it, in order. While on the pattern (from
+    the first waypoint reached to the last) altitude must stay within
+    `altitude_tol_ft` of the assigned altitude, speed inside `kias_band` and bank
+    within `max_bank_deg`. Criteria are engineering trial values, not CAP
+    standards.
+    """
+
+    def __init__(self, waypoints, *, altitude_indicated_ft, pass_nm=.35, altitude_tol_ft=200.,
+                 kias_band=(80., 140.), max_bank_deg=32., aircraft_name=None):
+        self.waypoints = list(waypoints)
+        self.altitude_ft = altitude_indicated_ft
+        self.pass_nm = pass_nm
+        self.altitude_tol_ft = altitude_tol_ft
+        self.kias_band = kias_band
+        self.max_bank_deg = max_bank_deg
+        self.aircraft_name = aircraft_name
+        self.index = 0
+        self.closest_nm = float("inf")
+        self.reached = []
+        self.previous = None
+        self.samples = 0
+        self.outcome = "INCOMPLETE"
+        self.reason = None
+        self.max_altitude_error_ft = 0.
+        self.max_bank_seen_deg = 0.
+
+    def fail(self, reason):
+        self.outcome, self.reason = "FAIL", reason
+        return self.report()
+
+    def observe(self, s):
+        if self.outcome != "INCOMPLETE":
+            return self.report()
+        try:
+            v = s["values"]
+            sim, frame = v["sim_time_s"], s["frame"]
+            if self.aircraft_name and s["aircraft"]["name"] != self.aircraft_name:
+                return self.fail("Wrong aircraft")
+            numbers = (sim, v["latitude_deg"], v["longitude_deg"], v["altitude_indicated_ft"],
+                       v["kias"], v["roll_deg"])
+            if not all(type(x) in (int, float) and math.isfinite(x) for x in numbers):
+                return self.fail("Invalid measured value")
+            if self.previous is not None:
+                if not (sim > self.previous[0] and frame > self.previous[1]):
+                    return self.fail("Nonincreasing telemetry")
+                if sim - self.previous[0] > .5:
+                    return self.fail("Telemetry gap")
+            if v["paused"] or v["on_ground"]:
+                return self.fail("Pause or ground contact")
+            self.previous = (sim, frame)
+            self.samples += 1
+            on_pattern = bool(self.reached)
+            if on_pattern:
+                err = abs(v["altitude_indicated_ft"] - self.altitude_ft)
+                self.max_altitude_error_ft = max(self.max_altitude_error_ft, err)
+                self.max_bank_seen_deg = max(self.max_bank_seen_deg, abs(v["roll_deg"]))
+                if err > self.altitude_tol_ft:
+                    return self.fail("Altitude outside tolerance on the pattern")
+                if not self.kias_band[0] <= v["kias"] <= self.kias_band[1]:
+                    return self.fail("Speed outside band on the pattern")
+                if abs(v["roll_deg"]) > self.max_bank_deg:
+                    return self.fail("Bank beyond limit on the pattern")
+            w = self.waypoints[self.index]
+            d = distance_nm(v["latitude_deg"], v["longitude_deg"], w.lat, w.lon)
+            self.closest_nm = min(self.closest_nm, d)
+            if d <= self.pass_nm:
+                self.reached.append({"waypoint": w.name, "sim_time_s": sim, "distance_nm": d,
+                                     "altitude_ft": v["altitude_indicated_ft"], "kias": v["kias"]})
+                self.index += 1
+                self.closest_nm = float("inf")
+                if self.index == len(self.waypoints):
+                    self.outcome = "PASS"
+        except (KeyError, TypeError, ValueError) as error:
+            return self.fail("Malformed snapshot: %s" % error)
+        return self.report()
+
+    def report(self):
+        return {"outcome": self.outcome, "reason": self.reason, "samples": self.samples,
+                "reached": list(self.reached), "next_index": self.index,
+                "max_altitude_error_ft": self.max_altitude_error_ft,
+                "max_bank_deg": self.max_bank_seen_deg}

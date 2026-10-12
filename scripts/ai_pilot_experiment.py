@@ -22,10 +22,18 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from services.ai_pilot.experiment import BridgeClient, Recorder, Scenario, digest, score_trace
 from services.ai_pilot.control_ownership import ControllerLock
+from services.ai_pilot.aircraft_profiles import PROFILES
 
 
-def inventory(xplane, include_landing=False, include_surface=False, include_mission=False):
-    aircraft = xplane / "Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf"
+AIRCRAFT_PATHS = {
+    "C172SP": "Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
+    "C182T": "Aircraft/CAP/Cessna 182T NAV III/Cessna_182T_G1000.acf",
+}
+
+
+def inventory(xplane, include_landing=False, include_surface=False, include_mission=False,
+              profile="C172SP"):
+    aircraft = xplane / AIRCRAFT_PATHS[profile]
     plugins = xplane / "Resources/plugins/PythonPlugins"
     def git(*args):
         return subprocess.check_output(["git", "-C", str(ROOT), *args], text=True).strip()
@@ -45,7 +53,7 @@ def inventory(xplane, include_landing=False, include_surface=False, include_miss
         "dirty": bool(git("status", "--porcelain")),
         "source_sha256": {str(p.relative_to(ROOT)): digest(p) for p in sources + [Path(__file__), ROOT / "services/ai_pilot/experiment.py"]},
         "installed_bridge_sha256": {p.name: digest(p) if p.exists() else None for p in installed},
-        "aircraft": {"path": str(aircraft), "sha256": digest(aircraft)},
+        "aircraft": {"path": str(aircraft), "sha256": digest(aircraft), "profile": profile},
         "scenery_packs_sha256": digest(xplane / "Custom Scenery/scenery_packs.ini"),
         "preferences_sha256": {
             name: digest(xplane / "Output/preferences" / name)
@@ -60,11 +68,15 @@ def inventory(xplane, include_landing=False, include_surface=False, include_miss
 def stage_observer(destination, qualification_aircraft=None, mode="qualification",
                    runway="KMYF 28R"):
     """Stage an explicit observation or expiring laboratory installation."""
+    aircraft_sha256 = None
     if qualification_aircraft is not None:
-        from xplane.capvsar_qualification import STOCK_NAME, STOCK_SHA256
+        from xplane.capvsar_qualification import (BUILT_PACKAGE_NAMES, STOCK_NAME,
+                                                   aircraft_identity_ok)
         qualification_aircraft = qualification_aircraft.resolve()
-        if qualification_aircraft.name != STOCK_NAME or digest(qualification_aircraft) != STOCK_SHA256:
-            raise ValueError("Qualification requires the pinned stock C172 G1000")
+        if qualification_aircraft.name in BUILT_PACKAGE_NAMES:
+            aircraft_sha256 = digest(qualification_aircraft)
+        if not aircraft_identity_ok(qualification_aircraft, aircraft_sha256):
+            raise ValueError("Laboratory requires the pinned stock C172 G1000 or a built CAP package")
     destination.mkdir(parents=True, exist_ok=False)
     names = ("PI_capvsar_flight_control.py", "capvsar_flight_control_core.py",
              "capvsar_flight_control_mapping.py", "capvsar_telemetry.py", "capvsar_qualification.py")
@@ -78,6 +90,8 @@ def stage_observer(destination, qualification_aircraft=None, mode="qualification
               "secret": secrets.token_hex(32),
               "socket_path": f"/tmp/capvsar-flight-control-{session}.sock"}
     if qualification_aircraft is not None:
+        if aircraft_sha256:
+            config["aircraft_sha256"] = aircraft_sha256
         config.update(mode=mode, aircraft_path=str(qualification_aircraft),
                       expires_unix_s=time.time() + (14300 if mode == "mission" else 10800 if mode in ("landing", "surface") else 3600))
         if mode == "landing":
@@ -101,7 +115,7 @@ def observe(args):
     client = BridgeClient(config)
     with ControllerLock():
         manifest = {"purpose": "telemetry-qualification", "created_utc": datetime.now(timezone.utc).isoformat(),
-                    "session": config["session"], "inventory": inventory(args.xplane),
+                    "session": config["session"], "inventory": inventory(args.xplane, profile=args.profile),
                     "telemetry": client.request("manifest"),
                     "criteria_status": "No flight scoring; read-only readiness trial"}
         inv = manifest["inventory"]
@@ -117,7 +131,7 @@ def observe(args):
             while time.monotonic() < end:
                 snap = client.request("snapshot")
                 if (snap["session"] != config["session"] or snap["aircraft"]["path"] != inv["aircraft"]["path"]
-                        or snap["aircraft"]["name"] != Scenario().aircraft_name):
+                        or snap["aircraft"]["name"] != PROFILES[args.profile].acf_name):
                     raise ValueError("Unexpected aircraft or session")
                 if snap["age_s"] < 0 or snap["age_s"] > 0.5:
                     raise ValueError("Stale telemetry snapshot")
@@ -160,6 +174,7 @@ def main():
     read.add_argument("--xplane", type=Path, default=Path.home() / "X-Plane 12")
     read.add_argument("--output", type=Path, required=True)
     read.add_argument("--seconds", type=float, default=30)
+    read.add_argument("--profile", choices=sorted(PROFILES), default="C172SP")
     score = commands.add_parser("score")
     score.add_argument("trace", type=Path)
     stage = commands.add_parser("stage-observer")

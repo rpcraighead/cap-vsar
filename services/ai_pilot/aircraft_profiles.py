@@ -74,6 +74,10 @@ class AircraftProfile:
     missed_flap_ratio: float = 1/3
     ils_flap_ratio: float = 1/3
     min_roll_rpm: float = 1800.         # engine must exceed this 5 s into the roll
+    # taxi throttle law: base + gain * (target - groundspeed), clamped to [0, max]
+    taxi_base_throttle: float = .16
+    taxi_speed_gain: float = .08
+    taxi_max_throttle: float = .28
     cruise_base_throttle: float = .55
     ils_base_throttle: float = .48
     approach_base_throttle: float = .28
@@ -109,6 +113,11 @@ class AircraftProfile:
         if (self.takeoff_flap_ratio
                 and self.flap_retract_kias > self.vfe_for(self.takeoff_flap_ratio)):
             raise ValueError("takeoff flaps would be carried above Vfe")
+
+    def taxi_throttle(self, target_mps: float, groundspeed_mps: float) -> float:
+        return min(max(self.taxi_base_throttle
+                       + self.taxi_speed_gain * (target_mps - groundspeed_mps), 0.),
+                   self.taxi_max_throttle)
 
     def vfe_for(self, ratio: float) -> float:
         """Vfe of the smallest handbook stage at or above `ratio`."""
@@ -192,6 +201,9 @@ C182T = AircraftProfile(
     touchdown_max_groundspeed_kt=80.,
     missed_flap_ratio=2/3, ils_flap_ratio=1/3,
     min_roll_rpm=2000.,
+    # The C172 taxi law, unchanged; the IO-540's idle thrust and the governed
+    # propeller will move it (measure on the first taxi-only trial).
+    taxi_base_throttle=.16, taxi_speed_gain=.08, taxi_max_throttle=.28,
     cruise_base_throttle=.55, ils_base_throttle=.48, approach_base_throttle=.28,
     envelope_kias=(80., 140.),
     tuning_validated=False,

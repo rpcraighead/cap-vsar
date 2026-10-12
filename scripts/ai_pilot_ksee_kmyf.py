@@ -18,6 +18,7 @@ from services.ai_pilot.ksee_kmyf_mission import MissionController, STAGES
 from services.ai_pilot.landing_trial import LandingObserver
 from xplane.capvsar_landing import RUNWAYS
 from scripts.ai_pilot_experiment import inventory
+from services.ai_pilot.aircraft_profiles import PROFILES
 
 
 def run(args):
@@ -26,7 +27,9 @@ def run(args):
     config = json.loads(args.config.read_text())
     if config.get("mode") != "mission":
         raise ValueError("Requires expiring mission bridge")
-    inv = inventory(args.xplane, include_mission=True)
+    profile = PROFILES[args.profile]
+    inv = inventory(args.xplane, include_mission=True, profile=args.profile)
+    inv["profile_tuning_validated"] = profile.tuning_validated
     for name, installed in inv["installed_bridge_sha256"].items():
         if installed != inv["source_sha256"]["xplane/"+name]:
             raise ValueError("Installed mission bridge mismatch: "+name)
@@ -39,8 +42,8 @@ def run(args):
                 "simulated_clearance": "Departure and approach self-vector; no ATC service"}
     recorder = Recorder(args.output, manifest)
     client = BridgeClient(config)
-    controller = MissionController(args.start_stage)
-    observer = LandingObserver(0., 0., "KMYF 28R")
+    controller = MissionController(args.start_stage, profile=profile)
+    observer = LandingObserver(0., 0., "KMYF 28R", profile=profile)
     result = {"outcome": "FAIL", "reason": "Setup incomplete"}
     session = secrets.token_hex(16)
     seq = 0
@@ -176,6 +179,8 @@ def main():
     p.add_argument("--stop-at", choices=STAGES)
     p.add_argument("--max-wall-s", type=float, default=3600)
     p.add_argument("--rollout-only", action="store_true")
+    p.add_argument("--profile", choices=sorted(PROFILES), default="C172SP",
+                   help="aircraft profile; C182T tuning is not yet validated")
     a = p.parse_args()
     with ControllerLock():
         return run(a)
