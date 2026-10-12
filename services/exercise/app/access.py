@@ -432,7 +432,10 @@ def save_exercise_setup(name: str, num_aircraft: int, aircraft_list: list[dict],
         for ac_idx, ac in enumerate(aircraft_list, 1):
             ac_id = ac.get("id") or f"ac-{ac_idx}"
             callsign = ac.get("callsign") or f"CAP {420 + ac_idx}"
-            tail = ac.get("tail") or "CAP 487"
+            tail = (ac.get("tail") or "").strip()
+            # A tail number is shown only when there is one; this used to fall
+            # back to a fixed callsign and print "CAP 487 (CAP 487)" on badges.
+            tail_part = f" ({tail})" if tail and tail != callsign else ""
             df_model = ac.get("df_model") or "Becker SAR-DF 517"
             num_suffix = callsign.split()[-1] if " " in callsign else str(ac_idx)
 
@@ -440,19 +443,19 @@ def save_exercise_setup(name: str, num_aircraft: int, aircraft_list: list[dict],
             if "pilot" in crew_roles:
                 new_roster.append((
                     f"r-plt-{uuid.uuid4().hex[:6]}", f"PLT-{num_suffix}", "aircrew",
-                    f"{callsign} ({tail}) SAR Mission Pilot", callsign, ac_id, "Mission Pilot",
+                    f"{callsign}{tail_part} SAR Mission Pilot", callsign, ac_id, "Mission Pilot",
                     secrets.token_hex(16).upper(), "/base", now
                 ))
             if "observer" in crew_roles:
                 new_roster.append((
                     f"r-obs-{uuid.uuid4().hex[:6]}", f"OBS-{num_suffix}", "aircrew",
-                    f"{callsign} ({tail}) Mission Observer [{df_model}]", callsign, ac_id, "Mission Observer",
+                    f"{callsign}{tail_part} Mission Observer [{df_model}]", callsign, ac_id, "Mission Observer",
                     secrets.token_hex(16).upper(), "/base", now
                 ))
             if "scanner" in crew_roles:
                 new_roster.append((
                     f"r-scn-{uuid.uuid4().hex[:6]}", f"SCN-{num_suffix}", "aircrew",
-                    f"{callsign} ({tail}) Mission Scanner", callsign, ac_id, "Mission Scanner",
+                    f"{callsign}{tail_part} Mission Scanner", callsign, ac_id, "Mission Scanner",
                     secrets.token_hex(16).upper(), "/base", now
                 ))
 
