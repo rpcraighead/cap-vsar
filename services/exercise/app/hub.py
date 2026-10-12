@@ -28,8 +28,18 @@ class Hub:
         self.sortie: dict | None = None
         self.scenario: dict | None = None
         self.truth_clients: set[WebSocket] = set()   # sockets that logged in as instructor
+        # D5.10: one presence record per membership (keyed by the session's
+        # roster code prefix, e.g. OBS-487): the page it is on, when it was
+        # last seen, and the checks the participant has attested to.
+        self.presence: dict[str, dict] = {}
         self._lock_loop = None
         self._lock: asyncio.Lock | None = None
+
+    def touch_presence(self, key: str, **fields) -> dict:
+        rec = self.presence.setdefault(key, {"checks": {}, "first_seen": time.time()})
+        rec.update(fields)
+        rec["last_seen"] = time.time()
+        return rec
 
     def sortie_lock(self) -> asyncio.Lock:
         """The lock that serialises start, stop, reveal, effects and scenario delete (X2-9).

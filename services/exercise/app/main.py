@@ -164,7 +164,7 @@ async def validation_error(request: Request, exc: RequestValidationError):
 # C15-1: the routes live in routers/, grouped by what they are about. Order
 # matters in one place only - the static mount and the page routes come after
 # the API routers, exactly as they did when this was one file.
-from .routers import (auth, comms, pages, scenarios, sorties, system,
+from .routers import (auth, comms, pages, ready, scenarios, sorties, system,
                       telemetry)                                # noqa: E402
 
 for _router in (scenarios.router, sorties.router, telemetry.router,
@@ -173,6 +173,7 @@ for _router in (scenarios.router, sorties.router, telemetry.router,
 
 app.include_router(radio.router)
 app.include_router(auth.router)
+app.include_router(ready.router)
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 

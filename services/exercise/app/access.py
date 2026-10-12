@@ -32,12 +32,67 @@ from fastapi import HTTPException, Request
 
 TOKEN_HEADER = "X-CAPVSAR-Token"
 SESSION_COOKIE = "capvsar_session"
-ROLES = ("instructor", "base", "aircrew", "ground_team", "plugin")
+ROLES = ("instructor", "evaluator", "base", "aircrew", "ground_team", "plugin")
+
+# D5: seats are the unit of membership; the role is the permission class a
+# seat maps to. This is the only list of seats in the code. `kind` says what a
+# seat belongs to, which is what the Ready room groups tiles by.
+SEATS: dict[str, dict] = {
+    "director":  {"role": "instructor",  "label": "Exercise Director",     "kind": "exercise", "lands": "/instructor"},
+    "ic":        {"role": "base",        "label": "Incident Commander",    "kind": "base",     "lands": "/base?mode=ic"},
+    "aobd":      {"role": "base",        "label": "Air Ops Branch Director", "kind": "base",   "lands": "/base?mode=aobd"},
+    "mro":       {"role": "base",        "label": "Mission Radio Operator", "kind": "base",    "lands": "/radio"},
+    "base":      {"role": "base",        "label": "Base staff",            "kind": "base",     "lands": "/base"},
+    "evaluator": {"role": "evaluator",   "label": "Evaluator (SET)",       "kind": "exercise", "lands": "/debrief"},
+    "pilot":     {"role": "aircrew",     "label": "Mission Pilot",         "kind": "aircraft", "lands": "/base"},
+    "observer":  {"role": "aircrew",     "label": "Mission Observer",      "kind": "aircraft", "lands": "/base"},
+    "scanner":   {"role": "aircrew",     "label": "Mission Scanner",       "kind": "aircraft", "lands": "/base"},
+    "udf":       {"role": "ground_team", "label": "Ground team / UDF",     "kind": "ground",   "lands": "/radio"},
+    "station":   {"role": "plugin",      "label": "Simulator station",     "kind": "aircraft", "lands": ""},
+}
+
+
+def seat_of(row: dict) -> str:
+    """The seat a roster row holds (D5). Rows written before the `seat`
+    column get it from their title and assigned name, the same words the
+    radio's crew classification already keys on; rows with a `seat` field
+    use it."""
+    seat = (row.get("seat") or "").strip().lower()
+    if seat in SEATS:
+        return seat
+    role = row.get("role", "")
+    text = " ".join(str(row.get(k) or "") for k in ("title", "assigned_name")).upper()
+    if role == "instructor":
+        return "director"
+    if role == "evaluator":
+        return "evaluator"
+    if role == "base":
+        if "RADIO" in text or "MRO" in text:
+            return "mro"
+        if "AIR OP" in text or "AOBD" in text:
+            return "aobd"
+        if "INCIDENT" in text or " IC" in text or text.startswith("IC"):
+            return "ic"
+        return "base"
+    if role == "aircrew":
+        if "PILOT" in text:
+            return "pilot"
+        if "SCANNER" in text:
+            return "scanner"
+        return "observer"
+    if role == "ground_team":
+        return "udf"
+    if role == "plugin":
+        return "station"
+    return "base"
+
 
 # Which roles/tokens satisfy an access requirement.
 # An instructor may act in any role; base staff can direct ground teams.
 SATISFIED_BY: dict[str, tuple[str, ...]] = {
     "instructor": ("instructor",),
+    # D5: a read-only seat; satisfies reads (any_role) and nothing else.
+    "evaluator": ("evaluator", "instructor"),
     "base": ("base", "instructor"),
     "aircrew": ("aircrew", "instructor"),
     "ground_team": ("ground_team", "base", "instructor"),

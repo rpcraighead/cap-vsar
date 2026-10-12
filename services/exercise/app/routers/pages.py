@@ -86,6 +86,14 @@ def index(request: Request):
     return FileResponse(STATIC / "index.html")
 
 
+@router.get("/ready")
+def ready_room(request: Request):
+    """The Ready room (UX phase 2 reference screen): who is here, who is ready."""
+    if not access.get_session_from_request(request) and not access.dev_open():
+        return RedirectResponse("/login?next=/ready", status_code=302)
+    return FileResponse(STATIC / "ready.html")
+
+
 @router.get("/debrief")
 def debrief(request: Request):
     """Replay a recorded sortie against beacon truth. The product, per the plan."""

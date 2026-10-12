@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ready room · CAP V-SAR</title>
+<link rel="stylesheet" href="/static/vendor/fonts/fonts.css">
+<link rel="stylesheet" href="/static/tokens.css">
+<link rel="stylesheet" href="/static/shell.css">
+<style>
+  .summary { display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; }
+  .summary .hero { font-family: var(--font-data); font-size: var(--fs-2xl); font-weight: 500; line-height: 1; }
+  .summary .hero small { font-size: var(--fs-md); color: var(--muted); font-weight: 400; }
+  .summary .bar { flex: 1; min-width: 160px; height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+  .summary .bar i { display: block; height: 100%; background: var(--good); width: 0; transition: width var(--motion); }
+  .blocking { margin: var(--sp-3) 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+  .blocking li { font-size: var(--fs-xs); color: var(--ink-2); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; }
+  .brief dt { color: var(--muted); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .08em; margin-top: var(--sp-3); }
+  .brief dd { margin: 2px 0 0; }
+  .brief .alert { padding: var(--sp-3); border-left: 3px solid var(--map-alert); background: var(--surface-2); border-radius: 0 var(--radius) var(--radius) 0; }
+  .chan { display: grid; grid-template-columns: auto 1fr; gap: 2px var(--sp-3); font-size: var(--fs-sm); }
+  .chan b { font-family: var(--font-data); font-weight: 500; }
+  .actions { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-4); }
+  .actions .btn { justify-content: center; }
+  .empty { color: var(--muted); font-size: var(--fs-sm); }
+</style>
+</head>
+<body>
+<header id="shell"></header>
+<main class="page two">
+  <section>
+    <div class="card" id="readiness">
+      <h2>Readiness <span class="count" id="count">—</span></h2>
+      <div class="summary">
+        <div class="hero"><span id="readyN">0</span><small> / <span id="totalN">0</span> ready</small></div>
+        <div class="bar"><i id="bar"></i></div>
+        <span class="pill" id="sortiePill"><span class="dot"></span> standing by</span>
+      </div>
+      <ul class="blocking" id="blocking"></ul>
+    </div>
+    <div id="groups" style="margin-top: var(--sp-4)"></div>
+  </section>
+  <aside>
+    <div class="card brief">
+      <h2>Briefing pack</h2>
+      <dl style="margin:0">
+        <dt>Exercise</dt><dd id="exName">—</dd>
+        <dt>Scenario</dt><dd id="scName" class="empty">no scenario selected</dd>
+        <dt>Alert</dt><dd><div class="alert" id="alert">—</div></dd>
+        <dt>Channel plan</dt><dd><div class="chan" id="channels"></div></dd>
+      </dl>
+      <div class="actions" id="actions"></div>
+    </div>
+    <div class="card" style="margin-top: var(--sp-4)">
+      <h2>Lobby</h2>
+      <ul class="log" id="lobby"><li class="empty">The lobby log opens with the sortie.</li></ul>
+    </div>
+  </aside>
+</main>
+<script src="/static/shell.js"></script>
+<script src="/static/ready.js"></script>
+</body>
+</html>

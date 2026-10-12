@@ -3,6 +3,12 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-10-11 — D5 seats, D6 tokens and shell, the Ready room reference screen
+
+Status: **implemented on local `main` and pushed.**
+
+`docs/DECISIONS_2026-10-11.md`: D5 (ten seats as the unit of membership, short codes plus link tokens, per-request role resolution, a read-only `evaluator` role, presence and readiness checks per seat) and D6 (one `tokens.css`, dark-first navy-tinted neutrals, validated categorical slots for aircraft 1-4, reserved status and truth colours, IBM Plex Sans and JetBrains Mono vendored, one shell header). Code: `access.SEATS` and `seat_of()`, `evaluator` in `ROLES`/`SATISFIED_BY`, `hub.presence` fed by `/ws?page=`, `GET /api/ready` and `POST /api/ready/check`, `/ready` on the shell (`ready.html`, `ready.js`, built with `textContent` only), `tests/test_ready.py` (8). Seat and slot derivation reads today's roster rows; the `seat`/`exercise_id`/`short_code` columns are UX phase 1.
+
 ## 2026-10-11 — UI walkthrough, UX proposal, CalTopo integration plan
 
 Status: **review documents written; four defects fixed on local `main`** (see the push note on the entry below).

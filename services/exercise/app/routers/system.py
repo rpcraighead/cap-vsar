@@ -114,13 +114,18 @@ async def ws(sock: WebSocket):
     # Both lookups hit SQLite, so they run in a worker thread (X2-5).
     def admit():
         access.enforce_read(sock)
-        return access.is_instructor(sock)
+        return access.is_instructor(sock), access.get_session_from_request(sock)
     try:
-        sees_truth = await run_in_threadpool(admit)
+        sees_truth, sess = await run_in_threadpool(admit)
     except HTTPException:
         await sock.close(code=1008)
         return
     await sock.accept()
+    # D5.10: the socket is how the Ready room knows who is here. Anonymous
+    # viewers on an open dev console are one shared "DEV" presence.
+    presence_key = (sess or {}).get("code") or "DEV"
+    hub.touch_presence(presence_key, page=sock.query_params.get("page", ""),
+                       role=(sess or {}).get("role", ""), socket=True)
     hub.clients.add(sock)
     if sees_truth:
         hub.truth_clients.add(sock)
@@ -135,4 +140,6 @@ async def ws(sock: WebSocket):
     finally:
         hub.clients.discard(sock)
         hub.truth_clients.discard(sock)
+        if presence_key in hub.presence:
+            hub.touch_presence(presence_key, socket=False)
 
