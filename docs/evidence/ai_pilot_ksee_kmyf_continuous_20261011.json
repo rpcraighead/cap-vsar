@@ -1,0 +1,79 @@
+{
+  "result": "GATE_FAIL",
+  "trace": {
+    "path": "~/.cache/capvsar/ai-pilot/ksee_kmyf_continuous_20261011_trial3.jsonl",
+    "sha256": "c606976e4e2c1621aa07370ce08565cbf4d769f0fe153486ac7f05bdf78aa868",
+    "samples": 20791
+  },
+  "chart_cycle": "FAA 2610",
+  "sim_cifp_cycle": "2406",
+  "surface_milestones": [
+    "27R lined up",
+    "300 ft AGL airborne handoff",
+    "D8 hold short",
+    "KSEE taxi began"
+  ],
+  "departure_climb": {
+    "takeoff_trace": {
+      "path": "~/.cache/capvsar/ai-pilot/ksee_kmyf_continuous_20261011_trial3.jsonl",
+      "sha256": "c606976e4e2c1621aa07370ce08565cbf4d769f0fe153486ac7f05bdf78aa868",
+      "samples": 20791
+    },
+    "distance_to_2000_ft_nm": 2.805,
+    "cumulative_gradient_ft_per_nm": 572.5,
+    "lowest_half_nm_gradient_ft_per_nm": 528.8,
+    "altitude_at_lowest_window_ft": 1771.8,
+    "published_minimum_ft_per_nm": 500,
+    "qualification": "SAMPLED_GRADIENT_MET"
+  },
+  "final_approach_segment_altitudes": {
+    "mibby": {
+      "floor_ft": 4200,
+      "sampled_low_ft": 4219.4,
+      "fix_crossing_ft": 4312.0
+    },
+    "nesty": {
+      "floor_ft": 3600,
+      "sampled_low_ft": 3665.7,
+      "fix_crossing_ft": 3716.7
+    },
+    "penyy": {
+      "floor_ft": 2500,
+      "sampled_low_ft": 2556.9,
+      "fix_crossing_ft": 2642.5
+    }
+  },
+  "ils_handoff": {
+    "sim_time_s": 2384.82,
+    "altitude_ft": 909.2,
+    "localizer_dots": -0.1,
+    "glideslope_dots": -0.25
+  },
+  "touchdown": {
+    "sim_time_s": 2462.41015625,
+    "along_m": 403.7686036497263,
+    "cross_m": -0.15436017572264404,
+    "agl_ft": 0.43075151770591735,
+    "kias": 48.6765251159668,
+    "groundspeed_kt": 52.49738692535401,
+    "vvi_fpm": -119.24640655517578,
+    "frame": 167113,
+    "pre_touch_pitch_deg": 5.461616039276123,
+    "pre_touch_heading_deg": 295.9416809082031,
+    "pre_touch_roll_deg": 0.1420729160308838,
+    "wind_mps": 0.0,
+    "wind_from_true_deg": 0.0
+  },
+  "runway_stop": {
+    "along_m": 549.0,
+    "cross_m": 1.3,
+    "groundspeed_mps": 1.29
+  },
+  "missed_approaches": [],
+  "limitations": [
+    "No live ATC or clearance; route authority is simulated.",
+    "Installed navigation cycle 2406 predates FAA chart cycle 2610.",
+    "Visual runway references and ILS audio ident were not machine verified.",
+    "Runway exit and taxi to parking are planned separately."
+  ]
+}

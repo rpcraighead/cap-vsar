@@ -16,6 +16,12 @@ from services.ai_pilot.control_ownership import ControllerLock
 from services.ai_pilot.experiment import BridgeClient, Recorder, digest
 from services.ai_pilot.ksee_kmyf_mission import MissionController, STAGES
 from services.ai_pilot.landing_trial import LandingObserver
+from services.ai_pilot.mission_retask import MissionRetaskServer
+from services.ai_pilot.ground_guidance import GroundObservation, TaxiGuidance
+from services.ai_pilot.ksee_surface import read_survey
+from services.ai_pilot.runway_entry import RunwayEntryGuidance
+from services.ai_pilot.takeoff_guidance import TakeoffGuidance, TakeoffObservation
+from services.ai_pilot.taxi import ClearanceSource, TaxiCoordinator, TaxiPhase
 from xplane.capvsar_landing import RUNWAYS
 from scripts.ai_pilot_experiment import inventory
 from services.ai_pilot.aircraft_profiles import PROFILES
@@ -24,6 +30,8 @@ from services.ai_pilot.aircraft_profiles import PROFILES
 def run(args):
     if args.rollout_only and args.start_stage != "landing":
         raise ValueError("Rollout-only continuation requires landing stage")
+    if args.from_parking and (args.start_stage != "runway_climb" or args.rollout_only):
+        raise ValueError("Parking start requires the complete departure sequence")
     config = json.loads(args.config.read_text())
     if config.get("mode") != "mission":
         raise ValueError("Requires expiring mission bridge")
@@ -40,10 +48,33 @@ def run(args):
                 "inventory": inv, "start_stage": args.start_stage,
                 "chart_cycle": "FAA 2610", "sim_cifp_cycle": "2406",
                 "simulated_clearance": "Departure and approach self-vector; no ATC service"}
-    recorder = Recorder(args.output, manifest)
     client = BridgeClient(config)
+    retask = MissionRetaskServer(config["socket_path"]+"-retask", config["secret"])
     controller = MissionController(args.start_stage, profile=profile)
     observer = LandingObserver(0., 0., "KMYF 28R", profile=profile)
+    survey = None
+    ground_stage = None
+    ground_start_sim = None
+    climb_distance_nm = 0.
+    last_climb_sim = None
+    if args.from_parking:
+        apt = args.xplane / "Global Scenery/Global Airports/Earth nav data/apt.dat"
+        survey = read_survey(apt)
+        route, points = survey.taxi_route()
+        taxi = TaxiCoordinator(route.start, towered=True)
+        taxi.load_route(route)
+        taxi.authorize_taxi(ClearanceSource.ATC)  # Explicit simulated authority.
+        taxi_guide = TaxiGuidance(taxi, route, points, corridor_half_width_m=10.,
+                                   profile=profile)
+        entry_guide = RunwayEntryGuidance(taxi, survey.entry_geometry(), profile=profile)
+        heading, length, _ = survey.runway_frame()
+        takeoff = TakeoffGuidance(taxi, runway="27R", runway_heading_true_deg=heading,
+                                  runway_length_m=length, field_elevation_ft=388., profile=profile)
+        ground_stage = "settle"
+        manifest["from_parking"] = True
+        manifest["apt_dat_sha256"] = digest(apt)
+        manifest["simulated_authority"] = ["KSEE taxi to D8", "KSEE 27R takeoff"]
+    recorder = Recorder(args.output, manifest)
     result = {"outcome": "FAIL", "reason": "Setup incomplete"}
     session = secrets.token_hex(16)
     seq = 0
@@ -52,6 +83,7 @@ def run(args):
     previous_frame = None
     previous_stage = controller.stage
     try:
+        retask.__enter__()
         status = client.request("fault_pause", reason="KSEE-KMYF mission setup")
         deadline = time.monotonic()+3
         while not status["pause_confirmed"]:
@@ -59,7 +91,8 @@ def run(args):
                 raise ValueError("Setup pause not confirmed")
             time.sleep(.03)
             status = client.request("status")
-        reset = client.request("lab_reset", session=session)
+        reset = client.request("lab_reset", session=session,
+                               **({"checkpoint": "KSEE parking"} if args.from_parking else {}))
         recorder.write("setup", reset)
         deadline = time.monotonic()+15
         while True:
@@ -74,6 +107,8 @@ def run(args):
             time.sleep(.1)
         controls = {"roll": .0, "pitch": .06, "yaw": .10, "throttle": 1.,
                     "flap": 0., "trim": max(-.6, min(.6, snap["controls"]["trim"])), "brake": 0.}
+        if args.from_parking:
+            controls.update(roll=0., pitch=0., yaw=0., throttle=0., brake=.35)
         if args.start_stage == "missed_runway":
             controls.update(pitch=.4, flap=1/3)
         if args.rollout_only:
@@ -103,10 +138,70 @@ def run(args):
                 if time.monotonic()-start_wall < .2:
                     continue
                 raise ValueError("Simulator paused during mission")
+            retask.apply_pending(controller, snap, recorder)
             samples += 1
-            if samples%5 == 0:
+            if samples%5 == 0 or ground_stage is not None:
                 recorder.write("snapshot", snap)
-            if args.rollout_only:
+            if ground_stage is not None:
+                if ground_start_sim is None:
+                    ground_start_sim = v["sim_time_s"]
+                position = survey.local((v["latitude_deg"], v["longitude_deg"]))
+                observation = GroundObservation(position.east_m, position.north_m,
+                                                v["heading_true_deg"], v["groundspeed_mps"],
+                                                bool(v["on_ground"]), bool(v["paused"]))
+                if ground_stage == "settle":
+                    if v["sim_time_s"]-ground_start_sim > 5:
+                        raise ValueError("KSEE parking settle deadline exceeded")
+                    if (v["sim_time_s"]-ground_start_sim >= 1.5 and v["on_ground"]
+                            and v["groundspeed_mps"] < .5 and v["engine_running"]
+                            and v["engine_rpm"] >= 450):
+                        ground_stage = "taxi"
+                        recorder.write("milestone", {"name": "KSEE taxi began", "frame": snap["frame"]})
+                elif ground_stage == "taxi":
+                    guidance = taxi_guide.step(observation)
+                    if taxi_guide.fault:
+                        raise ValueError(taxi_guide.fault)
+                    controls = guidance.actuator_frame(snap["controls"]["trim"])
+                    if taxi.phase is TaxiPhase.HOLDING_SHORT_DEPARTURE:
+                        if v["groundspeed_mps"] > .5:
+                            raise ValueError("D8 hold stop not verified")
+                        recorder.write("milestone", {"name": "D8 hold short", "frame": snap["frame"]})
+                        taxi.authorize_departure_runway("27R", ClearanceSource.ATC, takeoff=True)
+                        ground_stage = "lineup"
+                elif ground_stage == "lineup":
+                    guidance = entry_guide.step(observation)
+                    if entry_guide.fault:
+                        raise ValueError(entry_guide.fault)
+                    controls = guidance.actuator_frame(snap["controls"]["trim"])
+                    if entry_guide.phase == "complete":
+                        recorder.write("milestone", {"name": "27R lined up", "frame": snap["frame"]})
+                        ground_stage = "takeoff"
+                else:
+                    if last_climb_sim is not None and not v["on_ground"]:
+                        climb_distance_nm += v["groundspeed_mps"] * max(0., v["sim_time_s"]-last_climb_sim)/1852.
+                    last_climb_sim = v["sim_time_s"]
+                    frame = survey._frame(survey.runway_ends["27R"], survey.runway_ends["9L"])
+                    along, cross = survey._coordinates(frame, (v["latitude_deg"], v["longitude_deg"]))
+                    takeoff_observation = TakeoffObservation(
+                        sim_time_s=v["sim_time_s"], along_runway_m=along,
+                        cross_runway_m=cross, heading_true_deg=v["heading_true_deg"],
+                        kias=v["kias"], groundspeed_mps=v["groundspeed_mps"],
+                        on_ground=bool(v["on_ground"]), agl_ft=v["agl_m"]*3.28084,
+                        altitude_msl_ft=v["altitude_msl_m"]*3.28084,
+                        climb_distance_nm=climb_distance_nm, pitch_deg=v["pitch_deg"],
+                        pitch_rate_dps=v["pitch_rate_dps"], roll_deg=v["roll_deg"],
+                        engine_rpm=v["engine_rpm"], flap_ratio=v["flap_actual"])
+                    guidance = takeoff.step(takeoff_observation)
+                    if guidance.intervention_required:
+                        raise ValueError("Takeoff intervention: "+guidance.reason)
+                    controls = guidance.actuator_frame(snap["controls"]["trim"])
+                    if guidance.phase == "climb" and takeoff_observation.agl_ft >= 300:
+                        recorder.write("milestone", {"name": "300 ft AGL airborne handoff",
+                                                      "frame": snap["frame"],
+                                                      "altitude_ft": v["altitude_indicated_ft"]})
+                        ground_stage = None
+                        controls = controller.step(snap)
+            elif args.rollout_only:
                 along, cross = RUNWAYS["KMYF 28R"].coordinates(v["latitude_deg"], v["longitude_deg"])
                 if not v["on_ground"] or abs(cross)>5 or along>RUNWAYS["KMYF 28R"].length_m-100:
                     raise ValueError("KMYF rollout runway corridor lost")
@@ -120,7 +215,9 @@ def run(args):
                 if report["outcome"] != "INCOMPLETE":
                     result = {**report, "samples": samples, "transitions": controller.transitions}
                     break
-            controls = controller.step(snap)
+                controls = controller.step(snap)
+            else:
+                controls = controller.step(snap)
             if samples%5 == 0:
                 recorder.write("command", {"frame": snap["frame"],
                                            "controls": controls,
@@ -135,7 +232,7 @@ def run(args):
                               "samples": samples, "transition": transition}
                     break
             if time.monotonic()-last_report_wall > 30:
-                print("PROGRESS", json.dumps({"stage": controller.stage,
+                print("PROGRESS", json.dumps({"stage": ground_stage or controller.stage,
                     "alt_ft": round(v["altitude_indicated_ft"]), "kias": round(v["kias"]),
                     "heading": round(v["heading_true_deg"]), "lat": round(v["latitude_deg"],5),
                     "lon": round(v["longitude_deg"],5), "sim_s": round(v["sim_time_s"])}), flush=True)
@@ -148,6 +245,8 @@ def run(args):
                   "transitions": controller.transitions}
         recorder.write("intervention", result)
     finally:
+        if retask.thread is not None:
+            retask.__exit__(None, None, None)
         try:
             status = client.request("fault_pause", reason="KSEE-KMYF trial ended")
             deadline = time.monotonic()+2
@@ -181,6 +280,7 @@ def main():
     p.add_argument("--rollout-only", action="store_true")
     p.add_argument("--profile", choices=sorted(PROFILES), default="C172SP",
                    help="aircraft profile; C182T tuning is not yet validated")
+    p.add_argument("--from-parking", action="store_true")
     a = p.parse_args()
     with ControllerLock():
         return run(a)

@@ -150,7 +150,38 @@ visual references at decision altitude also limit what can be claimed. The
 independent fragment scorer and hashes are in
 [the flight evidence](evidence/ai_pilot_ksee_kmyf_20261011.json).
 
-The next controller interface should accept bounded, authenticated heading,
-direct-to and altitude changes during flight. This attended runner still
-pauses for route-code changes; live vector reassignment has not yet been
-implemented or qualified.
+The attended runner now has a local, authenticated interface for bounded
+magnetic-heading, direct-BAKEL and altitude changes above 3,000 ft during
+en-route segments. Each accepted task is recorded against the live telemetry
+frame. Its command validation passed local tests; an in-simulator no-pause
+retask is still required for qualification.
+
+## KMYF runway exit and taxi-to-parking plan
+
+The selected simulator parking destination is **KMYF GA11** (32.813665 N,
+117.140055 W), near the south-side FBO area. This is a planned stand, not a
+claim that a real parking space is assigned or clear. The route was surveyed
+against the installed Global Airports taxi network and the [FAA KMYF airport
+diagram](https://aeronav.faa.gov/d-tpp/2610/05401AD.PDF). The arrival taxi
+will be scored only after the airplane is stopped or at a controlled taxi
+speed on 28R, with brakes and nosewheel steering available.
+
+1. Continue along 28R centerline to the **C exit** at network node 220,
+   approximately 662 m from the 28R physical threshold. Turn left to node
+   221 and continue to node 222. Confirm the entire airplane is clear of 28R.
+2. Stop before **28L** at node 222. Obtain and record a specific simulated
+   crossing clearance for 28L; a general taxi instruction does not authorize
+   that crossing. Cross straight via node 210 (28L centerline) to node 211,
+   then confirm the whole airplane is clear of 28L before continuing.
+3. With separate simulated taxi authority, follow nodes
+   **211–163–164–165–21–22**, then the approximately 39 m apron connector
+   to GA11. Stop at the stand, set the parking brake, release control
+   overrides and record position, heading, speed, clearance events, runway
+   occupancy, and the full taxi trace.
+
+The node sequence is a **proposed simulator route**, not yet a taxi-control
+qualification. The first rollout stopped about 104 m before exit C. Before
+an attended taxi run, verify the actual C hold markings and GA11 connector
+visually, confirm the stand is free, and reject any route that crosses a
+different runway polygon or differs from the pinned scenery. A bolter or
+go-around leaves this taxi plan inactive until a subsequent landing.
