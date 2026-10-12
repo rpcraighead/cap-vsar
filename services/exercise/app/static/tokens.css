@@ -1,0 +1,100 @@
+/* CAP V-SAR design tokens (docs/DECISIONS_2026-10-11.md, D6).
+ *
+ * One file, referenced by every page in the console, the radio and the
+ * planner (the planner holds a byte-identical copy; a test keeps them equal).
+ * Dark is the default because the sim room and the base at night are dark;
+ * light is opted into with <html data-theme="light">. Colour values for data
+ * (series, status) are the validated reference palette from the dataviz
+ * method; they were checked against these surfaces and must not be edited by
+ * eye - re-run the validator. Hue carries identity only for aircraft and
+ * status; everything else is ink on surface.
+ */
+:root {
+  color-scheme: dark;
+
+  /* surfaces and ink */
+  --bg:            #0e1117;   /* page plane */
+  --surface:       #161b22;   /* cards, header, map chrome; also the chart surface */
+  --surface-2:     #1d242e;   /* nested panels, table stripes, inputs */
+  --line:          #2a3340;   /* hairlines, borders */
+  --line-strong:   #3b4656;
+  --ink:           #e6ebf2;   /* primary text */
+  --ink-2:         #b7c1cf;   /* secondary text */
+  --muted:         #8b97a8;   /* labels, axis, placeholders */
+  --accent:        #8fb3e6;   /* links, focus, selected tab (brand steel blue) */
+  --accent-ink:    #0e1117;   /* text on an accent fill */
+
+  /* status: reserved, never reused for a series; always with icon + label */
+  --good:          #0ca30c;
+  --warning:       #fab219;
+  --serious:       #ec835a;
+  --critical:      #d03b3b;
+  --info:          #63c7e6;
+
+  /* truth: the beacon and anything derived from it after reveal; nowhere else */
+  --truth:         #ff4fc8;
+
+  /* aircraft 1-4, fixed order, same slot on map, cards, charts and legends */
+  --ac-1:          #3987e5;
+  --ac-2:          #d95926;
+  --ac-3:          #199e70;
+  --ac-4:          #c98500;
+
+  /* map geometry */
+  --map-track:     var(--ink-2);
+  --map-bearing:   var(--muted);
+  --map-cut:       var(--serious);
+  --map-alert:     var(--warning);
+  --map-assign:    var(--accent);
+
+  /* type */
+  --font-ui:       'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-data:     'JetBrains Mono', ui-monospace, Consolas, monospace;
+  --fs-xs: 12px; --fs-sm: 13px; --fs-md: 14px; --fs-lg: 16px;
+  --fs-xl: 20px; --fs-2xl: 28px; --fs-hero: 44px;
+  --lh: 1.45;
+
+  /* space, shape, motion, layering */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+  --radius: 6px; --radius-lg: 10px;
+  --touch: 44px;
+  --focus: 0 0 0 3px color-mix(in srgb, var(--accent) 60%, transparent);
+  --motion: 150ms;
+  --z-map: 0; --z-panel: 10; --z-sheet: 20; --z-overlay: 30; --z-toast: 40;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg:          #f5f7fa;
+  --surface:     #ffffff;
+  --surface-2:   #eef2f7;
+  --line:        #cfd8e3;
+  --line-strong: #aab7c7;
+  --ink:         #1a2330;
+  --ink-2:       #3e4b5c;
+  --muted:       #5b6878;
+  --accent:      #2e5496;   /* CAP blue */
+  --accent-ink:  #ffffff;
+  --good:        #0ca30c;
+  --warning:     #fab219;
+  --serious:     #ec835a;
+  --critical:    #d03b3b;
+  --info:        #1f8fb0;
+  --truth:       #c21f8f;
+  --ac-1:        #2a78d6;
+  --ac-2:        #eb6834;
+  --ac-3:        #1baf7a;
+  --ac-4:        #eda100;
+}
+
+/* The wall board: read from across a room. Opted into with data-density="wall"
+   (set by the page, or automatically at 1900px and up by shell.css). */
+:root[data-density="wall"] {
+  --fs-xs: 16px; --fs-sm: 18px; --fs-md: 20px; --fs-lg: 24px;
+  --fs-xl: 30px; --fs-2xl: 42px; --fs-hero: 72px;
+  --sp-3: 16px; --sp-4: 24px; --sp-5: 32px; --sp-6: 48px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --motion: 0ms; }
+}
