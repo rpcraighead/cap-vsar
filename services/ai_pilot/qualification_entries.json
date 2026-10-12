@@ -1,0 +1,17 @@
+{
+  "schema": "capvsar.qualification-entries.v1",
+  "status": "Predeclared for the Sol campaign; engineering scenarios, not POH limits",
+  "baseline_repetitions": 10,
+  "disturbed_entries": [
+    {"name": "heading_left", "heading_offset": -10, "altitude_offset": 0, "speed_offset": 0},
+    {"name": "heading_right", "heading_offset": 10, "altitude_offset": 0, "speed_offset": 0},
+    {"name": "low", "heading_offset": 0, "altitude_offset": -150, "speed_offset": 0},
+    {"name": "high", "heading_offset": 0, "altitude_offset": 150, "speed_offset": 0},
+    {"name": "slow", "heading_offset": 0, "altitude_offset": 0, "speed_offset": -5},
+    {"name": "fast", "heading_offset": 0, "altitude_offset": 0, "speed_offset": 5},
+    {"name": "left_high_slow", "heading_offset": -10, "altitude_offset": 100, "speed_offset": -5},
+    {"name": "right_low_fast", "heading_offset": 10, "altitude_offset": -100, "speed_offset": 5},
+    {"name": "left_low_fast", "heading_offset": -10, "altitude_offset": -100, "speed_offset": 5},
+    {"name": "right_high_slow", "heading_offset": 10, "altitude_offset": 100, "speed_offset": -5}
+  ]
+}

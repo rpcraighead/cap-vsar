@@ -1,0 +1,192 @@
+{
+  "scope": "KMYF 28R stock C172 landing engineering trials",
+  "qualification_only": true,
+  "runs": [
+    {
+      "name": "26-crosswind-left12-45",
+      "trace_path": "/home/ron/.cache/capvsar/ai-pilot/kmyf-landing-trial-26-crosswind-left12-45-20261010.jsonl",
+      "trace_sha256": "6ce7b46af7f2bb3065f958361306f9dd8553d539c640c1dc3181a34fb54dc9fa",
+      "entry": {
+        "lateral_offset": 0.0,
+        "altitude_offset": 0.0,
+        "speed_offset": 0.0,
+        "wind_speed_kt": 12.0,
+        "wind_from_offset_deg": -45.0
+      },
+      "aircraft_sha256": "b9c3c35c956ac5bee8c74fc9cbf933c6ecdfab73db9ad22862022aa3a20ab847",
+      "scenery_sha256": "83e80cf7f26ac8292cdf998448f14a31b46f0e714050952bae78e42c5b7ada98",
+      "result": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1792,
+        "threshold": {
+          "sim_time_s": 269.8569641113281,
+          "along_m": 0.9997517146084633,
+          "cross_m": 0.3799351803275084,
+          "agl_ft": 37.918289151420595,
+          "kias": 64.10159301757812,
+          "groundspeed_kt": 57.305258761291505,
+          "flap_actual": 1.0
+        },
+        "touchdown": {
+          "sim_time_s": 285.17291259765625,
+          "along_m": 427.744153815468,
+          "cross_m": 0.934238938270056,
+          "agl_ft": 0.4925526190853119,
+          "kias": 46.857757568359375,
+          "groundspeed_kt": 44.6428626651001,
+          "vvi_fpm": -285.3264465332031,
+          "frame": 32710,
+          "pre_touch_pitch_deg": 5.488447666168213,
+          "pre_touch_heading_deg": 292.4274597167969,
+          "pre_touch_roll_deg": -1.1503126621246338,
+          "wind_mps": 4.312640190124512,
+          "wind_from_true_deg": 250.0450897216797
+        },
+        "last": {
+          "sim_time_s": 292.1891784667969,
+          "along_m": 513.5048620252937,
+          "cross_m": 1.6152835390548432,
+          "agl_ft": 0.10334835608482361,
+          "kias": 0.0,
+          "groundspeed_kt": 1.978827974357605
+        },
+        "flap_stages": [
+          "10deg",
+          "20deg",
+          "30deg"
+        ],
+        "max_brake": 0.3199999928474426,
+        "braked_samples": 112,
+        "max_flare_rebound_ft": 0.007409123535154549,
+        "flare_aileron_samples": 167,
+        "rollout_aileron_samples": 133,
+        "max_rollout_heading_error_deg": 2.826310212403655
+      }
+    },
+    {
+      "name": "27-crosswind-left12-45-repeat",
+      "trace_path": "/home/ron/.cache/capvsar/ai-pilot/kmyf-landing-trial-27-crosswind-left12-45-repeat-20261010.jsonl",
+      "trace_sha256": "1c3e90213441de26625a89047b6d2b934c81c3d3d592c634908ed3b76dd3e9ea",
+      "entry": {
+        "lateral_offset": 0.0,
+        "altitude_offset": 0.0,
+        "speed_offset": 0.0,
+        "wind_speed_kt": 12.0,
+        "wind_from_offset_deg": -45.0
+      },
+      "aircraft_sha256": "b9c3c35c956ac5bee8c74fc9cbf933c6ecdfab73db9ad22862022aa3a20ab847",
+      "scenery_sha256": "83e80cf7f26ac8292cdf998448f14a31b46f0e714050952bae78e42c5b7ada98",
+      "result": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1763,
+        "threshold": {
+          "sim_time_s": 366.6457824707031,
+          "along_m": 0.09653499130793511,
+          "cross_m": 0.6443609323686282,
+          "agl_ft": 37.900667452201844,
+          "kias": 64.08708953857422,
+          "groundspeed_kt": 57.333506817626954,
+          "flap_actual": 1.0
+        },
+        "touchdown": {
+          "sim_time_s": 382.42388916015625,
+          "along_m": 439.8324169020192,
+          "cross_m": 1.4620917878533817,
+          "agl_ft": 0.3500271143245697,
+          "kias": 46.462730407714844,
+          "groundspeed_kt": 43.98347687652588,
+          "vvi_fpm": -294.25469970703125,
+          "frame": 42251,
+          "pre_touch_pitch_deg": 5.348593711853027,
+          "pre_touch_heading_deg": 292.07196044921875,
+          "pre_touch_roll_deg": -1.2949832677841187,
+          "wind_mps": 4.2718658447265625,
+          "wind_from_true_deg": 250.0450897216797
+        },
+        "last": {
+          "sim_time_s": 389.4526062011719,
+          "along_m": 524.7661872993069,
+          "cross_m": 1.8835970263935167,
+          "agl_ft": 0.10014441077232361,
+          "kias": 0.0,
+          "groundspeed_kt": 1.8115008082294464
+        },
+        "flap_stages": [
+          "10deg",
+          "20deg",
+          "30deg"
+        ],
+        "max_brake": 0.3199999928474426,
+        "braked_samples": 109,
+        "max_flare_rebound_ft": 0.37125716308593937,
+        "flare_aileron_samples": 164,
+        "rollout_aileron_samples": 130,
+        "max_rollout_heading_error_deg": 3.22184854248178
+      }
+    },
+    {
+      "name": "28-calm-regression",
+      "trace_path": "/home/ron/.cache/capvsar/ai-pilot/kmyf-landing-trial-28-calm-regression-20261010.jsonl",
+      "trace_sha256": "74d9e7ef476171695814ea8a973f1f8bbc340e25f4ed58e6358d04662c5903e3",
+      "entry": {
+        "lateral_offset": 0.0,
+        "altitude_offset": 0.0,
+        "speed_offset": 0.0,
+        "wind_speed_kt": 0.0,
+        "wind_from_offset_deg": 0.0
+      },
+      "aircraft_sha256": "b9c3c35c956ac5bee8c74fc9cbf933c6ecdfab73db9ad22862022aa3a20ab847",
+      "scenery_sha256": "83e80cf7f26ac8292cdf998448f14a31b46f0e714050952bae78e42c5b7ada98",
+      "result": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1557,
+        "threshold": {
+          "sim_time_s": 454.834228515625,
+          "along_m": 0.6845107186258341,
+          "cross_m": -1.2594327933893623,
+          "agl_ft": 33.177926907463075,
+          "kias": 63.75845718383789,
+          "groundspeed_kt": 65.63233270263672,
+          "flap_actual": 1.0
+        },
+        "touchdown": {
+          "sim_time_s": 466.8631896972656,
+          "along_m": 381.7570889461524,
+          "cross_m": -0.06359007257574945,
+          "agl_ft": 0.408424023809433,
+          "kias": 48.1158332824707,
+          "groundspeed_kt": 52.066065540161134,
+          "vvi_fpm": -169.0032501220703,
+          "frame": 50477,
+          "pre_touch_pitch_deg": 5.88146448135376,
+          "pre_touch_heading_deg": 295.9372253417969,
+          "pre_touch_roll_deg": 0.1158357560634613,
+          "wind_mps": 0.0,
+          "wind_from_true_deg": 0.0
+        },
+        "last": {
+          "sim_time_s": 475.37109375,
+          "along_m": 506.5950675356189,
+          "cross_m": 0.33220171562007295,
+          "agl_ft": 0.0913335611629486,
+          "kias": 0.0,
+          "groundspeed_kt": 1.845562582616806
+        },
+        "flap_stages": [
+          "10deg",
+          "20deg",
+          "30deg"
+        ],
+        "max_brake": 0.3199999928474426,
+        "braked_samples": 140,
+        "max_flare_rebound_ft": 0.9524228057861333,
+        "flare_aileron_samples": 0,
+        "rollout_aileron_samples": 0,
+        "max_rollout_heading_error_deg": 0.0
+      }
+    }
+  ]
+}

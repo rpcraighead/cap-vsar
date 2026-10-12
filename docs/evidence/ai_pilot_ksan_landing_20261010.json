@@ -1,0 +1,681 @@
+{
+  "date_local": "2026-10-10",
+  "created_utc": "2026-10-11T02:55:56.987061+00:00",
+  "purpose": "Attended KSAN 27 stock-C172 landing engineering trials after VS Code crash recovery",
+  "qualification_claim": false,
+  "result": {
+    "attempted": 3,
+    "independent_passes": 2,
+    "completed_landings": 2,
+    "remaining_issue": "Atomic frame expiry still interrupts some approaches; the requested settings do not yet establish consistent timing."
+  },
+  "environment": {
+    "aircraft": "Stock C172SP G1000, Civil Air Patrol livery",
+    "runway": "KSAN 27",
+    "wind_speed_kt_configured": 15,
+    "wind_from_true_deg": 196.04,
+    "window": "1600x900 windowed",
+    "sound_enabled": true,
+    "x_world_america_enabled": true,
+    "map_enhancement_running_and_mounted": true,
+    "render_settings": {
+      "renopt_draw_3d_04": 2,
+      "renopt_draw_distance04": 1,
+      "renopt_tex_res_04": 3,
+      "renopt_shadow_quality_04": 1,
+      "renopt_SSAO_04": 0,
+      "renopt_MSAA": 0
+    },
+    "original_graphics_backup": "/home/ron/X-Plane 12/Output/capvsar-backups/ai-pilot-ksan-timing-20261010",
+    "intermediate_graphics_backup": "/home/ron/X-Plane 12/Output/capvsar-backups/ai-pilot-ksan-timing-b-20261010",
+    "scenery_warnings": [
+      "KSAN references missing static aircraft objects.",
+      "A scenery texture-loading warning was logged on the final launch."
+    ]
+  },
+  "recovery_changes": [
+    "Removed a confirmed stale control socket only after normal simulator exit.",
+    "Generalized the recovered landing harness to KMYF 28R and KSAN 27.",
+    "Added runway and fixed wind-side selection to the campaign runner.",
+    "Removed an additional 20 ms delay after exchanges; the 180 ms lease, watchdog, controller gains and scoring criteria were retained.",
+    "Recorded simulator preference hashes in trial manifests."
+  ],
+  "validation": {
+    "ai_pilot_tests_passed": 470,
+    "expected_failures": 22,
+    "subtests_passed": 60,
+    "landing_tests_passed": 17,
+    "legacy_kmyf_trace_replays_passed": 2,
+    "campaign_smoke_check": "PASS with simulated child processes, no simulator control calls"
+  },
+  "earlier_failed_attempts_evidence": "/home/ron/.cache/capvsar/ai-pilot/ksan27-resume-timing-evidence-20261010.json",
+  "unscored_weather_setup": "/home/ron/.cache/capvsar/ai-pilot/ksan27-resumed-weather-setup-b-20261010.json",
+  "campaign_ledger": "/home/ron/.cache/capvsar/ai-pilot/ksan27-resumed-left15-e-20261010-ledger.json",
+  "campaign_ledger_sha256": "bfde612b9f1b064f13f8825baf4f08c90c42b5625d948d5ab7a6f24017846f93",
+  "trials": [
+    {
+      "trial": 1,
+      "trace": "/home/ron/.cache/capvsar/ai-pilot/ksan27-resumed-left15-e-20261010-01.jsonl",
+      "trace_sha256": "afe7ddd429b02a7a21ee7e76a5b3f87980b81373f253d0921f914dc72420869c",
+      "manifest": {
+        "purpose": "KSAN-27-moderate-braking",
+        "created_utc": "2026-10-11T02:51:24.215969+00:00",
+        "inventory": {
+          "repository": "/home/ron/Projects/cap-vsar-ai-pilot",
+          "commit": "a77492c6d4577daab48f1e3c93e9b7ba04d58dba",
+          "dirty": true,
+          "source_sha256": {
+            "xplane/PI_capvsar_flight_control.py": "52e3522ec195ae7f4e9925d89ff82908b5bfd8bb3a66e9da5b7e863898542d16",
+            "xplane/capvsar_flight_control_core.py": "0bc03f24734c9bd83fec5aecd35e212090560714a4b2bb9000945ecb42b4f260",
+            "xplane/capvsar_flight_control_mapping.py": "3d73b733242271873f9bdc9c14995991b3328c62c304457758200635ea19ba83",
+            "xplane/capvsar_telemetry.py": "d6dfaa29115641135a8500ead94c0fad66fbd8387b7276d2ce7219e322304374",
+            "xplane/capvsar_qualification.py": "471b57e8081a5dfc4cc00648dfd05c602632de8c6d30f705d1d0da1ee896b754",
+            "xplane/capvsar_landing.py": "581510302945b42db9421f2771e7a9dbadc498dd884148e18f04becf6e76d893",
+            "scripts/ai_pilot_experiment.py": "59d9caa976c283008b692f887cb759b22921bae1b1c5328915282a775dab42e0",
+            "services/ai_pilot/experiment.py": "28e07cf283ae7b0d97cb47c6d80fb76ccbff6f474554ea329751942c650d2fb9"
+          },
+          "installed_bridge_sha256": {
+            "PI_capvsar_flight_control.py": "52e3522ec195ae7f4e9925d89ff82908b5bfd8bb3a66e9da5b7e863898542d16",
+            "capvsar_flight_control_core.py": "0bc03f24734c9bd83fec5aecd35e212090560714a4b2bb9000945ecb42b4f260",
+            "capvsar_flight_control_mapping.py": "3d73b733242271873f9bdc9c14995991b3328c62c304457758200635ea19ba83",
+            "capvsar_telemetry.py": "d6dfaa29115641135a8500ead94c0fad66fbd8387b7276d2ce7219e322304374",
+            "capvsar_qualification.py": "471b57e8081a5dfc4cc00648dfd05c602632de8c6d30f705d1d0da1ee896b754",
+            "capvsar_landing.py": "581510302945b42db9421f2771e7a9dbadc498dd884148e18f04becf6e76d893"
+          },
+          "aircraft": {
+            "path": "/home/ron/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
+            "sha256": "b9c3c35c956ac5bee8c74fc9cbf933c6ecdfab73db9ad22862022aa3a20ab847"
+          },
+          "scenery_packs_sha256": "0101f4ad3f2546dc63baa5e2ca0e0c907c9f732310efce325d5aaca1874036df",
+          "preferences_sha256": {
+            "X-Plane.prf": "49dfaba4848eaadc5c76e5742ca82ebdbadd636add83f578a582eeac3fd4e81c",
+            "X-Plane Window Positions.prf": "46032867fe0b9779c28f58880e302b92bdc3338776845adb2d66e641970136c3",
+            "Freeflight.prf": "0e926e7494b216d4dc7edf8de7f2be32b727f5391febeea8029e157d1001113c"
+          },
+          "python": "3.14.4 (main, Aug 20 2026, 10:41:58) [GCC 15.2.0]",
+          "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+          "plugins": [
+            "Air Plugin",
+            "Commands.txt",
+            "DataRefs.txt",
+            "PluginAdmin",
+            "PythonPlugins",
+            "XPLM.framework",
+            "XPLM_64.dll",
+            "XPLM_64.so",
+            "XPPython3",
+            "XPWidgets.framework",
+            "XPWidgets_64.dll",
+            "XPWidgets_64.so"
+          ],
+          "python_plugins": [
+            "PI_capvsar_df.py",
+            "PI_capvsar_flight_control.py",
+            "PI_g1000_sar.py"
+          ],
+          "controller_sha256": "dcbde4966efcf354a40b91562b72e212ae45aea6f3a723e6d4f482b799188cdb",
+          "runner_sha256": "3cce0799f2c67787499c754932f99756c410a1a5480ce43a9155661f8af6b9c2"
+        },
+        "qualification_only": true,
+        "criteria": {
+          "touchdown_along_m": [
+            559.62,
+            681.54
+          ],
+          "touchdown_cross_m": [
+            -4,
+            4
+          ],
+          "touchdown_sink_fpm_min": -600,
+          "max_brake_ratio": 0.35,
+          "pre_touch_pitch_deg": [
+            5,
+            7
+          ],
+          "max_flare_rebound_ft": 1.5,
+          "crosswind_pre_touch_heading_error_deg": 3,
+          "crosswind_max_rollout_heading_error_deg": 5,
+          "full_stop_groundspeed_kt": 2,
+          "max_stop_along_m": 2001.5954988186222
+        },
+        "entry": {
+          "runway": "KSAN 27",
+          "lateral_offset": 0.0,
+          "altitude_offset": 0.0,
+          "speed_offset": 0.0,
+          "wind_speed_kt": 15.0,
+          "wind_from_offset_deg": -90.0
+        }
+      },
+      "score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1880,
+        "threshold": {
+          "sim_time_s": 96.80223083496094,
+          "along_m": 1.4079336020399489,
+          "cross_m": -2.4792649589421165,
+          "agl_ft": 66.0660532067871,
+          "kias": 64.24474334716797,
+          "groundspeed_kt": 65.62825436401367,
+          "flap_actual": 1.0
+        },
+        "touchdown": {
+          "sim_time_s": 114.69515228271484,
+          "along_m": 584.374393084115,
+          "cross_m": -0.4114767704501503,
+          "agl_ft": 0.5904309581851959,
+          "kias": 49.17522430419922,
+          "groundspeed_kt": 52.93385072479248,
+          "vvi_fpm": -107.80498504638672,
+          "frame": 5615,
+          "pre_touch_pitch_deg": 5.4916768074035645,
+          "pre_touch_heading_deg": 285.6988525390625,
+          "pre_touch_roll_deg": -2.9463841915130615,
+          "wind_mps": 5.389715671539307,
+          "wind_from_true_deg": 196.04022216796875
+        },
+        "last": {
+          "sim_time_s": 124.20073699951172,
+          "along_m": 726.8977609079466,
+          "cross_m": -0.8625082622581033,
+          "agl_ft": 0.08195169590950012,
+          "kias": 0.0,
+          "groundspeed_kt": 1.7121040491008759
+        },
+        "flap_stages": [
+          "10deg",
+          "20deg",
+          "30deg"
+        ],
+        "max_brake": 0.3199999928474426,
+        "braked_samples": 163,
+        "max_flare_rebound_ft": 0.0,
+        "flare_aileron_samples": 151,
+        "rollout_aileron_samples": 186,
+        "max_rollout_heading_error_deg": 3.5531569984902944
+      },
+      "terminal_result": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1880,
+        "threshold": {
+          "sim_time_s": 96.80223083496094,
+          "along_m": 1.4079336020399489,
+          "cross_m": -2.4792649589421165,
+          "agl_ft": 66.0660532067871,
+          "kias": 64.24474334716797,
+          "groundspeed_kt": 65.62825436401367,
+          "flap_actual": 1.0
+        },
+        "touchdown": {
+          "sim_time_s": 114.69515228271484,
+          "along_m": 584.374393084115,
+          "cross_m": -0.4114767704501503,
+          "agl_ft": 0.5904309581851959,
+          "kias": 49.17522430419922,
+          "groundspeed_kt": 52.93385072479248,
+          "vvi_fpm": -107.80498504638672,
+          "frame": 5615,
+          "pre_touch_pitch_deg": 5.4916768074035645,
+          "pre_touch_heading_deg": 285.6988525390625,
+          "pre_touch_roll_deg": -2.9463841915130615,
+          "wind_mps": 5.389715671539307,
+          "wind_from_true_deg": 196.04022216796875
+        },
+        "last": {
+          "sim_time_s": 124.20073699951172,
+          "along_m": 726.8977609079466,
+          "cross_m": -0.8625082622581033,
+          "agl_ft": 0.08195169590950012,
+          "kias": 0.0,
+          "groundspeed_kt": 1.7121040491008759
+        },
+        "flap_stages": [
+          "10deg",
+          "20deg",
+          "30deg"
+        ],
+        "max_brake": 0.3199999928474426,
+        "braked_samples": 163,
+        "max_flare_rebound_ft": 0.0,
+        "flare_aileron_samples": 151,
+        "rollout_aileron_samples": 186,
+        "max_rollout_heading_error_deg": 3.5531569984902944,
+        "end_bridge": {
+          "state": "PAUSED_FAULT",
+          "owner": "FAULT",
+          "generation": 2,
+          "session": "03db760dc25bb00c38cfe01b1e27c1f7",
+          "retired": true,
+          "fault": "Landing trial ended",
+          "atomic": true,
+          "frame_sequence": 1899,
+          "pause_confirmed": true
+        }
+      },
+      "max_observed_snapshot_wall_gap_s": 0.09671455400530249
+    },
+    {
+      "trial": 2,
+      "trace": "/home/ron/.cache/capvsar/ai-pilot/ksan27-resumed-left15-e-20261010-02.jsonl",
+      "trace_sha256": "335ede24c8323ad3416ea3346fe52f0b1d576f38dd51b552abf47d0511b7cc9c",
+      "manifest": {
+        "purpose": "KSAN-27-moderate-braking",
+        "created_utc": "2026-10-11T02:52:59.543831+00:00",
+        "inventory": {
+          "repository": "/home/ron/Projects/cap-vsar-ai-pilot",
+          "commit": "a77492c6d4577daab48f1e3c93e9b7ba04d58dba",
+          "dirty": true,
+          "source_sha256": {
+            "xplane/PI_capvsar_flight_control.py": "52e3522ec195ae7f4e9925d89ff82908b5bfd8bb3a66e9da5b7e863898542d16",
+            "xplane/capvsar_flight_control_core.py": "0bc03f24734c9bd83fec5aecd35e212090560714a4b2bb9000945ecb42b4f260",
+            "xplane/capvsar_flight_control_mapping.py": "3d73b733242271873f9bdc9c14995991b3328c62c304457758200635ea19ba83",
+            "xplane/capvsar_telemetry.py": "d6dfaa29115641135a8500ead94c0fad66fbd8387b7276d2ce7219e322304374",
+            "xplane/capvsar_qualification.py": "471b57e8081a5dfc4cc00648dfd05c602632de8c6d30f705d1d0da1ee896b754",
+            "xplane/capvsar_landing.py": "581510302945b42db9421f2771e7a9dbadc498dd884148e18f04becf6e76d893",
+            "scripts/ai_pilot_experiment.py": "59d9caa976c283008b692f887cb759b22921bae1b1c5328915282a775dab42e0",
+            "services/ai_pilot/experiment.py": "28e07cf283ae7b0d97cb47c6d80fb76ccbff6f474554ea329751942c650d2fb9"
+          },
+          "installed_bridge_sha256": {
+            "PI_capvsar_flight_control.py": "52e3522ec195ae7f4e9925d89ff82908b5bfd8bb3a66e9da5b7e863898542d16",
+            "capvsar_flight_control_core.py": "0bc03f24734c9bd83fec5aecd35e212090560714a4b2bb9000945ecb42b4f260",
+            "capvsar_flight_control_mapping.py": "3d73b733242271873f9bdc9c14995991b3328c62c304457758200635ea19ba83",
+            "capvsar_telemetry.py": "d6dfaa29115641135a8500ead94c0fad66fbd8387b7276d2ce7219e322304374",
+            "capvsar_qualification.py": "471b57e8081a5dfc4cc00648dfd05c602632de8c6d30f705d1d0da1ee896b754",
+            "capvsar_landing.py": "581510302945b42db9421f2771e7a9dbadc498dd884148e18f04becf6e76d893"
+          },
+          "aircraft": {
+            "path": "/home/ron/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
+            "sha256": "b9c3c35c956ac5bee8c74fc9cbf933c6ecdfab73db9ad22862022aa3a20ab847"
+          },
+          "scenery_packs_sha256": "0101f4ad3f2546dc63baa5e2ca0e0c907c9f732310efce325d5aaca1874036df",
+          "preferences_sha256": {
+            "X-Plane.prf": "49dfaba4848eaadc5c76e5742ca82ebdbadd636add83f578a582eeac3fd4e81c",
+            "X-Plane Window Positions.prf": "46032867fe0b9779c28f58880e302b92bdc3338776845adb2d66e641970136c3",
+            "Freeflight.prf": "0e926e7494b216d4dc7edf8de7f2be32b727f5391febeea8029e157d1001113c"
+          },
+          "python": "3.14.4 (main, Aug 20 2026, 10:41:58) [GCC 15.2.0]",
+          "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+          "plugins": [
+            "Air Plugin",
+            "Commands.txt",
+            "DataRefs.txt",
+            "PluginAdmin",
+            "PythonPlugins",
+            "XPLM.framework",
+            "XPLM_64.dll",
+            "XPLM_64.so",
+            "XPPython3",
+            "XPWidgets.framework",
+            "XPWidgets_64.dll",
+            "XPWidgets_64.so"
+          ],
+          "python_plugins": [
+            "PI_capvsar_df.py",
+            "PI_capvsar_flight_control.py",
+            "PI_g1000_sar.py"
+          ],
+          "controller_sha256": "dcbde4966efcf354a40b91562b72e212ae45aea6f3a723e6d4f482b799188cdb",
+          "runner_sha256": "3cce0799f2c67787499c754932f99756c410a1a5480ce43a9155661f8af6b9c2"
+        },
+        "qualification_only": true,
+        "criteria": {
+          "touchdown_along_m": [
+            559.62,
+            681.54
+          ],
+          "touchdown_cross_m": [
+            -4,
+            4
+          ],
+          "touchdown_sink_fpm_min": -600,
+          "max_brake_ratio": 0.35,
+          "pre_touch_pitch_deg": [
+            5,
+            7
+          ],
+          "max_flare_rebound_ft": 1.5,
+          "crosswind_pre_touch_heading_error_deg": 3,
+          "crosswind_max_rollout_heading_error_deg": 5,
+          "full_stop_groundspeed_kt": 2,
+          "max_stop_along_m": 2001.5954988186222
+        },
+        "entry": {
+          "runway": "KSAN 27",
+          "lateral_offset": 0.0,
+          "altitude_offset": 0.0,
+          "speed_offset": 0.0,
+          "wind_speed_kt": 15.0,
+          "wind_from_offset_deg": -90.0
+        }
+      },
+      "score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1830,
+        "threshold": {
+          "sim_time_s": 189.96046447753906,
+          "along_m": 0.8130309789962364,
+          "cross_m": -3.060664808608264,
+          "agl_ft": 68.58003640548706,
+          "kias": 63.793941497802734,
+          "groundspeed_kt": 65.32142241149903,
+          "flap_actual": 1.0
+        },
+        "touchdown": {
+          "sim_time_s": 207.4868621826172,
+          "along_m": 573.1056558181886,
+          "cross_m": -0.8282793477852692,
+          "agl_ft": 0.5828810362720489,
+          "kias": 49.90207290649414,
+          "groundspeed_kt": 53.542438952026366,
+          "vvi_fpm": -105.902099609375,
+          "frame": 10063,
+          "pre_touch_pitch_deg": 5.705272674560547,
+          "pre_touch_heading_deg": 285.6195373535156,
+          "pre_touch_roll_deg": -2.5811405181884766,
+          "wind_mps": 5.407357215881348,
+          "wind_from_true_deg": 196.04022216796875
+        },
+        "last": {
+          "sim_time_s": 216.9425048828125,
+          "along_m": 716.4656752172365,
+          "cross_m": -1.2196051605465072,
+          "agl_ft": 0.0791873544216156,
+          "kias": 0.0,
+          "groundspeed_kt": 1.8844542917251588
+        },
+        "flap_stages": [
+          "10deg",
+          "20deg",
+          "30deg"
+        ],
+        "max_brake": 0.3199999928474426,
+        "braked_samples": 156,
+        "max_flare_rebound_ft": 0.0,
+        "flare_aileron_samples": 138,
+        "rollout_aileron_samples": 179,
+        "max_rollout_heading_error_deg": 3.4943191078652944
+      },
+      "terminal_result": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1830,
+        "threshold": {
+          "sim_time_s": 189.96046447753906,
+          "along_m": 0.8130309789962364,
+          "cross_m": -3.060664808608264,
+          "agl_ft": 68.58003640548706,
+          "kias": 63.793941497802734,
+          "groundspeed_kt": 65.32142241149903,
+          "flap_actual": 1.0
+        },
+        "touchdown": {
+          "sim_time_s": 207.4868621826172,
+          "along_m": 573.1056558181886,
+          "cross_m": -0.8282793477852692,
+          "agl_ft": 0.5828810362720489,
+          "kias": 49.90207290649414,
+          "groundspeed_kt": 53.542438952026366,
+          "vvi_fpm": -105.902099609375,
+          "frame": 10063,
+          "pre_touch_pitch_deg": 5.705272674560547,
+          "pre_touch_heading_deg": 285.6195373535156,
+          "pre_touch_roll_deg": -2.5811405181884766,
+          "wind_mps": 5.407357215881348,
+          "wind_from_true_deg": 196.04022216796875
+        },
+        "last": {
+          "sim_time_s": 216.9425048828125,
+          "along_m": 716.4656752172365,
+          "cross_m": -1.2196051605465072,
+          "agl_ft": 0.0791873544216156,
+          "kias": 0.0,
+          "groundspeed_kt": 1.8844542917251588
+        },
+        "flap_stages": [
+          "10deg",
+          "20deg",
+          "30deg"
+        ],
+        "max_brake": 0.3199999928474426,
+        "braked_samples": 156,
+        "max_flare_rebound_ft": 0.0,
+        "flare_aileron_samples": 138,
+        "rollout_aileron_samples": 179,
+        "max_rollout_heading_error_deg": 3.4943191078652944,
+        "end_bridge": {
+          "state": "PAUSED_FAULT",
+          "owner": "FAULT",
+          "generation": 2,
+          "session": "39939c0427bd0bb5313fe3bf58e4059f",
+          "retired": true,
+          "fault": "Landing trial ended",
+          "atomic": true,
+          "frame_sequence": 1852,
+          "pause_confirmed": true
+        }
+      },
+      "max_observed_snapshot_wall_gap_s": 0.1145851949986536
+    },
+    {
+      "trial": 3,
+      "trace": "/home/ron/.cache/capvsar/ai-pilot/ksan27-resumed-left15-e-20261010-03.jsonl",
+      "trace_sha256": "238857aba480d2b79e4b4348b03aae63b86f261215b12dc22eadb9aa08c9b72d",
+      "manifest": {
+        "purpose": "KSAN-27-moderate-braking",
+        "created_utc": "2026-10-11T02:54:35.117744+00:00",
+        "inventory": {
+          "repository": "/home/ron/Projects/cap-vsar-ai-pilot",
+          "commit": "a77492c6d4577daab48f1e3c93e9b7ba04d58dba",
+          "dirty": true,
+          "source_sha256": {
+            "xplane/PI_capvsar_flight_control.py": "52e3522ec195ae7f4e9925d89ff82908b5bfd8bb3a66e9da5b7e863898542d16",
+            "xplane/capvsar_flight_control_core.py": "0bc03f24734c9bd83fec5aecd35e212090560714a4b2bb9000945ecb42b4f260",
+            "xplane/capvsar_flight_control_mapping.py": "3d73b733242271873f9bdc9c14995991b3328c62c304457758200635ea19ba83",
+            "xplane/capvsar_telemetry.py": "d6dfaa29115641135a8500ead94c0fad66fbd8387b7276d2ce7219e322304374",
+            "xplane/capvsar_qualification.py": "471b57e8081a5dfc4cc00648dfd05c602632de8c6d30f705d1d0da1ee896b754",
+            "xplane/capvsar_landing.py": "581510302945b42db9421f2771e7a9dbadc498dd884148e18f04becf6e76d893",
+            "scripts/ai_pilot_experiment.py": "59d9caa976c283008b692f887cb759b22921bae1b1c5328915282a775dab42e0",
+            "services/ai_pilot/experiment.py": "28e07cf283ae7b0d97cb47c6d80fb76ccbff6f474554ea329751942c650d2fb9"
+          },
+          "installed_bridge_sha256": {
+            "PI_capvsar_flight_control.py": "52e3522ec195ae7f4e9925d89ff82908b5bfd8bb3a66e9da5b7e863898542d16",
+            "capvsar_flight_control_core.py": "0bc03f24734c9bd83fec5aecd35e212090560714a4b2bb9000945ecb42b4f260",
+            "capvsar_flight_control_mapping.py": "3d73b733242271873f9bdc9c14995991b3328c62c304457758200635ea19ba83",
+            "capvsar_telemetry.py": "d6dfaa29115641135a8500ead94c0fad66fbd8387b7276d2ce7219e322304374",
+            "capvsar_qualification.py": "471b57e8081a5dfc4cc00648dfd05c602632de8c6d30f705d1d0da1ee896b754",
+            "capvsar_landing.py": "581510302945b42db9421f2771e7a9dbadc498dd884148e18f04becf6e76d893"
+          },
+          "aircraft": {
+            "path": "/home/ron/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP_G1000.acf",
+            "sha256": "b9c3c35c956ac5bee8c74fc9cbf933c6ecdfab73db9ad22862022aa3a20ab847"
+          },
+          "scenery_packs_sha256": "0101f4ad3f2546dc63baa5e2ca0e0c907c9f732310efce325d5aaca1874036df",
+          "preferences_sha256": {
+            "X-Plane.prf": "49dfaba4848eaadc5c76e5742ca82ebdbadd636add83f578a582eeac3fd4e81c",
+            "X-Plane Window Positions.prf": "46032867fe0b9779c28f58880e302b92bdc3338776845adb2d66e641970136c3",
+            "Freeflight.prf": "0e926e7494b216d4dc7edf8de7f2be32b727f5391febeea8029e157d1001113c"
+          },
+          "python": "3.14.4 (main, Aug 20 2026, 10:41:58) [GCC 15.2.0]",
+          "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+          "plugins": [
+            "Air Plugin",
+            "Commands.txt",
+            "DataRefs.txt",
+            "PluginAdmin",
+            "PythonPlugins",
+            "XPLM.framework",
+            "XPLM_64.dll",
+            "XPLM_64.so",
+            "XPPython3",
+            "XPWidgets.framework",
+            "XPWidgets_64.dll",
+            "XPWidgets_64.so"
+          ],
+          "python_plugins": [
+            "PI_capvsar_df.py",
+            "PI_capvsar_flight_control.py",
+            "PI_g1000_sar.py"
+          ],
+          "controller_sha256": "dcbde4966efcf354a40b91562b72e212ae45aea6f3a723e6d4f482b799188cdb",
+          "runner_sha256": "3cce0799f2c67787499c754932f99756c410a1a5480ce43a9155661f8af6b9c2"
+        },
+        "qualification_only": true,
+        "criteria": {
+          "touchdown_along_m": [
+            559.62,
+            681.54
+          ],
+          "touchdown_cross_m": [
+            -4,
+            4
+          ],
+          "touchdown_sink_fpm_min": -600,
+          "max_brake_ratio": 0.35,
+          "pre_touch_pitch_deg": [
+            5,
+            7
+          ],
+          "max_flare_rebound_ft": 1.5,
+          "crosswind_pre_touch_heading_error_deg": 3,
+          "crosswind_max_rollout_heading_error_deg": 5,
+          "full_stop_groundspeed_kt": 2,
+          "max_stop_along_m": 2001.5954988186222
+        },
+        "entry": {
+          "runway": "KSAN 27",
+          "lateral_offset": 0.0,
+          "altitude_offset": 0.0,
+          "speed_offset": 0.0,
+          "wind_speed_kt": 15.0,
+          "wind_from_offset_deg": -90.0
+        }
+      },
+      "score": {
+        "outcome": "FAIL",
+        "reason": null,
+        "samples": 320,
+        "threshold": null,
+        "touchdown": null,
+        "last": {
+          "sim_time_s": 234.32472229003906,
+          "along_m": -1628.753946056143,
+          "cross_m": -2.228085585463475,
+          "agl_ft": 220.44087412017822,
+          "kias": 62.54977035522461,
+          "groundspeed_kt": 65.11655633972168
+        },
+        "flap_stages": [
+          "10deg",
+          "20deg"
+        ],
+        "max_brake": 0.0,
+        "braked_samples": 0,
+        "max_flare_rebound_ft": 0.0,
+        "flare_aileron_samples": 0,
+        "rollout_aileron_samples": 0,
+        "max_rollout_heading_error_deg": 0.0,
+        "trace_end": {
+          "outcome": "FAIL",
+          "reason": "Exchange requires active authority",
+          "observer": {
+            "outcome": "INCOMPLETE",
+            "reason": null,
+            "samples": 320,
+            "threshold": null,
+            "touchdown": null,
+            "last": {
+              "sim_time_s": 234.32472229003906,
+              "along_m": -1628.753946056143,
+              "cross_m": -2.228085585463475,
+              "agl_ft": 220.44087412017822,
+              "kias": 62.54977035522461,
+              "groundspeed_kt": 65.11655633972168
+            },
+            "flap_stages": [
+              "10deg",
+              "20deg"
+            ],
+            "max_brake": 0.0,
+            "braked_samples": 0,
+            "max_flare_rebound_ft": 0.0,
+            "flare_aileron_samples": 0,
+            "rollout_aileron_samples": 0,
+            "max_rollout_heading_error_deg": 0.0
+          },
+          "end_bridge": {
+            "state": "PAUSED_FAULT",
+            "owner": "FAULT",
+            "generation": 2,
+            "session": "6bcd0b2fd1ccab5e59e623ed4381e21a",
+            "retired": true,
+            "fault": "Atomic frame expired",
+            "atomic": true,
+            "frame_sequence": 340,
+            "pause_confirmed": true
+          }
+        }
+      },
+      "terminal_result": {
+        "outcome": "FAIL",
+        "reason": "Exchange requires active authority",
+        "observer": {
+          "outcome": "INCOMPLETE",
+          "reason": null,
+          "samples": 320,
+          "threshold": null,
+          "touchdown": null,
+          "last": {
+            "sim_time_s": 234.32472229003906,
+            "along_m": -1628.753946056143,
+            "cross_m": -2.228085585463475,
+            "agl_ft": 220.44087412017822,
+            "kias": 62.54977035522461,
+            "groundspeed_kt": 65.11655633972168
+          },
+          "flap_stages": [
+            "10deg",
+            "20deg"
+          ],
+          "max_brake": 0.0,
+          "braked_samples": 0,
+          "max_flare_rebound_ft": 0.0,
+          "flare_aileron_samples": 0,
+          "rollout_aileron_samples": 0,
+          "max_rollout_heading_error_deg": 0.0
+        },
+        "end_bridge": {
+          "state": "PAUSED_FAULT",
+          "owner": "FAULT",
+          "generation": 2,
+          "session": "6bcd0b2fd1ccab5e59e623ed4381e21a",
+          "retired": true,
+          "fault": "Atomic frame expired",
+          "atomic": true,
+          "frame_sequence": 340,
+          "pause_confirmed": true
+        }
+      },
+      "max_observed_snapshot_wall_gap_s": 0.0993181019948679
+    }
+  ],
+  "terminal": {
+    "status": {
+      "state": "PAUSED_FAULT",
+      "owner": "FAULT",
+      "generation": 2,
+      "session": "6bcd0b2fd1ccab5e59e623ed4381e21a",
+      "retired": true,
+      "fault": "Atomic frame expired",
+      "atomic": true,
+      "frame_sequence": 340,
+      "pause_confirmed": true
+    },
+    "paused": 1,
+    "override_state": false,
+    "brake_left": 0.0,
+    "brake_right": 0.0
+  }
+}

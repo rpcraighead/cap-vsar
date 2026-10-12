@@ -3,6 +3,26 @@
 Date: 2026-10-10. Owner: Ron. Repository baseline: `57663ec`.
 Status: agreed direction; the milestones below require implementation and measured simulator acceptance.
 
+Implementation on `feat/ai-pilot-first-cycle` has passed a fresh frozen
+stock-C172 campaign after the activation timing fix: ten consecutive baseline
+flights and ten disturbed entries, with independent trace replay and confirmed
+terminal pause in every flight. See the [requalification report](evidence/AI_PILOT_REQUALIFICATION_20261010.md),
+the [earlier campaign](evidence/AI_PILOT_SOL_CAMPAIGN_20261010.md), and the
+[Sol handoff](AI_PILOT_SOL_HANDOFF.md). The earlier startup failures and one
+intermediate campaign's in-flight frame expiry are preserved as evidence.
+The next phase produced attended [KMYF 28R landing engineering trials](evidence/AI_PILOT_KMYF_LANDING_20261010.md):
+normal 65 KIAS approaches, a low/slow recovery, two 12 kt left-crosswind
+landings and a calm regression all reached a scored full stop. Repeated
+landing qualification, short-field 61 KIAS landings, taxi and takeoff remain
+future milestones.
+The active stock-C172 route is now the
+[KSEE 27R–Mission Bay Two–BAKEL–KMYF ILS 28R trial](C172_KSEE_KMYF_IFR_TRIAL.md).
+Its taxi and takeoff controllers are offline candidates pending surveyed
+airport geometry, a bounded live bridge mode, and trace-backed simulator tests.
+The [first increment](AI_PILOT_FIRST_INCREMENT.md) records the earlier
+observation-only stage. Broader aircraft and mission qualification remains
+outstanding.
+
 Build an X-Plane pilot that can taxi, take off, cruise, approach, land, and
 return to parking, plus a test pilot that can establish reference conditions,
 execute handling and performance tests, deliberately enter stalls, and recover.

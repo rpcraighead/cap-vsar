@@ -3,9 +3,67 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-10-11 — First live C182T AI pilot flight: expanding square passes (branch `feat/c182-ai-pilot-baseline`)
+
+Status: **flown once, passed; profile still `tuning_validated=False`.**
+
+`scripts/ai_pilot_pattern.py --profile C182T` flew a 6-leg, 1 NM expanding
+square (12 NM) at 2,000 ft and 100 KIAS off Point Loma in the calibrated CAP 487
+package (ACF `11ff17d1…`), on the expiring mission bridge with the controller on
+the primary controls. The independent observer scored every waypoint inside
+0.35 NM, altitude within 20 ft, bank at most 21°. Settled cross-track was a
+median 8 m. The run ended paused with overrides released. The C172's 0.55
+cruise throttle held 100 KIAS (straight-leg median 0.553). Details and caveats:
+`docs/C182T_AI_PILOT_PORT_2026-10-11.md` "Live trial 1"; evidence
+`docs/evidence/ai_pilot_c182_pattern_20261011.json`.
+
+`main` merged into the branch so the trial ran on the current bridge, and the
+3 s `lab_start` reply window that the C172 KSEE-KMYF trial carries uncommitted
+is committed here (`ee990d7`).
+
+## 2026-10-11 — AI pilot: aircraft profiles, C182T port of the C172 controllers, search patterns (branch `feat/c182-ai-pilot-baseline`)
+
+Status: **implemented and tested offline; not flown.** Stacked on
+`feat/c172-taxi-takeoff-ifr`; `main` not moved.
+
+Ron's direction was to use the C172 autopilot code as the baseline for the 182.
+Rather than fork the three flown controllers, every operational number they
+carried as a literal (rotate/Vx/Vy, climb and vector speeds, approach and final
+speeds, flap gates, the observer's threshold window and touchdown pitch) now
+comes from an `AircraftProfile` in `services/ai_pilot/aircraft_profiles.py`.
+`takeoff_guidance.TakeoffGuidance`, `landing_trial.LandingController` /
+`LandingObserver` and `ksee_kmyf_mission.MissionController` take `profile=`,
+default `C172SP`, so the C172 behaviour is unchanged: the 496 pre-existing
+tests pass as they were. `C182T` is sourced line by line from the 182T NAV III
+information manual (P/N 182TPHBUS, SHA-256 `ba64adab…3fd2705c`, the document
+the dimension master pins): rotate 55, Vx 65, Vy 80, enroute climb 90, normal
+landing 70–80 flaps up / 60–70 flaps full, balked landing flaps 20, Vfe
+140/120/100, Va 110, takeoff flaps 10°. The profile refuses a flap gate above
+its Vfe. The C182T takeoff now holds for 10° of flap, carries it through the
+initial climb and retracts once above 300 ft AGL and 70 KIAS.
+
+**Tuning is deliberately not claimed.** Base throttles, flap gates and the
+observer windows on the C182T record are the C172 criteria moved by the speed
+difference, and the record says so (`tuning_validated=False`, `sources`).
+
+New `services/ai_pilot/search_patterns.py`: expanding square, creeping line and
+parallel track geometry to decision D2, replaying the g1000-sar 24-case fixture
+(copied verbatim into `services/ai_pilot/tests/data/`) to better than 6 m; and
+`SearchPatternController`, which flies the waypoints on the primary controls
+with the C172 mission controller's cruise loop (`CruiseLaw`, lifted unchanged),
+with cross-track intercept, turn anticipation and the pattern's own turn
+direction forced at every corner. A point-mass fly-through in the tests
+completes all three patterns in order. Suite: 537 passed, 20 xfailed (41 new).
+
+Follow-ups are listed in `docs/C182T_AI_PILOT_PORT_2026-10-11.md`: a
+`--profile` flag on the runners, bridge identity for CAP 487, then live trials
+in the order pattern at altitude → cruise cycle → taxi → takeoff → sortie, each
+retuning and citing its trace. The C182T package's own flight-model defects
+are in `docs/C182T_REVIEW_2026-10-11.md` on branch `review-c182-2026-10-11`.
+
 ## 2026-10-11 — C182T: tracker C18 worked, drag calibrated in flight (branch `fix/c182-a2-2026-10-11`)
 
-Status: **implemented and flown; pushed to the branch, not merged to main.**
+Status: **implemented and flown; merged to main 2026-10-12.**
 
 Builder (`scripts/build_c182t_package.py`): 79 in three-blade physics propeller
 with TCDS pitch stops 14.9/31.7 deg, six cylinders, Va 110, gear contact points

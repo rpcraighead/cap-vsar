@@ -34,6 +34,7 @@ class Sim:
         self.controls[channel] = value
     def read_control(self, channel): return self.controls.get(channel)
     def pause(self): self.paused = True
+    def is_paused(self): return self.paused
 
 
 class Backend:
@@ -70,6 +71,17 @@ def build():
     executive = FlightExecutive(bridge, {Controller.ARDUPLANE: adapter}, phase_profiles=profiles,
                                 clock=lambda: clock[0])
     return clock, sim, bridge, peer, observed, executive
+
+
+def test_executive_stops_tasks_even_if_bridge_pause_is_not_confirmed():
+    _, sim, bridge, _, _, executive = build()
+    sim.pause = lambda: None
+    bridge.fault_pause("Readback test")
+    assert bridge.state == "FAULT_PAUSE_PENDING"
+    status = executive.tick()
+    assert status["transfer"] == "PAUSED_FAULT"
+    assert status["lease"] is None and status["task"] is None
+    assert status["bridge"]["pause_confirmed"] is False
 
 
 def sortie(executive):

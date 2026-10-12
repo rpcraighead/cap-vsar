@@ -43,5 +43,27 @@ if [[ ${1:-} == '--check' ]]; then
     exit 0
 fi
 
+# X-Plane renames its process to "Main Thread" while loading. Checking the
+# process name can miss a running simulator and start a second memory-heavy
+# instance. Resolve /proc executables instead, including during modal loading.
+running_pid=$(python3 - "$xplane_binary" <<'PY'
+from pathlib import Path
+import sys
+binary = Path(sys.argv[1]).resolve()
+for process in Path('/proc').iterdir():
+    if not process.name.isdigit():
+        continue
+    try:
+        if (process / 'exe').resolve(strict=True) == binary:
+            print(process.name)
+    except (OSError, RuntimeError):
+        pass
+PY
+)
+if [[ -n "$running_pid" ]]; then
+    printf 'X-Plane is already running (PID %s); refusing a second instance.\n' "$running_pid" >&2
+    exit 75
+fi
+
 cd "$xplane_dir"
 exec "$xplane_binary" "$@"

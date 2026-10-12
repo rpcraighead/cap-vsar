@@ -32,6 +32,7 @@ class Simulator:
         self.writes.append((channel, value))
     def read_control(self, channel): return self.controls.get(channel)
     def pause(self): self.paused = True
+    def is_paused(self): return self.paused
 
 
 def ready(b):

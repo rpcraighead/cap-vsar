@@ -128,6 +128,24 @@ cannot move the aircraft. Tracker item AI-8 owns the remaining airport-surface
 graph, clearance/ATC state, ArduPlane adapter, steering/throttle/brake actuation,
 exclusive handoff, and live acceptance work.
 
+## Aircraft profiles, the C182T port and search patterns (2026-10-11)
+
+`aircraft_profiles.py` holds the operating speeds and acceptance windows the
+takeoff, landing and KSEE-KMYF controllers used to carry as literals, one record
+per aircraft with the handbook line for each sourced value. `C172SP` is the
+flown stock C172 (the default everywhere, so nothing flown has changed);
+`C182T` is the CAP 487 package, sourced from the 182T NAV III information manual
+the project pins. The C182T record carries `tuning_validated=False`: its base
+throttles, flap gates and observer windows are the C172 criteria shifted to the
+182T's speeds and have not been flown. See
+`docs/C182T_AI_PILOT_PORT_2026-10-11.md` for the mapping and the trial order.
+
+`search_patterns.py` generates CAP expanding square, creeping line and parallel
+track waypoints to the D2 convention shared with the planner and g1000-sar
+(their fixture is replayed in the tests), and `SearchPatternController` flies
+them on the primary controls with the C172 mission controller's cruise loop.
+Offline-tested only; no runner, no bridge integration, never flown.
+
 ## Direct surface-control backend (2026-09-11)
 
 `direct_backend.XPlaneDirectBackend` flies CAP 487 on the **primary flight

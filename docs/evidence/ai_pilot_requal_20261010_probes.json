@@ -1,0 +1,120 @@
+{
+  "schema": "capvsar.ai-pilot-requalification-probes.v1",
+  "frozen_commit": "4cd95808c5f8b266cf40a8b0396506b84afac6d0",
+  "probes": [
+    {
+      "name": "fault_loss",
+      "sha256": "167a2db35d66d712653814c338954b2155f613072efea821d8074130d4ebad54",
+      "outcome": "PROBE_PASS",
+      "at_probe": {
+        "state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "generation": 2,
+        "session": "ab434f3156a6761c06b76f6d767b2f53",
+        "retired": true,
+        "fault": "Atomic frame expired",
+        "atomic": true,
+        "frame_sequence": 353,
+        "pause_confirmed": true
+      },
+      "terminal": {
+        "state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "generation": 2,
+        "session": "ab434f3156a6761c06b76f6d767b2f53",
+        "retired": true,
+        "fault": "Atomic frame expired",
+        "atomic": true,
+        "frame_sequence": 353,
+        "pause_confirmed": true
+      }
+    },
+    {
+      "name": "fault_takeover_01",
+      "sha256": "ba8119acdd10369b5bee110b04a414bccd30064df156a4fe774c64dfd7f61ac6",
+      "outcome": "PROBE_PASS",
+      "at_probe": {
+        "state": "MANUAL",
+        "owner": "HUMAN",
+        "generation": 2,
+        "session": "be4c832c84ff6d64010a5c1e85b3ca7c",
+        "retired": true,
+        "fault": null,
+        "atomic": true,
+        "frame_sequence": 347,
+        "pause_confirmed": false
+      },
+      "terminal": {
+        "state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "generation": 3,
+        "session": "be4c832c84ff6d64010a5c1e85b3ca7c",
+        "retired": true,
+        "fault": "Qualification trial ended",
+        "atomic": true,
+        "frame_sequence": 347,
+        "pause_confirmed": true
+      }
+    },
+    {
+      "name": "fault_takeover_02",
+      "sha256": "2b1afbc0cad8ad09805b0d6b734dc5066f93ad19be0062abf7f53eae0ccdc0fb",
+      "outcome": "PROBE_PASS",
+      "at_probe": {
+        "state": "MANUAL",
+        "owner": "HUMAN",
+        "generation": 2,
+        "session": "98b457f7ead981ee5a72e316fa665f1a",
+        "retired": true,
+        "fault": null,
+        "atomic": true,
+        "frame_sequence": 352,
+        "pause_confirmed": false
+      },
+      "terminal": {
+        "state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "generation": 3,
+        "session": "98b457f7ead981ee5a72e316fa665f1a",
+        "retired": true,
+        "fault": "Qualification trial ended",
+        "atomic": true,
+        "frame_sequence": 352,
+        "pause_confirmed": true
+      }
+    },
+    {
+      "name": "fault_takeover_03",
+      "sha256": "0f8adf404a68d1b4f51ac96747119b7ffa1fee56264038422e18eaeaef82bd7c",
+      "outcome": "PROBE_PASS",
+      "at_probe": {
+        "state": "MANUAL",
+        "owner": "HUMAN",
+        "generation": 2,
+        "session": "d3381d0ef5a85f561e6332c802bdc9ac",
+        "retired": true,
+        "fault": null,
+        "atomic": true,
+        "frame_sequence": 347,
+        "pause_confirmed": false
+      },
+      "terminal": {
+        "state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "generation": 3,
+        "session": "d3381d0ef5a85f561e6332c802bdc9ac",
+        "retired": true,
+        "fault": "Qualification trial ended",
+        "atomic": true,
+        "frame_sequence": 347,
+        "pause_confirmed": true
+      }
+    }
+  ],
+  "paused_native_probe": {
+    "outcome": "PASS",
+    "sha256": "df3011cbacdeb95d1baa471c7672956fcd1902750955d40b931fe2dfc2bc9a67"
+  },
+  "raw_root": "/home/ron/.cache/capvsar/ai-pilot/sol-campaign-20261010-c",
+  "restored_backup": "/home/ron/X-Plane 12/Output/capvsar-backups/ai-pilot-sol-requal-20261010"
+}

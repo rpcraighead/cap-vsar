@@ -123,6 +123,7 @@ class TaxiCoordinator:
         self._departure_runway: str | None = None
         self._departure_action: str | None = None
         self._hold_reason = ""
+        self._return_owed = False
 
     @property
     def route(self) -> TaxiRoute | None:
@@ -133,6 +134,8 @@ class TaxiCoordinator:
         if route.start != self.position:
             raise ValueError("taxi route must begin at the aircraft's current position")
         if route.purpose is RoutePurpose.OUTBOUND:
+            if self._return_owed:
+                raise ValueError("return to recorded starting point is still required")
             if self.phase not in (TaxiPhase.PARKED, TaxiPhase.HOLDING_FOR_CLARIFICATION):
                 raise ValueError("outbound route is not valid in the current phase")
         else:
@@ -281,6 +284,8 @@ class TaxiCoordinator:
         self._leg_index += 1
         if self._route is not None and self._leg_index == len(self._route.legs):
             self._taxi_authorized = False
+            if self._route.purpose is RoutePurpose.RETURN:
+                self._return_owed = False
             self.phase = (
                 TaxiPhase.HOLDING_SHORT_DEPARTURE
                 if self._route.purpose is RoutePurpose.OUTBOUND
@@ -296,9 +301,12 @@ class TaxiCoordinator:
 
     def mark_airborne(self) -> None:
         """Record observed flight state; this method does not grant takeoff authority."""
+        if self.phase is not TaxiPhase.CLEARED_FOR_TAKEOFF:
+            raise PermissionError("airborne transition requires explicit takeoff authority")
         self._route = None
         self._taxi_authorized = False
         self._crossing_runway = None
+        self._departure_action = None
         self.phase = TaxiPhase.AIRBORNE
 
     def mark_landed_and_runway_clear(self, exit_point: str) -> None:
@@ -310,6 +318,7 @@ class TaxiCoordinator:
         self.position = exit_point
         self._route = None
         self._taxi_authorized = False
+        self._return_owed = True
         self.phase = TaxiPhase.RUNWAY_CLEAR_AWAITING_TAXI
 
     def _current_leg(self) -> TaxiLeg:

@@ -1,0 +1,109 @@
+{
+  "schema": "capvsar.ai-pilot-sol-probes.v1",
+  "campaign_commit": "379fce3b73b0f83888060c1b5fd2904c2987e939",
+  "airborne_probes": [
+    {
+      "name": "fault_loss",
+      "trace": "fault_loss.jsonl",
+      "sha256": "560f33b0413cc2cb475abee2d9c7f53cf1836bb035e745ac6b4328e1ac2771c8",
+      "outcome": "PROBE_PASS",
+      "reason": null,
+      "bridge_at_probe": {
+        "state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "generation": 2,
+        "session": "f74143cbcdf4e358fecf0d818a9942ca",
+        "retired": true,
+        "fault": "Atomic frame expired",
+        "atomic": true,
+        "frame_sequence": 218,
+        "pause_confirmed": true
+      },
+      "terminal_bridge": {
+        "state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "generation": 2,
+        "session": "f74143cbcdf4e358fecf0d818a9942ca",
+        "retired": true,
+        "fault": "Atomic frame expired",
+        "atomic": true,
+        "frame_sequence": 218,
+        "pause_confirmed": true
+      }
+    },
+    {
+      "name": "fault_takeover",
+      "trace": "fault_takeover.jsonl",
+      "sha256": "2c0242b8d595b995875f1599b491137e78b15170cda7a2cb000c4cfc5ef4a382",
+      "outcome": "FAIL",
+      "reason": "Exchange requires active authority",
+      "bridge_at_probe": null,
+      "terminal_bridge": {
+        "state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "generation": 2,
+        "session": "2feedfc55b1d820e35b17e495f8ccc54",
+        "retired": true,
+        "fault": "Atomic frame expired",
+        "atomic": true,
+        "frame_sequence": 2,
+        "pause_confirmed": true
+      }
+    },
+    {
+      "name": "fault_takeover_retry1",
+      "trace": "fault_takeover_retry1.jsonl",
+      "sha256": "912bb8994efae162bc207e9935c7461de16fdfb5e6c9f819e0aa66993142bb64",
+      "outcome": "FAIL",
+      "reason": "Atomic frame expired",
+      "bridge_at_probe": null,
+      "terminal_bridge": {
+        "state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "generation": 1,
+        "session": "5c562cd709e6c1ee8666465318e4d94f",
+        "retired": true,
+        "fault": "Qualification trial ended",
+        "atomic": true,
+        "frame_sequence": 1,
+        "pause_confirmed": true
+      }
+    },
+    {
+      "name": "fault_takeover_retry2",
+      "trace": "fault_takeover_retry2.jsonl",
+      "sha256": "10c87a21e251de90e3cf8ac765e2523c81c872d25bfd48d27fddf19e1ab758d2",
+      "outcome": "PROBE_PASS",
+      "reason": null,
+      "bridge_at_probe": {
+        "state": "MANUAL",
+        "owner": "HUMAN",
+        "generation": 2,
+        "session": "59fd1c1227babbefb231752f08de6c05",
+        "retired": true,
+        "fault": null,
+        "atomic": true,
+        "frame_sequence": 217,
+        "pause_confirmed": false
+      },
+      "terminal_bridge": {
+        "state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "generation": 3,
+        "session": "59fd1c1227babbefb231752f08de6c05",
+        "retired": true,
+        "fault": "Qualification trial ended",
+        "atomic": true,
+        "frame_sequence": 217,
+        "pause_confirmed": true
+      }
+    }
+  ],
+  "native_probe": {
+    "trace": "/home/ron/.cache/capvsar/ai-pilot/20261010-sol-native-probe4.json",
+    "sha256": "99c6c59d917cff4d2b2491e9d9bd188bcfea4e8132eca01b5db0717cdff5499a",
+    "outcome": "PASS"
+  },
+  "simulator_restored": true,
+  "simulator_backup": "/home/ron/X-Plane 12/Output/capvsar-backups/ai-pilot-sol-20261010"
+}

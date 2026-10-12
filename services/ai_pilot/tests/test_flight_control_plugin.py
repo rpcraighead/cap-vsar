@@ -14,6 +14,7 @@ SESSION = "d" * 32
 class FakeXP(types.ModuleType):
     Type_Float = 1
     FlightLoop_Phase_AfterFlightModel = 1
+    FlightLoop_Phase_BeforeFlightModel = 0
 
     def __init__(self):
         super().__init__("xp")
@@ -37,11 +38,19 @@ class FakeXP(types.ModuleType):
     def findCommand(self, name): return name
     def getDatai(self, ref): return self.refs.get(ref, 0)
     def getDataf(self, ref): return self.refs.get(ref, 0.0)
+    def getDatad(self, ref): return self.refs.get(ref, 0.0)
+    def getNthAircraftModel(self, index): return ("Cessna_172SP_G1000.acf", "/sim/Cessna_172SP_G1000.acf")
+    def getVersions(self): return (12403, 400, 3)
+    def createFlightLoop(self, callback, phase): return (callback, phase)
+    def scheduleFlightLoop(self, loop, interval): pass
+    def destroyFlightLoop(self, loop): pass
     def getDatavf(self, ref, values, offset, count):
-        assert ref in ("sim/flightmodel/engine/ENGN_thro_use", "sim/cockpit2/engine/actuators/throttle_ratio")
-        values[:count] = self.refs[ref][offset:offset + count]
+        values[:count] = self.refs.get(ref, [0.] * 16)[offset:offset + count]
         return count
+    def getDatavi(self, ref, values, offset, count):
+        return self.getDatavf(ref, values, offset, count)
     def setDatai(self, ref, value):
+        assert ref != "sim/time/paused", "Pause is a read-only dataref"
         self.refs[ref] = value
         self.writes.append((ref, value))
     def setDataf(self, ref, value):
@@ -60,6 +69,8 @@ class FakeXP(types.ModuleType):
         elif name == "sim/autopilot/servos_off_any":
             self.refs["sim/cockpit2/autopilot/servos_on"] = 0
             self.refs["sim/cockpit2/autopilot/flight_director_mode"] = 1
+        elif name == "sim/operation/pause_on":
+            self.refs["sim/time/paused"] = 1
     def registerDataAccessor(self, name, kind, writable, **callbacks):
         self.accessors[name] = callbacks
         return name
@@ -67,7 +78,7 @@ class FakeXP(types.ModuleType):
     def log(self, message): pass
 
 
-def load_plugin(monkeypatch, tmp_path, *, activate_fake=True):
+def load_plugin(monkeypatch, tmp_path, *, activate_fake=True, mode=None):
     fake = FakeXP()
     monkeypatch.setitem(sys.modules, "xp", fake)
     monkeypatch.syspath_prepend(str(Path(__file__).parents[3] / "xplane"))
@@ -76,7 +87,7 @@ def load_plugin(monkeypatch, tmp_path, *, activate_fake=True):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     config = tmp_path / "config.json"
-    config.write_text(json.dumps({"session": SESSION, "secret": "s" * 64,
+    config.write_text(json.dumps({"session": SESSION, "secret": "s" * 64, "mode": mode,
                                   "socket_path": f"/tmp/capvsar-flight-control-{SESSION}.sock"}))
     module.CONFIG = config
     if activate_fake:
@@ -120,6 +131,20 @@ def test_plugin_fd_only_readback_does_not_claim_ap_engagement(monkeypatch, tmp_p
     assert plugin.core.sink.ap_engaged() is False
     fake.refs["sim/cockpit2/autopilot/servos_on"] = 1
     assert plugin.core.sink.ap_engaged() is None
+    plugin.XPluginStop()
+
+
+def test_surface_sink_owns_toe_brakes_and_releases_them(monkeypatch, tmp_path):
+    fake, plugin = load_plugin(monkeypatch, tmp_path)
+    sink = type(plugin.core.sink)(landing=True, toe_brakes=True)
+    sink.set_override(True)
+    sink.write_control("brake", .7)
+    assert sink.override_state() is True
+    assert sink.read_brakes() == (.7, .7)
+    assert fake.refs["sim/operation/override/override_toe_brakes"] == 1
+    sink.set_override(False)
+    assert sink.override_state() is False
+    assert sink.read_brakes() == (0., 0.)
     plugin.XPluginStop()
 
 

@@ -416,27 +416,19 @@ def _towered_at_hold_short():
     return taxi
 
 
-@defect("RT-8", "mark_airborne() succeeds from HOLDING_SHORT_DEPARTURE with no takeoff authority "
-                "and records nothing; an unauthorized departure is laundered into a normal flight")
 def test_rt8a_becoming_airborne_without_takeoff_authority_is_refused_or_recorded():
-    """SRC taxi.mark_airborne: no phase check. Its docstring says it 'does not
-    grant takeoff authority' - true, but it erases the requirement for it. The
-    coordinator is the component whose stated job is that this never happens
-    silently; test_taxi.py itself calls mark_airborne() from PARKED."""
+    """A taxi clearance cannot be laundered into a normal airborne state."""
     taxi = _towered_at_hold_short()
     with pytest.raises((PermissionError, ValueError)):
         taxi.mark_airborne()
 
 
-@defect("RT-8", "reporting uncertainty during the return taxi, then loading an OUTBOUND route, "
-                "skips the return-to-start requirement entirely")
 def test_rt8b_the_return_to_start_rule_cannot_be_bypassed_via_a_clarification_hold():
-    """SRC taxi.load_route: OUTBOUND is accepted from HOLDING_FOR_CLARIFICATION
-    regardless of whether the aircraft was mid-RETURN. The doc's rule - 'the
-    sortie is not complete until the crew taxis back to the starting point' - is
-    only enforced on routes that declare themselves RETURN."""
-    taxi = TaxiCoordinator("CAP ramp spot 4", towered=True)
-    taxi.mark_airborne(); taxi.mark_landed_and_runway_clear("B1")
+    """Route uncertainty must preserve the obligation to return to parking."""
+    taxi = _towered_at_hold_short()
+    taxi.authorize_departure_runway("27R", ClearanceSource.ATC, takeoff=True)
+    taxi.mark_airborne()
+    taxi.mark_landed_and_runway_clear("B1")
     taxi.load_route(TaxiRoute(RoutePurpose.RETURN, (TaxiLeg("B1", "A1"), TaxiLeg("A1", "CAP ramp spot 4"))))
     taxi.authorize_taxi(ClearanceSource.ATC)
     taxi.report_route_uncertain("sign mismatch")

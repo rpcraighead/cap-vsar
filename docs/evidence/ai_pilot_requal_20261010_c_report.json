@@ -1,0 +1,1611 @@
+{
+  "schema": "capvsar.ai-pilot-campaign-report.v1",
+  "commit": "4cd95808c5f8b266cf40a8b0396506b84afac6d0",
+  "plan_sha256": "74454d224deb86002eea03b1ac72f7af6944831ba7d7dde1ae017c90e29151d2",
+  "attempts": 20,
+  "passed_with_confirmed_pause": 20,
+  "required": 20,
+  "outcome": "PASS",
+  "results": [
+    {
+      "name": "baseline_01",
+      "entry": {
+        "name": "baseline_01",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1165,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 42.02336883544922,
+            "frame": 7033,
+            "stable_since_s": 32.01822280883789
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 62.86238479614258,
+            "frame": 8875,
+            "stable_since_s": 52.836463928222656
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 84.0650634765625,
+            "frame": 10738,
+            "stable_since_s": 74.02619171142578
+          }
+        ],
+        "trace_sha256": "6fcd50b7816c93b6d2935ec37e3412b7d7389692596bf7ce3e6b2c2179d64634"
+      },
+      "samples": 1165,
+      "capture_elapsed_sim_s": {
+        "establish": 20.353,
+        "maneuver": 41.192,
+        "recover": 62.394
+      },
+      "tracking_max_by_phase": {
+        "establish": {
+          "heading_max_deg": 0.9082489013671875,
+          "altitude_max_ft": 23.486328125,
+          "airspeed_max_kt": 19.667221069335938
+        },
+        "maneuver": {
+          "heading_max_deg": 19.43256378173828,
+          "altitude_max_ft": 21.14111328125,
+          "airspeed_max_kt": 1.0989990234375
+        },
+        "recover": {
+          "heading_max_deg": 20.54682159423828,
+          "altitude_max_ft": 27.0849609375,
+          "airspeed_max_kt": 0.88970947265625
+        }
+      },
+      "max_telemetry_wall_gap_s": 0.11402215999987675,
+      "saturation_frames": {
+        "roll": 0,
+        "pitch": 0,
+        "yaw": 0,
+        "throttle": 0,
+        "flap": 0,
+        "trim": 0
+      },
+      "command_frames": 1164,
+      "interventions": [],
+      "terminal": {
+        "runner_outcome": "PASS",
+        "bridge_state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "pause_confirmed": true,
+        "retired": true
+      },
+      "outcome": "PASS",
+      "trace_sha256": "6fcd50b7816c93b6d2935ec37e3412b7d7389692596bf7ce3e6b2c2179d64634"
+    },
+    {
+      "name": "baseline_02",
+      "entry": {
+        "name": "baseline_02",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1157,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 103.4385757446289,
+            "frame": 12485,
+            "stable_since_s": 93.41522979736328
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 124.27205657958984,
+            "frame": 14348,
+            "stable_since_s": 114.27140808105469
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 145.46739196777344,
+            "frame": 16251,
+            "stable_since_s": 135.416259765625
+          }
+        ],
+        "trace_sha256": "677961a137e6fa9805e50f3b7ce0bfd72b30e7efdd853f792679ccd2b90f915a"
+      },
+      "samples": 1157,
+      "capture_elapsed_sim_s": {
+        "establish": 19.266,
+        "maneuver": 40.1,
+        "recover": 61.295
+      },
+      "tracking_max_by_phase": {
+        "establish": {
+          "heading_max_deg": 0.7453536987304688,
+          "altitude_max_ft": 10.8486328125,
+          "airspeed_max_kt": 4.538398742675781
+        },
+        "maneuver": {
+          "heading_max_deg": 19.437416076660156,
+          "altitude_max_ft": 18.072265625,
+          "airspeed_max_kt": 1.0959091186523438
+        },
+        "recover": {
+          "heading_max_deg": 20.553619384765625,
+          "altitude_max_ft": 23.96533203125,
+          "airspeed_max_kt": 0.8753280639648438
+        }
+      },
+      "max_telemetry_wall_gap_s": 0.12122497000382282,
+      "saturation_frames": {
+        "roll": 0,
+        "pitch": 0,
+        "yaw": 0,
+        "throttle": 0,
+        "flap": 0,
+        "trim": 0
+      },
+      "command_frames": 1156,
+      "interventions": [],
+      "terminal": {
+        "runner_outcome": "PASS",
+        "bridge_state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "pause_confirmed": true,
+        "retired": true
+      },
+      "outcome": "PASS",
+      "trace_sha256": "677961a137e6fa9805e50f3b7ce0bfd72b30e7efdd853f792679ccd2b90f915a"
+    },
+    {
+      "name": "baseline_03",
+      "entry": {
+        "name": "baseline_03",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1160,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 164.81959533691406,
+            "frame": 18055,
+            "stable_since_s": 154.80377197265625
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 185.6560516357422,
+            "frame": 19944,
+            "stable_since_s": 175.65443420410156
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 206.83367919921875,
+            "frame": 21850,
+            "stable_since_s": 196.82034301757812
+          }
+        ],
+        "trace_sha256": "d16c67136e110ea6abb88f812dbb8f4f0cce5e46bf6adc7234cbda62165443f8"
+      },
+      "samples": 1160,
+      "capture_elapsed_sim_s": {
+        "establish": 19.28,
+        "maneuver": 40.116,
+        "recover": 61.294
+      },
+      "tracking_max_by_phase": {
+        "establish": {
+          "heading_max_deg": 0.7586212158203125,
+          "altitude_max_ft": 10.84716796875,
+          "airspeed_max_kt": 4.5223388671875
+        },
+        "maneuver": {
+          "heading_max_deg": 19.437423706054688,
+          "altitude_max_ft": 18.03564453125,
+          "airspeed_max_kt": 1.093658447265625
+        },
+        "recover": {
+          "heading_max_deg": 20.552841186523438,
+          "altitude_max_ft": 23.92578125,
+          "airspeed_max_kt": 0.8720779418945312
+        }
+      },
+      "max_telemetry_wall_gap_s": 0.0914041109936079,
+      "saturation_frames": {
+        "roll": 0,
+        "pitch": 0,
+        "yaw": 0,
+        "throttle": 0,
+        "flap": 0,
+        "trim": 0
+      },
+      "command_frames": 1159,
+      "interventions": [],
+      "terminal": {
+        "runner_outcome": "PASS",
+        "bridge_state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "pause_confirmed": true,
+        "retired": true
+      },
+      "outcome": "PASS",
+      "trace_sha256": "d16c67136e110ea6abb88f812dbb8f4f0cce5e46bf6adc7234cbda62165443f8"
+    },
+    {
+      "name": "baseline_04",
+      "entry": {
+        "name": "baseline_04",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1174,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 226.25543212890625,
+            "frame": 23646,
+            "stable_since_s": 216.2101593017578
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 247.04150390625,
+            "frame": 25505,
+            "stable_since_s": 237.03274536132812
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 268.24969482421875,
+            "frame": 27415,
+            "stable_since_s": 258.206787109375
+          }
+        ],
+        "trace_sha256": "27f9394990c1f4fe0cb6724faac1294eff80c2a31d7fdad455a2de0a737b9130"
+      },
+      "samples": 1174,
+      "capture_elapsed_sim_s": {
+        "establish": 19.345,
+        "maneuver": 40.131,
+        "recover": 61.34
+      },
+      "tracking_max_by_phase": {
+        "establish": {
+          "heading_max_deg": 0.7120437622070312,
+          "altitude_max_ft": 10.71044921875,
+          "airspeed_max_kt": 4.5215301513671875
+        },
+        "maneuver": {
+          "heading_max_deg": 19.437164306640625,
+          "altitude_max_ft": 18.02734375,
+          "airspeed_max_kt": 1.0911178588867188
+        },
+        "recover": {
+          "heading_max_deg": 20.555221557617188,
+          "altitude_max_ft": 23.9326171875,
+          "airspeed_max_kt": 0.873138427734375
+        }
+      },
+      "max_telemetry_wall_gap_s": 0.09994497300067451,
+      "saturation_frames": {
+        "roll": 0,
+        "pitch": 0,
+        "yaw": 0,
+        "throttle": 0,
+        "flap": 0,
+        "trim": 0
+      },
+      "command_frames": 1173,
+      "interventions": [],
+      "terminal": {
+        "runner_outcome": "PASS",
+        "bridge_state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "pause_confirmed": true,
+        "retired": true
+      },
+      "outcome": "PASS",
+      "trace_sha256": "27f9394990c1f4fe0cb6724faac1294eff80c2a31d7fdad455a2de0a737b9130"
+    },
+    {
+      "name": "baseline_05",
+      "entry": {
+        "name": "baseline_05",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1166,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 287.56671142578125,
+            "frame": 29207,
+            "stable_since_s": 277.56024169921875
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 308.42694091796875,
+            "frame": 31101,
+            "stable_since_s": 298.402099609375
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 329.5920104980469,
+            "frame": 33022,
+            "stable_since_s": 319.5890808105469
+          }
+        ],
+        "trace_sha256": "8be22ab134f8cbe3be0f53134b1279e4f58af87bff134fd166a62c8efd64c634"
+      },
+      "samples": 1166,
+      "capture_elapsed_sim_s": {
+        "establish": 19.261,
+        "maneuver": 40.121,
+        "recover": 61.286
+      },
+      "tracking_max_by_phase": {
+        "establish": {
+          "heading_max_deg": 0.754180908203125,
+          "altitude_max_ft": 10.73779296875,
+          "airspeed_max_kt": 4.526153564453125
+        },
+        "maneuver": {
+          "heading_max_deg": 19.438232421875,
+          "altitude_max_ft": 17.94580078125,
+          "airspeed_max_kt": 1.095245361328125
+        },
+        "recover": {
+          "heading_max_deg": 20.548248291015625,
+          "altitude_max_ft": 23.81201171875,
+          "airspeed_max_kt": 0.8675079345703125
+        }
+      },
+      "max_telemetry_wall_gap_s": 0.09445526000490645,
+      "saturation_frames": {
+        "roll": 0,
+        "pitch": 0,
+        "yaw": 0,
+        "throttle": 0,
+        "flap": 0,
+        "trim": 0
+      },
+      "command_frames": 1165,
+      "interventions": [],
+      "terminal": {
+        "runner_outcome": "PASS",
+        "bridge_state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "pause_confirmed": true,
+        "retired": true
+      },
+      "outcome": "PASS",
+      "trace_sha256": "8be22ab134f8cbe3be0f53134b1279e4f58af87bff134fd166a62c8efd64c634"
+    },
+    {
+      "name": "baseline_06",
+      "entry": {
+        "name": "baseline_06",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1167,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 348.9182434082031,
+            "frame": 34843,
+            "stable_since_s": 338.8974914550781
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 369.7359619140625,
+            "frame": 36726,
+            "stable_since_s": 359.7239074707031
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 390.8955993652344,
+            "frame": 38640,
+            "stable_since_s": 380.8807067871094
+          }
+        ],
+        "trace_sha256": "ed13cdb8e6bd38db20bfbdee944528c84fd8dd0707d06c134a182c7d39ed3411"
+      },
+      "samples": 1167,
+      "capture_elapsed_sim_s": {
+        "establish": 19.282,
+        "maneuver": 40.1,
+        "recover": 61.259
+      },
+      "tracking_max_by_phase": {
+        "establish": {
+          "heading_max_deg": 0.7193374633789062,
+          "altitude_max_ft": 10.666015625,
+          "airspeed_max_kt": 4.517356872558594
+        },
+        "maneuver": {
+          "heading_max_deg": 19.437477111816406,
+          "altitude_max_ft": 17.9365234375,
+          "airspeed_max_kt": 1.09515380859375
+        },
+        "recover": {
+          "heading_max_deg": 20.554611206054688,
+          "altitude_max_ft": 23.81982421875,
+          "airspeed_max_kt": 0.8743438720703125
+        }
+      },
+      "max_telemetry_wall_gap_s": 0.09076110100431833,
+      "saturation_frames": {
+        "roll": 0,
+        "pitch": 0,
+        "yaw": 0,
+        "throttle": 0,
+        "flap": 0,
+        "trim": 0
+      },
+      "command_frames": 1166,
+      "interventions": [],
+      "terminal": {
+        "runner_outcome": "PASS",
+        "bridge_state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "pause_confirmed": true,
+        "retired": true
+      },
+      "outcome": "PASS",
+      "trace_sha256": "ed13cdb8e6bd38db20bfbdee944528c84fd8dd0707d06c134a182c7d39ed3411"
+    },
+    {
+      "name": "baseline_07",
+      "entry": {
+        "name": "baseline_07",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1170,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 410.2342529296875,
+            "frame": 40445,
+            "stable_since_s": 400.22650146484375
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 431.04119873046875,
+            "frame": 42305,
+            "stable_since_s": 421.0197448730469
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 452.2117004394531,
+            "frame": 44221,
+            "stable_since_s": 442.1905212402344
+          }
+        ],
+        "trace_sha256": "07c8b62d831ade379e5e08a80af7419a04c11cf0815516a5f542b4836da282c9"
+      },
+      "samples": 1170,
+      "capture_elapsed_sim_s": {
+        "establish": 19.258,
+        "maneuver": 40.065,
+        "recover": 61.236
+      },
+      "tracking_max_by_phase": {
+        "establish": {
+          "heading_max_deg": 0.7365341186523438,
+          "altitude_max_ft": 10.7783203125,
+          "airspeed_max_kt": 4.531501770019531
+        },
+        "maneuver": {
+          "heading_max_deg": 19.437637329101562,
+          "altitude_max_ft": 17.98876953125,
+          "airspeed_max_kt": 1.0973739624023438
+        },
+        "recover": {
+          "heading_max_deg": 20.554473876953125,
+          "altitude_max_ft": 23.89208984375,
+          "airspeed_max_kt": 0.8755111694335938
+        }
+      },
+      "max_telemetry_wall_gap_s": 0.08790057499572868,
+      "saturation_frames": {
+        "roll": 0,
+        "pitch": 0,
+        "yaw": 0,
+        "throttle": 0,
+        "flap": 0,
+        "trim": 0
+      },
+      "command_frames": 1169,
+      "interventions": [],
+      "terminal": {
+        "runner_outcome": "PASS",
+        "bridge_state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "pause_confirmed": true,
+        "retired": true
+      },
+      "outcome": "PASS",
+      "trace_sha256": "07c8b62d831ade379e5e08a80af7419a04c11cf0815516a5f542b4836da282c9"
+    },
+    {
+      "name": "baseline_08",
+      "entry": {
+        "name": "baseline_08",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1160,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 471.59637451171875,
+            "frame": 46033,
+            "stable_since_s": 461.58074951171875
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 492.41326904296875,
+            "frame": 47897,
+            "stable_since_s": 482.3714294433594
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 513.5794677734375,
+            "frame": 49827,
+            "stable_since_s": 503.5561218261719
+          }
+        ],
+        "trace_sha256": "b8f7725b12af51227f0c5b30bb4b17d23a65dd52e8682e90b1c4eaa43b0fa186"
+      },
+      "samples": 1160,
+      "capture_elapsed_sim_s": {
+        "establish": 19.306,
+        "maneuver": 40.123,
+        "recover": 61.289
+      },
+      "tracking_max_by_phase": {
+        "establish": {
+          "heading_max_deg": 0.7131271362304688,
+          "altitude_max_ft": 10.7060546875,
+          "airspeed_max_kt": 4.527488708496094
+        },
+        "maneuver": {
+          "heading_max_deg": 19.437515258789062,
+          "altitude_max_ft": 18.00048828125,
+          "airspeed_max_kt": 1.0952682495117188
+        },
+        "recover": {
+          "heading_max_deg": 20.553428649902344,
+          "altitude_max_ft": 23.900390625,
+          "airspeed_max_kt": 0.874053955078125
+        }
+      },
+      "max_telemetry_wall_gap_s": 0.09853304799617035,
+      "saturation_frames": {
+        "roll": 0,
+        "pitch": 0,
+        "yaw": 0,
+        "throttle": 0,
+        "flap": 0,
+        "trim": 0
+      },
+      "command_frames": 1159,
+      "interventions": [],
+      "terminal": {
+        "runner_outcome": "PASS",
+        "bridge_state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "pause_confirmed": true,
+        "retired": true
+      },
+      "outcome": "PASS",
+      "trace_sha256": "b8f7725b12af51227f0c5b30bb4b17d23a65dd52e8682e90b1c4eaa43b0fa186"
+    },
+    {
+      "name": "baseline_09",
+      "entry": {
+        "name": "baseline_09",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1156,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 532.9305419921875,
+            "frame": 51649,
+            "stable_since_s": 522.901611328125
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 553.741943359375,
+            "frame": 53515,
+            "stable_since_s": 543.7113037109375
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 574.9158935546875,
+            "frame": 55443,
+            "stable_since_s": 564.8903198242188
+          }
+        ],
+        "trace_sha256": "8b309286cc1d3f0df1d1c9188613c21dfd60ad4bb0beb33184c92ee71b648c05"
+      },
+      "samples": 1156,
+      "capture_elapsed_sim_s": {
+        "establish": 19.283,
+        "maneuver": 40.094,
+        "recover": 61.268
+      },
+      "tracking_max_by_phase": {
+        "establish": {
+          "heading_max_deg": 0.7197113037109375,
+          "altitude_max_ft": 10.68603515625,
+          "airspeed_max_kt": 4.5414276123046875
+        },
+        "maneuver": {
+          "heading_max_deg": 19.438034057617188,
+          "altitude_max_ft": 18.0654296875,
+          "airspeed_max_kt": 1.0989151000976562
+        },
+        "recover": {
+          "heading_max_deg": 20.5545654296875,
+          "altitude_max_ft": 23.9736328125,
+          "airspeed_max_kt": 0.8782119750976562
+        }
+      },
+      "max_telemetry_wall_gap_s": 0.11589064700092422,
+      "saturation_frames": {
+        "roll": 0,
+        "pitch": 0,
+        "yaw": 0,
+        "throttle": 0,
+        "flap": 0,
+        "trim": 0
+      },
+      "command_frames": 1155,
+      "interventions": [],
+      "terminal": {
+        "runner_outcome": "PASS",
+        "bridge_state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "pause_confirmed": true,
+        "retired": true
+      },
+      "outcome": "PASS",
+      "trace_sha256": "8b309286cc1d3f0df1d1c9188613c21dfd60ad4bb0beb33184c92ee71b648c05"
+    },
+    {
+      "name": "baseline_10",
+      "entry": {
+        "name": "baseline_10",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1164,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 594.2675170898438,
+            "frame": 57252,
+            "stable_since_s": 584.250732421875
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 615.1098022460938,
+            "frame": 59118,
+            "stable_since_s": 605.0963745117188
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 636.2916259765625,
+            "frame": 61046,
+            "stable_since_s": 626.2742919921875
+          }
+        ],
+        "trace_sha256": "0bc6d296555668c49c31f29542b5bf74d98c1c63d0a9cba0f6711bfd6a4b66e0"
+      },
+      "samples": 1164,
+      "capture_elapsed_sim_s": {
+        "establish": 19.248,
+        "maneuver": 40.091,
+        "recover": 61.272
+      },
+      "tracking_max_by_phase": {
+        "establish": {
+          "heading_max_deg": 0.7578201293945312,
+          "altitude_max_ft": 10.888671875,
+          "airspeed_max_kt": 4.534385681152344
+        },
+        "maneuver": {
+          "heading_max_deg": 19.438507080078125,
+          "altitude_max_ft": 18.0498046875,
+          "airspeed_max_kt": 1.093902587890625
+        },
+        "recover": {
+          "heading_max_deg": 20.555160522460938,
+          "altitude_max_ft": 23.9462890625,
+          "airspeed_max_kt": 0.875946044921875
+        }
+      },
+      "max_telemetry_wall_gap_s": 0.08936381699459162,
+      "saturation_frames": {
+        "roll": 0,
+        "pitch": 0,
+        "yaw": 0,
+        "throttle": 0,
+        "flap": 0,
+        "trim": 0
+      },
+      "command_frames": 1163,
+      "interventions": [],
+      "terminal": {
+        "runner_outcome": "PASS",
+        "bridge_state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "pause_confirmed": true,
+        "retired": true
+      },
+      "outcome": "PASS",
+      "trace_sha256": "0bc6d296555668c49c31f29542b5bf74d98c1c63d0a9cba0f6711bfd6a4b66e0"
+    },
+    {
+      "name": "heading_left",
+      "entry": {
+        "name": "heading_left",
+        "heading_offset": -10,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1154,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 655.5839233398438,
+            "frame": 62842,
+            "stable_since_s": 645.533935546875
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 676.4345703125,
+            "frame": 64709,
+            "stable_since_s": 666.3943481445312
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 697.6409301757812,
+            "frame": 66635,
+            "stable_since_s": 687.5799560546875
+          }
+        ],
+        "trace_sha256": "e539c9e2793f797067d49d310253f2ee49e521da73a75cfe44d84ddb34ffedd9"
+      },
+      "samples": 1154,
+      "capture_elapsed_sim_s": {
+        "establish": 19.228,
+        "maneuver": 40.078,
+        "recover": 61.285
+      },
+      "tracking_max_by_phase": {
+        "establish": {
+          "heading_max_deg": 10.316940307617188,
+          "altitude_max_ft": 10.6884765625,
+          "airspeed_max_kt": 4.522071838378906
+        },
+        "maneuver": {
+          "heading_max_deg": 19.25896453857422,
+          "altitude_max_ft": 17.4228515625,
+          "airspeed_max_kt": 1.0973968505859375
+        },
+        "recover": {
+          "heading_max_deg": 20.552658081054688,
+          "altitude_max_ft": 23.2275390625,
+          "airspeed_max_kt": 0.8652572631835938
+        }
+      },
+      "max_telemetry_wall_gap_s": 0.11249497799872188,
+      "saturation_frames": {
+        "roll": 0,
+        "pitch": 0,
+        "yaw": 0,
+        "throttle": 0,
+        "flap": 0,
+        "trim": 0
+      },
+      "command_frames": 1153,
+      "interventions": [],
+      "terminal": {
+        "runner_outcome": "PASS",
+        "bridge_state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "pause_confirmed": true,
+        "retired": true
+      },
+      "outcome": "PASS",
+      "trace_sha256": "e539c9e2793f797067d49d310253f2ee49e521da73a75cfe44d84ddb34ffedd9"
+    },
+    {
+      "name": "heading_right",
+      "entry": {
+        "name": "heading_right",
+        "heading_offset": 10,
+        "altitude_offset": 0,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1172,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 717.0220336914062,
+            "frame": 68442,
+            "stable_since_s": 706.9855346679688
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 737.8482055664062,
+            "frame": 70311,
+            "stable_since_s": 727.8212280273438
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 759.001708984375,
+            "frame": 72238,
+            "stable_since_s": 748.9771118164062
+          }
+        ],
+        "trace_sha256": "79e4e1885cf36f76801f600a3a795c939ef6c3e6468b0914e068bbb0f078d719"
+      },
+      "samples": 1172,
+      "capture_elapsed_sim_s": {
+        "establish": 19.32,
+        "maneuver": 40.147,
+        "recover": 61.3
+      },
+      "tracking_max_by_phase": {
+        "establish": {
+          "heading_max_deg": 10.251678466796875,
+          "altitude_max_ft": 10.3798828125,
+          "airspeed_max_kt": 4.495384216308594
+        },
+        "maneuver": {
+          "heading_max_deg": 19.620529174804688,
+          "altitude_max_ft": 17.42626953125,
+          "airspeed_max_kt": 1.1171417236328125
+        },
+        "recover": {
+          "heading_max_deg": 20.55268096923828,
+          "altitude_max_ft": 23.0625,
+          "airspeed_max_kt": 0.8770828247070312
+        }
+      },
+      "max_telemetry_wall_gap_s": 0.0994361269986257,
+      "saturation_frames": {
+        "roll": 0,
+        "pitch": 0,
+        "yaw": 0,
+        "throttle": 0,
+        "flap": 0,
+        "trim": 0
+      },
+      "command_frames": 1171,
+      "interventions": [],
+      "terminal": {
+        "runner_outcome": "PASS",
+        "bridge_state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "pause_confirmed": true,
+        "retired": true
+      },
+      "outcome": "PASS",
+      "trace_sha256": "79e4e1885cf36f76801f600a3a795c939ef6c3e6468b0914e068bbb0f078d719"
+    },
+    {
+      "name": "low",
+      "entry": {
+        "name": "low",
+        "heading_offset": 0,
+        "altitude_offset": -150,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1776,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 810.3160400390625,
+            "frame": 76998,
+            "stable_since_s": 800.2941284179688
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 831.1566162109375,
+            "frame": 78890,
+            "stable_since_s": 821.1080322265625
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 852.342041015625,
+            "frame": 80815,
+            "stable_since_s": 842.3131713867188
+          }
+        ],
+        "trace_sha256": "ded8393a55a390f49391a295cc7bb0e144b4f35bdd101b9410cf01a74f20db97"
+      },
+      "samples": 1776,
+      "capture_elapsed_sim_s": {
+        "establish": 51.237,
+        "maneuver": 72.078,
+        "recover": 93.263
+      },
+      "tracking_max_by_phase": {
+        "establish": {
+          "heading_max_deg": 0.7573928833007812,
+          "altitude_max_ft": 141.896484375,
+          "airspeed_max_kt": 6.612945556640625
+        },
+        "maneuver": {
+          "heading_max_deg": 19.45623779296875,
+          "altitude_max_ft": 56.880859375,
+          "airspeed_max_kt": 1.102874755859375
+        },
+        "recover": {
+          "heading_max_deg": 20.593582153320312,
+          "altitude_max_ft": 39.439453125,
+          "airspeed_max_kt": 0.46790313720703125
+        }
+      },
+      "max_telemetry_wall_gap_s": 0.11223910999979125,
+      "saturation_frames": {
+        "roll": 0,
+        "pitch": 0,
+        "yaw": 0,
+        "throttle": 1,
+        "flap": 0,
+        "trim": 0
+      },
+      "command_frames": 1775,
+      "interventions": [],
+      "terminal": {
+        "runner_outcome": "PASS",
+        "bridge_state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "pause_confirmed": true,
+        "retired": true
+      },
+      "outcome": "PASS",
+      "trace_sha256": "ded8393a55a390f49391a295cc7bb0e144b4f35bdd101b9410cf01a74f20db97"
+    },
+    {
+      "name": "high",
+      "entry": {
+        "name": "high",
+        "heading_offset": 0,
+        "altitude_offset": 150,
+        "speed_offset": 0
+      },
+      "exit_code": 0,
+      "score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1972,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 902.75537109375,
+            "frame": 85431,
+            "stable_since_s": 892.7322998046875
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 924.117431640625,
+            "frame": 87374,
+            "stable_since_s": 914.0972900390625
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 956.0215454101562,
+            "frame": 90287,
+            "stable_since_s": 945.9591674804688
+          }
+        ],
+        "trace_sha256": "83129704117d19f3c4fafcf07d425b4ee4b02648ad157bbdd8c07f748b3ae324"
+      },
+      "samples": 1972,
+      "capture_elapsed_sim_s": {
+        "establish": 50.321,
+        "maneuver": 71.683,
+        "recover": 103.587
+      },
+      "tracking_max_by_phase": {
+        "establish": {
+          "heading_max_deg": 0.69000244140625,
+          "altitude_max_ft": 158.54248046875,
+          "airspeed_max_kt": 3.168487548828125
+        },
+        "maneuver": {
+          "heading_max_deg": 19.470458984375,
+          "altitude_max_ft": 77.8203125,
+          "airspeed_max_kt": 0.9020843505859375
+        },
+        "recover": {
+          "heading_max_deg": 20.540069580078125,
+          "altitude_max_ft": 55.29833984375,
+          "airspeed_max_kt": 0.641143798828125
+        }
+      },
+      "max_telemetry_wall_gap_s": 0.10934411200287286,
+      "saturation_frames": {
+        "roll": 0,
+        "pitch": 0,
+        "yaw": 0,
+        "throttle": 0,
+        "flap": 0,
+        "trim": 0
+      },
+      "command_frames": 1971,
+      "interventions": [],
+      "terminal": {
+        "runner_outcome": "PASS",
+        "bridge_state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "pause_confirmed": true,
+        "retired": true
+      },
+      "outcome": "PASS",
+      "trace_sha256": "83129704117d19f3c4fafcf07d425b4ee4b02648ad157bbdd8c07f748b3ae324"
+    },
+    {
+      "name": "slow",
+      "entry": {
+        "name": "slow",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": -5
+      },
+      "exit_code": 0,
+      "score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1176,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 976.2523193359375,
+            "frame": 92184,
+            "stable_since_s": 966.2152709960938
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 997.0921630859375,
+            "frame": 94090,
+            "stable_since_s": 987.053955078125
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 1018.3019409179688,
+            "frame": 96022,
+            "stable_since_s": 1008.265380859375
+          }
+        ],
+        "trace_sha256": "c05742b54428d8175ae3b5005b10a995fb39f66954024bcd7f7106e58a523a9b"
+      },
+      "samples": 1176,
+      "capture_elapsed_sim_s": {
+        "establish": 20.139,
+        "maneuver": 40.979,
+        "recover": 62.189
+      },
+      "tracking_max_by_phase": {
+        "establish": {
+          "heading_max_deg": 0.886199951171875,
+          "altitude_max_ft": 8.11962890625,
+          "airspeed_max_kt": 7.584968566894531
+        },
+        "maneuver": {
+          "heading_max_deg": 19.423728942871094,
+          "altitude_max_ft": 16.60302734375,
+          "airspeed_max_kt": 1.0802230834960938
+        },
+        "recover": {
+          "heading_max_deg": 20.55150604248047,
+          "altitude_max_ft": 22.119140625,
+          "airspeed_max_kt": 0.8423080444335938
+        }
+      },
+      "max_telemetry_wall_gap_s": 0.11791905899735866,
+      "saturation_frames": {
+        "roll": 0,
+        "pitch": 0,
+        "yaw": 0,
+        "throttle": 1,
+        "flap": 0,
+        "trim": 0
+      },
+      "command_frames": 1175,
+      "interventions": [],
+      "terminal": {
+        "runner_outcome": "PASS",
+        "bridge_state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "pause_confirmed": true,
+        "retired": true
+      },
+      "outcome": "PASS",
+      "trace_sha256": "c05742b54428d8175ae3b5005b10a995fb39f66954024bcd7f7106e58a523a9b"
+    },
+    {
+      "name": "fast",
+      "entry": {
+        "name": "fast",
+        "heading_offset": 0,
+        "altitude_offset": 0,
+        "speed_offset": 5
+      },
+      "exit_code": 0,
+      "score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1239,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 1041.8680419921875,
+            "frame": 98221,
+            "stable_since_s": 1031.8475341796875
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 1062.7132568359375,
+            "frame": 100131,
+            "stable_since_s": 1052.660888671875
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 1083.8984375,
+            "frame": 102133,
+            "stable_since_s": 1073.87646484375
+          }
+        ],
+        "trace_sha256": "dab0c363d80f9d8464172a2fc70faaf1eebfe769ed8150ed8ec83c7665c9b62c"
+      },
+      "samples": 1239,
+      "capture_elapsed_sim_s": {
+        "establish": 23.452,
+        "maneuver": 44.297,
+        "recover": 65.483
+      },
+      "tracking_max_by_phase": {
+        "establish": {
+          "heading_max_deg": 0.6523208618164062,
+          "altitude_max_ft": 15.30029296875,
+          "airspeed_max_kt": 4.219459533691406
+        },
+        "maneuver": {
+          "heading_max_deg": 19.444908142089844,
+          "altitude_max_ft": 19.3515625,
+          "airspeed_max_kt": 1.0686264038085938
+        },
+        "recover": {
+          "heading_max_deg": 20.55236053466797,
+          "altitude_max_ft": 24.43408203125,
+          "airspeed_max_kt": 0.8624420166015625
+        }
+      },
+      "max_telemetry_wall_gap_s": 0.11716524700023001,
+      "saturation_frames": {
+        "roll": 0,
+        "pitch": 0,
+        "yaw": 0,
+        "throttle": 0,
+        "flap": 0,
+        "trim": 0
+      },
+      "command_frames": 1238,
+      "interventions": [],
+      "terminal": {
+        "runner_outcome": "PASS",
+        "bridge_state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "pause_confirmed": true,
+        "retired": true
+      },
+      "outcome": "PASS",
+      "trace_sha256": "dab0c363d80f9d8464172a2fc70faaf1eebfe769ed8150ed8ec83c7665c9b62c"
+    },
+    {
+      "name": "left_high_slow",
+      "entry": {
+        "name": "left_high_slow",
+        "heading_offset": -10,
+        "altitude_offset": 100,
+        "speed_offset": -5
+      },
+      "exit_code": 0,
+      "score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1807,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 1132.36572265625,
+            "frame": 106576,
+            "stable_since_s": 1122.3603515625
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 1153.10400390625,
+            "frame": 108454,
+            "stable_since_s": 1143.08203125
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 1179.5045166015625,
+            "frame": 110862,
+            "stable_since_s": 1169.5029296875
+          }
+        ],
+        "trace_sha256": "1141160cd0808d0c4d4553d8302d5f58a9258449c50d40e2dbf28d5fef27ea3e"
+      },
+      "samples": 1807,
+      "capture_elapsed_sim_s": {
+        "establish": 48.411,
+        "maneuver": 69.149,
+        "recover": 95.55
+      },
+      "tracking_max_by_phase": {
+        "establish": {
+          "heading_max_deg": 10.334518432617188,
+          "altitude_max_ft": 108.12109375,
+          "airspeed_max_kt": 7.235130310058594
+        },
+        "maneuver": {
+          "heading_max_deg": 19.479942321777344,
+          "altitude_max_ft": 65.392578125,
+          "airspeed_max_kt": 0.9551620483398438
+        },
+        "recover": {
+          "heading_max_deg": 20.575050354003906,
+          "altitude_max_ft": 49.564453125,
+          "airspeed_max_kt": 0.560760498046875
+        }
+      },
+      "max_telemetry_wall_gap_s": 0.09735501199611463,
+      "saturation_frames": {
+        "roll": 0,
+        "pitch": 0,
+        "yaw": 0,
+        "throttle": 0,
+        "flap": 0,
+        "trim": 0
+      },
+      "command_frames": 1806,
+      "interventions": [],
+      "terminal": {
+        "runner_outcome": "PASS",
+        "bridge_state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "pause_confirmed": true,
+        "retired": true
+      },
+      "outcome": "PASS",
+      "trace_sha256": "1141160cd0808d0c4d4553d8302d5f58a9258449c50d40e2dbf28d5fef27ea3e"
+    },
+    {
+      "name": "right_low_fast",
+      "entry": {
+        "name": "right_low_fast",
+        "heading_offset": 10,
+        "altitude_offset": -100,
+        "speed_offset": 5
+      },
+      "exit_code": 0,
+      "score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1618,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 1223.592529296875,
+            "frame": 114968,
+            "stable_since_s": 1213.5579833984375
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 1244.410400390625,
+            "frame": 116869,
+            "stable_since_s": 1234.394775390625
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 1265.6385498046875,
+            "frame": 118864,
+            "stable_since_s": 1255.6072998046875
+          }
+        ],
+        "trace_sha256": "90a29c04569ea1f312a1cf0e0c13c3a2b408ad1eac4a2ede1a50cbc9bb2f184c"
+      },
+      "samples": 1618,
+      "capture_elapsed_sim_s": {
+        "establish": 43.974,
+        "maneuver": 64.792,
+        "recover": 86.02
+      },
+      "tracking_max_by_phase": {
+        "establish": {
+          "heading_max_deg": 10.170944213867188,
+          "altitude_max_ft": 91.888671875,
+          "airspeed_max_kt": 5.701057434082031
+        },
+        "maneuver": {
+          "heading_max_deg": 19.463470458984375,
+          "altitude_max_ft": 34.1171875,
+          "airspeed_max_kt": 0.8216934204101562
+        },
+        "recover": {
+          "heading_max_deg": 20.601318359375,
+          "altitude_max_ft": 30.76904296875,
+          "airspeed_max_kt": 0.43138885498046875
+        }
+      },
+      "max_telemetry_wall_gap_s": 0.09869606400025077,
+      "saturation_frames": {
+        "roll": 0,
+        "pitch": 0,
+        "yaw": 0,
+        "throttle": 0,
+        "flap": 0,
+        "trim": 0
+      },
+      "command_frames": 1617,
+      "interventions": [],
+      "terminal": {
+        "runner_outcome": "PASS",
+        "bridge_state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "pause_confirmed": true,
+        "retired": true
+      },
+      "outcome": "PASS",
+      "trace_sha256": "90a29c04569ea1f312a1cf0e0c13c3a2b408ad1eac4a2ede1a50cbc9bb2f184c"
+    },
+    {
+      "name": "left_low_fast",
+      "entry": {
+        "name": "left_low_fast",
+        "heading_offset": -10,
+        "altitude_offset": -100,
+        "speed_offset": 5
+      },
+      "exit_code": 0,
+      "score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1594,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 1309.119140625,
+            "frame": 123044,
+            "stable_since_s": 1299.0684814453125
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 1329.88720703125,
+            "frame": 124997,
+            "stable_since_s": 1319.87548828125
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 1351.0933837890625,
+            "frame": 126993,
+            "stable_since_s": 1341.070556640625
+          }
+        ],
+        "trace_sha256": "e771bd4751ec7eabe80e1d52d8f060b75e78435a9a833d49a33b4f3b9f121e4a"
+      },
+      "samples": 1594,
+      "capture_elapsed_sim_s": {
+        "establish": 43.437,
+        "maneuver": 64.205,
+        "recover": 85.411
+      },
+      "tracking_max_by_phase": {
+        "establish": {
+          "heading_max_deg": 10.239883422851562,
+          "altitude_max_ft": 91.88671875,
+          "airspeed_max_kt": 5.615234375
+        },
+        "maneuver": {
+          "heading_max_deg": 19.461257934570312,
+          "altitude_max_ft": 32.888671875,
+          "airspeed_max_kt": 0.8038406372070312
+        },
+        "recover": {
+          "heading_max_deg": 20.604049682617188,
+          "altitude_max_ft": 30.345703125,
+          "airspeed_max_kt": 0.43585968017578125
+        }
+      },
+      "max_telemetry_wall_gap_s": 0.10740839200298069,
+      "saturation_frames": {
+        "roll": 0,
+        "pitch": 0,
+        "yaw": 0,
+        "throttle": 1,
+        "flap": 0,
+        "trim": 0
+      },
+      "command_frames": 1593,
+      "interventions": [],
+      "terminal": {
+        "runner_outcome": "PASS",
+        "bridge_state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "pause_confirmed": true,
+        "retired": true
+      },
+      "outcome": "PASS",
+      "trace_sha256": "e771bd4751ec7eabe80e1d52d8f060b75e78435a9a833d49a33b4f3b9f121e4a"
+    },
+    {
+      "name": "right_high_slow",
+      "entry": {
+        "name": "right_high_slow",
+        "heading_offset": 10,
+        "altitude_offset": 100,
+        "speed_offset": -5
+      },
+      "exit_code": 0,
+      "score": {
+        "outcome": "PASS",
+        "reason": null,
+        "samples": 1750,
+        "phase": "complete",
+        "transitions": [
+          {
+            "phase": "establish",
+            "sim_time_s": 1399.667236328125,
+            "frame": 131745,
+            "stable_since_s": 1389.637939453125
+          },
+          {
+            "phase": "maneuver",
+            "sim_time_s": 1420.3843994140625,
+            "frame": 133718,
+            "stable_since_s": 1410.3663330078125
+          },
+          {
+            "phase": "recover",
+            "sim_time_s": 1446.7978515625,
+            "frame": 135914,
+            "stable_since_s": 1436.7955322265625
+          }
+        ],
+        "trace_sha256": "834e35674015f0e0d3f047b2622fc3b17b02cf49cb17db6b165c7253e93990ac"
+      },
+      "samples": 1750,
+      "capture_elapsed_sim_s": {
+        "establish": 48.468,
+        "maneuver": 69.185,
+        "recover": 95.598
+      },
+      "tracking_max_by_phase": {
+        "establish": {
+          "heading_max_deg": 10.32159423828125,
+          "altitude_max_ft": 108.11962890625,
+          "airspeed_max_kt": 7.258567810058594
+        },
+        "maneuver": {
+          "heading_max_deg": 19.481521606445312,
+          "altitude_max_ft": 65.49267578125,
+          "airspeed_max_kt": 0.9596405029296875
+        },
+        "recover": {
+          "heading_max_deg": 20.575576782226562,
+          "altitude_max_ft": 49.60986328125,
+          "airspeed_max_kt": 0.5656814575195312
+        }
+      },
+      "max_telemetry_wall_gap_s": 0.10188524900149787,
+      "saturation_frames": {
+        "roll": 0,
+        "pitch": 0,
+        "yaw": 0,
+        "throttle": 1,
+        "flap": 0,
+        "trim": 0
+      },
+      "command_frames": 1749,
+      "interventions": [],
+      "terminal": {
+        "runner_outcome": "PASS",
+        "bridge_state": "PAUSED_FAULT",
+        "owner": "FAULT",
+        "pause_confirmed": true,
+        "retired": true
+      },
+      "outcome": "PASS",
+      "trace_sha256": "834e35674015f0e0d3f047b2622fc3b17b02cf49cb17db6b165c7253e93990ac"
+    }
+  ]
+}
