@@ -3,56 +3,68 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CAP V-SAR Debrief</title>
 <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
-<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/tokens.css">
+<link rel="stylesheet" href="/static/vendor/fonts/fonts.css">
+<link rel="stylesheet" href="/static/shell.css">
+<link rel="stylesheet" href="/static/debrief.css">
 </head><body>
 
-<header>
-  <div class="brand"><b>CAP V-SAR</b> <span>Debrief</span></div>
-  <div class="spacer"></div>
-  <a class="navlink" href="/">Home</a>
-  <a class="navlink" href="/instructor">Instructor console</a>
-  <a class="navlink" href="/base">Mission Base</a>
-  <a class="navlink" href="/radio">Base Radio</a>
-  <a class="navlink nav-planner" href="/planner/" target="_blank" title="Flight Planner">Flight Planner</a>
-  <div id="clock" class="mono"></div>
-</header>
+<header id="shell"></header>
 
-<main>
-  <aside>
-    <section>
-      <h2>Sortie</h2>
-      <select id="sortieSel"></select>
-      <div id="sortieInfo" class="box" style="margin-top:8px">select a sortie</div>
+<div class="debrief">
+  <aside class="debrief-side">
+    <section class="card">
+      <h2><label for="sortieSel">Sortie</label></h2>
+      <select id="sortieSel" class="input"></select>
+      <div id="sortieInfo" class="sortie-info small">select a sortie</div>
     </section>
 
-    <section>
-      <h2>Result</h2>
-      <div id="result" class="box">—</div>
-    </section>
-
-    <section>
+    <section class="card events-card">
       <h2>Events</h2>
-      <div id="events" class="box small">—</div>
+      <ol id="events" class="log">—</ol>
     </section>
   </aside>
 
-  <div style="flex:1;display:flex;flex-direction:column">
-    <div id="map" style="flex:1"></div>
-    <div class="scrub">
-      <button id="play" class="primary">Play</button>
-      <input id="slider" type="range" min="0" max="100" value="0">
-      <span id="tlabel" class="mono">00:00</span>
-      <select id="speed">
-        <option value="1">1x</option>
-        <option value="4" selected>4x</option>
-        <option value="10">10x</option>
-        <option value="30">30x</option>
-      </select>
-    </div>
-  </div>
-</main>
+  <main class="debrief-main">
+    <section class="card" aria-labelledby="scoreHead">
+      <h2 id="scoreHead">Scoring</h2>
+      <div id="summary" class="ac-cards"></div>
+    </section>
+
+    <section class="card" aria-labelledby="chartHead">
+      <h2 id="chartHead">Bearing error over time</h2>
+      <p class="chart-sub">Each aircraft's DF needle minus the true bearing to the beacon, in degrees;
+        positive is clockwise of the truth. Diamonds are the bearings mission base logged.
+        Click the chart to move the replay there.</p>
+      <div id="errChart"></div>
+    </section>
+
+    <section class="card replay" aria-labelledby="replayHead">
+      <h2 id="replayHead">Replay</h2>
+      <div id="map"></div>
+      <div class="scrub">
+        <button id="play" class="btn primary" type="button">Play</button>
+        <div class="scrub-track">
+          <div id="marks" class="marks"></div>
+          <input id="slider" type="range" min="0" max="100" step="any" value="0" aria-label="Replay position">
+        </div>
+        <span id="tlabel" class="mono">00:00</span>
+        <select id="speed" class="input" aria-label="Replay speed">
+          <option value="1">1x</option>
+          <option value="4" selected>4x</option>
+          <option value="10">10x</option>
+          <option value="30">30x</option>
+        </select>
+      </div>
+      <p class="marks-key small"><span><span class="mark-key brg"></span>logged bearing, in the aircraft's colour</span>
+        <span><span class="mark-key msg"></span>message</span> <span>&middot; click a mark to jump there</span></p>
+    </section>
+  </main>
+</div>
 
 <script src="/static/vendor/leaflet/leaflet.js"></script>
 <script src="/static/charts.js"></script>
+<script src="/static/shell.js"></script>
+<script src="/static/viz.js"></script>
 <script src="/static/debrief.js"></script>
 </body></html>
