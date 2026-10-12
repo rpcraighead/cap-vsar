@@ -57,6 +57,22 @@ lo, hi = target*(1-tol), target*(1+tol)
 print("  target       %.0f fpm +/-%.0f%%  =  %.0f..%.0f" % (target, tol*100, lo, hi))
 print("  error        %+.0f fpm  (%+.1f%%)" % (got-target, 100*(got-target)/target))
 print("  VERDICT      %s" % ("PASS" if lo <= got <= hi else "MISS"))
+# A2-11 (2026-10-11): comparing a climb flown at 2,000-3,000 ft with the
+# sea-level 924 fpm flattered every run by ~10 %. POH Figure 5-8 (rate of
+# climb at 3100 lb, standard temperature, 2400 RPM, full throttle, mixture at
+# the maximum-power fuel-flow placard, cowl flaps open) gives the target at the
+# altitude actually flown; that comparison is the verdict that counts.
+POH_FIG_5_8 = [(0, 925), (2000, 835), (4000, 750), (6000, 660), (8000, 565),
+               (10000, 470), (12000, 375), (14000, 285)]
+mean_alt = statistics.fmean(alt)
+for (a0, r0), (a1, r1) in zip(POH_FIG_5_8, POH_FIG_5_8[1:]):
+    if a0 <= mean_alt <= a1 or (mean_alt < 0 and a0 == 0):
+        poh = r0 + (r1 - r0) * (mean_alt - a0) / (a1 - a0)
+        break
+else:
+    poh = POH_FIG_5_8[-1][1]
+lo2, hi2 = poh * (1 - tol), poh * (1 + tol)
 print()
-print("  NOTE: measured at %.0f ft mean, not sea level. The rate decays with" % statistics.fmean(alt))
-print("  altitude, so the true sea-level figure is HIGHER than this.")
+print("  POH Fig 5-8  %.0f fpm at %.0f ft (std temp)  =  %.0f..%.0f" % (poh, mean_alt, lo2, hi2))
+print("  error        %+.0f fpm  (%+.1f%%)" % (got - poh, 100 * (got - poh) / poh))
+print("  VERDICT@ALT  %s" % ("PASS" if lo2 <= got <= hi2 else "MISS"))

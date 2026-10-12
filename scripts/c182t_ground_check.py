@@ -56,6 +56,7 @@ def main(argv=None) -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--spec", type=Path, default=Path.home() / ".cache/capvsar/flight-tests/ground_check_start.json")
     ap.add_argument("--hold-s", type=float, default=20.0)
+    ap.add_argument("--mixture-sweep", action="store_true")
     ap.add_argument("--shots", type=Path, default=None,
                     help="directory for cockpit/outside screenshots of the propeller")
     args = ap.parse_args(argv)
@@ -70,6 +71,10 @@ def main(argv=None) -> int:
             "local_time": {"day_of_year": 160, "time_in_24_hours": 12.0}}
     args.spec.parent.mkdir(parents=True, exist_ok=True)
     args.spec.write_text(json.dumps(spec, indent=1))
+    for _ in range(60):                 # a previous run may still be shutting down
+        if not h.running():
+            break
+        time.sleep(3)
     h.launch(True, None, None, ["--new_flight_json=%s" % args.spec])
     result = {"spec": spec, "acf": ACF}
     try:
@@ -152,6 +157,25 @@ def main(argv=None) -> int:
                             "groundspeed_mps": mean(names[4]), "oat_c": mean(names[5]),
                             "baro_pa": mean(names[6])}
         result["static"]["tcds_2300_2400"] = 2300 <= (result["static"]["rpm"] or 0) <= 2400
+        if args.mixture_sweep:
+            # A2-4: is the full-throttle power shortfall a mixture effect? Sweep the
+            # mixture lever at full throttle and record power at each setting.
+            sweep = []
+            for mixture in [1.0 - 0.04 * i for i in range(13)]:
+                h.dref_set("sim/cockpit2/engine/actuators/mixture_ratio_all", mixture)
+                for ref, value in brakes:
+                    h.dref_set(ref, value)
+                time.sleep(3.0)
+                r = h.dref_get(names[:3] + ["sim/cockpit2/engine/indicators/EGT_deg_C[0]",
+                                            "sim/cockpit2/engine/indicators/fuel_flow_kg_sec[0]"])
+                sweep.append({"mixture": mixture, "rpm": r.get(names[0]), "mp": r.get(names[1]),
+                              "hp": (r.get(names[2]) or 0) / 745.7,
+                              "egt_c": r.get("sim/cockpit2/engine/indicators/EGT_deg_C[0]"),
+                              "ff_gph": (r.get("sim/cockpit2/engine/indicators/fuel_flow_kg_sec[0]") or 0) * 3600 / 2.72})
+            result["mixture_sweep"] = sweep
+            best = max(sweep, key=lambda e: e["hp"])
+            result["best_power"] = best
+            print("BEST POWER", json.dumps(best), flush=True)
         h.dref_set("sim/cockpit2/engine/actuators/throttle_ratio_all", 0.0)
         time.sleep(2)
     finally:

@@ -3,6 +3,46 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-10-11 — C182T: tracker C18 worked, drag calibrated in flight (branch `fix/c182-a2-2026-10-11`)
+
+Status: **implemented and flown; pushed to the branch, not merged to main.**
+
+Builder (`scripts/build_c182t_package.py`): 79 in three-blade physics propeller
+with TCDS pitch stops 14.9/31.7 deg, six cylinders, Va 110, gear contact points
+on the 182T track and wheelbase, the C172 handbook and G430/G530/S-TEC manuals
+no longer shipped, CAP 487 as the default livery, and `XPLANE_ROOT` in place of
+hard-coded paths. `_body/0/_part_cd` is now **0.120**, flight-calibrated. Tests
+in `tests/test_c182t_acf_sources.py` pin all of these.
+
+Prop visual (`scripts/convert_flightgear_c182.py`): the donor prop-blur texture
+had blade wedges baked in and did not turn, which is what looked wrong from the
+cockpit. The builder now generates a radial disc that spins about the hub, and
+the spinner stays drawn at disc speed.
+
+Flight test. New `scripts/c182t_perf_card.py` flies the C1, B1 and C2 cards on
+the aircraft's own autopilot at ISA, calm, 3,100 lb. New
+`scripts/c182t_ground_check.py` reads wheel geometry, static RPM and a mixture
+sweep. `scripts/reduce_climb_point.py` now compares with POH Figure 5-8 at the
+altitude flown; the old sea-level comparison flattered climbs by about 10 %.
+
+| Result | Value | Handbook |
+|---|---|---|
+| Static RPM, full throttle | 2318-2326 | 2300-2400 (TCDS) |
+| Gear track / wheelbase | 108.0 / 66.5 in | 108.2 / 66.5 in |
+| Power, best-power mixture | 229.2 HP | 230 HP |
+| C1 sea-level max, Cd 0.120, best power | 149.5 KTAS | 150 |
+| C2 6,000 ft 79 %, Cd 0.120 | 141.9 KTAS | 143 |
+| B1 climb at Vy, best power | 955 fpm | 806 at that altitude |
+
+A2-4 is not an engine fault: X-Plane's full-rich mixture is richer than best
+power. The climb excess at Vy is a low-speed geometry effect and stays with
+A-1. Record: `docs/C182T_FLIGHT_MODEL_CALIBRATION.md` (2026-10-11 section).
+Evidence: `docs/evidence/c182t-2026-10-11/`. The installed package is
+byte-identical to the flown candidate (ACF SHA-256 `11ff17d1…cd89d8`).
+
+Open: A2-12 (squadron W&B data), A-1. The cowl is not visible from the seat,
+and the cockpit still shows an N172SP placard; neither is tracked yet.
+
 ## 2026-10-11 — C182T package review (branch `review-c182-2026-10-11`)
 
 Review only; nothing in the package or builder changed. `docs/C182T_REVIEW_2026-10-11.md`

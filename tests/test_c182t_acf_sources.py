@@ -129,3 +129,34 @@ def test_every_watched_field_is_patched_or_inherited_by_decision():
     assert not unexplained, "C172 values inherited without a decision:\n" + "\n".join(unexplained)
     overlap = sorted(set(INHERITED_ON_PURPOSE) & patched_records)
     assert not overlap, "fields both patched and listed as inherited: %s" % overlap
+
+
+def test_body_drag_is_the_flight_calibrated_value_not_the_c172s():
+    """A2-11: 0.120 put C1, C2 and B1 inside the card tolerances on 2026-10-11;
+    the C172's 0.200 missed all three by 11-12 %."""
+    assert patched("_body/0/_part_cd") == pytest.approx(0.12)
+
+
+# A2-6: the C172 handbook and manuals for avionics this aircraft lacks must not
+# ship. Checked in the builder source, and in the installed package when present.
+WRONG_MANUALS = (
+    "X-Plane_C172_Pilot_Operating_Manual.pdf",
+    "X-Plane G430 Manual.pdf",
+    "X-Plane G530 Manual.pdf",
+    "S-TEC Autopilot Manual.pdf",
+)
+
+
+def test_builder_removes_the_wrong_manuals():
+    source = (REPO / "scripts" / "build_c182t_package.py").read_text()
+    block = source.split("redundant_files = [", 1)[1].split("]", 1)[0]
+    for name in WRONG_MANUALS:
+        assert f'"{name}"' in block, name
+
+
+def test_installed_package_carries_no_wrong_manual():
+    installed = DEFAULT_SOURCE_DIR.parent.parent / "CAP" / "Cessna 182T NAV III"
+    if not (installed / "Cessna_182T_G1000.acf").exists():
+        pytest.skip("C182T package not installed on this machine")
+    present = [n for n in WRONG_MANUALS if (installed / n).exists()]
+    assert not present, present

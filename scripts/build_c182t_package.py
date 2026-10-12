@@ -217,6 +217,24 @@ ACF_PATCHES = {
     # That direction is right - the 182's tail is genuinely larger than the 172's -
     # but note that NO consulted source publishes a C182T horizontal tail AREA, so
     # only the span is verified. The area is a consequence, not a sourced target.
+    # A2-11: fuselage drag coefficient, CALIBRATED IN FLIGHT, not sourced.
+    # X-Plane's _body/0/_part_cd is a frontal-area coefficient; the inherited
+    # C172 value 0.200 left CAP 487 11-12 % slow at every cruise point. Flown on
+    # 2026-10-11 at 3,100 lb, ISA, calm, on the aircraft's own autopilot, with
+    # the 79-in propeller and TCDS pitch stops already in place (order A2-11):
+    #
+    #   Cd     C1 SL max KTAS   C2 6000 ft 79% KTAS   B1 Vy climb vs POH Fig 5-8
+    #   0.200  131.4 (-12.4%)   127.0 (-11.2%)        739 fpm  -11 %
+    #   0.100  150.9 (+0.6%)    147.1 (+2.8%)         899 fpm  +12 %
+    #   0.120  146.5 (-2.4%)    141.9 (-0.7%)         872 fpm   +7 %
+    #
+    # 0.120 is the value that puts all three inside the card tolerances
+    # (+/-5 KTAS, +/-10 % climb). It is a tuning of the whole-airframe drag on
+    # the C172's unconverted aerodynamic definition, not a measured fuselage
+    # coefficient: replace it when the Plane Maker geometry is converted (A-1).
+    # Evidence: docs/C182T_FLIGHT_MODEL_CALIBRATION.md, 2026-10-11 section.
+    r"^P _body/0/_part_cd .*": "P _body/0/_part_cd 0.120000000",
+
     # A2-3: wheel positions. Measured in X-Plane 12.4.3 on 2026-10-11 from
     # sim/flightmodel/parts/tire_[xz]_no_deflection with the stock C172 gear:
     # track 98.55 in, wheelbase 65.65 in. POH Figure 1-1: track 9 ft 0 in

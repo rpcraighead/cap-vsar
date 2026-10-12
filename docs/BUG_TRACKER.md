@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 218 items, 39 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 218 items, 27 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -176,7 +176,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [AI-22](#ai-22) | P0 | critical | fly_arduplane_backend: a refused gate.acquire() left SITL flying the aircraft | infra | C15 | S | AI-21 | fixed |
 | [A-1](#a-1) | P0 | high | CAP 487 retains the stock C172S airframe geometry and exterior | infra | C16 | L | — | open |
 | [AI-11](#ai-11) | P0 | high | FDR records defaults as data and the live deck never subscribes a dataref (V2-7, red team RT-3) | infra | C15 | M | — | fixed |
-| [A2-2](#a2-2) | P1 | high | Physics propeller is the C172 76-inch geometry; visual prop is 79 in | infra | C18 | S | — | open |
+| [A2-2](#a2-2) | P1 | high | Physics propeller is the C172 76-inch geometry; visual prop is 79 in | infra | C18 | S | — | fixed |
 | [AI-1](#ai-1) | P1 | high | Legacy AI pilot entrypoints bypass maneuver validation | infra | C15 | M | — | fixed |
 | [AI-10](#ai-10) | P1 | high | Controller and live deck silently share UDP receive port 49005 (V2-6, red team RT-2) | infra | C15 | M | — | open |
 | [AI-12](#ai-12) | P1 | high | Direct backend: no human-input arbitration, and its own fault path never pauses (D-3, red team RT-4) | infra | C15 | M | — | open |
@@ -192,13 +192,13 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [AI-9](#ai-9) | P1 | high | UDP receiver accepts telemetry from any sender (red team RT-1) | infra | C15 | M | — | open |
 | [O-5](#o-5) | P1 | high | Mumble server has no per-role ACLs and images float | infra | C5 | M | X-2, O-4 | fixed |
 | [O-7a](#o-7a) | P1 | high | Air Manager seat count for three MO stations unconfirmed | infra | C5 | S | — | resolved |
-| [A2-1](#a2-1) | P2 | medium | C182T ACF still has four cylinders | infra | C18 | S | — | open |
-| [A2-10](#a2-10) | P2 | medium | No test pins the built ACF to the dimension master | infra | C18 | M | — | open |
-| [A2-11](#a2-11) | P2 | medium | Calibration order: propeller and gear before the fuselage-Cd experiment | infra | C18 | M | A2-2, A2-3 | open |
+| [A2-1](#a2-1) | P2 | medium | C182T ACF still has four cylinders | infra | C18 | S | — | fixed |
+| [A2-10](#a2-10) | P2 | medium | No test pins the built ACF to the dimension master | infra | C18 | M | — | fixed |
+| [A2-11](#a2-11) | P2 | medium | Calibration order: propeller and gear before the fuselage-Cd experiment | infra | C18 | M | A2-2, A2-3 | fixed |
 | [A2-13](#a2-13) | P2 | medium | AI pilot: finish the C182T profile port (runner flag, bridge identity, taxi constants) | infra | C18 | M | — | open |
-| [A2-3](#a2-3) | P2 | medium | Gear physics track 8.2 ft while the mesh was corrected to 9 ft | infra | C18 | M | — | open |
-| [A2-4](#a2-4) | P2 | medium | Full-throttle power 214 HP vs 230 rated is unexplained | infra | C18 | M | A2-2 | open |
-| [A2-5](#a2-5) | P2 | medium | Aircraft default paint shows N429CP while the ACF and ATC say CAP 487 | infra | C18 | S | — | open |
+| [A2-3](#a2-3) | P2 | medium | Gear physics track 8.2 ft while the mesh was corrected to 9 ft | infra | C18 | M | — | fixed |
+| [A2-4](#a2-4) | P2 | medium | Full-throttle power 214 HP vs 230 rated is unexplained | infra | C18 | M | A2-2 | resolved |
+| [A2-5](#a2-5) | P2 | medium | Aircraft default paint shows N429CP while the ACF and ATC say CAP 487 | infra | C18 | S | — | fixed |
 | [AI-14](#ai-14) | P2 | medium | ManeuverGate has no liveness coupling to its monitor (D-3, red team RT-6) | infra | C15 | M | — | open |
 | [AI-15](#ai-15) | P2 | medium | Any local process can acquire or revoke aircraft control with no credential (red team RT-7) | infra | C15 | M | — | open |
 | [AI-16](#ai-16) | P2 | medium | Taxi coordinator launders an unauthorized departure and lets a clarification hold skip return-to-start (red team RT-8) | infra | C15 | S | AI-8 | open |
@@ -239,11 +239,11 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [I-11](#i-11) | P2 | low | TDFM memory table is 6 generic channels, not a CAP fleet plan | instruments | C12 | M | — | fixed |
 | [I-14](#i-14) | P2 | low | GMA 1347 ICS isolation and Split COM are lamp-only | instruments | C12 | L | — | fixed |
 | [A2-12](#a2-12) | P3 | low | Empty weight is the POH sample aircraft, not a CAP 182T | infra | C18 | S | — | open |
-| [A2-14](#a2-14) | P3 | low | C182T document index | infra | C18 | S | — | open |
-| [A2-6](#a2-6) | P3 | low | Package ships the C172 POM, G430/G530 and S-TEC manuals | infra | C18 | S | — | open |
-| [A2-7](#a2-7) | P3 | low | c182t_checklists.py says full flaps are 30 deg | infra | C18 | S | — | open |
-| [A2-8](#a2-8) | P3 | low | acf/_Va_kts is 0 | infra | C18 | S | — | open |
-| [A2-9](#a2-9) | P3 | low | Builder hard-codes /home/ron paths | infra | C18 | S | — | open |
+| [A2-14](#a2-14) | P3 | low | C182T document index | infra | C18 | S | — | fixed |
+| [A2-6](#a2-6) | P3 | low | Package ships the C172 POM, G430/G530 and S-TEC manuals | infra | C18 | S | — | fixed |
+| [A2-7](#a2-7) | P3 | low | c182t_checklists.py says full flaps are 30 deg | infra | C18 | S | — | fixed |
+| [A2-8](#a2-8) | P3 | low | acf/_Va_kts is 0 | infra | C18 | S | — | fixed |
+| [A2-9](#a2-9) | P3 | low | Builder hard-codes /home/ron paths | infra | C18 | S | — | fixed |
 | [AI-18](#ai-18) | P3 | low | SIGTERM skips every shutdown safeguard (red team RT-11) | infra | C15 | S | — | open |
 | [AI-19](#ai-19) | P3 | low | Advisory chat's no-action guard is a keyword list with no output filter (red team RT-13) | infra | C15 | S | — | open |
 | [B2-10](#b2-10) | P3 | low | Tracked fig_c182t_aircraft.png is a render of Laminar's C172 model | docs | C16 | S | — | open |
@@ -1289,7 +1289,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Physics propeller is the C172 76-inch geometry; visual prop is 79 in**
 
-`P1` · `high` · `bug` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort S · wave 3 · **open**
+`P1` · `high` · `bug` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort S · wave 3 · **fixed**
 
 - **Files:** `scripts/build_c182t_package.py`, `scripts/c182t_dimension_master.json`
 - **Problem:** _blad/0/_semilen_SEG 3.200 ft (76.8 in disc) against the TCDS/POH 79 in; chords and 10/40 deg pitch range are the C172 two-blade's and unsourced. 6 % less disc area; a candidate for the C1 cruise shortfall.
@@ -1470,7 +1470,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **C182T ACF still has four cylinders**
 
-`P2` · `medium` · `bug` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort S · wave 3 · **open**
+`P2` · `medium` · `bug` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort S · wave 3 · **fixed**
 
 - **Files:** `scripts/build_c182t_package.py`
 - **Problem:** acf/_num_cylinders is the C172's 4; the IO-540 has six. Engine model and G1000 lean-assist show a four-cylinder engine.
@@ -1481,7 +1481,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **No test pins the built ACF to the dimension master**
 
-`P2` · `medium` · `improvement` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort M · wave 3 · **open**
+`P2` · `medium` · `improvement` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort M · wave 3 · **fixed**
 
 - **Files:** `tests/test_c182t_flight_model.py`, `scripts/c182t_dimension_master.json`
 - **Problem:** ACF_PATCHES and the sourced JSON both carry 182T values with no check that they agree; A2-1/A2-2 survived because nothing listed the C172 fields left unpatched.
@@ -1492,7 +1492,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Calibration order: propeller and gear before the fuselage-Cd experiment**
 
-`P2` · `medium` · `improvement` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort M · wave 3 · **open**
+`P2` · `medium` · `improvement` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort M · wave 3 · **fixed**
 
 - **Files:** `docs/C182T_FLIGHT_MODEL_CALIBRATION.md`
 - **Problem:** The staged Cd=0.100 experiment would calibrate drag against the wrong propeller.
@@ -1515,7 +1515,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Gear physics track 8.2 ft while the mesh was corrected to 9 ft**
 
-`P2` · `medium` · `bug` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort M · wave 3 · **open**
+`P2` · `medium` · `bug` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort M · wave 3 · **fixed**
 
 - **Files:** `scripts/build_c182t_package.py`, `scripts/c182t_corrections.json`
 - **Problem:** _gear/1,2 attach (x 1.6 ft, latE -57 deg, leg 3.0 ft) is the C172SP's; wheelbase 65 in vs 66.5 in. Wheels drawn ~5 in outboard of the contact points each side.
@@ -1526,7 +1526,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Full-throttle power 214 HP vs 230 rated is unexplained**
 
-`P2` · `medium` · `bug` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort M · wave 3 · **open**
+`P2` · `medium` · `bug` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort M · wave 3 · **resolved**
 
 - **Files:** `docs/C182T_FLIGHT_MODEL_CALIBRATION.md`
 - **Problem:** C1 recorded 214 HP at 2400 RPM near sea level; ambient explains ~2 %. Candidates: A2-2, _max_MP_limit, _engine_friction_ratio.
@@ -1538,7 +1538,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Aircraft default paint shows N429CP while the ACF and ATC say CAP 487**
 
-`P2` · `medium` · `bug` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort S · wave 3 · **open**
+`P2` · `medium` · `bug` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort S · wave 3 · **fixed**
 
 - **Files:** `scripts/build_c182t_package.py`, `scripts/adapt_cap_livery.py`, `README.md`
 - **Problem:** The builder makes the adapted N429CP C172 artwork the default texture and icon; its own docstring rules out real registrations on a different simulated type; the artwork's author/URL are unknown.
@@ -1997,7 +1997,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **C182T document index**
 
-`P3` · `low` · `improvement` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort S · wave 3 · **open**
+`P3` · `low` · `improvement` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort S · wave 3 · **fixed**
 
 - **Files:** `docs/`
 - **Problem:** Seven docs/C182T_*.md plus the GPL plan, calibration doc and CHANGELOG describe the package with no statement of which is authoritative for what.
@@ -2008,7 +2008,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Package ships the C172 POM, G430/G530 and S-TEC manuals**
 
-`P3` · `low` · `bug` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort S · wave 3 · **open**
+`P3` · `low` · `bug` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort S · wave 3 · **fixed**
 
 - **Files:** `scripts/build_c182t_package.py`
 - **Problem:** Copied from the C172 folder; the 182T NAV III has a GFC 700 and the C172 manual's speeds are the wrong ones.
@@ -2019,7 +2019,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **c182t_checklists.py says full flaps are 30 deg**
 
-`P3` · `low` · `bug` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort S · wave 3 · **open**
+`P3` · `low` · `bug` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort S · wave 3 · **fixed**
 
 - **Files:** `services/ai_pilot/c182t_checklists.py`
 - **Problem:** Landing note reads 'full 30 deg below 100 KIAS'; the 182T full flap is 38 deg (ACF detent 3, TCDS); POH says 20-FULL below 100. Takeoff checklist omits the 10 deg preferred flap setting.
@@ -2030,7 +2030,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **acf/_Va_kts is 0**
 
-`P3` · `low` · `bug` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort S · wave 3 · **open**
+`P3` · `low` · `bug` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort S · wave 3 · **fixed**
 
 - **Files:** `scripts/build_c182t_package.py`
 - **Problem:** Not displayed by the G1000 but read by envelope tooling.
@@ -2041,7 +2041,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **Builder hard-codes /home/ron paths**
 
-`P3` · `low` · `bug` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort S · wave 3 · **open**
+`P3` · `low` · `bug` · Deployment / infrastructure · cluster C18 (C182T package review 2026-10-11) · effort S · wave 3 · **fixed**
 
 - **Files:** `scripts/build_c182t_package.py`
 - **Problem:** DEFAULT_SOURCE_DIR/TARGET_DIR and livery defaults are absolute workstation paths.

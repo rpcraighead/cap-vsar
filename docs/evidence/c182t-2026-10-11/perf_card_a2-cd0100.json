@@ -1,0 +1,24 @@
+{
+ "run": "a2-cd0100",
+ "start": {
+  "latitude": 32.7,
+  "longitude": -117.4,
+  "elevation_in_meters": 182.9,
+  "heading_true": 270.0,
+  "speed_in_meters_per_second": 62.0
+ },
+ "acf": "Aircraft/CAP/Cessna 182T NAV III body-cd-0100/Cessna_182T_G1000.acf",
+ "c1_modes": {
+  "sim/cockpit2/autopilot/autopilot_on": 1.0,
+  "sim/cockpit2/autopilot/heading_status": 2.0,
+  "sim/cockpit2/autopilot/altitude_hold_status": 2.0
+ },
+ "mass": "current condition:\n   total weight   2185 lb  (991.0 kg)\n   payload        0 lb\n   fuel           261 lb  (L 130 / R 130)\n   CG             +0.0405 m offset  =  13.0% MAC  =  FS 33.6 in (derived)\n\n   note: the aircraft is flying. Set conditions BETWEEN test points,\n   never during one - changing mass mid-run invalidates the run.\n\n   empty weight computed as 1924 lb\n\nachieved condition:\n   total weight   3100 lb  (1406.1 kg)\n   payload        654 lb\n   fuel           522 lb  (L 261 / R 261)\n   CG             +0.1980 m offset  =  23.5% MAC  =  FS 39.8 in (derived)\n\n   weight error -0 lb against the 3100 lb target\n\n   Record the ACHIEVED values with the test point, not the targets.\n",
+ "c1_capture": "capturing card C1 run a2-cd0100 for 120 s at 20 Hz - fly the point now\n\n--- card C1 run a2-cd0100: 2395 samples ---\n  rate         20.0 Hz effective (requested 20), max interval 0.053 s, 0 gaps\n  weight       3095 lb\n  KIAS         min 149.5  max 149.5\n  alt ft       min 622  max 622\n  AGL ft       min 611  max 611\n  alpha deg    min -1.64  max -1.63\n  Nz g         min 0.999  max 0.999\n  flap actual  min 0.000  max 0.000\n\nReduce against docs/C182T_FLIGHT_TEST_CARD.md and record the real numbers,\nincluding misses, in CHANGELOG.md.\ntrace: /home/ron/.cache/capvsar/flight-tests/C1_runa2-cd0100_20261011-215130.jsonl\n",
+ "b1_modes": {
+  "sim/cockpit2/autopilot/speed_status": 2.0,
+  "sim/cockpit2/autopilot/airspeed_dial_kts": 80.0,
+  "sim/flightmodel/position/indicated_airspeed": 85.37970733642578
+ },
+ "b1_capture": "capturing card B1 run a2-cd0100 for 90 s at 20 Hz - fly the point now\n\n--- card B1 run a2-cd0100: 1797 samples ---\n  rate         20.0 Hz effective (requested 20), max interval 0.055 s, 0 gaps\n  weight       3090 lb\n  KIAS         min 79.9  max 84.1\n  alt ft       min 1669  max 3079\n  AGL ft       min 1678  max 3082\n  alpha deg    min 4.27  max 5.16\n  Nz g         min 0.970  max 0.980\n  flap actual  min 0.000  max 0.000\n\nReduce against docs/C182T_FLIGHT_TEST_CARD.md and record the real numbers,\nincluding misses, in CHANGELOG.md.\ntrace: /home/ron/.cache/capvsar/flight-tests/B1_runa2-cd0100_20261011-215335.jsonl\n"
+}

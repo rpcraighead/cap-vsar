@@ -16,7 +16,9 @@ from pathlib import Path
 
 RECORD = "P _body/0/_part_cd "
 IDENTITY = "P acf/_tailnum CAP 487"
-STOCK_CD = 0.200000003
+# The baseline is whatever the builder writes (0.120 since the 2026-10-11
+# calibration; it was the C172's 0.200000003 before).
+STOCK_CD = 0.12
 
 
 def sha256(data: bytes) -> str:
@@ -33,8 +35,8 @@ def make_candidate(source: Path, output: Path, body_cd: float) -> dict:
     if output.exists() or output.is_symlink():
         raise ValueError(f"Output already exists: {output}")
     output = resolved_output
-    if not math.isfinite(body_cd) or not 0.025 <= body_cd <= STOCK_CD:
-        raise ValueError("Experimental body Cd must be finite and between 0.025 and 0.200")
+    if not math.isfinite(body_cd) or not 0.025 <= body_cd <= 0.25:
+        raise ValueError("Experimental body Cd must be finite and between 0.025 and 0.250")
 
     original = source.read_bytes()
     lines = original.decode("utf-8").splitlines(keepends=True)
@@ -45,7 +47,7 @@ def make_candidate(source: Path, output: Path, body_cd: float) -> dict:
         raise ValueError("Expected exactly one fuselage drag record")
     old = lines[matches[0]]
     if not math.isclose(float(old[len(RECORD):].strip()), STOCK_CD, abs_tol=1e-8):
-        raise ValueError("Input is not the uncalibrated 0.200 fuselage baseline")
+        raise ValueError("Input is not the builder's calibrated 0.120 fuselage baseline")
     newline = "\r\n" if old.endswith("\r\n") else "\n"
     lines[matches[0]] = f"{RECORD}{body_cd:.9f}{newline}"
     candidate = "".join(lines).encode("utf-8")
