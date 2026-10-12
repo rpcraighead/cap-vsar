@@ -9,6 +9,8 @@ Status: **implemented on local `main` and pushed.**
 
 `docs/DECISIONS_2026-10-11.md`: D5 (ten seats as the unit of membership, short codes plus link tokens, per-request role resolution, a read-only `evaluator` role, presence and readiness checks per seat) and D6 (one `tokens.css`, dark-first navy-tinted neutrals, validated categorical slots for aircraft 1-4, reserved status and truth colours, IBM Plex Sans and JetBrains Mono vendored, one shell header). Code: `access.SEATS` and `seat_of()`, `evaluator` in `ROLES`/`SATISFIED_BY`, `hub.presence` fed by `/ws?page=`, `GET /api/ready` and `POST /api/ready/check`, `/ready` on the shell (`ready.html`, `ready.js`, built with `textContent` only), `tests/test_ready.py` (8). Seat and slot derivation reads today's roster rows; the `seat`/`exercise_id`/`short_code` columns are UX phase 1.
 
+Debrief scoring (Opus, branch `ux-debrief-charts`, merged): `GET /api/sorties/{id}/analysis` (needle and logged-bearing error series against truth, closest approach, first cut within 10°, track efficiency, counts, active effects; truth-gated through the `/track` logic, in the leak test), per-aircraft measure cards, a bearing-error-over-time chart in `static/viz.js` (inline SVG, crosshair, legend, direct labels, table view, click-to-seek), replay marks for bearings and messages, the debrief page on the shell; `tests/test_analysis.py` (29). Not recorded yet and shown as such: effect timing, ops-normal timing, rejected cuts, session-to-session change.
+
 ## 2026-10-11 — UI walkthrough, UX proposal, CalTopo integration plan
 
 Status: **review documents written; four defects fixed on local `main`** (see the push note on the entry below).

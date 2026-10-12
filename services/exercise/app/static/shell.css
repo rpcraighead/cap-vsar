@@ -127,7 +127,13 @@ a:hover { text-decoration: underline; }
 /* ---- layout ------------------------------------------------------------- */
 .page { max-width: 1500px; margin: 0 auto; padding: var(--sp-4); display: grid; gap: var(--sp-4); }
 .page.two { grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); }
-@media (max-width: 1100px) { .page.two { grid-template-columns: 1fr; } .shell-links { display: none; } }
+.shell-exercise { max-width: 260px; }
+.shell-id { max-width: 300px; }
+.shell-id > span:not(.avatar) { overflow: hidden; text-overflow: ellipsis; }
+/* Below 1500px the tabs take their own row, so nothing is cut off. */
+@media (max-width: 1500px) { .shell { flex-wrap: wrap; padding-bottom: var(--sp-1); row-gap: 0; }
+                             .shell-nav { order: 10; flex-basis: 100%; margin-left: calc(-1 * var(--sp-2)); } }
+@media (max-width: 1100px) { .page.two { grid-template-columns: 1fr; } .shell-links { display: none; } .shell-tag { display: none; } }
 @media (max-width: 600px) { .shell { gap: var(--sp-2); padding: 0 var(--sp-3); } .shell-exercise, .shell-brand span { display: none; }
                             .tiles { grid-template-columns: 1fr 1fr; } .page { padding: var(--sp-3); } }
 @media (min-width: 1900px) { :root:not([data-density]) { --fs-xs: 16px; --fs-sm: 18px; --fs-md: 20px; --fs-lg: 24px; --fs-xl: 30px; --fs-2xl: 42px; } }
