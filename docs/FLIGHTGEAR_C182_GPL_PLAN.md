@@ -49,8 +49,10 @@ stock C172 fuselage, wing, landing-gear, propeller, glass, light and broken-part
 attachments while retaining the locally installed cockpit and systems. The
 primary control surfaces and three-blade propeller use X-Plane datarefs.
 When the downloaded CAP C172 artwork is available in `~/Documents/Civil Air
-Patrol`, the same build remaps it onto the C182 and uses the approved N429CP
-paint as the default; that optional step requires NumPy, SciPy, and Pillow.
+Patrol`, the same build remaps it onto the C182 and installs the approved
+N429CP paint as a named livery (CAP 487 stays the default paint unless
+`--default-livery n429cp` is given; tracker A2-5); that optional step requires
+NumPy, SciPy, and Pillow.
 The completed package is staged before replacing a target, and a prior
 installed CAP aircraft is retained under `Output/capvsar-backups`.
 

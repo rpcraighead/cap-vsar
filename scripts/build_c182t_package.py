@@ -36,8 +36,11 @@ from convert_flightgear_c182 import build_flightgear_objects
 from fetch_flightgear_c182 import DEFAULT_DONOR, DONOR_COMMIT, validate_donor
 
 
-DEFAULT_SOURCE_DIR = Path("/home/ron/X-Plane 12/Aircraft/Laminar Research/Cessna 172 SP")
-DEFAULT_TARGET_DIR = Path("/home/ron/X-Plane 12/Aircraft/CAP/Cessna 182T NAV III")
+# A2-9: the X-Plane folder comes from XPLANE_ROOT; the workstation path is only
+# the fallback, so the build runs unchanged on another machine.
+XPLANE_ROOT = Path(os.environ.get("XPLANE_ROOT", str(Path.home() / "X-Plane 12")))
+DEFAULT_SOURCE_DIR = XPLANE_ROOT / "Aircraft/Laminar Research/Cessna 172 SP"
+DEFAULT_TARGET_DIR = XPLANE_ROOT / "Aircraft/CAP/Cessna 182T NAV III"
 DEFAULT_DONOR_DIR = Path(
     os.environ.get(
         "CAPVSAR_FLIGHTGEAR_C182_SOURCE",
@@ -81,8 +84,26 @@ ACF_PATCHES = {
     r"^P _prop/0/_num_blades .*": "P _prop/0/_num_blades 3.000000000",
     r"^P _prop/0/_des_rpm_prp .*": "P _prop/0/_des_rpm_prp 2400.000000000",
     r"^P _prop/0/_des_kts_acf .*": "P _prop/0/_des_kts_acf 145.000000000",
-    r"^P _prop/0/_min_pitch .*": "P _prop/0/_min_pitch 10.000000000",
-    r"^P _prop/0/_max_pitch .*": "P _prop/0/_max_pitch 40.000000000",
+    # A2-2: blade pitch stops from FAA TCDS 3A13 Rev 66 p.32, McCauley
+    # B3D36C431/80VSA-1 (182S, 182T): "Pitch settings at 30 in. sta.: Low 14.9,
+    # High 31.7". The 30-in station is 76 % of the 39.5-in blade radius, the
+    # conventional reference station; no X-Plane document states the station
+    # Plane Maker uses, so the TCDS acceptance check is what validates it:
+    # static RPM at full throttle must be 2300-2400 (TCDS "Propeller limits").
+    # The previous 10/40 were unsourced.
+    r"^P _prop/0/_min_pitch .*": "P _prop/0/_min_pitch 14.900000000",
+    r"^P _prop/0/_max_pitch .*": "P _prop/0/_max_pitch 31.700000000",
+
+    # A2-2: blade radius. The stock C172 blade is 3.200 ft (76.8 in disc); the
+    # TCDS and POH give 79.0 in for the 182T. The visual propeller was already
+    # corrected to 79.0 in by c182t_corrections, so this brings the physics to
+    # the same disc. Chords are left at the C172 values: no source gives the
+    # B3D36C431 planform.
+    r"^P _blad/0/_semilen_SEG .*": "P _blad/0/_semilen_SEG 3.291666660",
+
+    # A2-1: the IO-540 has six cylinders; the C172 value (4) drove the engine
+    # model and the G1000 lean-assist bars.
+    r"^P acf/_num_cylinders .*": "P acf/_num_cylinders 6",
 
     # Weight & Balance. MTOW 3,100 lbs.
     #
@@ -128,6 +149,8 @@ ACF_PATCHES = {
     r"^P acf/_Vfem_kts .*": "P acf/_Vfem_kts 100.000000000",
     r"^P acf/_Vno_kts .*": "P acf/_Vno_kts 140.000000000",
     r"^P acf/_Vne_kts .*": "P acf/_Vne_kts 175.000000000",
+    # A2-8: manoeuvring speed at 3,100 lb, POH Figure 2-1 / TCDS (was 0).
+    r"^P acf/_Va_kts .*": "P acf/_Va_kts 110.000000000",
 
     # Control surface travel, from FAA TCDS 3A13 Rev 66 page 33 (Models 182S and
     # 182T, "Control surface movements").  The stock C172S values that shipped in
@@ -194,6 +217,36 @@ ACF_PATCHES = {
     # That direction is right - the 182's tail is genuinely larger than the 172's -
     # but note that NO consulted source publishes a C182T horizontal tail AREA, so
     # only the span is verified. The area is a consequence, not a sourced target.
+    # A2-11: fuselage drag coefficient, CALIBRATED IN FLIGHT, not sourced.
+    # X-Plane's _body/0/_part_cd is a frontal-area coefficient; the inherited
+    # C172 value 0.200 left CAP 487 11-12 % slow at every cruise point. Flown on
+    # 2026-10-11 at 3,100 lb, ISA, calm, on the aircraft's own autopilot, with
+    # the 79-in propeller and TCDS pitch stops already in place (order A2-11):
+    #
+    #   Cd     C1 SL max KTAS   C2 6000 ft 79% KTAS   B1 Vy climb vs POH Fig 5-8
+    #   0.200  131.4 (-12.4%)   127.0 (-11.2%)        739 fpm  -11 %
+    #   0.100  150.9 (+0.6%)    147.1 (+2.8%)         899 fpm  +12 %
+    #   0.120  146.5 (-2.4%)    141.9 (-0.7%)         872 fpm   +7 %
+    #
+    # 0.120 is the value that puts all three inside the card tolerances
+    # (+/-5 KTAS, +/-10 % climb). It is a tuning of the whole-airframe drag on
+    # the C172's unconverted aerodynamic definition, not a measured fuselage
+    # coefficient: replace it when the Plane Maker geometry is converted (A-1).
+    # Evidence: docs/C182T_FLIGHT_MODEL_CALIBRATION.md, 2026-10-11 section.
+    r"^P _body/0/_part_cd .*": "P _body/0/_part_cd 0.120000000",
+
+    # A2-3: wheel positions. Measured in X-Plane 12.4.3 on 2026-10-11 from
+    # sim/flightmodel/parts/tire_[xz]_no_deflection with the stock C172 gear:
+    # track 98.55 in, wheelbase 65.65 in. POH Figure 1-1: track 9 ft 0 in
+    # (108.0 in), wheelbase 66.5 in. Moving an attach point translates its wheel
+    # by the same amount, so the mains move out 0.11996 m each side and the
+    # nose forward 0.02161 m. The main-wheel station is kept (it fixes the
+    # CG-to-main distance the take-off rotation depends on); leg length, angles
+    # and tyres are left as the C172's (no 182T source).
+    r"^P _gear/1/_gear_x .*": "P _gear/1/_gear_x -1.993562200",
+    r"^P _gear/2/_gear_x .*": "P _gear/2/_gear_x 1.993562200",
+    r"^P _gear/0/_gear_z .*": "P _gear/0/_gear_z -0.670905800",
+
     r"^P _wing/8/_semilen_SEG .*": "P _wing/8/_semilen_SEG 5.533330000",
     r"^P _wing/9/_semilen_SEG .*": "P _wing/9/_semilen_SEG 5.533330000",
 }
@@ -619,6 +672,11 @@ def parse_args(argv=None):
     parser.add_argument("--cap-c172-livery", type=Path,
                         default=Path.home() / "Documents/Civil Air Patrol",
                         help="local downloaded N429CP CAP C172 paint to remap (when present)")
+    parser.add_argument("--default-livery", choices=("cap487", "n429cp"), default="cap487",
+                        help="paint on the aircraft's base texture. cap487 (default) matches the "
+                             "ACF tail number and ATC identity; n429cp makes the adapted C172 "
+                             "artwork the default. The N429CP livery is installed as a named "
+                             "livery either way when its source artwork is present (A2-5).")
     parser.add_argument("--cap-icon-dir", type=Path,
                         default=DEFAULT_TARGET_DIR / "liveries/Civil Air Patrol (N429CP - C172 Adapted)",
                         help="approved C182 N429CP icon pair, when present")
@@ -689,7 +747,13 @@ def main(argv=None):
         "Cessna_172SP_seaplane_icon11.png",
         "Cessna_172SP_seaplane_icon11_thumb.png",
         "Cessna_172SP_seaplane_prop_disc_2.png",
-        "Cessna_172SP_seaplane_vrconfig.txt"
+        "Cessna_172SP_seaplane_vrconfig.txt",
+        # A2-6: manuals for equipment this aircraft does not have, and the C172
+        # handbook whose speeds it must not be flown by. The G1000 manual stays.
+        "X-Plane_C172_Pilot_Operating_Manual.pdf",
+        "X-Plane G430 Manual.pdf",
+        "X-Plane G530 Manual.pdf",
+        "S-TEC Autopilot Manual.pdf",
     ]
     for rf in redundant_files:
         p = target_dir / rf
@@ -811,8 +875,9 @@ def main(argv=None):
         manifest_path = named / "adaptation.json"
         manifest_path.write_text(
             manifest_path.read_text().replace(str(target_dir), str(final_target)))
-        shutil.copy2(named / "objects/flightgear_c182t.png",
-                     target_dir / "objects/flightgear_c182t.png")
+        if args.default_livery == "n429cp":
+            shutil.copy2(named / "objects/flightgear_c182t.png",
+                         target_dir / "objects/flightgear_c182t.png")
         for icon in ("Cessna_182T_G1000_icon11.png", "Cessna_182T_G1000_icon11_thumb.png"):
             approved = cap_icons / icon
             if approved.is_file():
@@ -821,8 +886,9 @@ def main(argv=None):
                 stock = source_dir / icon.replace("182T", "172SP")
                 create_cap_badge_icon(stock, named / icon,
                                       is_thumb=icon.endswith("_thumb.png"), registration="N429CP")
-        for icon in ("Cessna_182T_G1000_icon11.png", "Cessna_182T_G1000_icon11_thumb.png"):
-            shutil.copy2(named / icon, target_dir / icon)
+        if args.default_livery == "n429cp":
+            for icon in ("Cessna_182T_G1000_icon11.png", "Cessna_182T_G1000_icon11_thumb.png"):
+                shutil.copy2(named / icon, target_dir / icon)
         readme = cap_icons / "README.txt"
         if readme.is_file():
             shutil.copy2(readme, named / "README.txt")
@@ -830,7 +896,10 @@ def main(argv=None):
             (named / "README.txt").write_text(
                 "N429CP CAP artwork remapped from the locally downloaded C172 livery.\n"
                 "See adaptation.json for source and texture hashes.\n")
-        print(f"[+] Approved N429CP paint installed as aircraft default and named livery.")
+        if args.default_livery == "n429cp":
+            print(f"[+] N429CP paint installed as aircraft default and named livery.")
+        else:
+            print(f"[+] N429CP paint installed as a named livery; CAP 487 stays the default (A2-5).")
     else:
         print(f"[*] No local N429CP source at {cap_source}; retaining CAP 487 paint.")
 

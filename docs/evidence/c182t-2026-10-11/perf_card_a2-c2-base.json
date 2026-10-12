@@ -1,0 +1,34 @@
+{
+ "run": "a2-c2-base",
+ "start": {
+  "latitude": 32.7,
+  "longitude": -117.4,
+  "elevation_in_meters": 1828.8,
+  "heading_true": 270.0,
+  "speed_in_meters_per_second": 70.0
+ },
+ "acf": "Aircraft/CAP/Cessna 182T NAV III/Cessna_182T_G1000.acf",
+ "card": "c2",
+ "c1_modes": {
+  "sim/cockpit2/autopilot/autopilot_on": 1.0,
+  "sim/cockpit2/autopilot/heading_status": 2.0,
+  "sim/cockpit2/autopilot/altitude_hold_status": 2.0
+ },
+ "mass": "current condition:\n   total weight   2185 lb  (991.0 kg)\n   payload        0 lb\n   fuel           261 lb  (L 130 / R 130)\n   CG             +0.0405 m offset  =  13.0% MAC  =  FS 33.6 in (derived)\n\n   note: the aircraft is flying. Set conditions BETWEEN test points,\n   never during one - changing mass mid-run invalidates the run.\n\n   empty weight computed as 1924 lb\n\nachieved condition:\n   total weight   3100 lb  (1406.1 kg)\n   payload        654 lb\n   fuel           522 lb  (L 261 / R 261)\n   CG             +0.1980 m offset  =  23.5% MAC  =  FS 39.8 in (derived)\n\n   weight error -0 lb against the 3100 lb target\n\n   Record the ACHIEVED values with the test point, not the targets.\n",
+ "leaning": {
+  "peak_egt_c": 1565.897216796875,
+  "mixture": 0.6
+ },
+ "throttle": 0.9526682281494141,
+ "c2_capture": "capturing card C2 run a2-c2-base for 120 s at 20 Hz - fly the point now\n\n--- card C2 run a2-c2-base: 2396 samples ---\n  rate         20.0 Hz effective (requested 20), max interval 0.053 s, 0 gaps\n  weight       3095 lb\n  KIAS         min 115.7  max 115.9\n  alt ft       min 6150  max 6151\n  AGL ft       min 6139  max 6140\n  alpha deg    min 0.32  max 0.34\n  Nz g         min 0.999  max 0.999\n  flap actual  min 0.000  max 0.000\n\nReduce against docs/C182T_FLIGHT_TEST_CARD.md and record the real numbers,\nincluding misses, in CHANGELOG.md.\ntrace: /home/ron/.cache/capvsar/flight-tests/C2_runa2-c2-base_20261011-221005.jsonl\n",
+ "c2_engine_mean": {
+  "mp": 23.000211683909097,
+  "rpm": 2400.0067057291667,
+  "hp": 172.81459848967413,
+  "egt": 1566.7090291341146,
+  "ktas": 126.97830432352703,
+  "oat": 2.832095766067505,
+  "palt": 6151.595426432292,
+  "cowl": 0.0
+ }
+}

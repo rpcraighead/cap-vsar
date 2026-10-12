@@ -407,6 +407,30 @@ def test_e2e_named_lights_land_on_the_lamps(synthetic_build):
          "airplane_strobe", "airplane_beacon", "airplane_landing", "airplane_taxi"])
 
 
+def _block(text, name):
+    return text.split("# " + name, 1)[1].split("ANIM_end", 1)[0]
+
+
+def test_e2e_prop_disc_spins_about_the_hub_and_the_spinner_never_vanishes(synthetic_build):
+    """Seen from the seat on 2026-10-11, the static FastProp disc read as a frozen
+    fan of hard wedges, and the spinner disappeared whenever the disc was drawn."""
+    target, _ = synthetic_build
+    blur_text = (target / "objects" / "flightgear_c182t_prop_blur.obj").read_text()
+    assert "FastProp" not in blur_text, "the donor's faceted disc is no longer drawn"
+    blur = _block(blur_text, "PropDisc")
+    assert "ANIM_hide 0.000000 0.000000 sim/flightmodel2/engines/prop_is_disc[0]" in blur
+    assert f"TRIS 0 {3 * conv.PROP_DISC_SEGMENTS}" in blur
+    from PIL import Image
+    tex = Image.open(target / "objects" / "flightgear_c182t_prop.png")
+    assert tex.mode == "RGBA" and tex.getpixel((256, 256))[3] == 0      # hub clear
+    assert max(tex.getpixel((x, 256))[3] for x in range(256, 512)) <= 70  # translucent
+    prop = (target / "objects" / "flightgear_c182t_propeller.obj").read_text()
+    spinner = _block(prop, "chrome_spinner")
+    assert "prop_is_disc" not in spinner
+    assert "prop_rotation_angle_deg" in spinner
+    assert "ANIM_hide 1.000000 1.000000 sim/flightmodel2/engines/prop_is_disc[0]" in _block(prop, "Blade1")
+
+
 def test_e2e_flap_animation_ends_at_the_acf_travel(synthetic_build):
     target, _ = synthetic_build
     text = (target / "objects" / "flightgear_c182t.obj").read_text()

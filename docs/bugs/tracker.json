@@ -88,6 +88,10 @@
     "C17": {
       "name": "UI walkthrough 2026-10-11 and UX proposal",
       "owner_hint": "Claude (Fable) from docs/UX_REVIEW_2026-10-11.md; proposal phases 1-3 and the CalTopo plan are not tracker rows until scheduled"
+    },
+    "C18": {
+      "name": "C182T package review 2026-10-11",
+      "owner_hint": "Claude (Fable) from docs/C182T_REVIEW_2026-10-11.md; AI pilot port on feat/c182-ai-pilot-baseline"
     }
   },
   "issues": [
@@ -4410,6 +4414,316 @@
       "verify": "",
       "depends_on": [],
       "done_when": null
+    },
+    {
+      "id": "A2-1",
+      "title": "C182T ACF still has four cylinders",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "S",
+      "component": "infra",
+      "cluster": "C18",
+      "status": "fixed",
+      "files": [
+        "scripts/build_c182t_package.py"
+      ],
+      "problem": "acf/_num_cylinders is the C172's 4; the IO-540 has six. Engine model and G1000 lean-assist show a four-cylinder engine.",
+      "fix": "Add `P acf/_num_cylinders 6` to ACF_PATCHES; rebuild.",
+      "verify": "Built ACF reads 6; G1000 engine page shows six EGT/CHT bars.",
+      "depends_on": [],
+      "done_when": null,
+      "notes": "2026-10-11: `P acf/_num_cylinders 6` in ACF_PATCHES; pinned by tests/test_c182t_acf_sources.py."
+    },
+    {
+      "id": "A2-2",
+      "title": "Physics propeller is the C172 76-inch geometry; visual prop is 79 in",
+      "type": "bug",
+      "severity": "high",
+      "priority": "P1",
+      "wave": 3,
+      "effort": "S",
+      "component": "infra",
+      "cluster": "C18",
+      "status": "fixed",
+      "files": [
+        "scripts/build_c182t_package.py",
+        "scripts/c182t_dimension_master.json"
+      ],
+      "problem": "_blad/0/_semilen_SEG 3.200 ft (76.8 in disc) against the TCDS/POH 79 in; chords and 10/40 deg pitch range are the C172 two-blade's and unsourced. 6 % less disc area; a candidate for the C1 cruise shortfall.",
+      "fix": "Patch _blad/0/_semilen_SEG 3.291667; take 30-in-station blade angles from FAA TCDS 3A13 p.33 for _min_pitch/_max_pitch; leave chord unless sourced.",
+      "verify": "measure_c182t harness and ACF agree on 79.0 in; C1 re-flown at 3,100 lb and recorded.",
+      "depends_on": [],
+      "done_when": null,
+      "notes": "2026-10-11: Blade semilength 3.29167 ft (79 in) and TCDS pitch stops 14.9/31.7 deg. Static full-throttle RPM 2318-2326 at KNZY, inside TCDS 3A13 2300-2400. Evidence docs/evidence/c182t-2026-10-11/."
+    },
+    {
+      "id": "A2-3",
+      "title": "Gear physics track 8.2 ft while the mesh was corrected to 9 ft",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "M",
+      "component": "infra",
+      "cluster": "C18",
+      "status": "fixed",
+      "files": [
+        "scripts/build_c182t_package.py",
+        "scripts/c182t_corrections.json"
+      ],
+      "problem": "_gear/1,2 attach (x 1.6 ft, latE -57 deg, leg 3.0 ft) is the C172SP's; wheelbase 65 in vs 66.5 in. Wheels drawn ~5 in outboard of the contact points each side.",
+      "fix": "Set gear attach/latE/lonE so contact track = 9 ft 0 in and wheelbase = 66.5 in (both in the dimension master); re-run measure_c182t.py.",
+      "verify": "Harness reports physics contact points and mesh wheel centres within 1 in.",
+      "depends_on": [],
+      "done_when": null,
+      "notes": "2026-10-11: Main gear x +/-1.9936 m and nose z -0.6709 m. Simulator read-back: track 108.0 in, wheelbase 66.5 in (POH 108.2 / 66.5). Evidence docs/evidence/c182t-2026-10-11/."
+    },
+    {
+      "id": "A2-4",
+      "title": "Full-throttle power 214 HP vs 230 rated is unexplained",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "M",
+      "component": "infra",
+      "cluster": "C18",
+      "status": "resolved",
+      "files": [
+        "docs/C182T_FLIGHT_MODEL_CALIBRATION.md"
+      ],
+      "problem": "C1 recorded 214 HP at 2400 RPM near sea level; ambient explains ~2 %. Candidates: A2-2, _max_MP_limit, _engine_friction_ratio.",
+      "fix": "Fix A2-2 first, re-fly C1, then isolate one parameter at a time with c182t_flight_model_experiment.py.",
+      "verify": "C1 HP within 3 % of the POH sea-level figure or the shortfall attributed to one named parameter.",
+      "depends_on": [
+        "A2-2"
+      ],
+      "done_when": null,
+      "notes": "2026-10-11: Not an engine defect. A full-throttle ground mixture sweep gives 229.2 HP at best power (lever 0.84) and 215.8 HP full rich. The 214-216 HP records were X-Plane's full-rich mixture; POH points assume best power. c182t_perf_card.py --mixture best. See docs/C182T_FLIGHT_MODEL_CALIBRATION.md 2026-10-11."
+    },
+    {
+      "id": "A2-5",
+      "title": "Aircraft default paint shows N429CP while the ACF and ATC say CAP 487",
+      "type": "bug",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "S",
+      "component": "infra",
+      "cluster": "C18",
+      "status": "fixed",
+      "files": [
+        "scripts/build_c182t_package.py",
+        "scripts/adapt_cap_livery.py",
+        "README.md"
+      ],
+      "problem": "The builder makes the adapted N429CP C172 artwork the default texture and icon; its own docstring rules out real registrations on a different simulated type; the artwork's author/URL are unknown.",
+      "fix": "Repaint the registration block to CAP 487 in adapt_cap_livery.py, or make the CAP 487 livery the default and keep N429CP as a named option; fix the README line.",
+      "verify": "Default load shows one identity on skin, G1000 and ATC.",
+      "depends_on": [],
+      "done_when": null,
+      "notes": "2026-10-11: Builder default livery is now the generated CAP 487 paint (--default-livery cap487); N429CP remains an optional named livery and is the base texture only with --default-livery n429cp. Review correction: the livery mapper does not locate the registration block, so repainting it was not the route taken."
+    },
+    {
+      "id": "A2-6",
+      "title": "Package ships the C172 POM, G430/G530 and S-TEC manuals",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 3,
+      "effort": "S",
+      "component": "infra",
+      "cluster": "C18",
+      "status": "fixed",
+      "files": [
+        "scripts/build_c182t_package.py"
+      ],
+      "problem": "Copied from the C172 folder; the 182T NAV III has a GFC 700 and the C172 manual's speeds are the wrong ones.",
+      "fix": "Delete them in the builder's redundant_files step or replace with a README pointing at docs/.",
+      "verify": "Built package contains no C172/S-TEC manuals.",
+      "depends_on": [],
+      "done_when": null,
+      "notes": "2026-10-11: The four C172 manuals are removed via redundant_files; builder hardening test covers it."
+    },
+    {
+      "id": "A2-7",
+      "title": "c182t_checklists.py says full flaps are 30 deg",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 3,
+      "effort": "S",
+      "component": "infra",
+      "cluster": "C18",
+      "status": "fixed",
+      "files": [
+        "services/ai_pilot/c182t_checklists.py"
+      ],
+      "problem": "Landing note reads 'full 30 deg below 100 KIAS'; the 182T full flap is 38 deg (ACF detent 3, TCDS); POH says 20-FULL below 100. Takeoff checklist omits the 10 deg preferred flap setting.",
+      "fix": "Correct the wording; add flaps 10 deg to the takeoff items; cite 182TPHBUS section 4.",
+      "verify": "test_checklists.py asserts the strings.",
+      "depends_on": [],
+      "done_when": null,
+      "notes": "2026-10-11: Checklists: takeoff flaps 0-20 (10 normal), landing flaps FULL 38 deg, approach 60-70 KIAS, per the 182T POH."
+    },
+    {
+      "id": "A2-8",
+      "title": "acf/_Va_kts is 0",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 3,
+      "effort": "S",
+      "component": "infra",
+      "cluster": "C18",
+      "status": "fixed",
+      "files": [
+        "scripts/build_c182t_package.py"
+      ],
+      "problem": "Not displayed by the G1000 but read by envelope tooling.",
+      "fix": "Patch acf/_Va_kts 110 (POH, 3100 lb).",
+      "verify": "Built ACF reads 110.",
+      "depends_on": [],
+      "done_when": null,
+      "notes": "2026-10-11: acf/_Va_kts 110 (POH 3,100 lb)."
+    },
+    {
+      "id": "A2-9",
+      "title": "Builder hard-codes /home/ron paths",
+      "type": "bug",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 3,
+      "effort": "S",
+      "component": "infra",
+      "cluster": "C18",
+      "status": "fixed",
+      "files": [
+        "scripts/build_c182t_package.py"
+      ],
+      "problem": "DEFAULT_SOURCE_DIR/TARGET_DIR and livery defaults are absolute workstation paths.",
+      "fix": "Derive from an XPLANE_ROOT env var with the current values as fallback.",
+      "verify": "Build runs on a second machine with XPLANE_ROOT set.",
+      "depends_on": [],
+      "done_when": null,
+      "notes": "2026-10-11: XPLANE_ROOT env var with ~/X-Plane 12 default; source dirs derive from it."
+    },
+    {
+      "id": "A2-10",
+      "title": "No test pins the built ACF to the dimension master",
+      "type": "improvement",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "M",
+      "component": "infra",
+      "cluster": "C18",
+      "status": "fixed",
+      "files": [
+        "tests/test_c182t_flight_model.py",
+        "scripts/c182t_dimension_master.json"
+      ],
+      "problem": "ACF_PATCHES and the sourced JSON both carry 182T values with no check that they agree; A2-1/A2-2 survived because nothing listed the C172 fields left unpatched.",
+      "fix": "Test that asserts each sourced ACF field against the JSON and reports every _engn/_prop/_blad/_gear field still at its C172 value.",
+      "verify": "Test fails on the current ACF for A2-1/A2-2 and passes after they are fixed.",
+      "depends_on": [],
+      "done_when": null,
+      "notes": "2026-10-11: tests/test_c182t_acf_sources.py pins prop diameter and pitch, cylinders, Va, gear geometry and body Cd against the dimension master and POH, plus a watchlist of C172 values inherited on purpose."
+    },
+    {
+      "id": "A2-11",
+      "title": "Calibration order: propeller and gear before the fuselage-Cd experiment",
+      "type": "improvement",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "M",
+      "component": "infra",
+      "cluster": "C18",
+      "status": "fixed",
+      "files": [
+        "docs/C182T_FLIGHT_MODEL_CALIBRATION.md"
+      ],
+      "problem": "The staged Cd=0.100 experiment would calibrate drag against the wrong propeller.",
+      "fix": "Sequence: A2-2, A2-3, re-fly B1/C1, then the Cd experiment.",
+      "verify": "Calibration doc updated with the sequence and results.",
+      "depends_on": [
+        "A2-2",
+        "A2-3"
+      ],
+      "done_when": null,
+      "notes": "2026-10-11: Flown in order: prop+gear, then C1/B1/C2 at Cd 0.200, 0.100, 0.120. Builder adopts 0.120: C1 149.5 KTAS best power (POH 150), C2 141.9 (POH 143). B1 at Vy still +18 % vs POH Fig 5-8 at altitude with best power; that residual is a low-speed geometry issue carried by A-1. Installed ACF SHA-256 11ff17d1...cd89d8. docs/C182T_FLIGHT_MODEL_CALIBRATION.md 2026-10-11."
+    },
+    {
+      "id": "A2-13",
+      "title": "AI pilot: finish the C182T profile port (runner flag, bridge identity, taxi constants)",
+      "type": "improvement",
+      "severity": "medium",
+      "priority": "P2",
+      "wave": 3,
+      "effort": "M",
+      "component": "infra",
+      "cluster": "C18",
+      "status": "open",
+      "files": [
+        "scripts/ai_pilot_ksee_kmyf.py",
+        "scripts/ai_pilot_surface.py",
+        "services/ai_pilot/experiment.py",
+        "services/ai_pilot/ground_guidance.py",
+        "xplane/capvsar_mission.py"
+      ],
+      "problem": "Controllers take an AircraftProfile (feat/c182-ai-pilot-baseline) but the runners, Scenario.aircraft_name and the taxi throttle constants still name the C172; C182T tuning is unvalidated.",
+      "fix": "Add --profile, record it in manifests, confirm verify_identity accepts CAP 487, then fly the trial order in docs/C182T_AI_PILOT_PORT_2026-10-11.md and retune.",
+      "verify": "A C182T sortie scored by the independent observers with tuning_validated flipped and traces cited.",
+      "depends_on": [],
+      "done_when": null,
+      "notes": "2026-10-11: partly done on feat/c182-ai-pilot-baseline (b285342). --profile on the runners with the profile and tuning_validated in manifests; the bridge accepts the built CAP 487 package by its staged SHA-256; taxi throttle constants moved into the profile. First live trial flown and passed: expanding square, 6 legs, 12 NM, 2,000 ft, 100 KIAS, all waypoints inside 0.35 NM, 20 ft max altitude error (docs/evidence/ai_pilot_c182_pattern_20261011.json on that branch). Still open: cruise cycle, taxi, takeoff, full sortie, retune, flip tuning_validated."
+    },
+    {
+      "id": "A2-14",
+      "title": "C182T document index",
+      "type": "improvement",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 3,
+      "effort": "S",
+      "component": "infra",
+      "cluster": "C18",
+      "status": "fixed",
+      "files": [
+        "docs/"
+      ],
+      "problem": "Seven docs/C182T_*.md plus the GPL plan, calibration doc and CHANGELOG describe the package with no statement of which is authoritative for what.",
+      "fix": "Write docs/C182T_INDEX.md.",
+      "verify": "Index exists and is linked from README.",
+      "depends_on": [],
+      "done_when": null,
+      "notes": "2026-10-11: docs/C182T_INDEX.md lists every C182T document, its status and what supersedes what."
+    },
+    {
+      "id": "A2-12",
+      "title": "Empty weight is the POH sample aircraft, not a CAP 182T",
+      "type": "improvement",
+      "severity": "low",
+      "priority": "P3",
+      "wave": 3,
+      "effort": "S",
+      "component": "infra",
+      "cluster": "C18",
+      "status": "open",
+      "files": [
+        "scripts/build_c182t_package.py",
+        "services/flightplanner/app.py",
+        "tests/test_loading_baseline.py"
+      ],
+      "problem": "1,924 lb is the handbook sample (the shared planner/simulator baseline chosen under L-7a); a CAP 182T NAV III with mission equipment is heavier.",
+      "fix": "If a squadron 182T weight-and-balance sheet is available, move builder and planner to it together.",
+      "verify": "test_loading_baseline.py passes with the new shared values.",
+      "depends_on": [],
+      "done_when": null,
+      "notes": "2026-10-11: still open. No squadron weight-and-balance record for the CAP 182T fleet is available here; needs one from the squadron."
     }
   ]
 }

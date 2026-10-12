@@ -1,0 +1,51 @@
+{
+ "spec": {
+  "aircraft": {
+   "path": "Aircraft/CAP/Cessna 182T NAV III/Cessna_182T_G1000.acf"
+  },
+  "lle_ground_start": {
+   "latitude": 32.692128477923056,
+   "longitude": -117.20194401934492,
+   "heading_true": 302.1115573005048
+  },
+  "engine_status": {
+   "all_engines": {
+    "running": true
+   }
+  },
+  "local_time": {
+   "day_of_year": 160,
+   "time_in_24_hours": 12.0
+  }
+ },
+ "acf": "Aircraft/CAP/Cessna 182T NAV III/Cessna_182T_G1000.acf",
+ "tires_m": {
+  "x": [
+   0.0,
+   -1.2516422271728516,
+   1.2516422271728516
+  ],
+  "z": [
+   -1.2253656387329102,
+   0.44212228059768677,
+   0.44212228059768677
+  ],
+  "y": [
+   -1.17489755153656,
+   -1.1514427661895752,
+   -1.1514427661895752
+  ]
+ },
+ "track_in": 98.5545059760769,
+ "wheelbase_in": 65.64913061534486,
+ "static": {
+  "rpm": 2323.4967529296873,
+  "mp_inhg": 29.87623062133789,
+  "hp": 215.95041362142953,
+  "prop_pitch_deg": 14.899999618530273,
+  "groundspeed_mps": 9.536445045471192,
+  "oat_c": 14.954010581970214,
+  "baro_pa": 101240.2078125,
+  "tcds_2300_2400": true
+ }
+}
