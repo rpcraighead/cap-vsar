@@ -1,0 +1,92 @@
+{
+ "spec": {
+  "aircraft": {
+   "path": "Aircraft/CAP/Cessna 182T NAV III/Cessna_182T_G1000.acf"
+  },
+  "lle_ground_start": {
+   "latitude": 32.692128477923056,
+   "longitude": -117.20194401934492,
+   "heading_true": 302.1115573005048
+  },
+  "engine_status": {
+   "all_engines": {
+    "running": true
+   }
+  },
+  "local_time": {
+   "day_of_year": 160,
+   "time_in_24_hours": 12.0
+  }
+ },
+ "acf": "Aircraft/CAP/Cessna 182T NAV III/Cessna_182T_G1000.acf",
+ "attach_m": {
+  "x": [
+   0.0,
+   -0.6076377630233765,
+   0.6076377630233765
+  ],
+  "z": [
+   -1.084754467010498,
+   0.5218175053596497,
+   0.5218175053596497
+  ]
+ },
+ "engine_rpm_at_ready": 511.4926452636719,
+ "tires_m": {
+  "x": [
+   0.0,
+   -1.3715999126434326,
+   1.3715999126434326
+  ],
+  "z": [
+   -1.246977686882019,
+   0.44212228059768677,
+   0.44212228059768677
+  ],
+  "y": [
+   -1.17489755153656,
+   -1.1514427661895752,
+   -1.1514427661895752
+  ]
+ },
+ "track_in": 107.99999301137014,
+ "wheelbase_in": 66.49999865184346,
+ "shots": [
+  {
+   "label": "idle",
+   "file": "/home/ron/.cache/capvsar/flight-tests/c182t_shots/c182t_cockpit_idle.png",
+   "rpm": 513.7772827148438,
+   "prop_is_disc": 1.0,
+   "view": "cockpit"
+  },
+  {
+   "label": "runup",
+   "file": "/home/ron/.cache/capvsar/flight-tests/c182t_shots/c182t_cockpit_runup.png",
+   "rpm": 1602.93115234375,
+   "prop_is_disc": 1.0,
+   "view": "cockpit"
+  },
+  {
+   "label": "full",
+   "file": "/home/ron/.cache/capvsar/flight-tests/c182t_shots/c182t_cockpit_full.png",
+   "rpm": 2307.20751953125,
+   "prop_is_disc": 1.0,
+   "view": "cockpit"
+  },
+  {
+   "label": "full",
+   "file": "/home/ron/.cache/capvsar/flight-tests/c182t_shots/c182t_outside_full.png",
+   "view": "chase"
+  }
+ ],
+ "static": {
+  "rpm": 2318.1091552734374,
+  "mp_inhg": 29.876230430603027,
+  "hp": 215.76445370122033,
+  "prop_pitch_deg": 14.899999618530273,
+  "groundspeed_mps": 9.707128524780273,
+  "oat_c": 14.954017066955567,
+  "baro_pa": 101240.22421875,
+  "tcds_2300_2400": true
+ }
+}

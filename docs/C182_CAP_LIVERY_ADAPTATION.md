@@ -113,12 +113,13 @@ python3 scripts/build_c182t_package.py \
 The builder checks all 50 source ACF fields before copying, builds in a
 sibling staging directory, and publishes only after conversion and texture
 generation succeed. Replacing an existing target moves its previous version
-to `Output/capvsar-backups` for an installed CAP aircraft. The build keeps
-the named CAP 487 livery and makes the approved N429CP paint the default
-when the C172 artwork is available. Its icon pair is reused from the installed
-approved livery when present; `--cap-icon-dir` selects another icon source.
-The painted registration and CAP 487 ACF identifier remain intentionally
-different.
+to `Output/capvsar-backups` for an installed CAP aircraft. When the C172
+artwork is available the build installs the N429CP paint as a named livery;
+its icon pair is reused from the installed approved livery when present
+(`--cap-icon-dir` selects another icon source). Since 2026-10-11 (tracker
+A2-5) the aircraft's default paint is the generated CAP 487 one, so the skin,
+the G1000/ATC tail number and the selection icon agree; `--default-livery
+n429cp` restores the N429CP paint as the default.
 
 The 2026-10-10 build with the corrected aileron and flap animations was
 installed at `~/X-Plane 12/Aircraft/CAP/Cessna 182T NAV III`. Its previous

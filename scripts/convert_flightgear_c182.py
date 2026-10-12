@@ -441,7 +441,11 @@ def write_obj8(
                 dataref = "sim/flightmodel2/lights/nav_lights_brightness_ratio[0]"
             lines.append(f"ATTR_light_level 0.000000 1.000000 {dataref}")
 
-        rotation = PROP_ROTATION if propeller else rotations.get(group.name)
+        # The blurred disc turns too: X-Plane documents prop_rotation_angle_deg in
+        # disc mode as "how fast the blurry disc is spinning". Drawn static, the
+        # donor's FastProp showed a frozen fan of hard light and dark wedges
+        # across the windscreen (seen from the seat on 2026-10-11).
+        rotation = PROP_ROTATION if (propeller or prop_blur) else rotations.get(group.name)
         hidden = group.name in (hide_in_cockpit or ())
         if rotation or prop_blur or hidden:
             lines.append("ANIM_begin")
@@ -452,7 +456,7 @@ def write_obj8(
                     "ANIM_hide 0.000000 0.500000 "
                     "sim/graphics/view/view_is_external"
                 )
-            if propeller:
+            if propeller and group.name not in PROP_ALWAYS_DRAWN:
                 lines.append(
                     "ANIM_hide 1.000000 1.000000 "
                     "sim/flightmodel2/engines/prop_is_disc[0]"
@@ -490,6 +494,97 @@ def write_obj8(
             "z": [min(zs), max(zs)],
         },
     }
+
+
+PROP_DISC_SEGMENTS = 64
+
+
+def prop_disc_texture(destination: Path, size: int = 512) -> None:
+    """A smooth, radially symmetric blur of three black-backed blades.
+
+    From the seat a turning propeller reads as a faint dark veil with a lighter
+    ring where the painted tips pass. The donor's PropBlur.png was a coarse fan of
+    24 hard light/dark wedges (a stroboscopic effect FlightGear animates), which
+    X-Plane drew frozen across the windscreen. This texture is generated, not
+    donor-derived.
+    """
+    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    px = image.load()
+    c = (size - 1) / 2.0
+    for y in range(size):
+        for x in range(size):
+            r = math.hypot(x - c, y - c) / c
+            if r > 1.0:
+                continue
+            if r < 0.15:                       # spinner covers the hub
+                alpha, rgb = 0.0, (30, 30, 32)
+            elif r < 0.86:
+                # blade chord narrows outboard: slightly less coverage further out
+                alpha, rgb = 0.20 - 0.05 * (r - 0.15) / 0.71, (30, 30, 32)
+            elif r < 0.97:
+                alpha, rgb = 0.24, (205, 205, 195)
+            else:
+                alpha, rgb = 0.24 * max(0.0, (1.0 - r) / 0.03), (205, 205, 195)
+            if r < 0.20:
+                alpha *= max(0.0, (r - 0.15) / 0.05)
+            px[x, y] = rgb + (int(round(alpha * 255)),)
+    image.save(destination)
+
+
+def write_generated_prop_disc(destination: Path, texture: str, blades: Iterable[ACObject],
+                              donor_disc: Iterable[ACObject]) -> dict[str, object]:
+    """Replace the donor's faceted FastProp disc with a smooth generated one.
+
+    The disc sits on the propeller axis (PROP_ROTATION), in the plane of the
+    donor's own disc, with the radius of the corrected blades (79.0 in after
+    c182t_corrections). It is drawn only when X-Plane shows the prop as a disc.
+    """
+    blade_vertices, _, _ = _build_mesh(blades)
+    disc_vertices, _, _ = _build_mesh(donor_disc)
+    centre, axis = PROP_ROTATION.center, PROP_ROTATION.axis
+
+    def along(p):
+        return sum((p[i] - centre[i]) * axis[i] for i in range(3))
+
+    def off_axis(p):
+        t = along(p)
+        return math.sqrt(max(0.0, sum((p[i] - centre[i] - t * axis[i]) ** 2 for i in range(3))))
+
+    plane = sum(along(v) for v in disc_vertices) / len(disc_vertices)
+    radius = max(off_axis(v) for v in blade_vertices)
+    hub = tuple(centre[i] + plane * axis[i] for i in range(3))
+    # Two unit vectors spanning the disc plane.
+    ref = (0.0, 1.0, 0.0) if abs(axis[1]) < 0.9 else (1.0, 0.0, 0.0)
+    e1 = _normal(_cross(axis, ref))
+    e2 = _normal(_cross(axis, e1))
+    vertices = [hub + tuple(axis) + (0.5, 0.5)]
+    for k in range(PROP_DISC_SEGMENTS):
+        a = 2 * math.pi * k / PROP_DISC_SEGMENTS
+        ca, sa = math.cos(a), math.sin(a)
+        point = tuple(hub[i] + radius * (ca * e1[i] + sa * e2[i]) for i in range(3))
+        vertices.append(point + tuple(axis) + (0.5 + 0.5 * ca, 0.5 + 0.5 * sa))
+    indices = []
+    for k in range(PROP_DISC_SEGMENTS):
+        indices.extend((0, 1 + k, 1 + (k + 1) % PROP_DISC_SEGMENTS))
+    lines = ["A", "800", "OBJ", "",
+             "# Generated propeller disc (not donor geometry); see write_generated_prop_disc.",
+             f"TEXTURE {texture}", "ATTR_no_cull", "ATTR_shadow_blend 0.5", "",
+             f"POINT_COUNTS {len(vertices)} 0 0 {len(indices)}"]
+    lines.extend("VT " + " ".join(_fmt(value) for value in vertex) for vertex in vertices)
+    for offset in range(0, len(indices), 10):
+        chunk = indices[offset:offset + 10]
+        if len(chunk) == 10:
+            lines.append("IDX10 " + " ".join(str(i) for i in chunk))
+        else:
+            lines.extend(f"IDX {i}" for i in chunk)
+    lines += ["", "# PropDisc", "ANIM_begin",
+              "ANIM_hide 0.000000 0.000000 sim/flightmodel2/engines/prop_is_disc[0]",
+              f"TRIS 0 {len(indices)}", "ANIM_end"]
+    destination.write_text("\n".join(lines) + "\n")
+    xs, ys, zs = ([v[i] for v in vertices] for i in range(3))
+    return {"file": destination.name, "objects": ["PropDisc"], "vertices": len(vertices),
+            "indices": len(indices), "radius_m": radius, "hub_m": list(hub),
+            "bounds_m": {"x": [min(xs), max(xs)], "y": [min(ys), max(ys)], "z": [min(zs), max(zs)]}}
 
 
 def write_blank_obj(destination: Path) -> None:
@@ -1020,6 +1115,9 @@ def named_light_placements(
 
 
 PROP_NAMES = {"Blade1", "Blade2", "Blade3", "chrome_spinner"}
+# The spinner is solid at every RPM; hiding it with the blades left a hole in the
+# middle of the disc.
+PROP_ALWAYS_DRAWN = {"chrome_spinner"}
 PROP_BLUR_NAME = "FastProp"
 SELECTED_TEXTURES = {"Default.png", "Lights.png"}
 
@@ -1096,7 +1194,7 @@ def build_flightgear_objects(donor: Path, target_aircraft: Path) -> dict[str, ob
 
     texture = objects_dir / "flightgear_c182t.png"
     create_cap_texture(donor / "Models/Liveries/Default.png", texture, main)
-    shutil.copy2(donor / "Models/PropBlur.png", objects_dir / "flightgear_c182t_prop.png")
+    prop_disc_texture(objects_dir / "flightgear_c182t_prop.png")
     shutil.copy2(donor / "Models/Lights.png", objects_dir / "flightgear_c182t_lights.png")
     Image.new("RGBA", (16, 16), (125, 170, 195, 72)).save(
         objects_dir / "flightgear_c182t_glass.png"
@@ -1121,12 +1219,11 @@ def build_flightgear_objects(donor: Path, target_aircraft: Path) -> dict[str, ob
             texture=texture.name,
             propeller=True,
         ),
-        write_obj8(
+        write_generated_prop_disc(
             objects_dir / "flightgear_c182t_prop_blur.obj",
+            "flightgear_c182t_prop.png",
+            [obj for obj in prop if obj.name.startswith("Blade")],
             prop_blur,
-            texture="flightgear_c182t_prop.png",
-            mode="prop_blur",
-            prop_blur=True,
         ),
         write_obj8(
             objects_dir / "flightgear_c182t_lights.obj",
