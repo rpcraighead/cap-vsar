@@ -298,7 +298,8 @@ class PythonInterface:
                         if not isinstance(request, dict) or request.pop("secret", None) != self.config["secret"]:
                             raise ValueError("Unauthorized control request")
                         answer = queue.Queue(maxsize=1)
-                        reply_timeout = 20.0 if request.get("action") == "lab_reset" else 0.25
+                        reply_timeout = (20.0 if request.get("action") == "lab_reset" else
+                                         3.0 if request.get("action") == "lab_start" else 0.25)
                         self.requests.put_nowait((request, answer, time.monotonic() + 0.20))
                         result = answer.get(timeout=reply_timeout)
                     except (ValueError, queue.Empty, queue.Full, OSError) as error:
