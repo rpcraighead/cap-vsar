@@ -4678,7 +4678,8 @@
       "fix": "Add --profile, record it in manifests, confirm verify_identity accepts CAP 487, then fly the trial order in docs/C182T_AI_PILOT_PORT_2026-10-11.md and retune.",
       "verify": "A C182T sortie scored by the independent observers with tuning_validated flipped and traces cited.",
       "depends_on": [],
-      "done_when": null
+      "done_when": null,
+      "notes": "2026-10-11: partly done on feat/c182-ai-pilot-baseline (b285342). --profile on the runners with the profile and tuning_validated in manifests; the bridge accepts the built CAP 487 package by its staged SHA-256; taxi throttle constants moved into the profile. First live trial flown and passed: expanding square, 6 legs, 12 NM, 2,000 ft, 100 KIAS, all waypoints inside 0.35 NM, 20 ft max altitude error (docs/evidence/ai_pilot_c182_pattern_20261011.json on that branch). Still open: cruise cycle, taxi, takeoff, full sortie, retune, flip tuning_validated."
     },
     {
       "id": "A2-14",
