@@ -144,6 +144,9 @@ def main(argv=None) -> int:
     ap.add_argument("--vvis", type=float, nargs="+", default=[700., 400., 0., -400., -700.])
     ap.add_argument("--min-settle-s", type=float, default=25.)
     ap.add_argument("--max-settle-s", type=float, default=75.)
+    ap.add_argument("--payload-kg", type=float, default=None,
+                    help="set the fixed payload (the C172 frozen campaign flies 170 kg payload + 100 kg fuel)")
+    ap.add_argument("--fuel-kg", type=float, default=None, help="set total fuel, split over two tanks")
     ap.add_argument("--no-launch", action="store_true", help="use the simulator that is already running")
     args = ap.parse_args(argv)
     profile = PROFILES[args.profile]
@@ -188,6 +191,12 @@ def main(argv=None) -> int:
         if profile.constant_speed_prop:
             h.dref_set("sim/cockpit2/engine/actuators/prop_rotation_speed_rad_sec_all", 2400 / 9.5493)
         h.dref_set("sim/cockpit2/controls/flap_handle_request_ratio", 0.0)
+        if args.payload_kg is not None:
+            h.dref_set("sim/flightmodel/weight/m_fixed", args.payload_kg)
+        if args.fuel_kg is not None:
+            h.dref_set("sim/flightmodel/weight/m_fuel[0]", args.fuel_kg / 2)
+            h.dref_set("sim/flightmodel/weight/m_fuel[1]", args.fuel_kg / 2)
+        log["loading"] = {"payload_kg": args.payload_kg, "fuel_kg": args.fuel_kg}
         h.dref_set("sim/cockpit2/engine/actuators/throttle_ratio_all", 0.7)
         h.cmd("sim/operation/pause_off")
         time.sleep(4)

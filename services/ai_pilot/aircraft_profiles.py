@@ -32,7 +32,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import math
 
-from .performance import PerformanceTable
+from .performance import CLIMB_MARGIN, PerformanceTable
 from .profile_loader import load_profiles
 
 
@@ -132,6 +132,15 @@ class AircraftProfile:
         if (self.takeoff_flap_ratio
                 and self.flap_retract_kias > self.vfe_for(self.takeoff_flap_ratio)):
             raise ValueError("takeoff flaps would be carried above Vfe")
+
+    def sustainable_climb_fpm(self):
+        """The climb rate controllers may ask for or plan with, from the measured table: the best rate this
+        airplane holds at its normal enroute climb speed with full throttle, with margin. None means
+        "not measured", and the controllers then use their built-in rates, as flown."""
+        if self.performance is None:
+            return None
+        best = self.performance.sustainable_vvi(self.climb_enroute_kias)
+        return None if best is None else max(0., best * CLIMB_MARGIN)
 
     def taxi_throttle(self, target_mps: float, groundspeed_mps: float) -> float:
         return min(max(self.taxi_base_throttle

@@ -27,6 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
+from .performance import CLIMB_MARGIN
 from .aircraft_profiles import AircraftProfile
 from .prop_law import PropLaw
 
@@ -200,6 +201,16 @@ class CruiseLaw:
         roll = clamp((bank_target - v["roll_deg"]) * .020 - v["roll_rate_dps"] * .022, -.35, .35)
         alt_error = target_alt - v["altitude_indicated_ft"]
         target_vvi = clamp(alt_error * 2., -650., 650.)
+        # Never ask for a climb the airplane cannot hold at the commanded speed: this law holds the
+        # vertical speed with pitch, so an unsustainable rate just bleeds off airspeed. The limit is the
+        # aircraft's measured one (85% of the best rate at full throttle); without a table the law is as flown.
+        climb_capped = False
+        performance = self.profile.performance
+        if performance is not None and target_vvi > 0:
+            best = performance.sustainable_vvi(target_ias if self.adopt_slew_kt_s is None
+                                               else (self.ias_cmd if self.ias_cmd is not None else v["kias"]))
+            if best is not None and target_vvi > max(0., best * CLIMB_MARGIN):
+                target_vvi, climb_capped = max(0., best * CLIMB_MARGIN), True
         raw_pitch = (target_vvi - v["vvi_fpm"]) * .010 + self.alt_i
         pitch_target = clamp(raw_pitch, -6., 10.)
         candidate = clamp(self.alt_i + alt_error * .0002 * dt * 10., -4., 4.)
@@ -238,7 +249,8 @@ class CruiseLaw:
                                       "flap": 0., "trim": self.trim, "brake": 0.}, v),
                 {"heading_error_deg": heading_error, "bank_target_deg": bank_target,
                  "target_vvi_fpm": target_vvi, "pitch_target_deg": pitch_target,
-                 "feed_forward_throttle": feed_forward, "feed_forward_in_table": in_table})
+                 "feed_forward_throttle": feed_forward, "feed_forward_in_table": in_table,
+                 "climb_capped": climb_capped})
 
 
 class SearchPatternController:

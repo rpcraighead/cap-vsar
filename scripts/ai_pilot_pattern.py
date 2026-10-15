@@ -77,7 +77,7 @@ def run(args):
     # The executive's terrain guard (it flew as a demo script until 2026-10-15): a
     # floor on the altitude target, never above what the bridge envelope accepts.
     guard = None if args.no_terrain_guard else TerrainGuard(
-        ceiling_ft=AIRBORNE_MAX_ALTITUDE_FT - 500)
+        ceiling_ft=AIRBORNE_MAX_ALTITUDE_FT - 500, max_climb_fpm=profile.sustainable_climb_fpm())
     result = {"outcome": "FAIL", "reason": "Setup incomplete"}
     session = secrets.token_hex(16)
     samples = 0

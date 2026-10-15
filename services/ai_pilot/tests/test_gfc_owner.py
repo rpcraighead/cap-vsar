@@ -362,3 +362,20 @@ def test_the_owner_never_touches_the_throttle_if_the_guard_never_asked_for_power
     before = len(rig.xp.writes)
     owner.step(rig.request("snapshot"), heading_mag=80., altitude_ft=4060., guard=TerrainGuard())
     assert not any(ref == THROTTLE for ref, _ in rig.xp.writes[before:])
+
+
+def test_the_autopilot_is_never_asked_for_a_climb_rate_the_airplane_cannot_hold(monkeypatch, tmp_path):
+    """A GFC 700 holding a vertical speed the engine cannot sustain just pitches up and loses airspeed."""
+    rig = Rig(monkeypatch, tmp_path, terrain=ridge_terrain(3.0, 3600.))
+    owner = owner_for(rig)
+    owner.engage(80., 4060.)
+    guard = TerrainGuard(ceiling_ft=AIRBORNE_MAX_ALTITUDE_FT - 500, max_climb_fpm=300.)
+    advice = owner.step(rig.request("snapshot"), heading_mag=80., altitude_ft=4060., guard=guard, max_climb_fpm=300.)
+    assert advice.floor_indicated_ft is not None
+    assert rig.xp.refs[VS_BUG] == 300.            # not the 700 the demo orders when the ground is this close
+    other = Rig(monkeypatch, tmp_path / "b", terrain=ridge_terrain(3.0, 3600.)) if (tmp_path / "b").mkdir() is None else None
+    owner2 = owner_for(other)
+    owner2.engage(80., 4060.)
+    owner2.step(other.request("snapshot"), heading_mag=80., altitude_ft=4060.,
+                guard=TerrainGuard(ceiling_ft=AIRBORNE_MAX_ALTITUDE_FT - 500))
+    assert other.xp.refs[VS_BUG] == 700.          # unchanged without a limit

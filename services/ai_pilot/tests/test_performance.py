@@ -151,3 +151,62 @@ def test_the_converter_keeps_only_settled_points_and_the_block_round_trips_throu
     assert sorted(loaded.points) == sorted(built.points) and loaded.acf_sha256 == HASH   # rendered grouped by climb rate
     for throttle, vvi, kias in built.points:
         assert loaded.throttle_for(kias, vvi)[0] == pytest.approx(throttle, abs=1e-9)
+
+
+# --- what climb the airplane can actually hold --------------------------------------------------------------------
+
+def weak_table():
+    """An underpowered airplane: full throttle holds 105 KIAS level but only 80 KIAS in a 400 fpm climb."""
+    rows = {-400.: (110., 118., 124.), 0.: (88., 96., 105.), 400.: (62., 71., 80.)}     # speeds at throttle .6/.8/1.0
+    return table([(t, v, k) for v, ks in rows.items() for t, k in zip((.6, .8, 1.), ks)])
+
+
+def test_sustainable_climb_is_read_from_the_full_throttle_row_without_extrapolating():
+    t = weak_table()
+    assert t.sustainable_vvi(80.) == pytest.approx(400.)          # holds a 400 fpm climb at 80 KIAS, no more is measured
+    assert t.sustainable_vvi(70.) == pytest.approx(400.)          # slower: still the best measured, not extrapolated
+    assert t.sustainable_vvi(92.5) == pytest.approx(200., abs=1.)  # between the level row (105) and the climb row (80)
+    assert t.sustainable_vvi(110.) <= 0.                           # faster than level full throttle holds: no climb
+    assert table().sustainable_vvi(100.) == pytest.approx(500.)    # the strong synthetic airplane: its best row
+    # only rows measured at (nearly) full throttle count
+    partial = table([(t_, v, 60 + 90 * t_ - .02 * v) for t_ in (.4, .6, .8) for v in (-500., 0., 500.)])
+    assert partial.sustainable_vvi(90.) is None
+
+
+def test_the_cruise_law_will_not_ask_for_a_climb_the_airplane_cannot_hold():
+    from dataclasses import replace
+    weak = replace(C182T, performance=weak_table())
+    strong = replace(C182T, performance=table())
+    # 200 ft low: the law wants +400 fpm. The strong airplane (measured to 500 fpm) can; the weak one cannot.
+    for profile, capped in ((weak, True), (strong, False)):
+        _, diag = CruiseLaw(profile).frame(level_values(90., alt=3800.), 0., 90., 4000., 90., .05)
+        assert diag["climb_capped"] is capped
+    _, weak_diag = CruiseLaw(weak).frame(level_values(90., alt=3800.), 0., 90., 4000., 90., .05)
+    assert 0. < weak_diag["target_vvi_fpm"] < 300.
+    _, none_diag = CruiseLaw(replace(C182T, performance=None)).frame(level_values(90., alt=2000.), 0., 90., 4000., 90., .05)
+    assert none_diag["target_vvi_fpm"] == 650. and none_diag["climb_capped"] is False   # as flown
+    # descents are never capped
+    _, down = CruiseLaw(weak).frame(level_values(90., alt=6000.), 0., 90., 4000., 90., .05)
+    assert down["target_vvi_fpm"] == -650.
+
+
+def test_the_profile_reports_the_climb_it_may_ask_for():
+    from dataclasses import replace
+    assert replace(C182T, performance=None).sustainable_climb_fpm() is None
+    assert C182T.sustainable_climb_fpm() == pytest.approx(0.85 * 700.)          # the measured CAP 487 table
+    weak = replace(C182T, performance=weak_table(), climb_enroute_kias=80.)
+    assert weak.sustainable_climb_fpm() == pytest.approx(0.85 * 400.)
+
+
+def test_the_terrain_guard_plans_and_orders_only_the_climb_the_airplane_can_hold():
+    from services.ai_pilot.tests.test_terrain_guard import snapshot, terrain
+    from services.ai_pilot.terrain_guard import TerrainGuard
+    normal = TerrainGuard().update(snapshot(4000., terrain(5200., 5.)))
+    assert normal.climb_fpm == 700                                  # below the ground: the demo's urgent rate
+    weak = TerrainGuard(max_climb_fpm=300.)
+    advice = weak.update(snapshot(4000., terrain(5200., 5.)))
+    assert advice.climb_fpm == 300
+    # a slower climber has to start earlier: 5.0 nm is too far for the strong airplane to need the floor yet
+    far = snapshot(4000., terrain(4700., 8.))
+    assert TerrainGuard().update(far).floor_indicated_ft is None
+    assert TerrainGuard(max_climb_fpm=200.).update(far).floor_indicated_ft is not None

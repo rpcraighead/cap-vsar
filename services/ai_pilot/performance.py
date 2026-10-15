@@ -21,6 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
+CLIMB_MARGIN = .85            # fraction of the best sustainable climb rate a controller will ask for
 MIN_ROWS = 2                  # vertical speeds
 MIN_POINTS_PER_ROW = 3        # throttle settings per vertical speed
 MAX_SPEED_INVERSION_KT = 1.5  # airspeed may not fall with throttle by more than measurement noise
@@ -86,6 +87,31 @@ class PerformanceTable:
                     return (t0 + t1) / 2, True
                 return t0 + (t1 - t0) * (kias - k0) / (k1 - k0), True
         return row[-1][0], False
+
+    def sustainable_vvi(self, kias: float):
+        """The best climb rate (fpm) the airplane holds at `kias` with full throttle, from the table.
+
+        Only rows measured at (nearly) full throttle count. The answer never exceeds the highest climb
+        rate measured and never goes below the lowest such row: the table does not extrapolate. If even
+        the lowest row cannot hold `kias` at full throttle, that lowest row's rate is returned, which for a
+        table with a level row means "level flight at best". Returns None if no row reached full throttle.
+        """
+        candidates = []
+        for vvi, row in self.rows().items():
+            top_throttle, top_kias = row[-1]
+            if top_throttle >= 0.95:
+                candidates.append((vvi, top_kias))
+        if not candidates:
+            return None
+        candidates.sort()                                  # ascending climb rate; top speed falls as it rises
+        if kias <= candidates[-1][1]:
+            return candidates[-1][0]
+        if kias >= candidates[0][1]:
+            return candidates[0][0]
+        for (v0, k0), (v1, k1) in zip(candidates, candidates[1:]):
+            if k1 <= kias <= k0:
+                return v0 + (v1 - v0) * (k0 - kias) / (k0 - k1) if k0 > k1 else v1
+        return candidates[0][0]
 
     def throttle_for(self, kias: float, vvi_fpm: float):
         """(throttle, in_range): the throttle that holds `kias` at `vvi_fpm` in the measured airplane."""

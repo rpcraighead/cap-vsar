@@ -104,7 +104,8 @@ def run(args):
     recorder = Recorder(args.output, manifest)
     client = BridgeClient(config)
     owner = GfcOwner(client)
-    guard = TerrainGuard(ceiling_ft=AIRBORNE_MAX_ALTITUDE_FT - 500)
+    max_climb = profile.sustainable_climb_fpm()      # None until the aircraft's table is measured
+    guard = TerrainGuard(ceiling_ft=AIRBORNE_MAX_ALTITUDE_FT - 500, max_climb_fpm=max_climb)
     observer = OwnerTrialObserver(altitude_ft=0., aircraft_name=profile.acf_name,
                                   require_capture=not args.handback_in_climb,
                                   speed_target_kias=args.kias or profile.search_kias)
@@ -255,7 +256,8 @@ def run(args):
             bad = observer.observe(snap)
             if bad:
                 raise ValueError(bad)
-            advice = owner.step(snap, heading_mag=target_mag, altitude_ft=altitude, guard=guard)
+            advice = owner.step(snap, heading_mag=target_mag, altitude_ft=altitude, guard=guard,
+                                max_climb_fpm=max_climb)
             advice = apply_guard(snap, advice)
             if advice is not None and advice.turn_back:
                 raise ValueError("Terrain guard: " + advice.reason)

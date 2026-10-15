@@ -53,9 +53,13 @@ class TerrainGuard:
     """Stateful because the floor has hysteresis: it rises when the ground needs
     it and is released only once the ground ahead is a full step lower."""
 
-    def __init__(self, *, leash=None, ceiling_ft=CEILING_FT):
+    def __init__(self, *, leash=None, ceiling_ft=CEILING_FT, max_climb_fpm=None):
         # leash: (lat, lon, radius_nm) of the area the sortie must stay within.
+        # max_climb_fpm: what THIS airplane can sustain (from its measured performance table); the guard
+        # then plans with, and orders, no more than that. None keeps the demo's 500/700 fpm.
         self.leash, self.ceiling_ft = leash, ceiling_ft
+        self.climb_fpm = CLIMB_FPM if max_climb_fpm is None else max(100., min(CLIMB_FPM, max_climb_fpm))
+        self.urgent_fpm = URGENT_CLIMB_FPM if max_climb_fpm is None else max(100., min(URGENT_CLIMB_FPM, max_climb_fpm))
         self.floor_msl = None
         self.last_reason = ""
 
@@ -81,7 +85,7 @@ class TerrainGuard:
         # now: time to gain the height at CLIMB_FPM at this groundspeed, plus a
         # margin. Distant high ground off the search area is not a reason to leave
         # the search altitude.
-        need_nm = max(gain, 0.) / CLIMB_FPM * gs_nmpm + MARGIN_NM
+        need_nm = max(gain, 0.) / self.climb_fpm * gs_nmpm + MARGIN_NM
         want = math.ceil((ahead + CLEAR_TARGET_FT) / STEP_FT) * STEP_FT
         reason = why
         if gain > 0 and ahead_nm <= need_nm and (self.floor_msl is None or want > self.floor_msl):
@@ -97,8 +101,8 @@ class TerrainGuard:
                 floor, self.ceiling_ft)
             reason = why
         full_power = floor is not None and alt_msl < floor - FULL_POWER_BELOW_FT
-        climb = 0. if floor is None else (URGENT_CLIMB_FPM if clearance < CLEAR_URGENT_FT
-                                          else CLIMB_FPM)
+        climb = 0. if floor is None else (self.urgent_fpm if clearance < CLEAR_URGENT_FT
+                                          else self.climb_fpm)
         self.last_reason = reason
         return Advice(True, None if floor is None else floor + offset, climb, full_power,
                       turn, reason, clearance, ahead, heading)

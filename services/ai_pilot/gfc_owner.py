@@ -160,7 +160,7 @@ class GfcOwner:
 
     # ---- one executive tick while the autopilot owns the airplane ----------
     def step(self, snapshot, *, heading_mag, altitude_ft, guard: TerrainGuard | None = None,
-             cruise_throttle=None):
+             cruise_throttle=None, max_climb_fpm=None):
         """Heartbeat, apply the terrain guard, keep the selections, verify them.
 
         `heading_mag` and `altitude_ft` are the mission's. The guard may raise the
@@ -188,6 +188,8 @@ class GfcOwner:
                 changes["vs_fpm"] = None
             else:
                 rate = advice.climb_fpm if (advice and advice.climb_fpm and error > 0) else 500.
+                if max_climb_fpm is not None:       # never ask the autopilot for a rate this airplane cannot hold
+                    rate = max(100., min(rate, max_climb_fpm))
                 changes["vs_fpm"] = rate if error > 0 else DESCENT_FPM
         if changes:
             self.select(changes.get("heading_mag"), changes.get("altitude_ft"), changes.get("vs_fpm"))
