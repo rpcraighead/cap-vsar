@@ -280,7 +280,7 @@ def main():
     p.add_argument("--stop-at", choices=STAGES)
     p.add_argument("--max-wall-s", type=float, default=3600)
     p.add_argument("--rollout-only", action="store_true")
-    p.add_argument("--profile", choices=sorted(PROFILES), default="C172SP",
+    p.add_argument("--profile", choices=sorted(PROFILES), required=True,
                    help="aircraft profile; C182T tuning is not yet validated")
     p.add_argument("--from-parking", action="store_true")
     a = p.parse_args()

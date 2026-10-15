@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import math
 
-from .aircraft_profiles import AircraftProfile, C172SP
+from .aircraft_profiles import AircraftProfile
 from .prop_law import FULL
 from xplane.capvsar_landing import GLIDEPATH_AIMPOINT_M, RUNWAYS
 
@@ -27,7 +27,7 @@ def wrap180(x):
 class LandingController:
     FLARE_START_AGL_FT = 17.5
 
-    def __init__(self, runway="KMYF 28R", profile: AircraftProfile = C172SP):
+    def __init__(self, runway="KMYF 28R", *, profile: AircraftProfile):
         self.runway = RUNWAYS[runway]
         self.profile = profile
         self.start_sim = None
@@ -266,7 +266,7 @@ class LandingController:
 class LandingObserver:
     """Scores measured runway position, touchdown, braking and complete stop."""
     def __init__(self, wind_speed_kt=0., wind_from_offset_deg=0., runway="KMYF 28R",
-                 profile: AircraftProfile = C172SP):
+                 *, profile: AircraftProfile):
         self.runway = RUNWAYS[runway]
         self.profile = profile
         self.wind_speed_kt = wind_speed_kt

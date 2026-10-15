@@ -148,3 +148,47 @@ def test_a_new_aircraft_is_a_new_file_and_duplicates_are_refused(tmp_path):
 def test_the_module_no_longer_carries_the_numbers():
     source = Path(aircraft_profiles.__file__).read_text()
     assert "AircraftProfile(\n    key=" not in source and "vr_kias=55." not in source
+
+
+# --- no controller defaults to a particular aircraft -------------------------------------------------
+
+def test_no_controller_or_observer_takes_a_default_aircraft():
+    """A new aircraft must never silently fly C172 numbers: every controller and observer that reads
+    a profile requires one from its caller (removed 2026-10-15; they defaulted to the C172SP)."""
+    import inspect
+    from services.ai_pilot.ground_guidance import TaxiGuidance
+    from services.ai_pilot.ksee_kmyf_mission import MissionController
+    from services.ai_pilot.landing_trial import LandingController, LandingObserver
+    from services.ai_pilot.runway_entry import RunwayEntryGuidance
+    from services.ai_pilot.search_patterns import CruiseLaw, SearchPatternController
+    from services.ai_pilot.takeoff_guidance import TakeoffGuidance
+    for cls in (TaxiGuidance, MissionController, LandingController, LandingObserver, RunwayEntryGuidance,
+                SearchPatternController, TakeoffGuidance, CruiseLaw):
+        parameter = inspect.signature(cls).parameters["profile"]
+        assert parameter.default is inspect.Parameter.empty, cls.__name__
+    with pytest.raises(TypeError, match="profile"):
+        MissionController("runway_climb")
+    with pytest.raises(TypeError, match="profile"):
+        LandingController("KMYF 28R")
+
+
+def test_no_module_source_names_a_default_aircraft_in_a_signature():
+    import re
+    root = Path(aircraft_profiles.__file__).parent
+    offenders = [p.name for p in root.glob("*.py")
+                 if re.search(r"profile\s*(:\s*\w+)?\s*=\s*(C172SP|C182T)\b", p.read_text())]
+    assert offenders == []
+
+
+@pytest.mark.parametrize("script", ["ai_pilot_pattern.py", "ai_pilot_ksee_kmyf.py", "ai_pilot_surface.py",
+                                    "ai_pilot_experiment.py"])
+def test_the_runners_refuse_to_start_without_a_named_aircraft(script):
+    import subprocess
+    import sys
+    scripts = Path(aircraft_profiles.__file__).parents[2] / "scripts"
+    args = {"ai_pilot_pattern.py": ["--config", "c", "--output", "o", "--pattern", "parallel", "--lat", "0", "--lon", "0"],
+            "ai_pilot_ksee_kmyf.py": ["--config", "c", "--output", "o"],
+            "ai_pilot_surface.py": ["--config", "c", "--output", "o"],
+            "ai_pilot_experiment.py": ["observe", "--config", "c", "--output", "o"]}[script]
+    done = subprocess.run([sys.executable, str(scripts / script), *args], capture_output=True, text=True, timeout=60)
+    assert done.returncode == 2 and "--profile" in done.stderr, done.stderr[-400:]

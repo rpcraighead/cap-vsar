@@ -98,7 +98,7 @@ session for each installation. Launch the stock C172 G1000 with a known scenery
 profile and wait for loading to complete, then run:
 
 ```sh
-python scripts/ai_pilot_experiment.py observe \
+python scripts/ai_pilot_experiment.py observe --profile C172SP \
   --config "$HOME/X-Plane 12/Resources/plugins/PythonPlugins/capvsar_flight_control_config.json" \
   --output "$HOME/.cache/capvsar/ai-pilot/new-observation.jsonl" --seconds 30
 ```

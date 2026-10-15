@@ -199,7 +199,7 @@ def main():
     p.add_argument("--config", type=Path, required=True)
     p.add_argument("--xplane", type=Path, default=Path.home() / "X-Plane 12")
     p.add_argument("--output", type=Path, required=True)
-    p.add_argument("--profile", choices=sorted(PROFILES), default="C172SP")
+    p.add_argument("--profile", choices=sorted(PROFILES), required=True)
     p.add_argument("--pattern", choices=("expanding_square", "parallel", "creeping_line"), required=True)
     p.add_argument("--lat", type=float, required=True)
     p.add_argument("--lon", type=float, required=True)

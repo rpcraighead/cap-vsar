@@ -1,4 +1,5 @@
 """Takeoff gates with a synthetic stock-C172 observation stream."""
+from services.ai_pilot.aircraft_profiles import C172SP
 import unittest
 
 from services.ai_pilot.takeoff_guidance import TakeoffGuidance, TakeoffObservation
@@ -17,7 +18,7 @@ class TakeoffGuidanceTests(unittest.TestCase):
         self.assertEqual(self.taxi.phase, TaxiPhase.HOLDING_SHORT_DEPARTURE)
         self.pilot = TakeoffGuidance(self.taxi, runway="27R",
                                      runway_heading_true_deg=282,
-                                     runway_length_m=1628, field_elevation_ft=388)
+                                     runway_length_m=1628, field_elevation_ft=388, profile=C172SP)
 
     def observation(self, **changes):
         values = dict(sim_time_s=0, along_runway_m=10, cross_runway_m=0,

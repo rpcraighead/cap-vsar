@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import math
 
 from .ground_guidance import GroundCommand, GroundObservation, TaxiPoint, clamp, wrap180
-from .aircraft_profiles import AircraftProfile, C172SP
+from .aircraft_profiles import AircraftProfile
 from .prop_law import full_forward
 from .taxi import TaxiCoordinator, TaxiPhase
 
@@ -31,7 +31,7 @@ class RunwayEntryGeometry:
 
 class RunwayEntryGuidance:
     def __init__(self, taxi: TaxiCoordinator, geometry: RunwayEntryGeometry,
-                 runway: str = "27R", profile: AircraftProfile = C172SP):
+                 runway: str = "27R", *, profile: AircraftProfile):
         self.taxi = taxi
         self.geometry = geometry
         self.runway = runway

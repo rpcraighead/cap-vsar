@@ -3,6 +3,20 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-10-15 — No controller defaults to a particular aircraft (branch `feat/aircraft-profile-config`)
+
+Status: **implemented and tested offline; behaviour unchanged, nothing re-flown.** Step 2 of making the AI
+autopilot one code path across aircraft. Every controller and observer that reads an `AircraftProfile`
+(`TaxiGuidance`, `TakeoffGuidance`, `RunwayEntryGuidance`, `MissionController`, `LandingController`,
+`LandingObserver`, `SearchPatternController`) used to default to the C172SP, so a new aircraft could fly C172
+numbers by forgetting an argument. `profile` is now required, keyword-only. The runners that fly an aircraft
+(`ai_pilot_pattern.py`, `ai_pilot_ksee_kmyf.py`, `ai_pilot_surface.py`, `ai_pilot_experiment.py observe`) now
+require `--profile` instead of defaulting to `C172SP`, and `inventory()` requires one. The scripts that are
+stock-C172 labs by design (`ai_pilot_cycle.py`, `ai_pilot_landing.py`) now say so, passing `C172SP`
+explicitly. 48 test call sites carry an explicit `profile=C172SP`. New tests fail if any controller regains a
+default or if a runner starts without a named aircraft. Old commands that omitted `--profile` for the four
+runners need it added (`docs/AI_PILOT_FIRST_INCREMENT.md` updated).
+
 ## 2026-10-15 — Aircraft profiles are data: TOML files and a strict loader (branch `feat/aircraft-profile-config`)
 
 Status: **implemented and tested offline; no controller changed, nothing re-flown.** Step 1 of making the AI

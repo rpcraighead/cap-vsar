@@ -177,8 +177,8 @@ def test_creeping_line_completes_and_holds_the_final_course():
 def test_controller_refuses_out_of_envelope_speed_and_lost_pattern():
     pts = parallel_track(33.10, -117.00, 90., 3., 1., 2)
     with pytest.raises(ValueError, match="envelope"):
-        SearchPatternController(pts, altitude_indicated_ft=1500., kias=60.)
-    controller = SearchPatternController(pts, altitude_indicated_ft=1500.)
+        SearchPatternController(pts, altitude_indicated_ft=1500., kias=60., profile=C172SP)
+    controller = SearchPatternController(pts, altitude_indicated_ft=1500., profile=C172SP)
     far = {"values": {"sim_time_s": 0., "latitude_deg": 33.10, "longitude_deg": -117.00,
                       "heading_true_deg": 90., "altitude_indicated_ft": 1500., "kias": 90.,
                       "vvi_fpm": 0., "pitch_deg": 2., "pitch_rate_dps": 0., "roll_deg": 0.,

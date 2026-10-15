@@ -10,6 +10,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from services.ai_pilot.aircraft_profiles import C172SP
 from services.ai_pilot.control_ownership import ControllerLock
 from services.ai_pilot.experiment import BridgeClient, Recorder, digest
 from services.ai_pilot.landing_trial import LandingController, LandingObserver
@@ -27,7 +28,8 @@ def replay(path):
                 entry = record["payload"].get("entry", {})
                 observer = LandingObserver(entry.get("wind_speed_kt", 0.),
                                            entry.get("wind_from_offset_deg", 0.),
-                                           entry.get("runway", "KMYF 28R"))
+                                           entry.get("runway", "KMYF 28R"),
+                                           profile=C172SP)  # traces predate recorded profiles: stock C172
             elif record["kind"] == "snapshot":
                 if observer is None:
                     raise ValueError("Landing trace has no manifest")
@@ -51,7 +53,7 @@ def run(args):
         raise ValueError("Installed runway does not match requested runway")
     runway = RUNWAYS[args.runway]
     client = BridgeClient(config)
-    inv = inventory(args.xplane, include_landing=True)
+    inv = inventory(args.xplane, include_landing=True, profile="C172SP")
     inv["controller_sha256"] = digest(ROOT / "services/ai_pilot/landing_trial.py")
     inv["runner_sha256"] = digest(Path(__file__))
     manifest = {"purpose": args.runway.replace(" ", "-") + "-moderate-braking",
@@ -72,8 +74,8 @@ def run(args):
                           "wind_speed_kt": args.wind_speed_kt,
                           "wind_from_offset_deg": args.wind_from_offset_deg}}
     recorder = Recorder(args.output, manifest)
-    observer = LandingObserver(args.wind_speed_kt, args.wind_from_offset_deg, args.runway)
-    controller = LandingController(args.runway)
+    observer = LandingObserver(args.wind_speed_kt, args.wind_from_offset_deg, args.runway, profile=C172SP)
+    controller = LandingController(args.runway, profile=C172SP)  # stock-C172 landing lab
     result = {"outcome": "FAIL", "reason": "Setup incomplete"}
     session = secrets.token_hex(16)
     generation = 0

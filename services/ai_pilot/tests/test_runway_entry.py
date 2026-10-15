@@ -1,4 +1,5 @@
 """Runway entry must remain distinct from taxi and takeoff authority."""
+from services.ai_pilot.aircraft_profiles import C172SP
 import unittest
 
 from services.ai_pilot.ground_guidance import GroundObservation, TaxiPoint
@@ -18,7 +19,7 @@ class RunwayEntryTests(unittest.TestCase):
         self.taxi = taxi
         geom = RunwayEntryGeometry(TaxiPoint(0, 0), TaxiPoint(0, 50),
                                    TaxiPoint(-30, 50), 270, 30)
-        self.guide = RunwayEntryGuidance(taxi, geom)
+        self.guide = RunwayEntryGuidance(taxi, geom, profile=C172SP)
 
     def obs(self, **change):
         values = dict(east_m=0, north_m=0, heading_true_deg=0,

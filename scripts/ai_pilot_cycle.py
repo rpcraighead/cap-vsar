@@ -22,7 +22,7 @@ def run(args):
         raise ValueError("Requires an expiring stock-C172 qualification installation")
     client = BridgeClient(config)
     scenario = Scenario()
-    inv = inventory(args.xplane)
+    inv = inventory(args.xplane, profile="C172SP")  # stock-C172 qualification lab
     inv["controller_sha256"] = {name: digest(ROOT / "services/ai_pilot" / name)
                                  for name in ("snapshot_controller.py", "direct_backend.py")}
     inv["runner_sha256"] = digest(Path(__file__))

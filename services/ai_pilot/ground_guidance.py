@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
-from .aircraft_profiles import AircraftProfile, C172SP
+from .aircraft_profiles import AircraftProfile
 from .prop_law import full_forward
 from .taxi import TaxiCoordinator, TaxiRoute
 
@@ -72,7 +72,7 @@ class TaxiGuidance:
 
     def __init__(self, coordinator: TaxiCoordinator, route: TaxiRoute,
                  points: dict[str, TaxiPoint], corridor_half_width_m: float = 5.,
-                 profile: AircraftProfile = C172SP):
+                 *, profile: AircraftProfile):
         if coordinator.route != route:
             raise ValueError("coordinator must own this route")
         if not 2 <= corridor_half_width_m <= 10:

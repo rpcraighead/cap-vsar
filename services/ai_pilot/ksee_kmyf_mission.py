@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import math
 
-from .aircraft_profiles import AircraftProfile, C172SP
+from .aircraft_profiles import AircraftProfile
 from .landing_trial import LandingController
 from .prop_law import PropLaw
 from xplane.capvsar_landing import RUNWAYS
@@ -44,7 +44,7 @@ def bearing_distance(lat, lon, target):
 
 
 class MissionController:
-    def __init__(self, stage="runway_climb", profile: AircraftProfile = C172SP):
+    def __init__(self, stage="runway_climb", *, profile: AircraftProfile):
         if stage not in STAGES:
             raise ValueError("Unknown mission stage")
         self.stage = stage

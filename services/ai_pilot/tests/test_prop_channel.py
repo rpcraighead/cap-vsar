@@ -100,7 +100,7 @@ def test_takeoff_and_ground_commands_carry_the_lever_only_for_the_governed_prop(
 def test_landing_flies_the_lever_full_forward():
     frame = LandingController("KMYF 28R", profile=C182T).step(landing_snapshot(-3000.))
     assert frame["prop"] == FULL
-    assert "prop" not in LandingController("KMYF 28R").step(landing_snapshot(-3000.))
+    assert "prop" not in LandingController("KMYF 28R", profile=C172SP).step(landing_snapshot(-3000.))
 
 
 def level_snapshots(**changes):
@@ -115,7 +115,7 @@ def test_mission_holds_full_in_climb_out_and_lets_cruise_stages_use_the_schedule
     assert ratios[-1] == pytest.approx(GOVERNED.prop_cruise_ratio)
     climb = MissionController(stage="runway_climb", profile=GOVERNED)
     assert {climb.step(snap)["prop"] for snap in level_snapshots()} == {FULL}
-    assert "prop" not in MissionController(stage="mzb_inbound").step(next(level_snapshots()))
+    assert "prop" not in MissionController(stage="mzb_inbound", profile=C172SP).step(next(level_snapshots()))
 
 
 def test_cruise_law_frame_has_exactly_the_bridge_channels():

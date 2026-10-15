@@ -27,7 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
-from .aircraft_profiles import AircraftProfile, C172SP
+from .aircraft_profiles import AircraftProfile
 from .prop_law import PropLaw
 
 EARTH_NM = 3440.065
@@ -251,7 +251,7 @@ class SearchPatternController:
     """
 
     def __init__(self, waypoints, *, altitude_indicated_ft, kias=None,
-                 profile: AircraftProfile = C172SP, capture_nm=.25,
+                 profile: AircraftProfile, capture_nm=.25,
                  bank_deg=20., lost_nm=3.):
         if len(waypoints) < 2:
             raise ValueError("a pattern needs at least two waypoints")

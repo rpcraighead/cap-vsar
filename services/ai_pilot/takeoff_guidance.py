@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
-from .aircraft_profiles import AircraftProfile, C172SP
+from .aircraft_profiles import AircraftProfile
 from .prop_law import full_forward
 from .taxi import TaxiCoordinator, TaxiPhase
 
@@ -85,7 +85,7 @@ class TakeoffGuidance:
 
     def __init__(self, taxi: TaxiCoordinator, *, runway: str,
                  runway_heading_true_deg: float, runway_length_m: float,
-                 field_elevation_ft: float, profile: AircraftProfile = C172SP):
+                 field_elevation_ft: float, profile: AircraftProfile):
         if not runway.strip() or not math.isfinite(runway_heading_true_deg):
             raise ValueError("surveyed runway identification and heading required")
         if not 500 <= runway_length_m <= 4000:

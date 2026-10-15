@@ -32,7 +32,7 @@ AIRCRAFT_PATHS = {
 
 
 def inventory(xplane, include_landing=False, include_surface=False, include_mission=False,
-              profile="C172SP"):
+              *, profile):
     aircraft = xplane / AIRCRAFT_PATHS[profile]
     plugins = xplane / "Resources/plugins/PythonPlugins"
     def git(*args):
@@ -189,7 +189,7 @@ def main():
     read.add_argument("--xplane", type=Path, default=Path.home() / "X-Plane 12")
     read.add_argument("--output", type=Path, required=True)
     read.add_argument("--seconds", type=float, default=30)
-    read.add_argument("--profile", choices=sorted(PROFILES), default="C172SP")
+    read.add_argument("--profile", choices=sorted(PROFILES), required=True)
     score = commands.add_parser("score")
     score.add_argument("trace", type=Path)
     stage = commands.add_parser("stage-observer")

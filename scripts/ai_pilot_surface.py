@@ -249,7 +249,7 @@ def main():
     parser.add_argument("--phase", choices=("taxi", "takeoff"), default="taxi")
     parser.add_argument("--start-at", choices=("parking", "hold"), default="parking")
     parser.add_argument("--max-wall-s", type=float, default=600.)
-    parser.add_argument("--profile", choices=sorted(PROFILES), default="C172SP",
+    parser.add_argument("--profile", choices=sorted(PROFILES), required=True,
                         help="aircraft profile; C182T tuning is not yet validated")
     args = parser.parse_args()
     if not 30 <= args.max_wall_s <= 900:
