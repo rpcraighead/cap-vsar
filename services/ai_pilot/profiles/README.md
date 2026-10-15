@@ -44,7 +44,9 @@ Numbers are plain TOML floats; `1/3` is written `0.3333333333333333`, which roun
 `[performance]` is the first measured (not handbook) data: `scripts/perf_table_sweep.py` flies the points and
 `scripts/perf_table_to_toml.py --write` puts them here. It is only valid for the aircraft file it was measured
 on, so re-measure when that changes. How the C182T table was made, what it showed and its limits:
-`docs/C182T_PERFORMANCE_TABLE_2026-10-15.md`. The C172 has none yet.
+`docs/C182T_PERFORMANCE_TABLE_2026-10-15.md`. Both the C172SP and the C182T have one; the climb rate controllers may ask for is derived from it
+(`AircraftProfile.sustainable_climb_fpm`). The two airplanes flying the same trials on the same code:
+`docs/ONE_AUTOPILOT_TWO_AIRCRAFT_2026-10-15.md`.
 
 ## What does not live here yet
 

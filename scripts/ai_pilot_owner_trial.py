@@ -105,6 +105,7 @@ def run(args):
     client = BridgeClient(config)
     owner = GfcOwner(client)
     max_climb = profile.sustainable_climb_fpm()      # None until the aircraft's table is measured
+    climbing_fpm = .6 * (max_climb if max_climb else 500.)
     guard = TerrainGuard(ceiling_ft=AIRBORNE_MAX_ALTITUDE_FT - 500, max_climb_fpm=max_climb)
     observer = OwnerTrialObserver(altitude_ft=0., aircraft_name=profile.acf_name,
                                   require_capture=not args.handback_in_climb,
@@ -268,7 +269,9 @@ def run(args):
             if args.handback_in_climb:
                 # Take the airplane back part-way up the guard's climb, at climb speed and power:
                 # the case the bumpless hand-back exists for.
-                if observer.terrain_override and snap["values"]["vvi_fpm"] > 500:
+                # "Climbing" is relative to what THIS airplane can climb (a C172 holds ~340 fpm, a C182T ~595):
+                # a fixed threshold never fired on the slower airplane (C172 run 1, 2026-10-15).
+                if observer.terrain_override and snap["values"]["vvi_fpm"] > climbing_fpm:
                     climb_since = sim if climb_since is None else climb_since
                     if sim - climb_since >= args.handback_in_climb:
                         break

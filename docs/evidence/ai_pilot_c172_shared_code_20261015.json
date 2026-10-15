@@ -1,0 +1,127 @@
+{
+ "purpose": "stock C172SP through the shared code, 2026-10-15",
+ "aircraft": "Cessna_172SP_G1000.acf sha256 b9c3c35c956a... (the pinned stock hash)",
+ "loading": "170 kg payload + 100 kg fuel (1,050.6 kg), the frozen C172 campaign loading",
+ "sweeps": {
+  "t1": {
+   "raw": "docs/evidence/c182t-2026-10-15/perf_table_C172SP_t1.json",
+   "sha256": "3e67a37555b3b637de4ba203e5e8db2467c38d4642b1364b186bd51a3821e1f9",
+   "note": "climb row too thin to be a table (two settled points at +400); superseded"
+  },
+  "t2": {
+   "raw": "docs/evidence/c182t-2026-10-15/perf_table_C172SP_t2.json",
+   "sha256": "b6ea39d4a17e2df820f050264858d78dd88c279e878e24b2a0f5abffd0485830",
+   "note": "used for the profile; adds +200 fpm and 100 s settle; level/descent points repeat t1 within ~1 kt, the edge +400 climb points do not (94.3/101.7 vs 91.3/81.0)"
+  }
+ },
+ "pattern_escon": {
+  "trace_sha256": "95b173f13ac194abef03bf3a314825c3eacda282297b7f087e02a06cd4dacb06",
+  "outcome": "PASS",
+  "waypoints": 9,
+  "max_alt_err_ft": 25.2,
+  "max_bank_deg": 21.3,
+  "kias": [
+   89.4,
+   90.6
+  ],
+  "xtk_median_m": 6,
+  "throttle_median": 0.73,
+  "invalid_attempts": [
+   "pattern_c172_escon_20261015_failed_start.jsonl: the previous simulator was still running, xplane-clean refused a second instance, nothing flew"
+  ]
+ },
+ "owner_run1": {
+  "note": "GFC owner climbed at the 340 fpm cap over the crest (1,411 ft above ground), levelled at 5,994 ft and restored throttle 1.00 -> 0.80 (first live check of the restore); the guard then declared a turn-back (needed floor 8,000 ft above the 6,000 ft ceiling) and the trial stopped. The mid-climb hand-back never ran: the runner's climb threshold was a fixed 500 fpm",
+  "outcome": "FAIL",
+  "reason": "Terrain guard: terrain needs a floor of 8000 ft, above the 6000 ft ceiling",
+  "trace_sha256": "d55719df71b564771b54aabeacfd9a1313425220b8d180a351fd02848c222da6",
+  "terrain_guard": {
+   "events": 2,
+   "max_floor_ft": 7999.814542364019,
+   "min_clearance_ft": -647.7451871354742,
+   "said": "terrain needs a floor of 8000 ft, above the 6000 ft ceiling",
+   "min_agl_ft": 1411.1729593055124,
+   "closest": null,
+   "crest": {
+    "ground_ft": 3896.0384229996075,
+    "altitude_msl_ft": 5309.132985976821,
+    "lat": 33.217278128019736,
+    "lon": -116.86156061009736,
+    "owner": "GFC700"
+   }
+  },
+  "phases": {
+   "direct1": {
+    "samples": 939,
+    "transient": {
+     "max_alt_error_ft": 2499.72585902213,
+     "max_bank_deg": 0.4691297709941864,
+     "max_abs_vvi_fpm": 382.0358581542969
+    }
+   },
+   "gfc": {
+    "samples": 4508,
+    "transient": {
+     "max_alt_error_ft": 2286.265094789045,
+     "max_bank_deg": 5.163248062133789,
+     "max_abs_vvi_fpm": 369.77752685546875
+    }
+   },
+   "direct2": {
+    "samples": 0,
+    "transient": {
+     "max_alt_error_ft": 0.0,
+     "max_bank_deg": 0.0,
+     "max_abs_vvi_fpm": 0.0
+    }
+   }
+  }
+ },
+ "owner_run2": {
+  "note": "PASS: hand-back mid-climb at 99.6 KIAS, eased to the 90 KIAS target (min 88.7), crest crossed under the AI pilot with >= 1,757 ft clearance",
+  "outcome": "PASS",
+  "reason": null,
+  "trace_sha256": "e7e2c4807553e7ab293afc516bc5e3ca586162f7051974a1006079b13deb21f9",
+  "terrain_guard": {
+   "events": 1,
+   "max_floor_ft": 6001.303044103182,
+   "min_clearance_ft": -650.6412173567264,
+   "said": "terrain 4128 ft at 9.5 nm, clearance -629 ft: floor 6000 ft",
+   "min_agl_ft": 1756.9336754955484,
+   "closest": null,
+   "crest": {
+    "ground_ft": 3713.285336279301,
+    "altitude_msl_ft": 5470.21901177485,
+    "lat": 33.21533439106501,
+    "lon": -116.86810187455585,
+    "owner": "DIRECT"
+   }
+  },
+  "phases": {
+   "direct1": {
+    "samples": 980,
+    "transient": {
+     "max_alt_error_ft": 10.17919921875,
+     "max_bank_deg": 0.567027747631073,
+     "max_abs_vvi_fpm": 366.1712951660156
+    }
+   },
+   "gfc": {
+    "samples": 489,
+    "transient": {
+     "max_alt_error_ft": 2294.528289313498,
+     "max_bank_deg": 5.149940490722656,
+     "max_abs_vvi_fpm": 367.7254638671875
+    }
+   },
+   "direct2": {
+    "samples": 5897,
+    "transient": {
+     "max_alt_error_ft": 1940.6563313668457,
+     "max_bank_deg": 0.1577526181936264,
+     "max_abs_vvi_fpm": 516.6810302734375
+    }
+   }
+  }
+ }
+}

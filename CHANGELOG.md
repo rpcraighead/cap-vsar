@@ -3,6 +3,22 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-10-15 — The stock C172SP flies the shared code: pattern and owner-transfer trials PASS, four aircraft-specific constants found (branch `feat/aircraft-profile-config`)
+
+Status: **flown.** The C172 has a measured performance table in its profile (`profiles/c172sp.toml`, stock ACF hash, the
+frozen campaign's 1,043.8 kg loading) and flew the ESCON expanding square (9/9 waypoints, altitude within 25 ft, 89.4-90.6
+KIAS) and the AI pilot -> GFC 700 -> AI pilot trial with the terrain guard at the Ramona ridge (hand-back mid-climb, PASS,
+crest crossed 1,757 ft above the ground) on exactly the code the CAP 487 flies, differing only by profile data. Found by
+flying it, each hidden while only the 182 flew: the cruise law asked for up to 650 fpm and the guard ordered 500-700 fpm
+whatever the airplane could hold (now bounded by the aircraft's own sustainable climb from its table: 340 fpm for the 172,
+595 for the 182); the owner trial counted a climb as above a fixed 500 fpm so the 172's hand-back never fired; the profile's
+fixed cruise throttle 0.55 was far from the 172's 0.85 for 100 KIAS; and the table rule needed two points per edge row.
+First live turn-back (the guard stopping a trial that would need a floor above the envelope ceiling) and first live check
+of the GFC owner's throttle restore after a level-off. `xplane-clean --restart` added after two silently refused launches.
+Not done: the frozen C172 campaign (it does not use `CruiseLaw` or the table), merging `MissionController`'s cruise loop,
+more than one altitude band. Account: `docs/ONE_AUTOPILOT_TWO_AIRCRAFT_2026-10-15.md`; evidence
+`docs/evidence/ai_pilot_c172_shared_code_20261015.json`.
+
 ## 2026-10-15 — Measured performance table for the CAP 487 as profile data (branch `feat/aircraft-profile-config`)
 
 Status: **measured and flown on the C182T; the C172 has none.** `scripts/perf_table_sweep.py` flew 35

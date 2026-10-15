@@ -1,7 +1,7 @@
 # CAP 487 C182T: measured throttle-for-(airspeed, climb rate) table (2026-10-15)
 
-Status: **measured, in the profile, validated on one aircraft in the simulator; for the C172 it is not
-measured.** Simulator engineering only; not operating guidance for any real aircraft.
+Status: **measured, in the profile, validated in the simulator. The C172's table, measured later the same day,
+is in `docs/ONE_AUTOPILOT_TWO_AIRCRAFT_2026-10-15.md`.** Simulator engineering only; not operating guidance for any real aircraft.
 
 ## Why
 
@@ -65,8 +65,8 @@ so, outside it.
 * Level speed jumps 11 kt between 0.60 and 0.70 throttle, because below about 0.65 the engine is held under
   2,400 RPM by the prop's fine stop (`docs/C182T_AI_PILOT_PROP_2026-10-15.md`); the table captures it, it does
   not explain it.
-* **Not measured for the C172.** It must be swept, and the frozen C172 campaign flown on the shared code, before
-  its profile gets a table; until then C172 controllers use the fixed-base law exactly as flown.
+* The C172 was swept afterwards and flew the same pattern and owner trials (see the note above). The frozen C172
+  qualification campaign does not use this table.
 * The MissionController (C172 KSEE-KMYF sortie) still has its own copy of the cruise loop and does not use the
   table.
 

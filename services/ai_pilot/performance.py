@@ -22,8 +22,12 @@ from dataclasses import dataclass
 import math
 
 CLIMB_MARGIN = .85            # fraction of the best sustainable climb rate a controller will ask for
-MIN_ROWS = 2                  # vertical speeds
-MIN_POINTS_PER_ROW = 3        # throttle settings per vertical speed
+MIN_ROWS = 3                  # vertical speeds
+# A row needs two measured throttle settings to interpolate between. The climb row nearest an airplane's
+# limit legitimately has only two: below them the climb runs out of airspeed (the C172's +400 fpm row,
+# 2026-10-15). The table as a whole must still be a real map (MIN_ROWS rows, one of them well measured).
+MIN_POINTS_PER_ROW = 2
+MIN_POINTS_BEST_ROW = 3
 MAX_SPEED_INVERSION_KT = 1.5  # airspeed may not fall with throttle by more than measurement noise
 
 
@@ -53,6 +57,9 @@ class PerformanceTable:
         rows = self.rows()
         if len(rows) < MIN_ROWS:
             raise PerformanceError("performance table needs at least %d vertical speeds" % MIN_ROWS)
+        if max(len(row) for row in rows.values()) < MIN_POINTS_BEST_ROW:
+            raise PerformanceError("no vertical speed has %d throttle points; the table is too thin to be a map"
+                                   % MIN_POINTS_BEST_ROW)
         for vvi, row in rows.items():
             if len(row) < MIN_POINTS_PER_ROW:
                 raise PerformanceError("vertical speed %+.0f fpm has %d throttle points; needs %d"

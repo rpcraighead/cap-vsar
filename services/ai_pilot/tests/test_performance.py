@@ -57,14 +57,19 @@ def test_a_table_must_say_what_it_was_measured_on(change, match):
 
 
 def test_a_table_must_be_a_real_map():
-    with pytest.raises(PerformanceError, match="at least 2 vertical speeds"):
-        table([(t, 0., 60 + 90 * t) for t in (.4, .6, .8)])
-    with pytest.raises(PerformanceError, match="throttle points"):
-        table([(.4, 0., 96.), (.6, 0., 114.), (.4, 500., 86.), (.6, 500., 104.)])
+    with pytest.raises(PerformanceError, match="at least 3 vertical speeds"):
+        table([(t, v, 60 + 90 * t - .02 * v) for t in (.4, .6, .8, 1.) for v in (0., 500.)])
+    with pytest.raises(PerformanceError, match="throttle points; needs 2"):
+        table([(t, 0., 60 + 90 * t) for t in (.4, .6, .8, 1.)] + [(t, 500., 50 + 90 * t) for t in (.6, 1.)]
+              + [(1., -500., 150.)])
+    with pytest.raises(PerformanceError, match="too thin"):
+        table([(t, v, 60 + 90 * t - .02 * v) for t in (.6, 1.) for v in (-500., 0., 500.)])
     with pytest.raises(PerformanceError, match="falls as throttle rises"):
-        table([(.4, 0., 100.), (.6, 0., 90.), (.8, 0., 120.), (.4, 500., 90.), (.6, 500., 100.), (.8, 500., 110.)])
+        table([(.4, 0., 100.), (.6, 0., 90.), (.8, 0., 120.), (.4, 500., 90.), (.6, 500., 100.), (.8, 500., 110.)]
+              + [(t, -500., 70. + 90. * t) for t in (.4, .6, .8)])
     with pytest.raises(PerformanceError, match="duplicate throttle"):
-        table([(.4, 0., 96.), (.4, 0., 96.5), (.6, 0., 114.), (.4, 500., 86.), (.6, 500., 104.), (.8, 500., 122.)])
+        table([(.4, 0., 96.), (.4, 0., 96.5), (.6, 0., 114.), (.4, 500., 86.), (.6, 500., 104.), (.8, 500., 122.)]
+              + [(t, -500., 70. + 90. * t) for t in (.4, .6, .8)])
 
 
 # --- in a profile file ---------------------------------------------------------------------------------
@@ -93,7 +98,7 @@ def test_a_profile_file_can_carry_a_performance_table(tmp_path):
 
 
 def test_a_malformed_performance_table_in_a_file_is_a_profile_error(tmp_path):
-    with pytest.raises(ProfileError, match="at least 2 vertical speeds"):
+    with pytest.raises(ProfileError, match="at least 3 vertical speeds"):
         load_profile(toml_with_table(tmp_path, [(.4, 0., 96.), (.6, 0., 114.), (.8, 0., 132.)]))
     bad = tmp_path / "bad.toml"
     bad.write_text(base_text() + '\n[performance]\nacf_sha256 = "x"\n')
@@ -171,6 +176,13 @@ def test_sustainable_climb_is_read_from_the_full_throttle_row_without_extrapolat
     # only rows measured at (nearly) full throttle count
     partial = table([(t_, v, 60 + 90 * t_ - .02 * v) for t_ in (.4, .6, .8) for v in (-500., 0., 500.)])
     assert partial.sustainable_vvi(90.) is None
+
+
+def test_an_edge_climb_row_may_have_only_two_points():
+    pts = [(t, v, 60. + 90. * t - 0.02 * v) for t in (.4, .6, .8, 1.) for v in (-500., 0.)] + [(.9, 400., 81.), (1., 400., 101.)]
+    assert max(len(r) for r in table(pts).rows().values()) >= 3
+    t = table(pts)
+    assert t.throttle_for(91., 400.)[0] == pytest.approx(.95, abs=.01)
 
 
 def test_the_cruise_law_will_not_ask_for_a_climb_the_airplane_cannot_hold():
