@@ -154,8 +154,10 @@ def level_values(kias, alt=4000., vvi=650.):
 
 
 def test_a_fresh_cruise_law_handed_a_climbing_airplane_does_not_cut_the_power():
+    from dataclasses import replace
     from services.ai_pilot.aircraft_profiles import C182T
     from services.ai_pilot.search_patterns import CruiseLaw
+    C182T = replace(C182T, performance=None)       # the fixed-base law, without the measured table
     v = level_values(119.)
     unchanged, _ = CruiseLaw(C182T).frame(v, 0., 90., 6000., 100., .05)
     assert unchanged["throttle"] < .2                      # the 2026-10-15 ESCON finding: idle for 8 s
@@ -171,7 +173,9 @@ def test_a_fresh_cruise_law_handed_a_climbing_airplane_does_not_cut_the_power():
 
 
 def test_without_adopt_slew_the_law_is_the_lifted_one():
+    from dataclasses import replace
     from services.ai_pilot.aircraft_profiles import C182T
+    C182T = replace(C182T, performance=None)
     from services.ai_pilot.search_patterns import CruiseLaw
     v = level_values(119.)
     a, _ = CruiseLaw(C182T).frame(v, 0., 90., 6000., 100., .05)

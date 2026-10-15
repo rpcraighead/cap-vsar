@@ -214,6 +214,13 @@ class CruiseLaw:
             target_ias = self.ias_cmd
         speed_error = target_ias - v["kias"]
         base = self.profile.cruise_base_throttle
+        # Feed-forward: with a measured performance table the throttle starts from what the airplane needs
+        # for this speed at this climb rate, and the loop below only trims the remainder. Without one
+        # (None) the fixed cruise base is used, which is the law exactly as it was flown.
+        feed_forward, in_table = None, False
+        if self.profile.performance is not None:
+            feed_forward, in_table = self.profile.performance.throttle_for(target_ias, target_vvi)
+            base = feed_forward
         if self.adopt_slew_kt_s is not None and throttle_in is not None and not self.seeded:
             self.power_i = clamp(throttle_in - (base + speed_error * .020), -.35, .35)
             self.seeded = True
@@ -230,7 +237,8 @@ class CruiseLaw:
         return (self.prop_law.add_to({"roll": roll, "pitch": pitch, "yaw": yaw, "throttle": throttle,
                                       "flap": 0., "trim": self.trim, "brake": 0.}, v),
                 {"heading_error_deg": heading_error, "bank_target_deg": bank_target,
-                 "target_vvi_fpm": target_vvi, "pitch_target_deg": pitch_target})
+                 "target_vvi_fpm": target_vvi, "pitch_target_deg": pitch_target,
+                 "feed_forward_throttle": feed_forward, "feed_forward_in_table": in_table})
 
 
 class SearchPatternController:

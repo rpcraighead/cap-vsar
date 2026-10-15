@@ -32,6 +32,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import math
 
+from .performance import PerformanceTable
 from .profile_loader import load_profiles
 
 
@@ -95,6 +96,9 @@ class AircraftProfile:
     prop_cruise_ratio: float = 1.
     tuning_validated: bool = False
     sources: dict = field(default_factory=dict)
+    # Measured throttle-for-(airspeed, vertical speed) table; None means "not measured", and the
+    # controllers then fall back to their base-throttle law (profiles/README.md, [performance]).
+    performance: "PerformanceTable | None" = None
 
     def __post_init__(self):
         speeds = (self.vr_kias, self.vx_kias, self.vy_kias, self.climb_enroute_kias,

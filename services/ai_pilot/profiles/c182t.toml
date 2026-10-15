@@ -115,3 +115,43 @@ missed = "Section 4 Balked Landing: flaps 20, 55 KIAS; retract above 70 KIAS"
 "vfe/va" = "Section 2 Figure 2-1"
 acf = "scripts/build_c182t_package.py ACF_PATCHES: Vs 51, Vso 41, Vx 65, Vy 80, Vfe 140/100, Vno 140, Vne 175; flap detents 10/20/38 deg"
 tuning = "NOT VALIDATED: base throttles, flap gates, threshold window and touchdown pitch are the C172 criteria shifted to the C182T speeds; see docs/C182T_AI_PILOT_PORT_2026-10-11.md"
+
+[performance]
+# MEASURED, not handbook: the airspeed that settles at a fixed throttle with the autopilot holding a
+# vertical speed (scripts/perf_table_sweep.py), prop full forward. Valid only for the aircraft file,
+# loading and altitude below; re-measure when the aircraft file changes (A-1 will move it).
+acf_sha256 = "11ff17d1f15ed3c715ca248f797999b3bf583763dd65275a658ddfac09cd89d8"
+altitude_ft = 4036.0
+mass_kg = 983.5
+conditions = "ISA, calm, full rich, prop full forward, flaps up, autopilot holding vertical speed; mean cowl-flap ratio 0.50 (left as the air start set it)"
+evidence = "docs/evidence/c182t-2026-10-15/perf_table_C182T_t2.json"
+# [throttle, vertical speed fpm, settled KIAS]
+points = [
+# -700 fpm
+  [0.4, -700.0, 106.8],
+  [0.5, -700.0, 114.4],
+  [0.6, -700.0, 122.5],
+  [0.7, -700.0, 130.5],
+# -400 fpm
+  [0.4, -400.0, 94.0],
+  [0.5, -400.0, 109.2],
+  [0.6, -400.0, 113.5],
+  [0.7, -400.0, 122.5],
+  [0.8, -400.0, 130.8],
+# +0 fpm
+  [0.5, 0.0, 92.2],
+  [0.6, 0.0, 102.7],
+  [0.7, 0.0, 114.0],
+  [0.8, 0.0, 120.0],
+  [0.9, 0.0, 129.6],
+  [1.0, 0.0, 137.0],
+# +400 fpm
+  [0.7, 400.0, 98.9],
+  [0.8, 400.0, 106.8],
+  [0.9, 400.0, 122.5],
+  [1.0, 400.0, 126.4],
+# +700 fpm
+  [0.8, 700.0, 95.7],
+  [0.9, 700.0, 111.2],
+  [1.0, 700.0, 117.1],
+]

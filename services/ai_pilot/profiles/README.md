@@ -34,13 +34,19 @@ Nothing here is operating guidance for a real aircraft.
 | `[throttle]` | `taxi_base taxi_speed_gain taxi_max cruise_base ils_base approach_base` | tuning: base throttle positions |
 | `[envelope]` | `kias` | the airborne speed band the bridge and observers accept |
 | `[prop]` | `constant_speed`, `cruise_ratio` | whether there is a prop lever, and the level-cruise setting (0.5-1.0 of the governing range) |
+| `[performance]` | optional: `acf_sha256 altitude_ft mass_kg conditions evidence points` | a MEASURED table of `[throttle, vertical speed fpm, settled KIAS]` points, tagged with the aircraft-file hash, loading and altitude; the cruise law uses it as throttle feed-forward. Absent means "not measured": the fixed `cruise_base` law is used |
 | `[sources]` | free-form strings; `tuning` required | where the numbers came from |
 
 Numbers are plain TOML floats; `1/3` is written `0.3333333333333333`, which round-trips exactly.
 
+## Measured performance
+
+`[performance]` is the first measured (not handbook) data: `scripts/perf_table_sweep.py` flies the points and
+`scripts/perf_table_to_toml.py --write` puts them here. It is only valid for the aircraft file it was measured
+on, so re-measure when that changes. How the C182T table was made, what it showed and its limits:
+`docs/C182T_PERFORMANCE_TABLE_2026-10-15.md`. The C172 has none yet.
+
 ## What does not live here yet
 
-Performance tables (power versus speed and climb rate, climb versus altitude, stall speeds, each tagged with
-the aircraft-file hash it was measured against) and further control types are planned, not built. They will
-be added as measured, not guessed: the first consumer is a throttle feed-forward to replace the stopgap
-speed ramp in `CruiseLaw.adopt_slew_kt_s`. See `docs/GFC700_SECOND_OWNER_2026-10-15.md`, "Findings and fixes".
+Climb performance versus altitude, stall speeds and further control types are planned, not built. They will
+be added as measured, not guessed.

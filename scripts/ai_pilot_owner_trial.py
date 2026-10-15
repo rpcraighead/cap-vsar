@@ -57,10 +57,10 @@ def clamp(x, low, high):
 class Hold:
     """Heading and altitude hold on the primary controls (the AI pilot's cruise law)."""
 
-    def __init__(self, profile, target_true, target_alt, kias):
+    def __init__(self, profile, target_true, target_alt, kias, adopt_slew_kt_s=None):
         # Bumpless: the airplane is handed over flying at its own speed and power, so the
         # speed command starts there and the throttle starts where the pilot left it.
-        self.law, self.profile = CruiseLaw(profile, adopt_slew_kt_s=ADOPT_SLEW_KT_S), profile
+        self.law, self.profile = CruiseLaw(profile, adopt_slew_kt_s=adopt_slew_kt_s or ADOPT_SLEW_KT_S), profile
         self.target_true, self.target_alt, self.kias = target_true, target_alt, kias
         self.last_sim = None
         self.trim = None
@@ -134,7 +134,7 @@ def run(args):
         v0 = snap["values"]
         altitude = round(v0["altitude_indicated_ft"] / 10.) * 10.
         observer.altitude_ft = altitude
-        hold = Hold(profile, v0["heading_true_deg"], altitude, kias)
+        hold = Hold(profile, v0["heading_true_deg"], altitude, kias, args.adopt_slew)
         controls = first_frame(snap, profile)
         started = client.request("lab_start", session=session, controls=controls,
                                  snapshot_frame=snap["frame"], snapshot_wall_time_s=snap["wall_time_s"])
@@ -282,7 +282,7 @@ def run(args):
         snapshot_owner[0] = "DIRECT"
         recorder.write("handover", {"to": "DIRECT", "session": new_session})
         v = snap["values"]
-        hold = Hold(profile, v["heading_true_deg"], observer.altitude_ft, kias)   # fresh integrators
+        hold = Hold(profile, v["heading_true_deg"], observer.altitude_ft, kias, args.adopt_slew)   # fresh integrators
         direct_phase("direct2", args.direct2_s or args.direct_s)
         result = {**observer.report(), "samples": samples, "terrain_guard": guard_log}
     except BaseException as error:
@@ -328,6 +328,9 @@ def main():
     p.add_argument("--handback-in-climb", type=float, default=None, metavar="SECONDS",
                    help="end the GFC 700 phase this many seconds into the guard's climb, mid-climb, "
                         "instead of waiting for capture at level")
+    p.add_argument("--adopt-slew", type=float, default=None, metavar="KT_PER_S",
+                   help="speed-command slew after a hand-back (default %.1f); the A/B knob for the "
+                        "performance-table feed-forward" % ADOPT_SLEW_KT_S)
     p.add_argument("--direct2-s", type=float, default=None,
                    help="length of the final AI-pilot phase (default: --direct-s)")
     p.add_argument("--kias", type=float, default=None)

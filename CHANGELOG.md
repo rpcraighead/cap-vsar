@@ -3,6 +3,22 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-10-15 — Measured performance table for the CAP 487 as profile data (branch `feat/aircraft-profile-config`)
+
+Status: **measured and flown on the C182T; the C172 has none.** `scripts/perf_table_sweep.py` flew 35
+(throttle, vertical speed) points with the aircraft's own autopilot holding the climb rate; the settled
+airspeeds, inverted, say what throttle a speed and climb rate need. The first sweep let altitude drift and
+hid up to 6.7 kt; the second recentres and is the table (`[performance]` in `profiles/c182t.toml`, tagged with
+the ACF hash `11ff17d1...`, 2,185 lb, mean 4,036 ft). `CruiseLaw` uses it as throttle feed-forward when a
+profile has one; without one it is the law as flown. Validation: the ESCON expanding square is unchanged
+(9 waypoints, altitude within 30 ft, 99.3-100.7 KIAS, same median throttle); the hand-back mid-climb is NOT
+fixed by the table: at a 2 kt/s speed ramp it dips to 95 KIAS (90 without it) and still fails, at 0.4 kt/s
+both pass, so the slow ramp stays the operative fix. Found on the way: `xplane-clean` correctly refused to
+start while the sweep's own simulator was still running (one unflown attempt). New: `performance.py`, the
+optional `[performance]` loader section, the two scripts. Account and the grid:
+`docs/C182T_PERFORMANCE_TABLE_2026-10-15.md`; evidence `docs/evidence/ai_pilot_performance_table_20261015.json`.
+Not done: the C172 table and its frozen campaign; a second altitude band; merging `MissionController`'s cruise loop.
+
 ## 2026-10-15 — No controller defaults to a particular aircraft (branch `feat/aircraft-profile-config`)
 
 Status: **implemented and tested offline; behaviour unchanged, nothing re-flown.** Step 2 of making the AI

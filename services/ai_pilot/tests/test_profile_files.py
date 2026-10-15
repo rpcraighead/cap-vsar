@@ -1,4 +1,5 @@
 """Aircraft profiles as data: the migration proof, and the loader's strictness."""
+from dataclasses import replace
 from pathlib import Path
 import shutil
 
@@ -13,8 +14,10 @@ from services.ai_pilot.tests import golden_profiles
 # --- the migration: moving the numbers to files changed none of them ----------------------------
 
 def test_the_files_load_to_profiles_equal_to_the_old_python_definitions():
-    assert load_profile(PROFILE_DIR / "c172sp.toml") == golden_profiles.C172SP
-    assert load_profile(PROFILE_DIR / "c182t.toml") == golden_profiles.C182T
+    # Everything the Python literals carried. The measured `performance` table did not exist then; it is
+    # new data a file may add, and is tested in test_performance.py.
+    assert replace(load_profile(PROFILE_DIR / "c172sp.toml"), performance=None) == golden_profiles.C172SP
+    assert replace(load_profile(PROFILE_DIR / "c182t.toml"), performance=None) == golden_profiles.C182T
 
 
 def test_the_registry_is_built_from_the_files_and_the_module_attributes_still_work():

@@ -104,6 +104,29 @@ def _convert(value, kind, where):
     raise AssertionError(kind)
 
 
+PERFORMANCE_KEYS = {"acf_sha256", "altitude_ft", "mass_kg", "conditions", "evidence", "points"}
+
+
+def _performance(table, name):
+    from .performance import PerformanceError, PerformanceTable
+    if not isinstance(table, dict) or set(table) != PERFORMANCE_KEYS:
+        raise ProfileError("%s: [performance] needs exactly %s" % (name, sorted(PERFORMANCE_KEYS)))
+    points = table["points"]
+    if (not isinstance(points, list) or not points
+            or any(not isinstance(p, list) or len(p) != 3 for p in points)):
+        raise ProfileError("%s: [performance].points must be a list of [throttle, vertical speed fpm, KIAS]" % name)
+    try:
+        return PerformanceTable(
+            acf_sha256=_convert(table["acf_sha256"], "str", name + " [performance] acf_sha256"),
+            altitude_ft=_number(table["altitude_ft"], name + " [performance] altitude_ft"),
+            mass_kg=_number(table["mass_kg"], name + " [performance] mass_kg"),
+            conditions=_convert(table["conditions"], "str", name + " [performance] conditions"),
+            evidence=_convert(table["evidence"], "str", name + " [performance] evidence"),
+            points=tuple(tuple(_number(x, name + " [performance] points") for x in p) for p in points))
+    except PerformanceError as error:
+        raise ProfileError("%s: %s" % (name, error)) from error
+
+
 def load_profile(path):
     """Build an `AircraftProfile` from a TOML file, or raise `ProfileError` saying what is wrong."""
     from .aircraft_profiles import AircraftProfile, FlapGate
@@ -112,7 +135,7 @@ def load_profile(path):
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError) as error:
         raise ProfileError("%s: cannot read profile: %s" % (path.name, error)) from error
-    allowed = set(SCHEMA) | {"sources"}
+    allowed = set(SCHEMA) | {"sources", "performance"}
     unknown = set(data) - allowed
     if unknown:
         raise ProfileError("%s: unknown section(s) %s" % (path.name, sorted(unknown)))
@@ -147,6 +170,8 @@ def load_profile(path):
         raise ProfileError("%s: [sources] needs a 'tuning' entry saying where the controller "
                            "constants came from and whether they are validated" % path.name)
     kwargs["sources"] = dict(sources)
+    if "performance" in data:
+        kwargs["performance"] = _performance(data["performance"], path.name)
     try:
         return AircraftProfile(**kwargs)
     except ValueError as error:
