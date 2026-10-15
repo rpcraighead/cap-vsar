@@ -59,7 +59,7 @@ def test_a_hand_over_transient_fails_the_trial_and_names_the_phase():
                                            ({"vvi": 2000.}, "Hand-over transient")])
 def test_speed_bank_and_climb_rate_limits(fields, reason):
     observer = OwnerTrialObserver(altitude_ft=4000.)
-    observer.enter("direct1", snap(0))
+    observer.enter("gfc", snap(0), heading_target_true=110.)
     assert reason in observer.observe(snap(.25, **fields))
 
 
@@ -116,3 +116,30 @@ def test_stage_mission_installs_terrain_gfc_and_the_fence(tmp_path):
     stage_observer(surface, aircraft, mode="surface")
     plain = json.loads((surface / "capvsar_flight_control_config.json").read_text())
     assert "gfc_owner" not in plain and "terrain_lookahead" not in plain
+
+
+def test_terrain_floor_waives_only_the_altitude_criteria_and_is_counted():
+    observer = OwnerTrialObserver(altitude_ft=4000.)
+    observer.enter("gfc", snap(0), heading_target_true=110.)
+    observer.terrain_override = True
+    observer.altitude_ft = 5500.                      # the floor the guard raised
+    t = 0.
+    for _ in range(40):
+        t += .25
+        assert observer.observe(snap(t, alt=5480.)) is None       # near the floor: fine
+    assert observer.report()["terrain_override_samples"] == 40
+    assert observer.observe(snap(t + .25, alt=5480., roll=40.)).startswith("Hand-over transient") \
+        or observer.failure                                          # bank is never waived
+    clean = OwnerTrialObserver(altitude_ft=4000.)
+    clean.enter("gfc", snap(0), heading_target_true=110.)
+    assert clean.observe(snap(.25, alt=3700.)) == "Hand-over transient too large entering gfc"
+    assert clean.report()["terrain_override_samples"] == 0
+
+
+def test_the_adopted_first_phase_is_recorded_not_limited_but_later_hand_overs_still_are():
+    observer = OwnerTrialObserver(altitude_ft=4000.)
+    observer.enter("direct1", snap(0))
+    assert observer.observe(snap(.25, vvi=1500., alt=3900.)) is None      # the air start was still climbing
+    assert observer.report()["phases"]["direct1"]["transient"]["max_abs_vvi_fpm"] == 1500.
+    observer.enter("gfc", snap(.5), heading_target_true=110.)
+    assert observer.observe(snap(.75, vvi=1500.)).startswith("Hand-over transient")

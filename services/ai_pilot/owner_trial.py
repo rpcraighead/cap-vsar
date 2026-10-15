@@ -37,6 +37,13 @@ class OwnerTrialObserver:
         self.captured = False
         self.failure = None
         self.previous = None
+        # Set by the runner while the executive's terrain guard holds a floor above the
+        # assigned altitude: `altitude_ft` then moves to the floor, the altitude
+        # criteria are waived for those samples (a climb away from the ground is not a
+        # tracking failure) and the samples are counted, so a PASS that used the waiver
+        # says so. Bank, climb-rate, speed and heading criteria still apply.
+        self.terrain_override = False
+        self.terrain_override_samples = 0
 
     @staticmethod
     def _blank():
@@ -79,21 +86,26 @@ class OwnerTrialObserver:
                 return self.fail("Speed outside band in %s" % self.phase)
             stats = self.stats[self.phase]
             stats["samples"] += 1
+            self.terrain_override_samples += 1 if self.terrain_override else 0
             alt_error = abs(v["altitude_indicated_ft"] - self.altitude_ft)
             bank = abs(v["roll_deg"])
             if sim - self.phase_started[self.phase] <= TRANSIENT_S:
+                # The first phase adopts whatever state the air start left; there is no
+                # hand-over to score, so it is recorded, not limited.
+                adopting = self.phase == self.PHASES[0]
                 t = stats["transient"]
                 t["max_alt_error_ft"] = max(t["max_alt_error_ft"], alt_error)
                 t["max_bank_deg"] = max(t["max_bank_deg"], bank)
                 t["max_abs_vvi_fpm"] = max(t["max_abs_vvi_fpm"], abs(v["vvi_fpm"]))
-                if (alt_error > c["transient_altitude_ft"] or bank > c["transient_bank_deg"]
-                        or abs(v["vvi_fpm"]) > c["transient_vvi_fpm"]):
+                if not adopting and (bank > c["transient_bank_deg"]
+                                     or (alt_error > c["transient_altitude_ft"] and not self.terrain_override)
+                                     or abs(v["vvi_fpm"]) > c["transient_vvi_fpm"]):
                     return self.fail("Hand-over transient too large entering %s" % self.phase)
             else:
                 s = stats["steady"]
                 s["max_alt_error_ft"] = max(s["max_alt_error_ft"], alt_error)
                 s["max_bank_deg"] = max(s["max_bank_deg"], bank)
-                if self.phase != "gfc" and alt_error > c["transient_altitude_ft"]:
+                if self.phase != "gfc" and alt_error > c["transient_altitude_ft"] and not self.terrain_override:
                     return self.fail("Altitude not held in %s" % self.phase)
                 if bank > c["max_bank_deg"]:
                     return self.fail("Bank beyond limit in %s" % self.phase)
@@ -118,4 +130,5 @@ class OwnerTrialObserver:
                                   "heading/altitude not captured by the GFC 700" if complete
                                   else "a phase was not flown")
         return {"outcome": outcome, "reason": reason, "captured": self.captured,
-                "phases": self.stats, "criteria": self.criteria}
+                "phases": self.stats, "criteria": self.criteria,
+                "terrain_override_samples": self.terrain_override_samples}

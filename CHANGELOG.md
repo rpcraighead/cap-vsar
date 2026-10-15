@@ -3,6 +3,17 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-10-15 — Owner-transfer trial flown: AI pilot -> GFC 700 -> AI pilot, with the terrain guard (branch `feat/c182-prop-control`)
+
+Status: **flown twice on the CAP 487, both PASS** (open water; ESCON with a guard climb). First live use
+of the GFC 700 second owner, the terrain scan and the terrain guard; simulator started and flown
+unattended with the bridge's pause/override release as containment. An earlier ESCON attempt failed on a
+scorer flaw (the adopted first phase was held to hand-over limits) and was fixed, not a flight result.
+Findings: hand-overs under 1.2 ft and 25 fpm; heading/altitude captured; the guard raised a 5,997 ft floor
+over a 4,526 ft ridge and the GFC 700 flew the 700 fpm climb at full power; a fresh DIRECT controller cut
+power for 8 s when given the airplane at 119 KIAS (not fixed). Evidence
+`docs/evidence/ai_pilot_owner_trial_20261015.json`; account in `docs/GFC700_SECOND_OWNER_2026-10-15.md`.
+
 ## 2026-10-15 — C182T prop lever: wrong dataref found and fixed; map measured (branch `feat/c182-prop-control`)
 
 Status: **measured live; sink corrected and unit-tested; not yet exercised in the simulator.** The

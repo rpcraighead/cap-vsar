@@ -1,7 +1,8 @@
 # GFC 700 as a second owner of the bridge, and the terrain guard in the executive (2026-10-15)
 
-Status: **implemented and tested offline (fake SDK); never run in X-Plane.** Branch
-`feat/c182-prop-control`. Simulator engineering only; not operating guidance for any
+Status: **flown twice in X-Plane on the CAP 487 on 2026-10-15 and passed both times**
+(open water; ESCON with the terrain guard climbing). Offline tests on a fake SDK before that.
+Branch `feat/c182-prop-control`. Simulator engineering only; not operating guidance for any
 real aircraft.
 
 Decision context: CONOPS gate G was closed on 2026-10-15 (ArduPlane not adopted,
@@ -65,25 +66,52 @@ selection being re-sent, stager output, and the trial scorer. 636 AI-pilot tests
 (20 expected failures); the full suite has the same 169 failures as `main` (console tests,
 unrelated).
 
-## Not verified: everything the simulator has to answer
+## Flown 2026-10-15 (`scripts/ai_pilot_owner_trial.py`, CAP 487 ACF `11ff17d1...`)
 
-1. Engaging the autopilot with `sim/GPS/g1000n1_ap` and no modes: does it come up ROL/PIT
-   (ARDUPLANE_TRIAL F4) and hold attitude for the frames before `gfc_select` lands? The
-   trial's hand-over transient numbers answer this.
-2. Whether `XPLMCommandOnce` completes before the next line, i.e. whether engaging VS zeroes
-   the rate before or after the sink writes it. `GfcOwner.verify` re-sends, up to 3 times.
-3. `sim/autopilot/altitude_hold` holds the *current* altitude, not the bug. The hold path
-   therefore holds wherever the airplane is when it engages; the trial scores that.
-4. The scan runs about 75 probes once a second inside the telemetry callback. Check
-   `capture_duration_s` in the trace.
-5. The first frame after hand-back uses a neutral yoke with measured throttle, trim and
-   prop. Whether the airplane holds through it is the second transient the trial scores.
-6. Request latency: the plugin serves at most 8 requests per simulator frame, one round
-   trip each. At low frame rates the 0.4 s heartbeat has less margin.
-7. The GFC 700 is flown on **heading and altitude only**. GPSS, the G1000 flight plan and
-   NAV/APR coupling (what the squadron demo uses) are not driven from here yet.
+Simulator launched and flown unattended (`xplane-clean`); the bridge's pause and override release
+were the containment. Summary and trace hashes: `docs/evidence/ai_pilot_owner_trial_20261015.json`.
 
-## Live trial (needs a person at the workstation)
+| Run | Start | Result |
+|---|---|---|
+| 1 | Open water off Point Loma, 2,170 ft, heading 352 deg | **PASS.** Hand-over to the autopilot: 0.4 ft altitude change, 24 fpm. Heading change of 20 deg left captured within 1.1 deg, altitude held within 1.2 ft. Hand-back: 1.2 ft, 0.4 deg of bank. |
+| ESCON attempt 1 | 8.6 nm from the Ramona ridge, 3,540 ft | **FAIL, scorer flaw, not a flight result.** The air start was still climbing at 1,207 fpm when adopted and tripped a hand-over limit. The first phase has no hand-over; it is now recorded, not limited. |
+| ESCON run 2 | Same start, same airplane, re-adopted | **PASS.** The GFC 700 held heading and altitude at 3,533 ft (within 11 ft, bank under 6 deg). The ridge ahead (3,977 to 4,526 ft against 3,530 ft) tripped the guard: floor 5,997 ft, minimum clearance -813 ft, 700 fpm climb ordered and flown to within a few fpm, full power ordered and flown. Hand-back happened during the climb. Contained, paused, overrides released. |
+
+What this answers from the offline list:
+
+1. `g1000n1_ap` with no modes, then `gfc_select`: no visible attitude gap. Hand-over transients were
+   under 1 ft and 25 fpm in run 1. (Mode state after selection: HDG + ALT hold, `autopilot_state` 16386;
+   HDG + VS, 50, during the climb.)
+2. VS engagement and the selected rate: the 700 fpm selection held for the whole climb, so the
+   rate was not zeroed after the write. `GfcOwner.verify`'s re-send path was not needed live.
+3. ALT hold holds the current altitude: held 3,531 +/- 3 ft over 90 s. The hold path works as built.
+4. Scan cost: recorded `capture_duration_s` maximum 0.7 ms (every 5th snapshot only).
+5. First frame after hand-back (neutral yoke, measured throttle/trim): no excursion.
+6. The 0.4 s heartbeat held at this machine's frame rate for the whole of both runs.
+
+New findings:
+
+* **Power after a hand-back mid-climb.** The fresh `CruiseLaw` targets 100 KIAS. Handed the airplane
+  at 119 KIAS at full power, it cut throttle to 0.12 for about 8 s and speed fell to 90 KIAS before it
+  recovered and climbed at 650 to 690 fpm. Inside the scorer's 70-130 KIAS band, but the DIRECT owner
+  should start from the airspeed it is given. Not fixed.
+* **The DIRECT owner ignores the guard's `full_power`.** It climbs on its own speed-and-altitude loop,
+  which reached full throttle in about 10 s. Only the GFC 700 owner applies `full_power`.
+* **The guard's events were swallowed** by a second `guard.update` per frame in the runner, so the trace
+  shows `terrain_guard.events` as 0 though the floor rose. Fixed (pass the advice in); not re-flown.
+* The airplane ended the ESCON run at 4,590 ft climbing, 1.5 nm short of the ridge line at 4,526 ft and
+  heading for a 6,000 ft floor; the trial stops at its time limit, so clearance over the ridge itself was
+  not demonstrated. A run long enough to cross it is the next ESCON test.
+
+## Still not verified
+
+1. The GFC 700 is flown on heading and altitude only. GPSS, the G1000 flight plan and NAV/APR coupling
+   (what the squadron demo uses) are not driven from here yet.
+2. The terrain fence (`terrain_backstop_ft`, 200 ft) never fired; no trial approached it.
+3. A turn-back (floor above the ceiling, or the leash) has not been flown.
+4. Low frame rates and request latency under load.
+
+## Running the trial
 
 ```bash
 python3 scripts/ai_pilot_experiment.py stage-mission ~/.cache/capvsar/stage-<stamp> \
@@ -94,5 +122,5 @@ python3 scripts/ai_pilot_owner_trial.py --config <PythonPlugins>/capvsar_flight_
     --output ~/.cache/capvsar/ai-pilot/owner_trial_c182_1.jsonl --profile C182T
 ```
 
-Restore the previous bridge afterwards. The squadron demo rig (`~/capvsar-demo`) keeps its
+The simulator can be launched without anyone at the desk (`xplane-clean --detach --new_flight_json=...`, then pause once airborne). Back up and restore the installed bridge (`~/.cache/capvsar/bridge-backup-*`). The squadron demo rig (`~/capvsar-demo`) keeps its
 own copy of the guard and is untouched.

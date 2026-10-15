@@ -1,0 +1,123 @@
+{
+ "openwater_c182_run1": {
+  "trace": "~/.cache/capvsar/ai-pilot/owner_trial_c182_20261015_1.jsonl",
+  "trace_sha256": "dd1942d105ed5febc550c13ac6f3c7d66d263d9de65ebde233d6739dedf31e1c",
+  "outcome": "PASS",
+  "reason": null,
+  "captured": true,
+  "samples": 4296,
+  "phases": {
+   "direct1": {
+    "samples": 1657,
+    "transient": {
+     "max_alt_error_ft": 5.72412109375,
+     "max_bank_deg": 1.6991204023361206,
+     "max_abs_vvi_fpm": 379.8891296386719
+    },
+    "steady": {
+     "max_alt_error_ft": 4.58837890625,
+     "max_bank_deg": 0.7789285778999329
+    }
+   },
+   "gfc": {
+    "samples": 862,
+    "transient": {
+     "max_alt_error_ft": 0.43115234375,
+     "max_bank_deg": 13.303999900817871,
+     "max_abs_vvi_fpm": 24.5692138671875
+    },
+    "steady": {
+     "max_alt_error_ft": 1.1767578125,
+     "max_bank_deg": 13.202301025390625
+    }
+   },
+   "direct2": {
+    "samples": 1777,
+    "transient": {
+     "max_alt_error_ft": 1.1845703125,
+     "max_bank_deg": 0.4036058187484741,
+     "max_abs_vvi_fpm": 42.52088165283203
+    },
+    "steady": {
+     "max_alt_error_ft": 4.268798828125,
+     "max_bank_deg": 0.6560494303703308
+    }
+   }
+  },
+  "terrain_override_samples": null,
+  "terrain_guard": null,
+  "containment": {
+   "state": "PAUSED_FAULT",
+   "pause_confirmed": true
+  },
+  "recorded_capture_duration_s": {
+   "max": 0.000661284000671003,
+   "median": 9.816500096349046e-05,
+   "note": "every 5th snapshot only"
+  },
+  "aircraft_acf_sha256": "11ff17d1f15ed3c715ca248f797999b3bf583763dd65275a658ddfac09cd89d8"
+ },
+ "escon_c182_run2": {
+  "trace": "~/.cache/capvsar/ai-pilot/owner_trial_c182_escon_20261015_2.jsonl",
+  "trace_sha256": "884a5eaad545ba7992831e2f66c087ce9be56d4769b51154d8409ed919bd3032",
+  "outcome": "PASS",
+  "reason": null,
+  "captured": true,
+  "samples": 3257,
+  "phases": {
+   "direct1": {
+    "samples": 1009,
+    "transient": {
+     "max_alt_error_ft": 22.440673828125,
+     "max_bank_deg": 0.23119637370109558,
+     "max_abs_vvi_fpm": 1232.8564453125
+    },
+    "steady": {
+     "max_alt_error_ft": 15.86083984375,
+     "max_bank_deg": 0.19115614891052246
+    }
+   },
+   "gfc": {
+    "samples": 1266,
+    "transient": {
+     "max_alt_error_ft": 11.044921875,
+     "max_bank_deg": 5.392024040222168,
+     "max_abs_vvi_fpm": 40.58277893066406
+    },
+    "steady": {
+     "max_alt_error_ft": 2465.9543246203157,
+     "max_bank_deg": 4.752660751342773
+    }
+   },
+   "direct2": {
+    "samples": 982,
+    "transient": {
+     "max_alt_error_ft": 1803.9799980341768,
+     "max_bank_deg": 0.5779654383659363,
+     "max_abs_vvi_fpm": 799.09228515625
+    },
+    "steady": {
+     "max_alt_error_ft": 1738.3743896543283,
+     "max_bank_deg": 0.42306017875671387
+    }
+   }
+  },
+  "terrain_override_samples": 1472,
+  "terrain_guard": {
+   "events": 0,
+   "max_floor_ft": 5997.050760167191,
+   "min_clearance_ft": -813.4186611499213,
+   "said": ""
+  },
+  "containment": {
+   "state": "PAUSED_FAULT",
+   "pause_confirmed": true
+  },
+  "recorded_capture_duration_s": {
+   "max": 0.001181566000013845,
+   "median": 8.68640017870348e-05,
+   "note": "every 5th snapshot only"
+  },
+  "aircraft_acf_sha256": "11ff17d1f15ed3c715ca248f797999b3bf583763dd65275a658ddfac09cd89d8"
+ }
+}

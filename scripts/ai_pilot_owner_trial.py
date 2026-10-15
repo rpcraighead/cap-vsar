@@ -101,6 +101,7 @@ def run(args):
     observer = OwnerTrialObserver(altitude_ft=0., aircraft_name=profile.acf_name)
     kias = args.kias or profile.search_kias
     result = {"outcome": "FAIL", "reason": "Setup incomplete"}
+    guard_log = {}
     session = secrets.token_hex(16)
     samples = 0
     try:
@@ -160,12 +161,41 @@ def run(args):
                 if bad:
                     raise ValueError(bad)
                 if samples % 5 == 0:
-                    recorder.write("snapshot", {"phase": name, **snap})
+                    recorder.write("snapshot", {**snap, "trial_phase": name})
                 sim = snap["values"]["sim_time_s"]
                 phase_start = sim if phase_start is None else phase_start
                 if sim - phase_start >= seconds:
                     return
+                advice = apply_guard(snap)
+                if advice is not None and advice.turn_back:
+                    raise ValueError("Terrain guard: " + advice.reason)
+                hold.target_alt = observer.altitude_ft
                 frame_now[0] = {k: float(v) for k, v in hold.frame(snap).items() if k in channels}
+
+        guard_log = {"events": 0, "max_floor_ft": None, "min_clearance_ft": None, "said": ""}
+
+        def apply_guard(snapshot, advice=None):
+            """The executive's terrain guard, applied to whoever owns the airplane: the
+            observer scores against the floor-adjusted altitude and waives only altitude.
+            Pass the advice already computed this frame (GfcOwner.step does); the guard is
+            stateful and a second update would swallow the event that raised the floor."""
+            advice = advice or guard.update(snapshot)
+            target = guard.apply_to_altitude(altitude, advice)
+            observer.altitude_ft = target
+            observer.terrain_override = target > altitude
+            if advice.floor_indicated_ft is not None:
+                top = guard_log["max_floor_ft"]
+                guard_log["max_floor_ft"] = advice.floor_indicated_ft if top is None else max(top, advice.floor_indicated_ft)
+            if advice.clearance_ft is not None:
+                low = guard_log["min_clearance_ft"]
+                guard_log["min_clearance_ft"] = advice.clearance_ft if low is None else min(low, advice.clearance_ft)
+            if advice.reason and advice.reason != guard_log["said"]:
+                guard_log["said"] = advice.reason
+                guard_log["events"] += 1
+                print("GUARD", advice.reason, flush=True)
+                recorder.write("guard", {"frame": snapshot["frame"], "reason": advice.reason,
+                                         "floor_ft": advice.floor_indicated_ft})
+            return advice
 
         client_session, frame_now = [session], [controls]
         direct_phase("direct1", args.direct_s)
@@ -192,10 +222,11 @@ def run(args):
             if bad:
                 raise ValueError(bad)
             advice = owner.step(snap, heading_mag=target_mag, altitude_ft=altitude, guard=guard)
+            advice = apply_guard(snap, advice)
             if advice is not None and advice.turn_back:
                 raise ValueError("Terrain guard: " + advice.reason)
             if samples % 5 == 0:
-                recorder.write("snapshot", {"phase": "gfc", **snap})
+                recorder.write("snapshot", {**snap, "trial_phase": "gfc"})
             sim = snap["values"]["sim_time_s"]
             gfc_start = sim if gfc_start is None else gfc_start
             if sim - gfc_start >= args.gfc_s and observer.captured:
@@ -209,12 +240,12 @@ def run(args):
         client_session[0], frame_now[0] = new_session, controls
         recorder.write("handover", {"to": "DIRECT", "session": new_session})
         v = snap["values"]
-        hold = Hold(profile, v["heading_true_deg"], altitude, kias)   # fresh integrators
+        hold = Hold(profile, v["heading_true_deg"], observer.altitude_ft, kias)   # fresh integrators
         direct_phase("direct2", args.direct_s)
-        result = {**observer.report(), "samples": samples}
+        result = {**observer.report(), "samples": samples, "terrain_guard": guard_log}
     except BaseException as error:
         result = {**observer.report(), "outcome": "FAIL", "reason": str(error) or type(error).__name__,
-                  "samples": samples}
+                  "samples": samples, "terrain_guard": guard_log}
         recorder.write("intervention", result)
     finally:
         try:
