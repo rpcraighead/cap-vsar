@@ -33,6 +33,7 @@ OUT = Path.home() / ".cache/capvsar/measurements/prop_probe.json"
 BASE = "sim/cockpit2/engine/actuators/"
 READ = {
     "lever_0": BASE + "prop_ratio[0]",
+    "lever_rad_s": BASE + "prop_rotation_speed_rad_sec[0]",
     "lever_all": BASE + "prop_ratio_all",
     "commanded_prop_rad_s": "sim/flightmodel/engine/ENGN_prop[0]",
     "rpm": "sim/cockpit2/engine/indicators/engine_speed_rpm[0]",
@@ -41,9 +42,14 @@ READ = {
     "override_prop_pitch": "sim/operation/override/override_prop_pitch",
     "prop_mode": BASE + "prop_mode[0]",
 }
-PATHS = (("A prop_ratio[0]", BASE + "prop_ratio[0]"),
-         ("B prop_ratio_all", BASE + "prop_ratio_all"))
+# 2026-10-15 result (docs/C182T_AI_PILOT_PROP_2026-10-15.md): paths A and B do nothing, they read
+# 0.0 and drive nothing. Path C is the real lever, in rad/s of requested prop speed; "levers"
+# for C are written as a ratio of the 2,000-2,400 RPM governing range.
+PATHS = (("A prop_ratio[0]", BASE + "prop_ratio[0]", False),
+         ("B prop_ratio_all", BASE + "prop_ratio_all", False),
+         ("C prop_rotation_speed", BASE + "prop_rotation_speed_rad_sec[0]", True))
 LEVERS = (1.0, 0.5, 0.0, 1.0)
+RANGE = ("sim/aircraft/controls/acf_RSC_mingov_prp", "sim/aircraft/controls/acf_RSC_redline_prp")
 
 
 def load_harness():
@@ -59,9 +65,10 @@ def main() -> int:
         print("X-Plane is not answering on UDP 49000; start it with the CAP 487 flying.")
         return 2
     rows = []
-    for label, ref in PATHS:
+    low, high = (h.dref_get([name])[name] for name in RANGE)
+    for label, ref, in_rad_s in PATHS:
         for lever in LEVERS:
-            h.dref_set(ref, lever)
+            h.dref_set(ref, low + lever * (high - low) if in_rad_s else lever)
             time.sleep(1.0)       # one second to see whether it is rewritten
             early = h.dref_get(list(READ.values()))
             time.sleep(8.0)       # governor lag
@@ -74,7 +81,7 @@ def main() -> int:
                 label, lever, *(("%.2f" % row["after_9s"][k]) if row["after_9s"][k] is not None else "-"
                                 for k in ("lever_0", "lever_all", "commanded_prop_rad_s", "rpm", "pitch_req_deg"))),
                 flush=True)
-    h.dref_set(BASE + "prop_ratio_all", 1.0)
+    h.dref_set(BASE + "prop_rotation_speed_rad_sec[0]", high)
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(rows, indent=1))
     print("wrote", OUT)

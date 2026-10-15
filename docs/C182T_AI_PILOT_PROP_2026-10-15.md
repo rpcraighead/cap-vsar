@@ -1,85 +1,72 @@
 # C182T constant-speed prop lever in the AI pilot (2026-10-15)
 
-Status: **channel implemented and unit-tested; no live result yet. The first
-sweep says the lever write is not taking effect, cause unknown.** Simulator
-engineering only; not operating guidance for any real aircraft.
+Status: **the bridge channel was wired to the wrong dataref and is fixed; the lever now measured in the
+simulator.** The lever-to-RPM map is known (below). The corrected bridge sink is tested offline only; it
+has not yet run inside the simulator. Simulator engineering only; not operating guidance for any real
+aircraft.
+
+## Result in one paragraph
+
+On the CAP 487 the constant-speed lever is **`sim/cockpit2/engine/actuators/prop_rotation_speed_rad_sec`**,
+the requested prop speed in rad/s. `prop_ratio`, which the bridge, the cockpit lever animation and the first
+sweep used, drives nothing. Governed RPM follows the lever one-for-one between the aircraft's governing
+limits, 2,000 RPM (`acf_RSC_mingov_prp`) and 2,400 RPM (`acf_RSC_redline_prp`), at least above the throttle
+where the engine can reach the setting. The bridge's 0-1 `prop` channel is now scaled across that range
+(0 = 2,000 RPM, 1 = 2,400 RPM; the lab's authority floor of 0.5 is 2,200 RPM).
 
 ## What is in the tree
 
-Commit `91951e2` (branch `feat/c182-prop-control`): an optional `prop` channel in
-the atomic bridge frame, enabled by `constant_speed_prop` in the staged config so
-C172 frames are unchanged; `services/ai_pilot/prop_law.py` (`PropLaw`) applies
-`profile.prop_cruise_ratio` only in level, established cruise (above 1,000 ft
-AGL, at least 85 KIAS, flaps up, |vvi| under 300 fpm to enter and 500 to leave)
-and flies the lever full forward everywhere else; moves are slew-limited at
-0.25 per second of simulation time. `prop_cruise_ratio` defaults to 1.0, so the
-schedule currently commands full forward at all times. Commit `308d959` added
-`scripts/c182t_prop_sweep.py` to measure the lever-to-RPM map.
+Commit `91951e2` added an optional `prop` channel to the atomic bridge frame, enabled by
+`constant_speed_prop` in the staged config (C172 frames are unchanged), and
+`services/ai_pilot/prop_law.py` (`PropLaw`), which applies `profile.prop_cruise_ratio` only in level,
+established cruise (above 1,000 ft AGL, at least 85 KIAS, flaps up, |vvi| under 300 fpm to enter and 500 to
+leave) and flies the lever full forward everywhere else, slew-limited at 0.25 per second of simulation
+time. `prop_cruise_ratio` defaults to 1.0 (2,400 RPM). The correction to the real dataref and range scaling
+is in `PI_capvsar_flight_control.py` (`PROP_LEVER`, `PROP_RANGE`, `XPlaneSink._prop_range`).
 
-## First sweep (run p2, 2026-10-15 07:18)
+## How it was found (live, 2026-10-15)
 
-CAP 487 (ACF `Cessna_182T_G1000.acf`), ISA sea level, calm, 2,000 ft, on the
-aircraft's own GFC 700 heading and altitude hold. Evidence:
-`docs/evidence/c182t-2026-10-15/prop_sweep_p2.json` (SHA-256 `2224afd0cc467f8f…`)
-and `.log`. Run p1 launched the simulator but the autopilot never engaged
-(modes 0/0/0) and recorded no points; it is not evidence.
+1. **Sweep p2 (07:18):** wrote `prop_ratio[0]` from 1.0 to 0.5; the readback stayed 0.0, commanded prop
+   speed stayed 251.33 rad/s, RPM did not move. Evidence: `docs/evidence/c182t-2026-10-15/prop_sweep_p2.*`.
+   Run p1 recorded no points and is not evidence.
+2. **Probe (10:5x, simulator launched unattended with `xplane-clean`):** `prop_ratio[0]` and
+   `prop_ratio_all` again did nothing. The pilot-style commands `sim/engines/prop_down`/`prop_up` did move
+   `ENGN_prop`, about 1.7 RPM per step, from 2,400 down to a floor of 2,000 RPM after about 300 steps;
+   once the commanded speed fell below the engine's actual RPM the engine followed it and prop pitch
+   coarsened (15.1 deg at 2,000).
+3. **The right dataref:** X-Plane's `DataRefs.txt` says `prop_rotation_speed_rad_sec` is the "prop handle
+   position, in radians per second of requested prop rpm. Use this if your plane has a constant speed
+   prop." Writing it at 0.80 throttle, 2,000 ft, GFC 700 altitude hold:
 
-| Throttle | Lever commanded | RPM | MP (in.hg) | Power (HP) | KIAS |
-|---|---|---|---|---|---|
-| 0.55 | 1.00 to 0.50 | 2013-2016 | 15.9 | 76 | 100 |
-| 0.80 | 1.00 to 0.50 | 2400 | 21.3 | 142 | 123 rising to 127 |
+| Lever written (RPM) | Governed RPM | MP (in.hg) | Prop pitch (deg) | Power (HP) | KIAS |
+|---:|---:|---:|---:|---:|---:|
+| 2400 | 2401 | 21.1 | 15.1 | 141 | 119 |
+| 2300 | 2300 | 21.9 | 16.7 | 141 | 123 |
+| 2200 | 2200 | 22.5 | 18.3 | 141 | 125 |
+| 2100 | 2100 | 23.2 | 19.9 | 140 | 126 |
+| 2000 | 2000 | 23.8 | 21.5 | 138 | 126 |
 
-Across the whole lever range RPM, manifold pressure and power did not change.
-In every row the `prop_ratio[0]` readback was 0.0 (commanded 1.0 down to 0.5)
-and `ENGN_prop` (commanded prop speed) was a constant 251.3 rad/s (2,400 RPM).
+   The corrected probe (`scripts/c182t_prop_probe.py`, evidence `prop_probe_live.json`, SHA-256
+   `c630deccc07221a5...`) repeats it: path C (`prop_rotation_speed_rad_sec[0]`) gives 2,400 / 2,200 / 2,000
+   RPM for ratios 1.0 / 0.5 / 0.0 with pitch 15.8 / 18.5 / 21.6 deg. `prop_ratio` reads back a small
+   derived number (0.05 to 0.40) once the real lever moves; it is an output here, not the lever.
 
-## What this does and does not show
+## Consequences
 
-* The write did not land, or something rewrites the lever every frame. A lever
-  that reads 0.0 after being set to 1.0 is not a lever with no effect. Both
-  `prop_ratio[0]` and `prop_ratio_all` were set at the start of the run.
-* It does **not** show the governor model is broken. With the lever reading 0.0
-  and the commanded speed pinned at 2,400, the airplane may simply be governing
-  at its maximum setting regardless of the lever.
-* Candidates, not established: an assigned joystick prop axis rewriting the
-  dataref each frame (unassigned axes normally do not); the UDP DREF name with
-  an array index not addressing element 0 for writes; the ACF governing range
-  (`_RSC_max_pwr_ENGN` and `_RSC_redline_ENGN` are both 2,400 in this build, the
-  C172 had 2,500 and 2,700), which would leave the lever little or no room.
-  Only a live probe separates them.
-* The bridge writes the lever with `setDatavf` inside the plugin, not over UDP,
-  and reads it back every frame. That path has passed offline tests only and has
-  never run in X-Plane. The sweep does not exercise it.
-* Side observation, not yet examined: 76 HP held 100 KIAS at 2,000 ft at 0.55
-  throttle. That is a low power for 100 KIAS in a 182 and may bear on the open
-  climb and cruise calibration (A-1, A2-4). Check against the POH power grid
-  before using it.
-
-## Consequence for the AI pilot
-
-Nothing flies differently today: the schedule commands 1.0 unless
-`prop_cruise_ratio` is lowered, and the sweep gives no basis for lowering it.
-**Keep `prop_cruise_ratio` at 1.0** until a lever write is shown to move
-`ENGN_prop` and the map is measured. The `prop_ratio` channel in the bridge
-must be proven in the simulator (frame sent, readback follows) before any C182T
-trial depends on it.
-
-## Live probe (needs a person at the workstation)
-
-1. Start X-Plane with the CAP 487 airborne and flying (autopilot on is fine).
-2. `python3 scripts/c182t_prop_probe.py`. It writes the lever by two UDP paths,
-   at 1.0, 0.5, 0.0, 1.0, and prints lever, commanded speed, RPM and prop pitch
-   one second and nine seconds after each write. Output goes to
-   `~/.cache/capvsar/measurements/prop_probe.json`.
-3. Read the result:
-   * readback follows the write, `ENGN_prop` moves: the sweep script had a
-     defect; fix it and re-run `c182t_prop_sweep.py`.
-   * readback snaps back to 0.0 within a second: something else owns the
-     dataref. Check Settings, Joystick for a prop axis, then repeat.
-   * readback follows, `ENGN_prop` does not move: the ACF governing range leaves
-     no room. That is a builder change (`ACF_PATCHES`), sourced from the POH
-     2,200-2,400 RPM cruise band, then re-flown.
-4. Only then run the bridge path: stage a mission session with
-   `constant_speed_prop` set and confirm the `prop` readback follows the frame.
-
-`scripts/c182t_prop_probe.py` has been syntax-checked only; it has not been run.
+* **The bridge's `prop` channel was inert.** Frames wrote to `prop_ratio` and read back 0.0. Fixed in the
+  sink; the unit test now pins the dataref, the scaling and the refusal to guess when the range is
+  unreadable. **Not yet exercised inside the simulator** (needs a staged mission session).
+* **The cockpit prop lever the builder adds is bound to `prop_ratio[0]`** (`build_c182t_package.py`,
+  `add_prop_lever`), so it neither drives the governor nor tracks it. It needs rebinding to the rad/s
+  dataref with the 209.4-251.3 key values. Not done here (aircraft-acceptance lane, and AI-4 is open).
+* **`prop_cruise_ratio` can now be set from a measured map.** Cruise RPM = 2,000 + 400 x ratio. Power
+  barely changes with RPM at fixed throttle (138-141 HP), and airspeed rises about 7 kt from 2,400 to
+  2,000 RPM, so the schedule is a noise and fuel-flow choice, not a performance one. It stays at 1.0
+  until someone picks a cruise RPM from the POH power table.
+* **At low throttle the prop is on its fine stop.** At 0.55 throttle (15.9 in.hg) the engine reaches only
+  about 2,010 RPM with the prop at its 14.9 deg minimum pitch, while 2,400 is commanded, so the governor
+  has no authority until the commanded speed drops below 2,010. Whether that matches a real B3D36C431 is
+  unchecked; it bears on the 182 cruise-power and climb calibration (A2-4, A-1). The earlier "76 HP holds
+  100 KIAS" observation is this regime.
+* **Corrected sweep:** `scripts/c182t_prop_sweep.py` now writes the rad/s lever scaled across the range.
+  A full re-sweep is optional; the map above answers its question.

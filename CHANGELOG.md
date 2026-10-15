@@ -3,6 +3,16 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-10-15 — C182T prop lever: wrong dataref found and fixed; map measured (branch `feat/c182-prop-control`)
+
+Status: **measured live; sink corrected and unit-tested; not yet exercised in the simulator.** The
+simulator was launched unattended for the first time (`~/.local/bin/xplane-clean`). The morning's sweep
+had shown the lever write doing nothing: `prop_ratio` is not the constant-speed lever. The lever is
+`prop_rotation_speed_rad_sec` (requested prop speed), and governed RPM follows it one-for-one from
+2,000 to 2,400 RPM. The bridge's `prop` channel, which wrote `prop_ratio`, is now scaled across
+`acf_RSC_mingov_prp`..`acf_RSC_redline_prp`. The cockpit lever animation is still bound to `prop_ratio`
+and needs rebinding. Record, table and open points: `docs/C182T_AI_PILOT_PROP_2026-10-15.md`.
+
 ## 2026-10-15 — GFC 700 as a second owner of the bridge; terrain guard moved into the executive (branch `feat/c182-prop-control`)
 
 Status: **implemented and tested offline; never run in X-Plane.** 636 AI-pilot tests

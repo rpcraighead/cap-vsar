@@ -168,17 +168,27 @@ def test_lab_authority_adds_a_floored_prop_lever_only_when_configured(monkeypatc
         governed.validate_controls({**valid, "prop": PROP_AUTHORITY[0] - .01})
 
 
-def test_sink_writes_and_reads_back_the_cockpit_prop_lever(monkeypatch, tmp_path):
+def test_sink_writes_the_requested_prop_speed_scaled_across_the_governing_range(monkeypatch, tmp_path):
+    """Measured on the CAP 487, 2026-10-15: prop_ratio reads 0.0 and drives nothing; the lever
+    is prop_rotation_speed_rad_sec, one-for-one with governed RPM between 2,000 and 2,400."""
     from services.ai_pilot.tests.test_flight_control_plugin import load_plugin
     xp, plugin = load_plugin(monkeypatch, tmp_path)
-    lever = "sim/cockpit2/engine/actuators/prop_ratio"
+    lever = "sim/cockpit2/engine/actuators/prop_rotation_speed_rad_sec"
+    low, high = 2000 / 9.5493, 2400 / 9.5493
     xp.refs[lever] = [0.] * 8
+    xp.refs["sim/aircraft/controls/acf_RSC_mingov_prp"] = low
+    xp.refs["sim/aircraft/controls/acf_RSC_redline_prp"] = high
     xp.setDatavf = lambda ref, values, offset, count: xp.refs[ref].__setitem__(
         slice(offset, offset + count), values[:count])
     fixed = plugin.core.sink
     assert "prop" not in fixed.controls
     sink = type(fixed)(prop=True)
     assert sink.controls["prop"] == lever
-    sink.write_control("prop", .83)
-    assert xp.refs[lever][0] == .83
-    assert sink.read_control("prop") == pytest.approx(.83)
+    sink.write_control("prop", 1.0)
+    assert xp.refs[lever][0] * 9.5493 == pytest.approx(2400)
+    sink.write_control("prop", .5)
+    assert xp.refs[lever][0] * 9.5493 == pytest.approx(2200)      # the authority floor
+    assert sink.read_control("prop") == pytest.approx(.5)
+    xp.refs["sim/aircraft/controls/acf_RSC_redline_prp"] = 0.      # range unreadable: refuse, don't guess
+    with pytest.raises(RuntimeError, match="range unavailable"):
+        sink.write_control("prop", .8)

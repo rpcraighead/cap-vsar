@@ -53,7 +53,13 @@ except ModuleNotFoundError as error:
 
 CONFIG = Path(__file__).with_name("capvsar_flight_control_config.json")
 LIVE_PLUGIN_QUALIFIED = False
-PROP_LEVER = "sim/cockpit2/engine/actuators/prop_ratio"
+# The constant-speed prop lever is the REQUESTED PROP SPEED in rad/s, not prop_ratio:
+# measured live on the CAP 487 on 2026-10-15, prop_ratio reads 0.0 whatever is written
+# and drives nothing, while this dataref moves the governor one-for-one across the
+# aircraft's governing range. The bridge's 0-1 `prop` channel is scaled across that
+# range: 0 = minimum governed speed (2,000 RPM), 1 = redline (2,400 RPM).
+PROP_LEVER = "sim/cockpit2/engine/actuators/prop_rotation_speed_rad_sec"
+PROP_RANGE = ("sim/aircraft/controls/acf_RSC_mingov_prp", "sim/aircraft/controls/acf_RSC_redline_prp")
 # GFC 700 (X-Plane autopilot) selections. These are the datarefs and toggle
 # commands the squadron demo flew on the C182T on 2026-10-14. The three commands
 # are TOGGLES, so the sink engages one only while its autopilot_state bit is clear.
@@ -95,8 +101,12 @@ class XPlaneSink:
         # lever is not covered by the joystick/throttle overrides, so the sink
         # writes it directly and Telemetry reads the lever back every frame.
         self.prop = bool(prop)
+        self.prop_range = None
         if self.prop:
             self.controls["prop"] = xp.findDataRef(PROP_LEVER)
+            self.prop_range = tuple(xp.findDataRef(name) for name in PROP_RANGE)
+            if not all(self.prop_range):
+                raise RuntimeError("Prop governor range datarefs missing")
         self.brakes = None
         self.toe_brake_override = (xp.findDataRef("sim/operation/override/override_toe_brakes")
                                    if toe_brakes else None)
@@ -153,7 +163,8 @@ class XPlaneSink:
             for ref in self.brakes:
                 xp.setDataf(ref, value)
         elif channel == "prop":
-            xp.setDatavf(self.controls[channel], [value], 0, 1)
+            low, high = self._prop_range()
+            xp.setDatavf(self.controls[channel], [low + value * (high - low)], 0, 1)
         elif channel == "throttle":
             # ENGN_thro_use only drives the engine while override_throttles=1.
             # Garmin ownership leaves overrides off and moves the cockpit lever.
@@ -170,7 +181,8 @@ class XPlaneSink:
             values = [0.0]
             if xp.getDatavf(self.controls[channel], values, 0, 1) != 1:
                 raise RuntimeError("Prop lever readback unavailable")
-            return values[0]
+            low, high = self._prop_range()
+            return (values[0] - low) / (high - low)
         if channel == "throttle":
             ref = self.controls[channel] if xp.getDatai(self.throttles) else self.cockpit_throttle
             values = [0.0]
@@ -178,6 +190,12 @@ class XPlaneSink:
                 raise RuntimeError("Throttle readback unavailable")
             return values[0]
         return xp.getDataf(self.controls[channel])
+
+    def _prop_range(self):
+        low, high = (xp.getDataf(ref) for ref in self.prop_range)
+        if not (0. < low < high):
+            raise RuntimeError("Prop governor range unavailable")
+        return low, high
 
     def read_brakes(self):
         if not self.brakes:
