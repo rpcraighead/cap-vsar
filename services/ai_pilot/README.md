@@ -436,3 +436,23 @@ python3 -m services.ai_pilot.maneuver_server --live --min-altitude 3000 --max-al
 ```bash
 python3 -m unittest discover -s services/ai_pilot/tests -v
 ```
+
+## Starting the simulator without anyone at the desk
+
+X-Plane stops at a modal "sandboxed Snap environment" dialog if it inherits `SNAP*`
+variables (the VS Code and Codex shells are Snaps), and a shell outside the desktop
+session (ssh, a remote agent) has no `DISPLAY`. On the workstation use
+`~/.local/bin/xplane-clean`, which removes the Snap identity, finds the live session's
+`DISPLAY`/`XAUTHORITY`, and refuses a second instance or a stale NVIDIA module:
+
+```bash
+xplane-clean --check                          # what it would do; launches nothing
+xplane-clean --detach --no_sound              # launch X-Plane in the background
+xplane-clean --wrap scripts/launch_xplane_cap_vsar.sh --no-menu   # any launcher, cleaned
+```
+
+`launch_xplane_cap_vsar.sh` re-runs itself through it when present and otherwise strips
+the Snap variables inline (squadron stations do not have the tool). The g1000-sar
+`sim_harness.py` launcher, which the prop sweep, perf card and ground check use, finds the
+display itself.
+

@@ -19,6 +19,23 @@
 # part most likely to work first time.
 set -euo pipefail
 
+# No Snap popup, no one at the desk. X-Plane aborts into a modal "sandboxed Snap
+# environment" dialog if it sees SNAP* variables (VS Code and Codex shells are Snaps),
+# and a shell outside the desktop session has no DISPLAY. On the workstation, re-run
+# through ~/.local/bin/xplane-clean, which fixes both; anywhere else (squadron
+# stations ship this script) strip the Snap identity inline.
+if [[ -z "${XPLANE_CLEAN_ENV:-}" ]] && command -v xplane-clean >/dev/null 2>&1; then
+  exec xplane-clean --wrap "$0" "$@"
+fi
+unset SNAP SNAP_ARCH SNAP_COMMON SNAP_CONTEXT SNAP_COOKIE SNAP_DATA SNAP_EUID SNAP_INSTANCE_NAME \
+      SNAP_LAUNCHER_ARCH_TRIPLET SNAP_LIBRARY_PATH SNAP_NAME SNAP_REAL_HOME SNAP_REVISION SNAP_UID \
+      SNAP_USER_COMMON SNAP_USER_DATA SNAP_VERSION GTK_PATH GIO_MODULE_DIR GIO_LAUNCHED_DESKTOP_FILE \
+      GIO_LAUNCHED_DESKTOP_FILE_PID LD_PRELOAD LD_LIBRARY_PATH
+for v in $(compgen -e | grep -E '^VSCODE_' || true); do unset "$v"; done
+[[ -n "${XDG_DATA_DIRS_VSCODE_SNAP_ORIG:-}" ]] && export XDG_DATA_DIRS=$XDG_DATA_DIRS_VSCODE_SNAP_ORIG
+[[ -n "${XDG_CONFIG_DIRS_VSCODE_SNAP_ORIG:-}" ]] && export XDG_CONFIG_DIRS=$XDG_CONFIG_DIRS_VSCODE_SNAP_ORIG
+unset XDG_DATA_DIRS_VSCODE_SNAP_ORIG XDG_CONFIG_DIRS_VSCODE_SNAP_ORIG
+
 XP_ARGS=()
 AIR_START=""
 while (( $# )); do
