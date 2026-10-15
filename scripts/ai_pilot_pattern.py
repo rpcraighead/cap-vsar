@@ -28,6 +28,8 @@ sys.path.insert(0, str(ROOT))
 from services.ai_pilot.aircraft_profiles import PROFILES
 from services.ai_pilot.control_ownership import ControllerLock
 from services.ai_pilot.experiment import BridgeClient, Recorder, digest
+from services.ai_pilot.terrain_guard import TerrainGuard
+from xplane.capvsar_mission import AIRBORNE_MAX_ALTITUDE_FT
 from services.ai_pilot.search_patterns import (PatternObserver, SearchPatternController,
                                                creeping_line, expanding_square, parallel_track,
                                                track_miles)
@@ -72,9 +74,14 @@ def run(args):
                                          profile=profile, kias=args.kias)
     observer = PatternObserver(waypoints, altitude_indicated_ft=args.altitude_ft,
                                aircraft_name=profile.acf_name)
+    # The executive's terrain guard (it flew as a demo script until 2026-10-15): a
+    # floor on the altitude target, never above what the bridge envelope accepts.
+    guard = None if args.no_terrain_guard else TerrainGuard(
+        ceiling_ft=AIRBORNE_MAX_ALTITUDE_FT - 500)
     result = {"outcome": "FAIL", "reason": "Setup incomplete"}
     session = secrets.token_hex(16)
     samples = 0
+    guard_said = ""
     previous_frame = None
     try:
         status = client.request("fault_pause", reason="pattern trial setup")
@@ -130,6 +137,21 @@ def run(args):
             if report["outcome"] != "INCOMPLETE":
                 result = {**report, "controller_transitions": controller.transitions}
                 break
+            if guard is not None:
+                if "terrain" not in snap and not guard_said:
+                    guard_said = "no terrain in snapshots"
+                    print("GUARD WARNING: snapshots carry no terrain scan; stage the session with the "
+                          "current stage-mission so the guard can see the ground", flush=True)
+                advice = guard.update(snap)
+                controller.altitude_ft = guard.apply_to_altitude(args.altitude_ft, advice)
+                observer.terrain_override = controller.altitude_ft > args.altitude_ft
+                if advice.turn_back:
+                    raise ValueError("Terrain guard: " + advice.reason)
+                if advice.reason and advice.reason != guard_said:
+                    guard_said = advice.reason
+                    print("GUARD", advice.reason, flush=True)
+                    recorder.write("guard", {"frame": snap["frame"], "reason": advice.reason,
+                                             "floor_ft": advice.floor_indicated_ft})
             frame = controller.step(snap)
             controls = {k: float(frame[k]) for k in channels}
             if samples % 5 == 0:
@@ -190,6 +212,8 @@ def main():
     p.add_argument("--altitude-ft", type=float, default=2000.)
     p.add_argument("--kias", type=float, default=None)
     p.add_argument("--max-wall-s", type=float, default=1800.)
+    p.add_argument("--no-terrain-guard", action="store_true",
+                   help="fly the pattern altitude whatever the ground ahead (the bridge fence still applies)")
     a = p.parse_args()
     with ControllerLock():
         return run(a)

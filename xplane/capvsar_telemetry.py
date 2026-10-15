@@ -23,6 +23,13 @@ FIELDS = {
     "frame_period_s": ("sim/operation/misc/frame_rate_period", "f", "s"),
     "on_ground": ("sim/flightmodel/failures/onground_any", "i", "boolean"),
     "groundspeed_mps": ("sim/flightmodel/position/groundspeed", "f", "m/s"),
+    "track_true_deg": ("sim/flightmodel/position/hpath", "f", "deg true ground track"),
+    # GFC 700 / X-Plane autopilot selections, so an executive that hands the
+    # airplane to the autopilot reads back what it asked for from the same frame.
+    "ap_state": ("sim/cockpit/autopilot/autopilot_state", "i", "bitfield"),
+    "ap_heading_bug_deg": ("sim/cockpit/autopilot/heading_mag", "f", "deg magnetic"),
+    "ap_altitude_bug_ft": ("sim/cockpit/autopilot/altitude", "f", "ft indicated"),
+    "ap_vs_bug_fpm": ("sim/cockpit/autopilot/vertical_velocity", "f", "ft/min"),
     "brake_left": ("sim/flightmodel/controls/l_brake_add", "f", "ratio"),
     "brake_right": ("sim/flightmodel/controls/r_brake_add", "f", "ratio"),
     "toe_brake_left": ("sim/cockpit2/controls/left_brake_ratio", "f", "ratio"),
@@ -52,8 +59,9 @@ ARRAY_FIELDS = {"engine_running": ("sim/flightmodel/engine/ENGN_running", "i", "
 
 
 class Telemetry:
-    def __init__(self, xp, sink, session, clock=time.monotonic):
+    def __init__(self, xp, sink, session, clock=time.monotonic, terrain=None):
         self.xp, self.sink, self.session, self.clock = xp, sink, session, clock
+        self.terrain = terrain   # xplane.capvsar_terrain.TerrainScanner or None
         self.refs = {key: xp.findDataRef(spec[0]) for key, spec in FIELDS.items()}
         self.array_refs = {key: xp.findDataRef(spec[0]) for key, spec in ARRAY_FIELDS.items()}
         if not all(self.refs.values()):
@@ -78,7 +86,7 @@ class Telemetry:
         if not all(math.isfinite(value) for value in controls.values()):
             raise ValueError("Nonfinite control readback")
         self.frame += 1
-        return {
+        snapshot = {
             "schema": "capvsar.telemetry.v1", "session": self.session,
             "frame": self.frame, "sdk_counter": sdk_counter,
             "wall_time_s": start, "capture_duration_s": self.clock() - start,
@@ -88,6 +96,11 @@ class Telemetry:
             "ap_engaged": self.sink.ap_engaged(),
             "override_state": self.sink.override_state(),
         }
+        if self.terrain is not None:
+            snapshot["terrain"] = self.terrain.update(
+                values["latitude_deg"], values["longitude_deg"], values["heading_true_deg"],
+                values["track_true_deg"], values["groundspeed_mps"])
+        return snapshot
 
     def manifest(self):
         all_fields = {**FIELDS, **ARRAY_FIELDS}

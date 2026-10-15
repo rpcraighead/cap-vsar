@@ -39,7 +39,8 @@ def inventory(xplane, include_landing=False, include_surface=False, include_miss
         return subprocess.check_output(["git", "-C", str(ROOT), *args], text=True).strip()
     names = (
         "PI_capvsar_flight_control.py", "capvsar_flight_control_core.py",
-        "capvsar_flight_control_mapping.py", "capvsar_telemetry.py", "capvsar_qualification.py")
+        "capvsar_flight_control_mapping.py", "capvsar_telemetry.py", "capvsar_qualification.py",
+        "capvsar_terrain.py")
     sources = [ROOT / "xplane" / name for name in names]
     if include_landing:
         sources.append(ROOT / "xplane/capvsar_landing.py")
@@ -67,7 +68,7 @@ def inventory(xplane, include_landing=False, include_surface=False, include_miss
 
 
 def stage_observer(destination, qualification_aircraft=None, mode="qualification",
-                   runway="KMYF 28R"):
+                   runway="KMYF 28R", terrain_backstop_ft=200):
     """Stage an explicit observation or expiring laboratory installation."""
     aircraft_sha256 = None
     if qualification_aircraft is not None:
@@ -80,7 +81,8 @@ def stage_observer(destination, qualification_aircraft=None, mode="qualification
             raise ValueError("Laboratory requires the pinned stock C172 G1000 or a built CAP package")
     destination.mkdir(parents=True, exist_ok=False)
     names = ("PI_capvsar_flight_control.py", "capvsar_flight_control_core.py",
-             "capvsar_flight_control_mapping.py", "capvsar_telemetry.py", "capvsar_qualification.py")
+             "capvsar_flight_control_mapping.py", "capvsar_telemetry.py", "capvsar_qualification.py",
+             "capvsar_terrain.py")
     extras = (("capvsar_landing.py",) if mode == "landing" else
               ("capvsar_surface.py",) if mode == "surface" else
               ("capvsar_mission.py", "capvsar_surface.py") if mode == "mission" else ())
@@ -104,6 +106,12 @@ def stage_observer(destination, qualification_aircraft=None, mode="qualification
             config["runway"] = runway
         if mode == "surface":
             config["parking"] = "KSEE East Transient Parking 12"
+        if mode == "mission":
+            # Terrain lookahead in every snapshot, the GFC 700 as a second owner,
+            # and a last-ditch terrain fence (None disables the fence).
+            config.update(terrain_lookahead=True, gfc_owner=True)
+            if terrain_backstop_ft is not None:
+                config["terrain_backstop_ft"] = terrain_backstop_ft
     fd = os.open(destination / "capvsar_flight_control_config.json",
                  os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w") as stream:
@@ -195,6 +203,9 @@ def main():
     mission = commands.add_parser("stage-mission")
     mission.add_argument("destination", type=Path)
     mission.add_argument("--aircraft", type=Path, required=True)
+    mission.add_argument("--terrain-backstop-ft", type=float, default=200.,
+                         help="pause if terrain within 1.5 nm is closer than this below the "
+                              "airplane (above 1,000 ft AGL only); 0 disables")
     args = parser.parse_args()
     if args.command == "observe":
         if not 2 <= args.seconds <= 600:
@@ -207,7 +218,9 @@ def main():
     else:
         stage_observer(args.destination, args.aircraft if args.command in ("stage-qualification", "stage-landing", "stage-surface", "stage-mission") else None,
                        mode="landing" if args.command == "stage-landing" else "surface" if args.command == "stage-surface" else "mission" if args.command == "stage-mission" else "qualification",
-                       runway=args.runway if args.command == "stage-landing" else "KMYF 28R")
+                       runway=args.runway if args.command == "stage-landing" else "KMYF 28R",
+                       **({"terrain_backstop_ft": args.terrain_backstop_ft or None}
+                          if args.command == "stage-mission" else {}))
     return 0
 
 

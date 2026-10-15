@@ -254,6 +254,49 @@ class ControlBridge:
         return {**self.status(), "channel": channel, "requested": float(value),
                 "observed": float(actual)}
 
+    def gfc_select(self, session: str, expected_generation: int, *, heading_mag=None,
+                   altitude_ft=None, vs_fpm=None) -> dict:
+        """Point the GFC 700 at a heading and/or altitude while it owns the airplane.
+
+        The same fence as set_virtual_aux: only in GFC700 state, for the current
+        session and generation, with Garmin authority re-read from the sink. The
+        bridge accepts typed, bounded selections and nothing else, and reads the
+        selected values back; a mismatch pauses the simulator. `vs_fpm` needs an
+        `altitude_ft` to capture, and without it the autopilot holds altitude.
+        """
+        if (self.state != "GFC700" or self.owner != "GFC700"
+                or session != self.session or expected_generation != self.generation):
+            raise ValueError("GFC selection has no current Garmin authority")
+        if heading_mag is None and altitude_ft is None:
+            raise ValueError("GFC selection needs a heading or an altitude")
+        for name, value, low, high in (("heading", heading_mag, 0., 360.),
+                                       ("altitude", altitude_ft, 500., 12000.),
+                                       ("vertical speed", vs_fpm, -1000., 1000.)):
+            if value is not None and (type(value) not in (int, float) or not math.isfinite(value)
+                                      or not low <= value <= high):
+                raise ValueError("GFC %s outside bounds" % name)
+        if vs_fpm is not None and altitude_ft is None:
+            raise ValueError("A vertical speed needs an altitude to capture")
+        if self.sink.ap_engaged() is not True or self.sink.override_state() is not False:
+            self._fault("Garmin authority changed during GFC selection")
+            raise ValueError("Garmin authority readback lost")
+        try:
+            observed = self.sink.gfc_select(heading_mag, altitude_ft, vs_fpm)
+        except Exception as error:
+            self._fault("GFC selection failed: %s" % error)
+            raise
+        expected = (("heading_bug", heading_mag, 1.0), ("altitude_bug", altitude_ft, 1.0),
+                    ("vs_bug", vs_fpm, 1.0))
+        for key, wanted, tolerance in expected:
+            if wanted is None:
+                continue
+            got = observed.get(key)
+            if (not isinstance(got, (int, float)) or not math.isfinite(got)
+                    or abs((got - wanted + 180) % 360 - 180 if key == "heading_bug" else got - wanted) > tolerance):
+                self._fault("GFC selection readback mismatch: %s" % key)
+                raise ValueError("GFC selection not observed")
+        return {**self.status(), "selected": observed}
+
     def human_takeover(self, reason: str) -> dict:
         prior = self.state
         self.generation += 1

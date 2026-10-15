@@ -37,6 +37,12 @@ except ModuleNotFoundError as error:
         def __init__(self, *_args, **_kwargs):
             raise RuntimeError("Surface laboratory module is not installed")
 try:
+    from capvsar_terrain import TerrainScanner, probe_terrain_ft
+except ModuleNotFoundError as error:
+    if error.name != "capvsar_terrain":
+        raise
+    TerrainScanner = probe_terrain_ft = None
+try:
     from capvsar_mission import MissionLab
 except ModuleNotFoundError as error:
     if error.name != "capvsar_mission":
@@ -48,6 +54,17 @@ except ModuleNotFoundError as error:
 CONFIG = Path(__file__).with_name("capvsar_flight_control_config.json")
 LIVE_PLUGIN_QUALIFIED = False
 PROP_LEVER = "sim/cockpit2/engine/actuators/prop_ratio"
+# GFC 700 (X-Plane autopilot) selections. These are the datarefs and toggle
+# commands the squadron demo flew on the C182T on 2026-10-14. The three commands
+# are TOGGLES, so the sink engages one only while its autopilot_state bit is clear.
+GFC_REFS = {"state": "sim/cockpit/autopilot/autopilot_state",
+            "heading_bug": "sim/cockpit/autopilot/heading_mag",
+            "altitude_bug": "sim/cockpit/autopilot/altitude",
+            "vs_bug": "sim/cockpit/autopilot/vertical_velocity"}
+GFC_COMMANDS = {"heading": "sim/autopilot/heading",
+                "vertical_speed": "sim/autopilot/vertical_speed",
+                "altitude_hold": "sim/autopilot/altitude_hold"}
+AP_HDG, AP_VS, AP_ALT_HOLD = 1 << 1, 1 << 4, 1 << 14
 NATIVE = {
     "roll": "sim/joystick/yoke_roll_ratio",
     "pitch": "sim/joystick/yoke_pitch_ratio",
@@ -66,8 +83,14 @@ def lab_channels(braked, config):
 
 
 class XPlaneSink:
-    def __init__(self, landing=False, toe_brakes=False, prop=False):
+    def __init__(self, landing=False, toe_brakes=False, prop=False, gfc=False):
         self.controls = {key: xp.findDataRef(ref) for key, ref in NATIVE.items()}
+        self.gfc_refs = self.gfc_commands = None
+        if gfc:
+            self.gfc_refs = {key: xp.findDataRef(ref) for key, ref in GFC_REFS.items()}
+            self.gfc_commands = {key: xp.findCommand(ref) for key, ref in GFC_COMMANDS.items()}
+            if not all(self.gfc_refs.values()) or not all(self.gfc_commands.values()):
+                raise RuntimeError("Required GFC 700 dataref/command missing")
         # Constant-speed prop lever (a governed-prop package only). The cockpit
         # lever is not covered by the joystick/throttle overrides, so the sink
         # writes it directly and Telemetry reads the lever back every frame.
@@ -164,6 +187,35 @@ class XPlaneSink:
     def command_ap_off(self):
         xp.commandOnce(self.off)
 
+    def gfc_select(self, heading_mag, altitude_ft, vs_fpm):
+        """Select a heading and/or altitude on the GFC 700; returns what it reads back.
+
+        Heading mode: set the bug, engage HDG only if clear. Altitude: set the
+        bug, then either capture it in VS mode at `vs_fpm` (engaging VS zeroes the
+        rate, so the rate is written after) or hold the current altitude.
+        """
+        if not self.gfc_refs:
+            raise RuntimeError("GFC 700 control not enabled for this session")
+        refs, commands = self.gfc_refs, self.gfc_commands
+        state = xp.getDatai(refs["state"])
+        if heading_mag is not None:
+            xp.setDataf(refs["heading_bug"], float(heading_mag))
+            if not state & AP_HDG:
+                xp.commandOnce(commands["heading"])
+        if altitude_ft is not None:
+            xp.setDataf(refs["altitude_bug"], float(altitude_ft))
+            if vs_fpm is None:
+                if not state & AP_ALT_HOLD:
+                    xp.commandOnce(commands["altitude_hold"])
+            else:
+                if not state & AP_VS:
+                    xp.commandOnce(commands["vertical_speed"])
+                xp.setDataf(refs["vs_bug"], float(vs_fpm))
+        return {"heading_bug": xp.getDataf(refs["heading_bug"]),
+                "altitude_bug": xp.getDataf(refs["altitude_bug"]),
+                "vs_bug": xp.getDataf(refs["vs_bug"]),
+                "state": xp.getDatai(refs["state"])}
+
     def command_ap_on(self):
         xp.commandOnce(self.ap_toggle)
 
@@ -186,6 +238,7 @@ class PythonInterface:
         self.actuator_readback = None
         self.observe_only = False
         self.lab = None
+        self.destroy_probe = None
         self.lab_sessions = set()
         self.config = None
         self.requests = queue.Queue(maxsize=16)
@@ -210,11 +263,18 @@ class PythonInterface:
             mission = config.get("mode") == "mission"
             braked = landing or surface or mission
             self.core = ControlBridge(XPlaneSink(landing=braked, toe_brakes=surface or mission,
-                                                 prop=bool(config.get("constant_speed_prop"))), session,
+                                                 prop=bool(config.get("constant_speed_prop")),
+                                                 gfc=mission and bool(config.get("gfc_owner"))), session,
                                       atomic=config.get("protocol") == "atomic-v1",
                                       channels=lab_channels(braked, config),
                                       brake_max=1. if surface or mission else .35)
-            self.telemetry = Telemetry(xp, self.core.sink, session)
+            scanner = None
+            if config.get("terrain_lookahead"):
+                if probe_terrain_ft is None:
+                    raise RuntimeError("Terrain lookahead module is not installed")
+                terrain_ft, self.destroy_probe = probe_terrain_ft(xp)
+                scanner = TerrainScanner(terrain_ft, time.monotonic)
+            self.telemetry = Telemetry(xp, self.core.sink, session, terrain=scanner)
             if config.get("mode") in ("qualification", "landing", "surface", "mission"):
                 if not self.core.atomic:
                     raise ValueError("Qualification requires atomic-v1 protocol")
@@ -282,6 +342,9 @@ class PythonInterface:
         for accessor in self.accessors:
             xp.unregisterDataAccessor(accessor)
         self.accessors.clear()
+        if self.destroy_probe:
+            self.destroy_probe()
+            self.destroy_probe = None
 
     def XPluginReceiveMessage(self, inFrom, inMsg, inParam):
         pass
@@ -346,9 +409,17 @@ class PythonInterface:
                 action = request.pop("action")
                 if self.observe_only and action not in ("status", "snapshot", "manifest"):
                     raise ValueError("Observe mode has no control authority")
+                gfc_actions = (("transfer_gfc", "heartbeat", "gfc_select", "set_virtual_aux", "lab_handback")
+                               if isinstance(self.lab, MissionLab) and self.config.get("gfc_owner") else ())
                 if self.lab and action not in ("status", "snapshot", "manifest", "lab_reset", "lab_resume",
-                        "lab_start", "submit_frame", "prepare", "activate", "exchange", "fault_pause", "human_takeover"):
+                        "lab_start", "submit_frame", "prepare", "activate", "exchange", "fault_pause", "human_takeover",
+                        *gfc_actions):
                     raise ValueError("Action unavailable during qualification")
+                if action == "transfer_gfc" and self.lab:
+                    self.lab.verify_identity()
+                    self.lab.require_gfc_flight(self.snapshot)
+                if action in ("gfc_select", "set_virtual_aux") and self.lab:
+                    self.lab.verify_identity()
                 if self.lab and action in ("prepare", "activate", "submit_frame", "exchange", "lab_resume", "lab_start"):
                     self.lab.verify_identity()
                     if action == "prepare" and request.get("owner") != "DIRECT":
@@ -417,6 +488,47 @@ class PythonInterface:
                         raise
                     answer.put_nowait(self.core.status())
                     continue
+                if action == "lab_handback" and self.lab:
+                    # GFC 700 back to the AI pilot's controllers. The new session,
+                    # first frames, ownership change and AP release share one
+                    # simulator callback for the reason lab_start does: separate
+                    # socket round trips can outlast the 200 ms actuator lease.
+                    # The caller then keeps submitting frames until ACTIVE.
+                    if set(request) != {"session", "controls", "snapshot_frame", "snapshot_wall_time_s"}:
+                        raise ValueError("Unexpected hand-back arguments")
+                    now = time.monotonic()
+                    if (self.snapshot is None or self.telemetry_error
+                            or type(request["snapshot_frame"]) is not int
+                            or request["snapshot_frame"] > self.snapshot["frame"]
+                            or type(request["snapshot_wall_time_s"]) not in (int, float)
+                            or not 0 <= now - request["snapshot_wall_time_s"] <= 0.20
+                            or not 0 <= now - self.snapshot["wall_time_s"] <= 0.20):
+                        raise ValueError("Fresh hand-back snapshot required")
+                    self.lab.verify_identity()
+                    self.lab.require_gfc_flight(self.snapshot)
+                    self.lab.validate_controls(request["controls"])
+                    new_session = request["session"]
+                    candidate_prefix(new_session)
+                    if new_session in self.core.used_sessions or len(self.core.used_sessions) >= 4:
+                        raise ValueError("Hand-back needs a new session (rotation limit 4)")
+                    if self.core.state != "GFC700" or self.core.owner != "GFC700":
+                        raise ValueError("Hand-back requires GFC 700 ownership")
+                    controls = request["controls"]
+                    try:
+                        self.core.renew_session(new_session, self.core.generation)
+                        self.telemetry.session = new_session
+                        self.lab_sessions.add(new_session)
+                        self.core.submit_frame(new_session, self.core.generation, 1,
+                                               self.core.clock() + .18, controls)
+                        prepared = self.core.prepare("DIRECT", new_session, self.core.generation)
+                        self.core.submit_frame(new_session, prepared["generation"], 2,
+                                               self.core.clock() + .18, controls)
+                        self.core.activate(new_session, prepared["generation"])
+                    except Exception:
+                        self.core.fault_pause("GFC hand-back failed")
+                        raise
+                    answer.put_nowait(self.core.status())
+                    continue
                 if action == "exchange":
                     if self.core.state != "ACTIVE":
                         raise ValueError("Exchange requires active authority")
@@ -440,6 +552,7 @@ class PythonInterface:
                            "heartbeat": self.core.heartbeat, "activate": self.core.activate,
                            "transfer_gfc": self.core.transfer_gfc,
                            "set_virtual_aux": self.core.set_virtual_aux,
+                           "gfc_select": self.core.gfc_select,
                            "human_takeover": self.core.human_takeover,
                            "fault_pause": self.core.fault_pause}
                 if action == "renew_session":
@@ -490,6 +603,6 @@ class PythonInterface:
         except Exception as error:
             self.snapshot = None
             self.telemetry_error = str(error)
-            if not self.observe_only and self.core.state == "ACTIVE":
+            if not self.observe_only and self.core.state in ("ACTIVE", "WAIT_GFC", "GFC700"):
                 self.core.fault_pause("Telemetry capture failed: %s" % error)
         return -1

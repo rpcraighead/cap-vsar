@@ -418,6 +418,12 @@ class PatternObserver:
         self.reason = None
         self.max_altitude_error_ft = 0.
         self.max_bank_seen_deg = 0.
+        # Set by the runner while the executive's terrain guard holds a floor above
+        # the assigned altitude: the altitude criterion is waived for those samples
+        # (a climb away from the ground is not a tracking failure) and counted, so a
+        # PASS that used the waiver says so.
+        self.terrain_override = False
+        self.terrain_override_samples = 0
 
     def fail(self, reason):
         self.outcome, self.reason = "FAIL", reason
@@ -449,7 +455,9 @@ class PatternObserver:
                 err = abs(v["altitude_indicated_ft"] - self.altitude_ft)
                 self.max_altitude_error_ft = max(self.max_altitude_error_ft, err)
                 self.max_bank_seen_deg = max(self.max_bank_seen_deg, abs(v["roll_deg"]))
-                if err > self.altitude_tol_ft:
+                if self.terrain_override:
+                    self.terrain_override_samples += 1
+                elif err > self.altitude_tol_ft:
                     return self.fail("Altitude outside tolerance on the pattern")
                 if not self.kias_band[0] <= v["kias"] <= self.kias_band[1]:
                     return self.fail("Speed outside band on the pattern")
@@ -473,4 +481,5 @@ class PatternObserver:
         return {"outcome": self.outcome, "reason": self.reason, "samples": self.samples,
                 "reached": list(self.reached), "next_index": self.index,
                 "max_altitude_error_ft": self.max_altitude_error_ft,
-                "max_bank_deg": self.max_bank_seen_deg}
+                "max_bank_deg": self.max_bank_seen_deg,
+                "terrain_override_samples": self.terrain_override_samples}

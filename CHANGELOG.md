@@ -3,6 +3,25 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-10-15 — GFC 700 as a second owner of the bridge; terrain guard moved into the executive (branch `feat/c182-prop-control`)
+
+Status: **implemented and tested offline; never run in X-Plane.** 636 AI-pilot tests
+pass; the full suite has the same 169 console failures as `main`.
+
+The mission bridge can now hand the airplane to the GFC 700 and take it back
+(`transfer_gfc`, `gfc_select`, `lab_handback`; `GfcOwner` on the executive side), under
+the same airborne envelope, heartbeat and pause containment as the AI pilot's own
+controllers, and the capture loop now pauses on a fault in `GFC700`, not only `ACTIVE`.
+The demo's terrain guard became `services/ai_pilot/terrain_guard.py` (pure advice) fed by
+a terrain scan in every telemetry snapshot (`xplane/capvsar_terrain.py`); the pattern
+runner applies it to the DIRECT owner, `GfcOwner.step` to the autopilot. A configurable
+last-ditch terrain fence (`terrain_backstop_ft`, default 200 ft in `stage-mission`) pauses
+the simulator if the guard did not act. Found and fixed while testing: the guard's ceiling
+had to sit under the bridge envelope's 6,500 ft or a raised floor would pause the sim.
+`scripts/ai_pilot_owner_trial.py` is the attended trial (AI pilot -> GFC 700 -> AI pilot,
+both hand-overs scored); it has not been flown. Unverified list and procedure:
+`docs/GFC700_SECOND_OWNER_2026-10-15.md`.
+
 ## 2026-10-15 — Gate G closed: ArduPlane not adopted
 
 Status: **decision recorded; no code changed.** Ron closed CONOPS gate G without
