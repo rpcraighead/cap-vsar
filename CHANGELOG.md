@@ -3,6 +3,21 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-10-15 — Aircraft profiles are data: TOML files and a strict loader (branch `feat/aircraft-profile-config`)
+
+Status: **implemented and tested offline; no controller changed, nothing re-flown.** Step 1 of making the AI
+autopilot one code path across aircraft with differences in data, at Ron's direction. The C172SP and C182T
+profiles moved from Python literals to `services/ai_pilot/profiles/c172sp.toml` and `c182t.toml`, loaded by
+`profile_loader.py`, which requires every value, rejects unknown keys, checks types, applies the dataclass's
+existing physics checks and demands a `[sources]` table with a `tuning` entry. `aircraft_profiles.PROFILES` is
+built from the directory, so adding an aircraft is adding a file. The migration is proved by
+`tests/golden_profiles.py` (the old literals, verbatim) and a test that the files load to profiles equal to
+them, `sources` text included; the full AI-pilot suite passes unchanged (670 passed, 20 expected failures).
+Schema and procedure: `services/ai_pilot/profiles/README.md`. Not done yet, in order: remove the `C172SP`
+default arguments from the controllers; measured performance tables and a throttle feed-forward to replace the
+stopgap hand-back ramp; merge `MissionController`'s duplicate cruise loop into `CruiseLaw` behind a regression
+flight; run the frozen campaign on the shared code for both aircraft.
+
 ## 2026-10-15 — Owner-transfer trial flown six times on ESCON; two defects found and fixed (branch `feat/c182-prop-control`)
 
 Status: **flown on the CAP 487; the final run passes.** First live use of the GFC 700 second owner, the

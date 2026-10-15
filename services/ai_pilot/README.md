@@ -456,3 +456,9 @@ the Snap variables inline (squadron stations do not have the tool). The g1000-sa
 `sim_harness.py` launcher, which the prop sweep, perf card and ground check use, finds the
 display itself.
 
+## Aircraft profiles are data
+
+Everything that differs between airplanes (speeds with their handbook sources, Vfe, flap handling,
+tuning constants, prop control) lives in `services/ai_pilot/profiles/<aircraft>.toml`, validated by
+`profile_loader.py`. Adding an aircraft is adding a file; see `profiles/README.md`.
+

@@ -1,0 +1,117 @@
+# CAP 487 Cessna 182T NAV III, the local prototype package built by scripts/build_c182t_package.py (ACF
+# 11ff17d1..., flight-calibrated 2026-10-11). Sourced from the Cessna 182T NAV III GFC 700 AFCS information manual,
+# P/N 182TPHBUS (SHA-256 ba64adab5d6e...3fd2705c, pinned in scripts/c182t_dimension_master.json).
+# Moved from Python to this file 2026-10-15 with every value unchanged (test_profile_files.py asserts it).
+# TUNING IS NOT VALIDATED: see [sources].tuning. Nothing here is operating guidance for a real aircraft.
+
+[aircraft]
+key = "C182T"
+acf_name = "Cessna_182T_G1000.acf"
+display_name = "CAP 487 Cessna 182T NAV III (local prototype package)"
+# true only after a sortie in THIS aircraft has been flown and scored with these values
+tuning_validated = false
+
+[speeds_kias]
+# POH Section 4, Normal Takeoff: flaps UP-20 deg (10 deg preferred), lift nosewheel at 50-60 KIAS.
+vr = 55.0
+# POH Section 4 / Section 5: Vx 65 KIAS and Vy 80 KIAS at sea level.
+vx = 65.0
+vy = 80.0
+# POH Section 4, Enroute Climb: 85-95 KIAS at 23 in.hg / 2400 RPM.
+climb_enroute = 90.0
+# Exercise cruise: the README's FLC exercise target; inside the 55-80 % power band of POH Section 4 Cruise
+# and the 90-140 KIAS exercise envelope.
+cruise = 110.0
+approach_initial = 100.0
+approach_intermediate = 95.0
+# POH Section 4, Normal Landing: 70-80 KIAS flaps up; flaps 10 deg below 140, 10-20 deg below 120,
+# 20-FULL below 100; 60-70 KIAS flaps FULL.
+approach_clean = 85.0
+ils_final = 80.0
+final_approach = 68.0
+# POH Section 4, Balked Landing: full power, flaps 20 deg, 55 KIAS, retract slowly after a safe altitude and
+# 70 KIAS. 70 KIAS (the flaps-20 climb speed of Normal Takeoff) is used for the controller's missed-approach
+# climb rather than 55, which is an obstacle-clearance speed.
+missed = 70.0
+# POH Section 2: Va 110 KIAS at 3100 lb.
+va = 110.0
+# CAP visual search speed for the 182 (training value, not a POH figure).
+search = 100.0
+
+[vfe]
+# POH Section 2, Figure 2-1: Vfe 140 (up-10), 120 (10-20), 100 (20-FULL).
+# [flap handle ratio, Vfe KIAS] per stage, smallest ratio first
+stages = [[0.3333333333333333, 140.0], [0.6666666666666666, 120.0], [1.0, 100.0]]
+
+[flaps]
+# Normal takeoff with 10 deg, retracted above 70 KIAS (POH Short Field Takeoff item 9) once clear of the
+# runway environment.
+takeoff_ratio = 0.3333333333333333
+retract_kias = 70.0
+retract_agl_ft = 300.0
+missed_ratio = 0.6666666666666666
+ils_ratio = 0.3333333333333333
+stage_names = ["10deg", "20deg", "38deg"]
+
+# Landing flap stages, first to last. A stage is selected once the airplane is inside `inside_m` of the
+# threshold AND no faster than `max_kias`; the last gate is full flaps (its distance and speed are ignored).
+[[flaps.landing_gates]]
+ratio = 0.3333333333333333
+inside_m = 1852.0
+max_kias = 95.0
+
+[[flaps.landing_gates]]
+ratio = 0.6666666666666666
+inside_m = 926.0
+max_kias = 85.0
+
+[[flaps.landing_gates]]
+ratio = 1.0
+inside_m = 0.0
+max_kias = 0.0
+
+# --- tuning: controller constants and observer windows, not handbook figures ---
+[landing]
+# C172 values moved up by the final-approach speed difference. NOT VALIDATED.
+final_speed_add_kias = 5.0
+threshold_kias = [64.0, 72.0]
+touchdown_pitch_deg = [5.0, 8.0]
+touchdown_max_groundspeed_kt = 80.0
+
+[engine]
+# the engine must exceed this RPM 5 s into the takeoff roll
+min_roll_rpm = 2000.0
+
+[throttle]
+# The C172 values, unchanged. Not retuned: the 230 HP IO-540 and the governed prop will need different base
+# positions (measure on the first taxi-only and cruise-cycle trials).
+# taxi throttle = base + gain * (target - groundspeed), clamped to [0, max]
+taxi_base = 0.16
+taxi_speed_gain = 0.08
+taxi_max = 0.28
+cruise_base = 0.55
+ils_base = 0.48
+approach_base = 0.28
+
+[envelope]
+# the airborne speed band the bridge and observers accept
+kias = [80.0, 140.0]
+
+[prop]
+# 3-blade McCauley constant-speed prop (ACF _prop_type 1, governor 2000-2400 RPM). The lever is the requested
+# prop speed in rad/s (docs/C182T_AI_PILOT_PROP_2026-10-15.md); the bridge scales the 0-1 channel across the governing
+# range. Cruise ratio is full forward until a cruise RPM is chosen from the POH power table.
+constant_speed = true
+# lever setting in level cruise, as a 0-1 ratio of the governing range; every other phase flies it full forward
+cruise_ratio = 1.0
+
+[sources]
+handbook = "Cessna 182T NAV III GFC 700 AFCS information manual, P/N 182TPHBUS, SHA-256 ba64adab5d6ed543f73b330f24301e72fdaba4f729c3661075fa55173fd2705c"
+vr = "Section 4 Normal Takeoff: lift nosewheel at 50-60 KIAS (55 used)"
+"vx/vy" = "Section 4 Maximum Performance Climb: 80 KIAS SL; Section 5 Vx 65 KIAS SL"
+climb_enroute = "Section 4 Enroute Climb: 85-95 KIAS"
+landing = "Section 4 Normal Landing: 70-80 KIAS flaps up, 60-70 KIAS flaps FULL"
+missed = "Section 4 Balked Landing: flaps 20, 55 KIAS; retract above 70 KIAS"
+"vfe/va" = "Section 2 Figure 2-1"
+acf = "scripts/build_c182t_package.py ACF_PATCHES: Vs 51, Vso 41, Vx 65, Vy 80, Vfe 140/100, Vno 140, Vne 175; flap detents 10/20/38 deg"
+tuning = "NOT VALIDATED: base throttles, flap gates, threshold window and touchdown pitch are the C172 criteria shifted to the C182T speeds; see docs/C182T_AI_PILOT_PORT_2026-10-11.md"
