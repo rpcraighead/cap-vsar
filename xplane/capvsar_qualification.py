@@ -28,11 +28,22 @@ def aircraft_identity_ok(path, config_sha256=None):
             and len(config_sha256) == 64 and digest == config_sha256)
 AUTHORITY = {"roll": (-.35, .35), "pitch": (-.4, .4), "yaw": (-.35, .35),
              "throttle": (.15, 1), "flap": (0, 0), "trim": (-.6, .6)}
+# Constant-speed propeller lever (prop_ratio: 1 = governor at redline RPM). The
+# floor keeps a software fault from commanding a low-RPM, high-pitch setting.
+PROP_AUTHORITY = (.5, 1.)
+
+
+def authority_for(authority, config):
+    """The lab's actuator authority, plus the prop lever on a governed-prop package."""
+    if config.get("constant_speed_prop"):
+        return {**authority, "prop": PROP_AUTHORITY}
+    return dict(authority)
 
 
 class QualificationLab:
     def __init__(self, xp, sink, config):
         self.xp, self.sink = xp, sink
+        self.authority = authority_for(AUTHORITY, config)
         self.aircraft = str(Path(config["aircraft_path"]).resolve())
         self.expires = config["expires_unix_s"]
         if (not aircraft_identity_ok(self.aircraft, config.get("aircraft_sha256"))
@@ -69,9 +80,9 @@ class QualificationLab:
             raise ValueError("Qualification aircraft or lease changed")
 
     def validate_controls(self, controls):
-        if set(controls) != set(AUTHORITY):
+        if set(controls) != set(self.authority):
             raise ValueError("Complete lab actuator frame required")
-        for name, (low, high) in AUTHORITY.items():
+        for name, (low, high) in self.authority.items():
             if type(controls[name]) not in (int, float) or not math.isfinite(controls[name]) or not low <= controls[name] <= high:
                 raise ValueError("Qualification control limit: " + name)
 
@@ -124,7 +135,8 @@ class QualificationLab:
         xp.commandOnce(self.pause_command)
         for axis in "PQR":
             scalar("sim/flightmodel/position/" + axis, 0.)
-        for channel, value in {"roll": 0., "pitch": 0., "yaw": 0., "trim": 0., "flap": 0., "throttle": .55}.items():
+        for channel, value in {"roll": 0., "pitch": 0., "yaw": 0., "trim": 0., "flap": 0., "throttle": .55,
+                               **({"prop": 1.} if "prop" in self.authority else {})}.items():
             self.sink.write_control(channel, value)
         self.trial_started = None
         self.previous_sim = None

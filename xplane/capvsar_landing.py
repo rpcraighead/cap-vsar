@@ -7,9 +7,9 @@ import math
 import time
 
 try:
-    from .capvsar_qualification import QualificationLab
+    from .capvsar_qualification import QualificationLab, authority_for
 except ImportError:
-    from capvsar_qualification import QualificationLab
+    from capvsar_qualification import QualificationLab, authority_for
 
 class RunwayGeometry:
     def __init__(self, name, threshold, far_end, airport_elev_ft,
@@ -67,6 +67,7 @@ def runway_coordinates(lat, lon):
 class LandingLab(QualificationLab):
     def __init__(self, xp, sink, config):
         super().__init__(xp, sink, config)
+        self.authority = authority_for(AUTHORITY, config)
         self.runway = RUNWAYS[config.get("runway", "KMYF 28R")]
         ref = xp.findDataRef("sim/weather/region/wind_direction_degt")
         if not ref:
@@ -74,9 +75,9 @@ class LandingLab(QualificationLab):
         self.refs["sim/weather/region/wind_direction_degt"] = ref
 
     def validate_controls(self, controls):
-        if not isinstance(controls, dict) or set(controls) != set(AUTHORITY):
+        if not isinstance(controls, dict) or set(controls) != set(self.authority):
             raise ValueError("Complete landing actuator frame required")
-        for name, (low, high) in AUTHORITY.items():
+        for name, (low, high) in self.authority.items():
             value = controls[name]
             if type(value) not in (int, float) or not math.isfinite(value) or not low <= value <= high:
                 raise ValueError("Landing control limit: " + name)
@@ -149,7 +150,8 @@ class LandingLab(QualificationLab):
         for axis in "PQR":
             scalar("sim/flightmodel/position/" + axis, 0.)
         for channel, value in {"roll": 0., "pitch": 0., "yaw": 0., "trim": 0.,
-                               "flap": 1/3, "throttle": .24, "brake": 0.}.items():
+                               "flap": 1/3, "throttle": .24, "brake": 0.,
+                               **({"prop": 1.} if "prop" in self.authority else {})}.items():
             self.sink.write_control(channel, value)
         self.trial_started = None
         self.previous_sim = None

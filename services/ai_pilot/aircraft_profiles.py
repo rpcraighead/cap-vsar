@@ -82,6 +82,11 @@ class AircraftProfile:
     ils_base_throttle: float = .48
     approach_base_throttle: float = .28
     envelope_kias: tuple[float, float] = (80., 140.)
+    # Constant-speed propeller (the C172 package is fixed pitch and has no lever).
+    # `prop_cruise_ratio` is the lever setting used in level cruise; every other
+    # phase flies the lever full forward (takeoff, climb, approach, balked landing).
+    constant_speed_prop: bool = False
+    prop_cruise_ratio: float = 1.
     tuning_validated: bool = False
     sources: dict = field(default_factory=dict)
 
@@ -104,6 +109,10 @@ class AircraftProfile:
                 raise ValueError("flap gate ratio outside 0..1")
             if gate.max_kias > self.vfe_for(gate.ratio):
                 raise ValueError("flap gate %.2f would select flaps above Vfe" % gate.ratio)
+        if not 0.5 <= self.prop_cruise_ratio <= 1.:
+            raise ValueError("prop cruise ratio outside the bridge's 0.5..1 authority")
+        if self.prop_cruise_ratio != 1. and not self.constant_speed_prop:
+            raise ValueError("a fixed-pitch aircraft has no prop cruise setting")
         if self.landing_flap_gates[-1].ratio != 1.:
             raise ValueError("the last landing flap gate must be full flaps")
         if self.ils_final_kias > self.vfe_for(self.ils_flap_ratio):
@@ -206,6 +215,10 @@ C182T = AircraftProfile(
     taxi_base_throttle=.16, taxi_speed_gain=.08, taxi_max_throttle=.28,
     cruise_base_throttle=.55, ils_base_throttle=.48, approach_base_throttle=.28,
     envelope_kias=(80., 140.),
+    # 3-blade McCauley constant-speed prop (ACF _prop_type 1, governor 2400 RPM).
+    # Cruise ratio is full forward until the cruise-cycle trial measures the
+    # lever-to-RPM map (docs/C182T_AI_PILOT_PROP_2026-10-15.md).
+    constant_speed_prop=True, prop_cruise_ratio=1.,
     tuning_validated=False,
     sources={
         "handbook": "Cessna 182T NAV III GFC 700 AFCS information manual, P/N 182TPHBUS, "

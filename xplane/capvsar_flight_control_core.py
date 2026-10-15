@@ -18,7 +18,7 @@ CHANNELS = ("roll", "pitch", "yaw", "throttle", "flap", "trim")
 ARDUPLANE_CHANNELS = CHANNELS[:-1]
 RANGES = {"roll": (-1.0, 1.0), "pitch": (-1.0, 1.0),
           "yaw": (-1.0, 1.0), "throttle": (0.0, 1.0), "flap": (0.0, 1.0),
-          "trim": (-1.0, 1.0), "brake": (0.0, .35)}
+          "trim": (-1.0, 1.0), "brake": (0.0, .35), "prop": (0.0, 1.0)}
 
 
 class ControlBridge:
@@ -32,7 +32,7 @@ class ControlBridge:
         self.sink, self.session, self.clock = sink, session, clock
         self.channels = tuple(channels)
         if (not set(CHANNELS) <= set(self.channels) or len(set(self.channels)) != len(self.channels)
-                or not set(self.channels) <= set(RANGES) or ("brake" in self.channels and not atomic)):
+                or not set(self.channels) <= set(RANGES) or (set(self.channels) & {"brake", "prop"} and not atomic)):
             raise ValueError("Invalid actuator channel set")
         if (type(brake_max) not in (int, float) or not math.isfinite(brake_max)
                 or not .35 <= brake_max <= 1.0):

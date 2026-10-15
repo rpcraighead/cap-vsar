@@ -10,7 +10,7 @@ from xplane import capvsar_qualification, capvsar_surface
 from .test_flight_control_plugin import load_plugin
 
 
-def lab_setup(monkeypatch, tmp_path):
+def lab_setup(monkeypatch, tmp_path, **extra):
     xp, plugin = load_plugin(monkeypatch, tmp_path)
     aircraft = tmp_path / capvsar_qualification.STOCK_NAME
     aircraft.write_text("stock fixture")
@@ -18,7 +18,7 @@ def lab_setup(monkeypatch, tmp_path):
                         hashlib.sha256(aircraft.read_bytes()).hexdigest())
     xp.getNthAircraftModel = lambda _index: (aircraft.name, str(aircraft))
     config = {"aircraft_path": str(aircraft), "expires_unix_s": time.time()+1000,
-              "parking": "KSEE East Transient Parking 12"}
+              "parking": "KSEE East Transient Parking 12", **extra}
     plugin.core.sink.brakes = ("sim/cockpit2/controls/left_brake_ratio",
                                "sim/cockpit2/controls/right_brake_ratio")
     plugin.core.sink.toe_brake_override = "sim/operation/override/override_toe_brakes"

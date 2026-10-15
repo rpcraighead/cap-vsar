@@ -70,6 +70,8 @@ def run(args):
     sequence = 0
     controls = {"roll": 0., "pitch": 0., "yaw": 0., "throttle": 0.,
                 "flap": 0., "trim": 0., "brake": .35}
+    if profile.constant_speed_prop:
+        controls["prop"] = 1.
     stage = "settle"
     previous_frame = None
     start_sim = None

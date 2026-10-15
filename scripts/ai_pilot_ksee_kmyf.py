@@ -107,6 +107,8 @@ def run(args):
             time.sleep(.1)
         controls = {"roll": .0, "pitch": .06, "yaw": .10, "throttle": 1.,
                     "flap": 0., "trim": max(-.6, min(.6, snap["controls"]["trim"])), "brake": 0.}
+        if profile.constant_speed_prop:
+            controls["prop"] = 1.
         if args.from_parking:
             controls.update(roll=0., pitch=0., yaw=0., throttle=0., brake=.35)
         if args.start_stage == "missed_runway":

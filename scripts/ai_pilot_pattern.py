@@ -49,6 +49,7 @@ def run(args):
     if config.get("mode") != "mission":
         raise ValueError("Requires the expiring mission bridge configuration")
     profile = PROFILES[args.profile]
+    channels = CHANNELS + (("prop",) if profile.constant_speed_prop else ())
     waypoints = build_pattern(args)
     inv = inventory(args.xplane, include_mission=True, profile=args.profile)
     for name, installed in inv["installed_bridge_sha256"].items():
@@ -97,6 +98,8 @@ def run(args):
         controls = {"roll": 0., "pitch": max(-.4, min(.4, measured.get("pitch", 0.))), "yaw": 0.,
                     "throttle": max(.2, min(1., measured.get("throttle", .6))), "flap": 0.,
                     "trim": max(-.6, min(.6, measured["trim"])), "brake": 0.}
+        if profile.constant_speed_prop:
+            controls["prop"] = max(.5, min(1., measured.get("prop", 1.)))
         started = client.request("lab_start", session=session, controls=controls,
                                  snapshot_frame=snap["frame"], snapshot_wall_time_s=snap["wall_time_s"])
         if started["state"] != "ACTIVE":
@@ -128,7 +131,7 @@ def run(args):
                 result = {**report, "controller_transitions": controller.transitions}
                 break
             frame = controller.step(snap)
-            controls = {k: float(frame[k]) for k in CHANNELS}
+            controls = {k: float(frame[k]) for k in channels}
             if samples % 5 == 0:
                 recorder.write("command", {"frame": snap["frame"], "controls": controls,
                                            "diagnostics": controller.last_diagnostics})

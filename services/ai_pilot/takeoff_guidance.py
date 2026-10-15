@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import math
 
 from .aircraft_profiles import AircraftProfile, C172SP
+from .prop_law import full_forward
 from .taxi import TaxiCoordinator, TaxiPhase
 
 
@@ -66,13 +67,17 @@ class TakeoffCommand:
     phase: str = "hold"
     reason: str = "hold"
     intervention_required: bool = False
+    prop: float | None = None           # lever, only for a constant-speed-prop profile
 
     def actuator_frame(self, trim: float = 0.) -> dict[str, float]:
         if not math.isfinite(trim) or not -.6 <= trim <= .6:
             raise ValueError("trim outside takeoff trial envelope")
-        return {"roll": self.roll, "pitch": self.pitch, "yaw": self.yaw,
-                "throttle": self.throttle, "flap": self.flap, "trim": trim,
-                "brake": self.brake}
+        frame = {"roll": self.roll, "pitch": self.pitch, "yaw": self.yaw,
+                 "throttle": self.throttle, "flap": self.flap, "trim": trim,
+                 "brake": self.brake}
+        if self.prop is not None:
+            frame["prop"] = self.prop
+        return frame
 
 
 class TakeoffGuidance:
@@ -99,6 +104,7 @@ class TakeoffGuidance:
         self.reason = "awaiting explicit takeoff authority"
         self.gradient_deficit = False
 
+    @full_forward
     def step(self, o: TakeoffObservation) -> TakeoffCommand:
         if o.paused:
             return TakeoffCommand(phase=self.phase, reason="simulator paused")

@@ -9,6 +9,7 @@ import math
 
 from .aircraft_profiles import AircraftProfile, C172SP
 from .landing_trial import LandingController
+from .prop_law import PropLaw
 from xplane.capvsar_landing import RUNWAYS
 
 PGY10 = (32.778216667, -116.972158333)
@@ -22,6 +23,10 @@ RUNWAY = RUNWAYS["KMYF 28R"]
 STAGES = ("runway_climb", "pgy_intercept", "pgy_inbound", "mzb_inbound",
           "bakel_vector", "vector_heading", "mibby", "nesty", "penyy", "ils", "landing",
           "missed_runway", "missed_270", "carif_inbound", "retry_bakel")
+# Stages where a governed prop may leave full forward (level, established
+# cruise). Climb-out, the approach and every go-around fly it full forward.
+CRUISE_PROP_STAGES = ("pgy_inbound", "mzb_inbound", "bakel_vector", "vector_heading",
+                      "carif_inbound", "retry_bakel")
 
 
 def clamp(x, low, high):
@@ -51,6 +56,7 @@ class MissionController:
         self.vvi_lp = None
         self.ils_pitch_i = 0.
         self.landing = LandingController("KMYF 28R", profile=profile)
+        self.prop_law = PropLaw(profile)
         self.last_diagnostics = {}
         self.transitions = []
         self.vector_heading_mag = None
@@ -283,6 +289,7 @@ class MissionController:
                 else 0.)
         command = {"roll": roll, "pitch": pitch, "yaw": yaw, "throttle": throttle,
                    "flap": flap, "trim": self.trim, "brake": 0.}
+        self.prop_law.add_to(command, v, allow_cruise=self.stage in CRUISE_PROP_STAGES)
         self.last_diagnostics = {"stage": self.stage, "target_true_deg": target_true,
                                  "target_alt_ft": target_alt, "target_kias": target_ias,
                                  "distance_nm": distance, "heading_error_deg": heading_error,

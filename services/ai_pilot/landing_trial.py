@@ -8,6 +8,7 @@ from __future__ import annotations
 import math
 
 from .aircraft_profiles import AircraftProfile, C172SP
+from .prop_law import FULL
 from xplane.capvsar_landing import GLIDEPATH_AIMPOINT_M, RUNWAYS
 
 # The unflared glidepath intersects 25 ft beyond the displaced threshold.
@@ -248,6 +249,8 @@ class LandingController:
                         "throttle": throttle, "flap": flap,
                         "trim": self.trim, "brake": 0.}
             self.last_air_roll = roll
+        if self.profile.constant_speed_prop:
+            controls["prop"] = FULL     # prop high for landing and any go-around
         self.last_commands = {"phase": self.phase, "along_m": along, "cross_m": cross,
                               "agl_ft": agl_ft, "groundspeed_kt": gs_kt,
                               "target_kias": target_speed if self.phase != "rollout" else 0.,

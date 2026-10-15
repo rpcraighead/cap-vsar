@@ -47,6 +47,7 @@ except ModuleNotFoundError as error:
 
 CONFIG = Path(__file__).with_name("capvsar_flight_control_config.json")
 LIVE_PLUGIN_QUALIFIED = False
+PROP_LEVER = "sim/cockpit2/engine/actuators/prop_ratio"
 NATIVE = {
     "roll": "sim/joystick/yoke_roll_ratio",
     "pitch": "sim/joystick/yoke_pitch_ratio",
@@ -57,9 +58,22 @@ NATIVE = {
 }
 
 
+def lab_channels(braked, config):
+    """Actuator channels of an atomic-frame session: brake in the braked labs,
+    prop on a constant-speed-prop package."""
+    return (CHANNELS + (("brake",) if braked else ())
+            + (("prop",) if config.get("constant_speed_prop") else ()))
+
+
 class XPlaneSink:
-    def __init__(self, landing=False, toe_brakes=False):
+    def __init__(self, landing=False, toe_brakes=False, prop=False):
         self.controls = {key: xp.findDataRef(ref) for key, ref in NATIVE.items()}
+        # Constant-speed prop lever (a governed-prop package only). The cockpit
+        # lever is not covered by the joystick/throttle overrides, so the sink
+        # writes it directly and Telemetry reads the lever back every frame.
+        self.prop = bool(prop)
+        if self.prop:
+            self.controls["prop"] = xp.findDataRef(PROP_LEVER)
         self.brakes = None
         self.toe_brake_override = (xp.findDataRef("sim/operation/override/override_toe_brakes")
                                    if toe_brakes else None)
@@ -115,6 +129,8 @@ class XPlaneSink:
         if channel == "brake":
             for ref in self.brakes:
                 xp.setDataf(ref, value)
+        elif channel == "prop":
+            xp.setDatavf(self.controls[channel], [value], 0, 1)
         elif channel == "throttle":
             # ENGN_thro_use only drives the engine while override_throttles=1.
             # Garmin ownership leaves overrides off and moves the cockpit lever.
@@ -127,6 +143,11 @@ class XPlaneSink:
         return xp.getDataf(self.controls["trim"])
 
     def read_control(self, channel):
+        if channel == "prop":
+            values = [0.0]
+            if xp.getDatavf(self.controls[channel], values, 0, 1) != 1:
+                raise RuntimeError("Prop lever readback unavailable")
+            return values[0]
         if channel == "throttle":
             ref = self.controls[channel] if xp.getDatai(self.throttles) else self.cockpit_throttle
             values = [0.0]
@@ -188,9 +209,10 @@ class PythonInterface:
             surface = config.get("mode") == "surface"
             mission = config.get("mode") == "mission"
             braked = landing or surface or mission
-            self.core = ControlBridge(XPlaneSink(landing=braked, toe_brakes=surface or mission), session,
+            self.core = ControlBridge(XPlaneSink(landing=braked, toe_brakes=surface or mission,
+                                                 prop=bool(config.get("constant_speed_prop"))), session,
                                       atomic=config.get("protocol") == "atomic-v1",
-                                      channels=CHANNELS + ("brake",) if braked else CHANNELS,
+                                      channels=lab_channels(braked, config),
                                       brake_max=1. if surface or mission else .35)
             self.telemetry = Telemetry(xp, self.core.sink, session)
             if config.get("mode") in ("qualification", "landing", "surface", "mission"):
@@ -341,7 +363,7 @@ class PythonInterface:
                     result = self.lab.reset(self.core, **request)
                     self.lab_sessions.add(new_session)
                     self.core = ControlBridge(self.core.sink, new_session, atomic=True,
-                                              channels=CHANNELS + ("brake",) if isinstance(self.lab, (LandingLab, SurfaceLab, MissionLab)) else CHANNELS,
+                                              channels=lab_channels(isinstance(self.lab, (LandingLab, SurfaceLab, MissionLab)), self.config),
                                               brake_max=1. if isinstance(self.lab, (SurfaceLab, MissionLab)) else .35)
                     self.telemetry.session = new_session
                     self.snapshot = None

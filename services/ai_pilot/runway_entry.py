@@ -6,6 +6,7 @@ import math
 
 from .ground_guidance import GroundCommand, GroundObservation, TaxiPoint, clamp, wrap180
 from .aircraft_profiles import AircraftProfile, C172SP
+from .prop_law import full_forward
 from .taxi import TaxiCoordinator, TaxiPhase
 
 
@@ -38,6 +39,7 @@ class RunwayEntryGuidance:
         self.phase = "hold"
         self.fault: str | None = None
 
+    @full_forward
     def step(self, o: GroundObservation) -> GroundCommand:
         if o.paused:
             return GroundCommand(reason="simulator paused")

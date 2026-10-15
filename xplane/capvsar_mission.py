@@ -3,10 +3,10 @@ import math
 import time
 
 try:
-    from .capvsar_qualification import QualificationLab
+    from .capvsar_qualification import QualificationLab, authority_for
     from .capvsar_surface import SurfaceLab
 except ImportError:
-    from capvsar_qualification import QualificationLab
+    from capvsar_qualification import QualificationLab, authority_for
     from capvsar_surface import SurfaceLab
 
 
@@ -18,15 +18,16 @@ AUTHORITY = {"roll": (-.35, .35), "pitch": (-.45, .45),
 class MissionLab(QualificationLab):
     def __init__(self, xp, sink, config):
         super().__init__(xp, sink, config)
+        self.authority = authority_for(AUTHORITY, config)
         self.nav1 = xp.findDataRef("sim/cockpit2/radios/actuators/nav1_frequency_hz")
         self.obs1 = xp.findDataRef("sim/cockpit2/radios/actuators/nav1_obs_deg_mag_pilot")
         if not self.nav1 or not self.obs1:
             raise ValueError("NAV1 tuning datarefs unavailable")
 
     def validate_controls(self, controls):
-        if not isinstance(controls, dict) or set(controls) != set(AUTHORITY):
+        if not isinstance(controls, dict) or set(controls) != set(self.authority):
             raise ValueError("Complete mission actuator frame required")
-        for key, (low, high) in AUTHORITY.items():
+        for key, (low, high) in self.authority.items():
             value = controls[key]
             if type(value) not in (int, float) or not math.isfinite(value) or not low <= value <= high:
                 raise ValueError("Mission actuator limit: " + key)

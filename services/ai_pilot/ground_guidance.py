@@ -10,6 +10,7 @@ from dataclasses import dataclass
 import math
 
 from .aircraft_profiles import AircraftProfile, C172SP
+from .prop_law import full_forward
 from .taxi import TaxiCoordinator, TaxiRoute
 
 
@@ -53,13 +54,17 @@ class GroundCommand:
     throttle: float = 0.
     brake: float = 0.
     reason: str = "hold"
+    prop: float | None = None           # lever, only for a constant-speed-prop profile
 
     def actuator_frame(self, trim: float = 0.) -> dict[str, float]:
         if not math.isfinite(trim) or not -.6 <= trim <= .6:
             raise ValueError("trim outside taxi trial envelope")
-        return {"roll": 0., "pitch": 0., "yaw": self.yaw,
-                "throttle": self.throttle, "flap": 0., "trim": trim,
-                "brake": self.brake}
+        frame = {"roll": 0., "pitch": 0., "yaw": self.yaw,
+                 "throttle": self.throttle, "flap": 0., "trim": trim,
+                 "brake": self.brake}
+        if self.prop is not None:
+            frame["prop"] = self.prop
+        return frame
 
 
 class TaxiGuidance:
@@ -86,6 +91,7 @@ class TaxiGuidance:
         self.profile = profile
         self.fault: str | None = None
 
+    @full_forward
     def step(self, o: GroundObservation) -> GroundCommand:
         if o.paused:
             return GroundCommand(reason="simulator paused")

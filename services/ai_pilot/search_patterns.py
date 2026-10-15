@@ -28,6 +28,7 @@ from dataclasses import dataclass
 import math
 
 from .aircraft_profiles import AircraftProfile, C172SP
+from .prop_law import PropLaw
 
 EARTH_NM = 3440.065
 M_PER_NM = 1852.
@@ -171,6 +172,7 @@ class CruiseLaw:
 
     def __init__(self, profile: AircraftProfile):
         self.profile = profile
+        self.prop_law = PropLaw(profile)
         self.alt_i = 0.
         self.power_i = 0.
         self.trim = None
@@ -206,8 +208,8 @@ class CruiseLaw:
         self.trim = clamp(self.trim + clamp(pitch * .35 * dt, -.06 * dt, .06 * dt), -.6, .6)
         ias = max(v["kias"], 40.)
         yaw = clamp(.07 * throttle * (100. / ias) ** 2 + roll * .25 - v["beta_deg"] * .045, -.35, .35)
-        return ({"roll": roll, "pitch": pitch, "yaw": yaw, "throttle": throttle,
-                 "flap": 0., "trim": self.trim, "brake": 0.},
+        return (self.prop_law.add_to({"roll": roll, "pitch": pitch, "yaw": yaw, "throttle": throttle,
+                                      "flap": 0., "trim": self.trim, "brake": 0.}, v),
                 {"heading_error_deg": heading_error, "bank_target_deg": bank_target,
                  "target_vvi_fpm": target_vvi, "pitch_target_deg": pitch_target})
 

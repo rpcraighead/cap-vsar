@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from services.ai_pilot.experiment import BridgeClient, Recorder, Scenario, digest, score_trace
 from services.ai_pilot.control_ownership import ControllerLock
-from services.ai_pilot.aircraft_profiles import PROFILES
+from services.ai_pilot.aircraft_profiles import PROFILES, profile_for
 
 
 AIRCRAFT_PATHS = {
@@ -93,6 +93,8 @@ def stage_observer(destination, qualification_aircraft=None, mode="qualification
     if qualification_aircraft is not None:
         if aircraft_sha256:
             config["aircraft_sha256"] = aircraft_sha256
+        if profile_for(qualification_aircraft.name).constant_speed_prop:
+            config["constant_speed_prop"] = True
         config.update(mode=mode, aircraft_path=str(qualification_aircraft),
                       expires_unix_s=time.time() + (14300 if mode == "mission" else 10800 if mode in ("landing", "surface") else 3600))
         if mode == "landing":

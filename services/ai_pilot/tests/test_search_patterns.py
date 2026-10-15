@@ -89,7 +89,8 @@ def fly(controller, lat, lon, heading, kias=100., dt=.2, max_s=5400.):
                                "groundspeed_mps": gs},
                     "controls": {"trim": 0.}}
         frame = controller.step(snapshot)
-        assert set(frame) == {"roll", "pitch", "yaw", "throttle", "flap", "trim", "brake"}
+        assert set(frame) == ({"roll", "pitch", "yaw", "throttle", "flap", "trim", "brake"}
+                              | ({"prop"} if controller.law.profile.constant_speed_prop else set()))
         # Roll rate follows the yoke through a half-second lag, as an airframe does;
         # an instantaneous response would alias against the rate-damping term.
         roll_rate += (max(-40., min(40., frame["roll"] * 90.)) - roll_rate) * min(1., dt / .5)
