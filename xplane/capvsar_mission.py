@@ -15,6 +15,17 @@ AUTHORITY = {"roll": (-.35, .35), "pitch": (-.45, .45),
              "flap": (0., 1.), "trim": (-.6, .6), "brake": (0., 1.)}
 
 
+# Airborne geofence boxes (lat_min, lat_max, lon_min, lon_max). Leaving every box
+# pauses the simulator. The second covers scenario C-1 (ELT at the ESCON fix on
+# the KCRQ ILS, 33.17 N 117.079 W) with room for a 1 NM-spaced expanding square.
+AIRBORNE_BOXES = ((32.65, 33.06, -117.40, -116.75),
+                  (33.00, 33.35, -117.35, -116.85))
+
+
+def in_airborne_region(lat, lon):
+    return any(a <= lat <= b and c <= lon <= d for a, b, c, d in AIRBORNE_BOXES)
+
+
 class MissionLab(QualificationLab):
     def __init__(self, xp, sink, config):
         super().__init__(xp, sink, config)
@@ -59,7 +70,7 @@ class MissionLab(QualificationLab):
         alt = xp.getDataf(xp.findDataRef("sim/cockpit2/gauges/indicators/altitude_ft_pilot"))
         ias = xp.getDataf(xp.findDataRef("sim/flightmodel/position/indicated_airspeed"))
         agl = xp.getDataf(xp.findDataRef("sim/flightmodel/position/y_agl"))
-        airborne = (32.65 <= lat <= 33.06 and -117.40 <= lon <= -116.75
+        airborne = (in_airborne_region(lat, lon)
                     and 500 <= alt <= 6500 and 50 <= ias <= 140 and agl >= 60)
         rollout = (32.805 <= lat <= 32.825 and -117.15 <= lon <= -117.12
                    and 380 <= alt <= 500 and 0 <= ias <= 80 and -1 <= agl <= 3
@@ -102,8 +113,8 @@ class MissionLab(QualificationLab):
                         and 0 <= v["kias"] <= 110 and 0 <= v["groundspeed_mps"] <= 65
                         and -1 <= v["agl_m"] <= 3
                         and abs(v["roll_deg"]) <= 15 and abs(v["pitch_deg"]) <= 15)
-        airborne = (not v["on_ground"] and 32.65 <= v["latitude_deg"] <= 33.06
-                    and -117.40 <= v["longitude_deg"] <= -116.75
+        airborne = (not v["on_ground"]
+                    and in_airborne_region(v["latitude_deg"], v["longitude_deg"])
                     and 300 <= v["altitude_indicated_ft"] <= 6500
                     and 40 <= v["kias"] <= 145
                     and abs(v["roll_deg"]) <= 38 and abs(v["pitch_deg"]) <= 24)
