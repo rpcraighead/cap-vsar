@@ -15,7 +15,14 @@ CRITERIA = {
     "transient_altitude_ft": 150., "transient_bank_deg": 25., "transient_vvi_fpm": 1200.,
     "kias_band": (70., 130.), "capture_heading_deg": 3., "capture_altitude_ft": 100.,
     "capture_vvi_fpm": 150., "capture_dwell_s": 8., "max_bank_deg": 32.,
+    # After a hand-back the airplane may ease down to the AI pilot's target speed, but must not
+    # fall more than this far BELOW the lower of the speed it was handed at and that target in the
+    # first HANDBACK_WINDOW_S: a power cut that undershoots is a bad hand-over even when the speed
+    # stays inside the band. (ESCON run 4: handed 119.6, target 100, fell to 90.0. Run 5 with the
+    # slower ramp eased to 104.6 and passed this.)
+    "handback_undershoot_kt": 5.,
 }
+HANDBACK_WINDOW_S = 90.
 
 
 def wrap180(x):
@@ -25,8 +32,11 @@ def wrap180(x):
 class OwnerTrialObserver:
     PHASES = ("direct1", "gfc", "direct2")
 
-    def __init__(self, *, altitude_ft, aircraft_name=None, criteria=None):
+    def __init__(self, *, altitude_ft, aircraft_name=None, criteria=None, require_capture=True,
+                 speed_target_kias=None):
         self.altitude_ft = altitude_ft
+        self.require_capture = require_capture   # False when the autopilot phase is cut short by design
+        self.speed_target_kias = speed_target_kias   # the AI pilot's commanded speed after a hand-back
         self.aircraft_name = aircraft_name
         self.criteria = {**CRITERIA, **(criteria or {})}
         self.phase = None
@@ -34,6 +44,7 @@ class OwnerTrialObserver:
         self.stats = {p: self._blank() for p in self.PHASES}
         self.gfc_target_heading = None
         self.captured_since = None
+        self.phase_entry_kias = None
         self.captured = False
         self.failure = None
         self.previous = None
@@ -56,6 +67,7 @@ class OwnerTrialObserver:
             raise ValueError("Unknown phase")
         self.phase = phase
         self.phase_started[phase] = snapshot["values"]["sim_time_s"]
+        self.phase_entry_kias = snapshot["values"]["kias"]
         if phase == "gfc":
             self.gfc_target_heading = heading_target_true
             self.captured_since = None
@@ -86,6 +98,15 @@ class OwnerTrialObserver:
                 return self.fail("Speed outside band in %s" % self.phase)
             stats = self.stats[self.phase]
             stats["samples"] += 1
+            if self.phase == "direct2":
+                elapsed = sim - self.phase_started[self.phase]
+                if elapsed <= HANDBACK_WINDOW_S:
+                    stats["min_kias_after_handback"] = min(stats.get("min_kias_after_handback", v["kias"]), v["kias"])
+                reference = self.phase_entry_kias if self.speed_target_kias is None else \
+                    min(self.phase_entry_kias, self.speed_target_kias)
+                if elapsed <= HANDBACK_WINDOW_S and v["kias"] < reference - c["handback_undershoot_kt"]:
+                    return self.fail("Speed undershot after the hand-back: %.0f KIAS, %.0f kt below %.0f" % (
+                        v["kias"], reference - v["kias"], reference))
             self.terrain_override_samples += 1 if self.terrain_override else 0
             alt_error = abs(v["altitude_indicated_ft"] - self.altitude_ft)
             bank = abs(v["roll_deg"])
@@ -125,7 +146,8 @@ class OwnerTrialObserver:
 
     def report(self):
         complete = all(self.stats[p]["samples"] for p in self.PHASES)
-        outcome = ("FAIL" if self.failure else "PASS" if complete and self.captured else "INCOMPLETE")
+        outcome = ("FAIL" if self.failure else
+                   "PASS" if complete and (self.captured or not self.require_capture) else "INCOMPLETE")
         reason = self.failure or (None if outcome == "PASS" else
                                   "heading/altitude not captured by the GFC 700" if complete
                                   else "a phase was not flown")

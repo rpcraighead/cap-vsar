@@ -337,3 +337,28 @@ def test_a_floor_above_the_envelope_ceiling_turns_back_instead_of_pausing_the_si
     advice = owner.step(rig.request("snapshot"), heading_mag=80., altitude_ft=4060., guard=guard)
     assert advice.turn_back and "ceiling" in advice.reason
     assert rig.state == "GFC700"
+
+
+def test_the_owner_gives_back_the_power_it_raised_when_the_climb_is_over(monkeypatch, tmp_path):
+    """ESCON run 3, 2026-10-15: the guard ordered full power, the airplane levelled at 6,000 ft and
+    stayed at full throttle (130 KIAS) because nothing restored the pilot's power."""
+    rig = Rig(monkeypatch, tmp_path, terrain=ridge_terrain(3.0, 3600.))
+    rig.xp.refs[THROTTLE] = [0.6] * 16
+    owner = owner_for(rig)
+    owner.engage(80., 4060.)
+    guard = TerrainGuard(ceiling_ft=AIRBORNE_MAX_ALTITUDE_FT - 500)
+    owner.step(rig.request("snapshot"), heading_mag=80., altitude_ft=4060., guard=guard)
+    assert rig.xp.refs[THROTTLE][0] == pytest.approx(1.0)               # climbing: full power
+    rig.xp.refs["sim/flightmodel/position/elevation"] = 5500. / FT_PER_M
+    rig.xp.refs["sim/cockpit2/gauges/indicators/altitude_ft_pilot"] = 5560.
+    owner.step(rig.request("snapshot"), heading_mag=80., altitude_ft=4060., guard=guard)
+    assert rig.xp.refs[THROTTLE][0] == pytest.approx(0.6)               # level: the pilot's power
+
+
+def test_the_owner_never_touches_the_throttle_if_the_guard_never_asked_for_power(rig):
+    rig.xp.refs[THROTTLE] = [0.6] * 16
+    owner = owner_for(rig)
+    owner.engage(80., 4060.)
+    before = len(rig.xp.writes)
+    owner.step(rig.request("snapshot"), heading_mag=80., altitude_ft=4060., guard=TerrainGuard())
+    assert not any(ref == THROTTLE for ref, _ in rig.xp.writes[before:])

@@ -1,10 +1,10 @@
 {
- "openwater_c182_run1": {
+ "run1_openwater": {
+  "note": "PASS: first live owner transfer",
   "trace": "~/.cache/capvsar/ai-pilot/owner_trial_c182_20261015_1.jsonl",
   "trace_sha256": "dd1942d105ed5febc550c13ac6f3c7d66d263d9de65ebde233d6739dedf31e1c",
   "outcome": "PASS",
   "reason": null,
-  "captured": true,
   "samples": 4296,
   "phases": {
    "direct1": {
@@ -48,21 +48,17 @@
   "terrain_guard": null,
   "containment": {
    "state": "PAUSED_FAULT",
-   "pause_confirmed": true
-  },
-  "recorded_capture_duration_s": {
-   "max": 0.000661284000671003,
-   "median": 9.816500096349046e-05,
-   "note": "every 5th snapshot only"
+   "pause_confirmed": true,
+   "containment_error": null
   },
   "aircraft_acf_sha256": "11ff17d1f15ed3c715ca248f797999b3bf583763dd65275a658ddfac09cd89d8"
  },
- "escon_c182_run2": {
+ "run2_escon_climb": {
+  "note": "PASS: guard raised floor, GFC 700 flew the 700 fpm climb, hand-back mid-climb (old law)",
   "trace": "~/.cache/capvsar/ai-pilot/owner_trial_c182_escon_20261015_2.jsonl",
   "trace_sha256": "884a5eaad545ba7992831e2f66c087ce9be56d4769b51154d8409ed919bd3032",
   "outcome": "PASS",
   "reason": null,
-  "captured": true,
   "samples": 3257,
   "phases": {
    "direct1": {
@@ -111,12 +107,275 @@
   },
   "containment": {
    "state": "PAUSED_FAULT",
-   "pause_confirmed": true
+   "pause_confirmed": true,
+   "containment_error": null
   },
-  "recorded_capture_duration_s": {
-   "max": 0.001181566000013845,
-   "median": 8.68640017870348e-05,
-   "note": "every 5th snapshot only"
+  "aircraft_acf_sha256": "11ff17d1f15ed3c715ca248f797999b3bf583763dd65275a658ddfac09cd89d8"
+ },
+ "run3_escon_long": {
+  "note": "FAIL (real): GFC owner left throttle at full after levelling at 6,000 ft, 129-130 KIAS",
+  "trace": "~/.cache/capvsar/ai-pilot/owner_trial_c182_escon_20261015_3.jsonl",
+  "trace_sha256": "95b764e8ae1dda926775f213ef45b2259778fd9713b492d1221ff794088b8cda",
+  "outcome": "FAIL",
+  "reason": "Speed outside band in gfc",
+  "samples": 3520,
+  "phases": {
+   "direct1": {
+    "samples": 966,
+    "transient": {
+     "max_alt_error_ft": 25.948486328125,
+     "max_bank_deg": 0.9200707077980042,
+     "max_abs_vvi_fpm": 1228.9061279296875
+    },
+    "steady": {
+     "max_alt_error_ft": 16.84521484375,
+     "max_bank_deg": 0.18971377611160278
+    }
+   },
+   "gfc": {
+    "samples": 2553,
+    "transient": {
+     "max_alt_error_ft": 11.04248046875,
+     "max_bank_deg": 5.550771236419678,
+     "max_abs_vvi_fpm": 21.153179168701172
+    },
+    "steady": {
+     "max_alt_error_ft": 2445.865803206635,
+     "max_bank_deg": 4.906057357788086
+    }
+   },
+   "direct2": {
+    "samples": 0,
+    "transient": {
+     "max_alt_error_ft": 0.0,
+     "max_bank_deg": 0.0,
+     "max_abs_vvi_fpm": 0.0
+    },
+    "steady": {
+     "max_alt_error_ft": 0.0,
+     "max_bank_deg": 0.0
+    }
+   }
+  },
+  "terrain_override_samples": 1909,
+  "terrain_guard": {
+   "events": 2,
+   "max_floor_ft": 5999.59959705526,
+   "min_clearance_ft": -800.7897019290222,
+   "said": "terrain 4008 ft at 6.0 nm, clearance -454 ft: floor 6000 ft",
+   "min_agl_ft": 1585.5905484615946,
+   "closest": null
+  },
+  "containment": {
+   "state": "PAUSED_FAULT",
+   "pause_confirmed": true,
+   "containment_error": "Pause/override/autopilot release not confirmed"
+  },
+  "aircraft_acf_sha256": "11ff17d1f15ed3c715ca248f797999b3bf583763dd65275a658ddfac09cd89d8"
+ },
+ "run4_escon_midclimb": {
+  "note": "PASS but hand-back dipped to 90.0 KIAS (power cut): fix with a 2 kt/s ramp did not work",
+  "trace": "~/.cache/capvsar/ai-pilot/owner_trial_c182_escon_20261015_4.jsonl",
+  "trace_sha256": "687a2f0e0ff267f490dd508e4d39e4523199c229006e26e8c1e05eac342f9205",
+  "outcome": "PASS",
+  "reason": null,
+  "samples": 6748,
+  "phases": {
+   "direct1": {
+    "samples": 971,
+    "transient": {
+     "max_alt_error_ft": 29.527099609375,
+     "max_bank_deg": 0.5905524492263794,
+     "max_abs_vvi_fpm": 1121.2987060546875
+    },
+    "steady": {
+     "max_alt_error_ft": 21.67724609375,
+     "max_bank_deg": 0.19293349981307983
+    }
+   },
+   "gfc": {
+    "samples": 1203,
+    "transient": {
+     "max_alt_error_ft": 12.95458984375,
+     "max_bank_deg": 5.459822177886963,
+     "max_abs_vvi_fpm": 35.09306716918945
+    },
+    "steady": {
+     "max_alt_error_ft": 2480.832421064695,
+     "max_bank_deg": 4.818648338317871
+    }
+   },
+   "direct2": {
+    "samples": 4574,
+    "transient": {
+     "max_alt_error_ft": 1740.5369009658516,
+     "max_bank_deg": 0.2580944299697876,
+     "max_abs_vvi_fpm": 881.0596923828125
+    },
+    "steady": {
+     "max_alt_error_ft": 1667.964413837638,
+     "max_bank_deg": 0.40975984930992126
+    }
+   }
+  },
+  "terrain_override_samples": 5092,
+  "terrain_guard": {
+   "events": 2,
+   "max_floor_ft": 5999.268219639034,
+   "min_clearance_ft": -789.9807274347322,
+   "said": "terrain 4018 ft at 6.0 nm, clearance -499 ft: floor 6000 ft",
+   "min_agl_ft": 1639.229565712369,
+   "closest": null,
+   "crest": {
+    "ground_ft": 3756.779343493125,
+    "altitude_msl_ft": 5396.008909205494,
+    "lat": 33.212346153029145,
+    "lon": -116.86623774979785,
+    "owner": "DIRECT"
+   }
+  },
+  "containment": {
+   "state": "PAUSED_FAULT",
+   "pause_confirmed": true,
+   "containment_error": null
+  },
+  "aircraft_acf_sha256": "11ff17d1f15ed3c715ca248f797999b3bf583763dd65275a658ddfac09cd89d8"
+ },
+ "run5_escon_slowramp": {
+  "note": "FAIL by scorer criterion that was wrong (15 kt below entry speed); flight itself eased smoothly to 104.6",
+  "trace": "~/.cache/capvsar/ai-pilot/owner_trial_c182_escon_20261015_5.jsonl",
+  "trace_sha256": "a2e87f154761c0083560a3c9c4a96f38919dd97559211d4d72c6f0b595b0f92b",
+  "outcome": "FAIL",
+  "reason": "Speed fell 15 kt after the hand-back (from 120 to 105 KIAS)",
+  "samples": 3148,
+  "phases": {
+   "direct1": {
+    "samples": 982,
+    "transient": {
+     "max_alt_error_ft": 30.8623046875,
+     "max_bank_deg": 0.6067004203796387,
+     "max_abs_vvi_fpm": 1131.1248779296875
+    },
+    "steady": {
+     "max_alt_error_ft": 21.440673828125,
+     "max_bank_deg": 0.06586352735757828
+    }
+   },
+   "gfc": {
+    "samples": 1217,
+    "transient": {
+     "max_alt_error_ft": 13.861328125,
+     "max_bank_deg": 5.4105610847473145,
+     "max_abs_vvi_fpm": 36.42606735229492
+    },
+    "steady": {
+     "max_alt_error_ft": 2481.8135631549594,
+     "max_bank_deg": 4.823198318481445
+    }
+   },
+   "direct2": {
+    "samples": 949,
+    "transient": {
+     "max_alt_error_ft": 1740.8088911971945,
+     "max_bank_deg": 0.17172445356845856,
+     "max_abs_vvi_fpm": 891.6907348632812
+    },
+    "steady": {
+     "max_alt_error_ft": 1666.3043234867346,
+     "max_bank_deg": 0.1179802417755127
+    },
+    "min_kias_after_handback": 104.60542297363281
+   }
+  },
+  "terrain_override_samples": 1464,
+  "terrain_guard": {
+   "events": 1,
+   "max_floor_ft": 5999.362879561209,
+   "min_clearance_ft": -783.1230417816814,
+   "said": "terrain 4000 ft at 6.0 nm, clearance -482 ft: floor 6000 ft",
+   "min_agl_ft": 1667.1733249014496,
+   "closest": null,
+   "crest": {
+    "ground_ft": 2269.732208483264,
+    "altitude_msl_ft": 4728.097466831508,
+    "lat": 33.20359762290808,
+    "lon": -116.89976623654192,
+    "owner": "DIRECT"
+   }
+  },
+  "containment": {
+   "state": "PAUSED_FAULT",
+   "pause_confirmed": true,
+   "containment_error": null
+  },
+  "aircraft_acf_sha256": "11ff17d1f15ed3c715ca248f797999b3bf583763dd65275a658ddfac09cd89d8"
+ },
+ "run6_escon_final": {
+  "note": "PASS: hand-back mid-climb at 119.5 KIAS, eased to 100 target, min 98.5, ridge crest crossed under the AI pilot",
+  "trace": "~/.cache/capvsar/ai-pilot/owner_trial_c182_escon_20261015_6.jsonl",
+  "trace_sha256": "2129dab6cacb4c425332cf0607a8a7e15005a2169297b0db7253674e5ee71e37",
+  "outcome": "PASS",
+  "reason": null,
+  "samples": 7060,
+  "phases": {
+   "direct1": {
+    "samples": 948,
+    "transient": {
+     "max_alt_error_ft": 26.491943359375,
+     "max_bank_deg": 0.8105915188789368,
+     "max_abs_vvi_fpm": 1205.404541015625
+    },
+    "steady": {
+     "max_alt_error_ft": 16.4501953125,
+     "max_bank_deg": 0.09475290775299072
+    }
+   },
+   "gfc": {
+    "samples": 1213,
+    "transient": {
+     "max_alt_error_ft": 11.826904296875,
+     "max_bank_deg": 5.2776055335998535,
+     "max_abs_vvi_fpm": 35.773780822753906
+    },
+    "steady": {
+     "max_alt_error_ft": 2459.4867102188236,
+     "max_bank_deg": 4.675327777862549
+    }
+   },
+   "direct2": {
+    "samples": 4899,
+    "transient": {
+     "max_alt_error_ft": 1719.5660966149544,
+     "max_bank_deg": 0.19984149932861328,
+     "max_abs_vvi_fpm": 893.1107788085938
+    },
+    "steady": {
+     "max_alt_error_ft": 1645.0282255695402,
+     "max_bank_deg": 0.1345834732055664
+    },
+    "min_kias_after_handback": 98.5220718383789
+   }
+  },
+  "terrain_override_samples": 5423,
+  "terrain_guard": {
+   "events": 2,
+   "max_floor_ft": 6000.194635857165,
+   "min_clearance_ft": -812.2062090875352,
+   "said": "terrain 4002 ft at 6.0 nm, clearance -461 ft: floor 6000 ft",
+   "min_agl_ft": 1703.0429427464096,
+   "closest": null,
+   "crest": {
+    "ground_ft": 3737.1114966414425,
+    "altitude_msl_ft": 5440.154439387852,
+    "lat": 33.21168832476826,
+    "lon": -116.86636751575233,
+    "owner": "DIRECT"
+   }
+  },
+  "containment": {
+   "state": "PAUSED_FAULT",
+   "pause_confirmed": true,
+   "containment_error": null
   },
   "aircraft_acf_sha256": "11ff17d1f15ed3c715ca248f797999b3bf583763dd65275a658ddfac09cd89d8"
  }

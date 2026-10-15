@@ -3,16 +3,21 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
-## 2026-10-15 — Owner-transfer trial flown: AI pilot -> GFC 700 -> AI pilot, with the terrain guard (branch `feat/c182-prop-control`)
+## 2026-10-15 — Owner-transfer trial flown six times on ESCON; two defects found and fixed (branch `feat/c182-prop-control`)
 
-Status: **flown twice on the CAP 487, both PASS** (open water; ESCON with a guard climb). First live use
-of the GFC 700 second owner, the terrain scan and the terrain guard; simulator started and flown
-unattended with the bridge's pause/override release as containment. An earlier ESCON attempt failed on a
-scorer flaw (the adopted first phase was held to hand-over limits) and was fixed, not a flight result.
-Findings: hand-overs under 1.2 ft and 25 fpm; heading/altitude captured; the guard raised a 5,997 ft floor
-over a 4,526 ft ridge and the GFC 700 flew the 700 fpm climb at full power; a fresh DIRECT controller cut
-power for 8 s when given the airplane at 119 KIAS (not fixed). Evidence
-`docs/evidence/ai_pilot_owner_trial_20261015.json`; account in `docs/GFC700_SECOND_OWNER_2026-10-15.md`.
+Status: **flown on the CAP 487; the final run passes.** First live use of the GFC 700 second owner, the
+terrain scan and the terrain guard, with the simulator started and flown unattended and the bridge's
+pause/override release as containment. Open water (PASS), then ESCON toward the Ramona ridge: the guard
+raised a 6,000 ft floor over 4,000-4,500 ft ground and the GFC 700 flew the 700 fpm climb at full power.
+Real defects found and fixed: the GFC owner left the throttle at full after levelling (run 3, 130 KIAS);
+a fresh AI-pilot cruise law handed a fast, climbing airplane cut power and fell to 90 KIAS (run 4), fixed by an
+opt-in bumpless `CruiseLaw` (`adopt_slew_kt_s`, 0.4 kt/s; a 2 kt/s ramp did not work, run 5). Two scorer
+errors were also found and fixed (the adopted first phase; a wrong speed-loss criterion). Final run 6:
+hand-back at 119.5 KIAS mid-climb, eased to 100, min 98.5, ridge crest crossed under the AI pilot at
+1,703 ft above the ground. A widened geofence (`--extra-box`, session-only, recorded in the config) was
+needed to reach the high ground. The throttle restore under a GFC level-off is unit-tested, not re-flown.
+Evidence `docs/evidence/ai_pilot_owner_trial_20261015.json`; account
+`docs/GFC700_SECOND_OWNER_2026-10-15.md`.
 
 ## 2026-10-15 — C182T prop lever: wrong dataref found and fixed; map measured (branch `feat/c182-prop-control`)
 

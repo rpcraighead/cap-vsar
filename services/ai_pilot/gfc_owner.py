@@ -48,6 +48,7 @@ class GfcOwner:
         self.selected = {}            # heading_mag, altitude_ft, vs_fpm as last sent
         self._awaiting = None         # (deadline, reselects) while a selection settles
         self._throttle = None
+        self._entry_throttle = None   # the power the AI pilot was flying when it handed over
 
     # ---- bridge state ------------------------------------------------------
     def status(self):
@@ -87,6 +88,7 @@ class GfcOwner:
                 raise GfcOwnerError("Autopilot engagement not observed")
             self.sleep(0.02)
         self.selected = {}
+        self._entry_throttle = self._throttle = None
         self.select(heading_mag, altitude_ft, vs_fpm)
         return status
 
@@ -166,6 +168,8 @@ class GfcOwner:
         heading with a course back to the area. Returns the guard's advice.
         """
         self.keepalive()
+        if self._entry_throttle is None:
+            self._entry_throttle = snapshot["controls"].get("throttle")   # before any full-power order
         v, advice = snapshot["values"], None
         target_alt, target_hdg = altitude_ft, heading_mag
         if guard is not None:
@@ -189,8 +193,12 @@ class GfcOwner:
             self.select(changes.get("heading_mag"), changes.get("altitude_ft"), changes.get("vs_fpm"))
         if advice is not None and advice.full_power:
             self.set_throttle(1.0)
-        elif cruise_throttle is not None:
-            self.set_throttle(cruise_throttle)
+        else:
+            # The autopilot has no autothrottle: whoever raised the power must give it back,
+            # or the airplane levels off at full throttle (130 KIAS at 6,000 ft, ESCON run 3).
+            restore = cruise_throttle if cruise_throttle is not None else self._entry_throttle
+            if restore is not None and (cruise_throttle is not None or self._throttle is not None):
+                self.set_throttle(restore)
         self.verify(snapshot)
         return advice
 

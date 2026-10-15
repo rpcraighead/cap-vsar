@@ -170,19 +170,29 @@ class CruiseLaw:
     sortie, not aircraft data; `profile.cruise_base_throttle` is the one
     aircraft-dependent constant."""
 
-    def __init__(self, profile: AircraftProfile):
+    def __init__(self, profile: AircraftProfile, adopt_slew_kt_s=None):
+        # adopt_slew_kt_s: take over an airplane that is already flying at its own
+        # speed and power (a hand-back from the GFC 700) without a bump. The speed
+        # command starts at the measured airspeed and slews to the target at this
+        # rate, and the throttle integrator is seeded so the first throttle equals
+        # the measured one. None (default) is the lifted-unchanged behaviour.
         self.profile = profile
         self.prop_law = PropLaw(profile)
+        self.adopt_slew_kt_s = adopt_slew_kt_s
         self.alt_i = 0.
         self.power_i = 0.
         self.trim = None
+        self.ias_cmd = None
+        self.seeded = False
 
     def reset(self):
         self.alt_i = 0.
         self.power_i = 0.
+        self.ias_cmd = None
+        self.seeded = False
 
     def frame(self, v, trim_in, target_true, target_alt, target_ias, dt,
-              max_bank_deg=20.):
+              max_bank_deg=20., throttle_in=None):
         if self.trim is None:
             self.trim = clamp(trim_in, -.6, .6)
         heading_error = wrap180(target_true - v["heading_true_deg"])
@@ -196,8 +206,17 @@ class CruiseLaw:
         if (-6 < raw_pitch < 10 or (raw_pitch >= 10 and candidate < self.alt_i)
                 or (raw_pitch <= -6 and candidate > self.alt_i)):
             self.alt_i = candidate
+        if self.adopt_slew_kt_s is not None:
+            if self.ias_cmd is None:
+                self.ias_cmd = v["kias"]
+            step = self.adopt_slew_kt_s * dt
+            self.ias_cmd += clamp(target_ias - self.ias_cmd, -step, step)
+            target_ias = self.ias_cmd
         speed_error = target_ias - v["kias"]
         base = self.profile.cruise_base_throttle
+        if self.adopt_slew_kt_s is not None and throttle_in is not None and not self.seeded:
+            self.power_i = clamp(throttle_in - (base + speed_error * .020), -.35, .35)
+            self.seeded = True
         candidate = clamp(self.power_i + speed_error * .0015 * dt * 10., -.35, .35)
         trial = base + speed_error * .020 + candidate
         if (.12 < trial < 1. or (trial >= 1 and candidate < self.power_i)

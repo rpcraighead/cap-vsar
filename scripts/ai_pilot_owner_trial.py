@@ -43,6 +43,11 @@ from xplane.capvsar_mission import AIRBORNE_MAX_ALTITUDE_FT
 from scripts.ai_pilot_experiment import inventory
 
 CHANNELS = ("roll", "pitch", "yaw", "throttle", "flap", "trim", "brake")
+# Slow on purpose. At 2.0 kt/s the first live hand-back mid-climb (ESCON run 4, 2026-10-15) still
+# dropped to 90 KIAS: the loop chased a deceleration the climbing airplane could not follow, cut
+# power to idle and wound the integrator down. Handed 119.6 KIAS, the command now takes ~50 s to
+# reach the 100 KIAS target, so power eases off instead of being cut.
+ADOPT_SLEW_KT_S = 0.4
 
 
 def clamp(x, low, high):
@@ -53,7 +58,9 @@ class Hold:
     """Heading and altitude hold on the primary controls (the AI pilot's cruise law)."""
 
     def __init__(self, profile, target_true, target_alt, kias):
-        self.law, self.profile = CruiseLaw(profile), profile
+        # Bumpless: the airplane is handed over flying at its own speed and power, so the
+        # speed command starts there and the throttle starts where the pilot left it.
+        self.law, self.profile = CruiseLaw(profile, adopt_slew_kt_s=ADOPT_SLEW_KT_S), profile
         self.target_true, self.target_alt, self.kias = target_true, target_alt, kias
         self.last_sim = None
         self.trim = None
@@ -64,7 +71,7 @@ class Hold:
         dt = .05 if self.last_sim is None else clamp(sim - self.last_sim, .005, .25)
         self.last_sim = sim
         frame, _ = self.law.frame(v, snap["controls"]["trim"], self.target_true, self.target_alt,
-                                  self.kias, dt)
+                                  self.kias, dt, throttle_in=snap["controls"].get("throttle"))
         return frame
 
 
@@ -98,7 +105,9 @@ def run(args):
     client = BridgeClient(config)
     owner = GfcOwner(client)
     guard = TerrainGuard(ceiling_ft=AIRBORNE_MAX_ALTITUDE_FT - 500)
-    observer = OwnerTrialObserver(altitude_ft=0., aircraft_name=profile.acf_name)
+    observer = OwnerTrialObserver(altitude_ft=0., aircraft_name=profile.acf_name,
+                                  require_capture=not args.handback_in_climb,
+                                  speed_target_kias=args.kias or profile.search_kias)
     kias = args.kias or profile.search_kias
     result = {"outcome": "FAIL", "reason": "Setup incomplete"}
     guard_log = {}
@@ -172,7 +181,9 @@ def run(args):
                 hold.target_alt = observer.altitude_ft
                 frame_now[0] = {k: float(v) for k, v in hold.frame(snap).items() if k in channels}
 
-        guard_log = {"events": 0, "max_floor_ft": None, "min_clearance_ft": None, "said": ""}
+        snapshot_owner = ["DIRECT"]
+        guard_log = {"events": 0, "max_floor_ft": None, "min_clearance_ft": None, "said": "",
+                     "min_agl_ft": None, "closest": None, "crest": None}
 
         def apply_guard(snapshot, advice=None):
             """The executive's terrain guard, applied to whoever owns the airplane: the
@@ -189,6 +200,28 @@ def run(args):
             if advice.clearance_ft is not None:
                 low = guard_log["min_clearance_ft"]
                 guard_log["min_clearance_ft"] = advice.clearance_ft if low is None else min(low, advice.clearance_ft)
+            terrain = snapshot.get("terrain")
+            if terrain and terrain.get("under_valid"):
+                agl = snapshot["values"]["altitude_msl_m"] / .3048 - terrain["under_ft"]
+                low = guard_log["min_agl_ft"]
+                guard_log["min_agl_ft"] = agl if low is None else min(low, agl)
+            if terrain and terrain.get("under_valid"):
+                # The highest ground the airplane actually flew over, and how high it was there.
+                if guard_log["crest"] is None or terrain["under_ft"] > guard_log["crest"]["ground_ft"]:
+                    guard_log["crest"] = {"ground_ft": terrain["under_ft"],
+                                          "altitude_msl_ft": snapshot["values"]["altitude_msl_m"] / .3048,
+                                          "lat": snapshot["values"]["latitude_deg"],
+                                          "lon": snapshot["values"]["longitude_deg"],
+                                          "owner": snapshot_owner[0]}
+            if terrain and terrain.get("valid") and terrain["ahead_max_nm"] <= 1.5:
+                # Over or nearly over the highest ground in the scan: the crossing itself.
+                clearance = snapshot["values"]["altitude_msl_m"] / .3048 - terrain["ahead_max_ft"]
+                if guard_log["closest"] is None or clearance < guard_log["closest"]["clearance_ft"]:
+                    guard_log["closest"] = {"clearance_ft": clearance, "ground_ft": terrain["ahead_max_ft"],
+                                            "ground_nm": terrain["ahead_max_nm"],
+                                            "lon": snapshot["values"]["longitude_deg"],
+                                            "lat": snapshot["values"]["latitude_deg"],
+                                            "owner": snapshot_owner[0]}
             if advice.reason and advice.reason != guard_log["said"]:
                 guard_log["said"] = advice.reason
                 guard_log["events"] += 1
@@ -205,10 +238,11 @@ def run(args):
         target_true = (v["heading_true_deg"] + args.turn_deg) % 360
         target_mag = (v["heading_mag_deg"] + args.turn_deg) % 360
         observer.enter("gfc", snap, heading_target_true=target_true)
+        snapshot_owner[0] = "GFC700"
         owner.engage(heading_mag=target_mag, altitude_ft=altitude)
         recorder.write("handover", {"to": "GFC700", "frame": snap["frame"], "heading_mag": target_mag,
                                     "altitude_ft": altitude})
-        gfc_start, previous = None, None
+        gfc_start, previous, climb_since = None, None, None
         while True:
             if time.monotonic() - start_wall > args.max_wall_s:
                 raise ValueError("Wall deadline exceeded")
@@ -229,7 +263,14 @@ def run(args):
                 recorder.write("snapshot", {**snap, "trial_phase": "gfc"})
             sim = snap["values"]["sim_time_s"]
             gfc_start = sim if gfc_start is None else gfc_start
-            if sim - gfc_start >= args.gfc_s and observer.captured:
+            if args.handback_in_climb:
+                # Take the airplane back part-way up the guard's climb, at climb speed and power:
+                # the case the bumpless hand-back exists for.
+                if observer.terrain_override and snap["values"]["vvi_fpm"] > 500:
+                    climb_since = sim if climb_since is None else climb_since
+                    if sim - climb_since >= args.handback_in_climb:
+                        break
+            elif sim - gfc_start >= args.gfc_s and observer.captured:
                 break
             if sim - gfc_start >= args.gfc_s * 2:
                 raise ValueError("GFC 700 did not capture the heading and altitude")
@@ -238,10 +279,11 @@ def run(args):
         controls = first_frame(snap, profile)
         new_session, generation, seq = owner.hand_back(controls)
         client_session[0], frame_now[0] = new_session, controls
+        snapshot_owner[0] = "DIRECT"
         recorder.write("handover", {"to": "DIRECT", "session": new_session})
         v = snap["values"]
         hold = Hold(profile, v["heading_true_deg"], observer.altitude_ft, kias)   # fresh integrators
-        direct_phase("direct2", args.direct_s)
+        direct_phase("direct2", args.direct2_s or args.direct_s)
         result = {**observer.report(), "samples": samples, "terrain_guard": guard_log}
     except BaseException as error:
         result = {**observer.report(), "outcome": "FAIL", "reason": str(error) or type(error).__name__,
@@ -256,10 +298,13 @@ def run(args):
                 status = client.request("status")
             end = client.request("snapshot")
             result["end"] = {"status": status, "values": end["values"]}
-            if (not status["pause_confirmed"] or end["override_state"] is not False
-                    or end["ap_engaged"] is not False):
+            # A fault pauses the simulator and releases the actuator overrides. It does NOT drop
+            # the autopilot: if the GFC 700 owns the airplane it keeps flying it when the sim is
+            # un-paused, which is safer than free flight (ARDUPLANE_TRIAL F1).
+            result["end_autopilot_engaged"] = end["ap_engaged"]
+            if not status["pause_confirmed"] or end["override_state"] is not False:
                 result["outcome"] = "FAIL"
-                result["containment_error"] = "Pause/override/autopilot release not confirmed"
+                result["containment_error"] = "Pause/override release not confirmed"
         except Exception as error:
             result["outcome"] = "FAIL"
             result["containment_error"] = str(error)
@@ -280,6 +325,11 @@ def main():
     p.add_argument("--turn-deg", type=float, default=20.)
     p.add_argument("--direct-s", type=float, default=60.)
     p.add_argument("--gfc-s", type=float, default=90.)
+    p.add_argument("--handback-in-climb", type=float, default=None, metavar="SECONDS",
+                   help="end the GFC 700 phase this many seconds into the guard's climb, mid-climb, "
+                        "instead of waiting for capture at level")
+    p.add_argument("--direct2-s", type=float, default=None,
+                   help="length of the final AI-pilot phase (default: --direct-s)")
     p.add_argument("--kias", type=float, default=None)
     p.add_argument("--max-wall-s", type=float, default=900.)
     a = p.parse_args()

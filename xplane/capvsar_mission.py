@@ -27,8 +27,22 @@ AIRBORNE_BOXES = ((32.65, 33.06, -117.40, -116.75),
 AIRBORNE_MAX_ALTITUDE_FT = 6500.
 
 
-def in_airborne_region(lat, lon):
-    return any(a <= lat <= b and c <= lon <= d for a, b, c, d in AIRBORNE_BOXES)
+def in_airborne_region(lat, lon, boxes=AIRBORNE_BOXES):
+    return any(a <= lat <= b and c <= lon <= d for a, b, c, d in boxes)
+
+
+def checked_extra_boxes(extra):
+    """Validate a staged list of extra geofence boxes (a deliberate, recorded widening)."""
+    boxes = []
+    for box in extra or ():
+        if (not isinstance(box, (list, tuple)) or len(box) != 4
+                or any(type(x) not in (int, float) for x in box)):
+            raise ValueError("extra_airborne_boxes needs [lat_min, lat_max, lon_min, lon_max] entries")
+        a, b, c, d = map(float, box)
+        if not (32.0 <= a < b <= 34.0 and -118.0 <= c < d <= -116.0):
+            raise ValueError("extra airborne box outside the Southern California trial area")
+        boxes.append((a, b, c, d))
+    return tuple(boxes)
 
 
 # The GFC 700 may own the airplane only in established flight, never on the
@@ -48,6 +62,7 @@ TERRAIN_MAX_AGE_S = 5.
 
 class MissionLab(QualificationLab):
     terrain_backstop_ft = None
+    boxes = AIRBORNE_BOXES
 
     def __init__(self, xp, sink, config):
         super().__init__(xp, sink, config)
@@ -56,6 +71,7 @@ class MissionLab(QualificationLab):
         if backstop is not None and (type(backstop) not in (int, float) or not 50 <= backstop <= 2000):
             raise ValueError("terrain_backstop_ft must be 50-2000 ft or absent")
         self.terrain_backstop_ft = backstop
+        self.boxes = AIRBORNE_BOXES + checked_extra_boxes(config.get("extra_airborne_boxes"))
         self.nav1 = xp.findDataRef("sim/cockpit2/radios/actuators/nav1_frequency_hz")
         self.obs1 = xp.findDataRef("sim/cockpit2/radios/actuators/nav1_obs_deg_mag_pilot")
         if not self.nav1 or not self.obs1:
@@ -96,7 +112,7 @@ class MissionLab(QualificationLab):
         alt = xp.getDataf(xp.findDataRef("sim/cockpit2/gauges/indicators/altitude_ft_pilot"))
         ias = xp.getDataf(xp.findDataRef("sim/flightmodel/position/indicated_airspeed"))
         agl = xp.getDataf(xp.findDataRef("sim/flightmodel/position/y_agl"))
-        airborne = (in_airborne_region(lat, lon)
+        airborne = (in_airborne_region(lat, lon, self.boxes)
                     and 500 <= alt <= 6500 and 50 <= ias <= 140 and agl >= 60)
         rollout = (32.805 <= lat <= 32.825 and -117.15 <= lon <= -117.12
                    and 380 <= alt <= 500 and 0 <= ias <= 80 and -1 <= agl <= 3
@@ -122,7 +138,7 @@ class MissionLab(QualificationLab):
             raise ValueError("GFC hand-over needs a current snapshot")
         v = snapshot["values"]
         if (v["paused"] or v["on_ground"] or v["agl_m"] / .3048 < GFC_MIN_AGL_FT
-                or not in_airborne_region(v["latitude_deg"], v["longitude_deg"])
+                or not in_airborne_region(v["latitude_deg"], v["longitude_deg"], self.boxes)
                 or not GFC_KIAS[0] <= v["kias"] <= GFC_KIAS[1]
                 or abs(v["roll_deg"]) > GFC_MAX_BANK_DEG):
             raise ValueError("GFC 700 ownership requires established airborne flight")
@@ -167,7 +183,7 @@ class MissionLab(QualificationLab):
                         and -1 <= v["agl_m"] <= 3
                         and abs(v["roll_deg"]) <= 15 and abs(v["pitch_deg"]) <= 15)
         airborne = (not v["on_ground"]
-                    and in_airborne_region(v["latitude_deg"], v["longitude_deg"])
+                    and in_airborne_region(v["latitude_deg"], v["longitude_deg"], self.boxes)
                     and 300 <= v["altitude_indicated_ft"] <= AIRBORNE_MAX_ALTITUDE_FT
                     and 40 <= v["kias"] <= 145
                     and abs(v["roll_deg"]) <= 38 and abs(v["pitch_deg"]) <= 24)

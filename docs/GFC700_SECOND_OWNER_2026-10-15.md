@@ -1,7 +1,8 @@
 # GFC 700 as a second owner of the bridge, and the terrain guard in the executive (2026-10-15)
 
-Status: **flown twice in X-Plane on the CAP 487 on 2026-10-15 and passed both times**
-(open water; ESCON with the terrain guard climbing). Offline tests on a fake SDK before that.
+Status: **flown six times in X-Plane on the CAP 487 on 2026-10-15** (open water; ESCON with the terrain
+guard climbing over the Ramona ridge): the final mid-climb hand-back run passes, earlier runs found and fixed
+two real defects. Offline tests on a fake SDK before that.
 Branch `feat/c182-prop-control`. Simulator engineering only; not operating guidance for any
 real aircraft.
 
@@ -69,47 +70,60 @@ unrelated).
 ## Flown 2026-10-15 (`scripts/ai_pilot_owner_trial.py`, CAP 487 ACF `11ff17d1...`)
 
 Simulator launched and flown unattended (`xplane-clean`); the bridge's pause and override release
-were the containment. Summary and trace hashes: `docs/evidence/ai_pilot_owner_trial_20261015.json`.
+were the containment. Six flights, three passes, two real findings and one scorer error, all kept.
+Summary and trace hashes: `docs/evidence/ai_pilot_owner_trial_20261015.json`.
 
-| Run | Start | Result |
+| Run | What | Result |
 |---|---|---|
-| 1 | Open water off Point Loma, 2,170 ft, heading 352 deg | **PASS.** Hand-over to the autopilot: 0.4 ft altitude change, 24 fpm. Heading change of 20 deg left captured within 1.1 deg, altitude held within 1.2 ft. Hand-back: 1.2 ft, 0.4 deg of bank. |
-| ESCON attempt 1 | 8.6 nm from the Ramona ridge, 3,540 ft | **FAIL, scorer flaw, not a flight result.** The air start was still climbing at 1,207 fpm when adopted and tripped a hand-over limit. The first phase has no hand-over; it is now recorded, not limited. |
-| ESCON run 2 | Same start, same airplane, re-adopted | **PASS.** The GFC 700 held heading and altitude at 3,533 ft (within 11 ft, bank under 6 deg). The ridge ahead (3,977 to 4,526 ft against 3,530 ft) tripped the guard: floor 5,997 ft, minimum clearance -813 ft, 700 fpm climb ordered and flown to within a few fpm, full power ordered and flown. Hand-back happened during the climb. Contained, paused, overrides released. |
+| 1 | Open water off Point Loma, 2,170 ft | **PASS.** Hand-over to the autopilot: 0.4 ft, 24 fpm. 20 deg left captured within 1 deg, altitude within 1.2 ft. Hand-back: 1.2 ft, 0.4 deg of bank. |
+| ESCON attempt | 8.6 nm from the Ramona ridge, 3,540 ft | **FAIL, scorer flaw, not a flight result.** The first phase was held to hand-over limits while the air start was still climbing 1,207 fpm. Fixed. |
+| 2 | ESCON, same start | **PASS.** The ridge (3,977 to 4,526 ft against 3,530 ft) tripped the guard: floor about 6,000 ft, 700 fpm climb ordered and flown, full power ordered and flown. Hand-back during the climb. |
+| 3 | ESCON, long (past the crest) | **FAIL, real.** Under the GFC 700 the airplane crossed the crest at 5,275 ft over 3,668 ft ground (min 1,586 ft clear), then levelled at 6,000 ft **at full throttle** and ran to 129-130 KIAS, breaking the speed band. The GFC owner restored cruise power only if the caller passed one. Fixed: it now remembers the power the AI pilot was flying and gives it back. |
+| 4 | ESCON, hand-back mid-climb | **PASS, but a bad hand-over.** Handed 119.6 KIAS at 700 fpm, the fresh AI-pilot law cut the throttle to 0.13 and speed fell to 90.0 KIAS within 19 s. Inside the 70-130 band, so the scorer passed it. |
+| 5 | Same, 2 kt/s ramp and seeded power | **FAIL by a wrong criterion; the flight was better but not fixed.** Min speed 90.0 -> 104.6 over the window the scorer saw. My criterion ("no more than 15 kt below the entry speed") also failed the intended slow deceleration to the 100 KIAS target. Replaced by an undershoot criterion. |
+| 6 | Same, 0.4 kt/s ramp, undershoot criterion | **PASS.** Handed 119.5 KIAS mid-climb at 4,270 ft. Speed eased to the 100 KIAS target over about 50 s and held 100 +/- 1 (min 98.5), throttle 0.90 -> 0.76, climb continued at about 680 fpm to the 6,000 ft floor and levelled at 6,060 ft. The AI pilot flew over the ridge crest (33.212 N, 116.866 W, 3,737 ft ground, about 1.1 nm from the demo crash site) at 5,440 ft: 1,703 ft above the ground at the closest. Contained: paused, overrides released. |
 
 What this answers from the offline list:
 
-1. `g1000n1_ap` with no modes, then `gfc_select`: no visible attitude gap. Hand-over transients were
-   under 1 ft and 25 fpm in run 1. (Mode state after selection: HDG + ALT hold, `autopilot_state` 16386;
-   HDG + VS, 50, during the climb.)
-2. VS engagement and the selected rate: the 700 fpm selection held for the whole climb, so the
-   rate was not zeroed after the write. `GfcOwner.verify`'s re-send path was not needed live.
-3. ALT hold holds the current altitude: held 3,531 +/- 3 ft over 90 s. The hold path works as built.
+1. `g1000n1_ap` with no modes, then `gfc_select`: no visible attitude gap; hand-over transients under
+   1 ft and 25 fpm (run 1), 12 ft and 36 fpm (ESCON). Modes after selection: HDG + ALT hold
+   (`autopilot_state` 16386), HDG + VS during the climb (50).
+2. VS engagement and the selected rate: the 700 fpm selection held for the whole climb in every run;
+   the rate was not zeroed after the write. `GfcOwner.verify`'s re-send was not needed.
+3. ALT hold holds the current altitude: 3,531 +/- 3 ft over 90 s.
 4. Scan cost: recorded `capture_duration_s` maximum 0.7 ms (every 5th snapshot only).
 5. First frame after hand-back (neutral yoke, measured throttle/trim): no excursion.
-6. The 0.4 s heartbeat held at this machine's frame rate for the whole of both runs.
+6. The 0.4 s heartbeat held at this machine's frame rate in all six runs.
 
-New findings:
+Findings and fixes:
 
-* **Power after a hand-back mid-climb.** The fresh `CruiseLaw` targets 100 KIAS. Handed the airplane
-  at 119 KIAS at full power, it cut throttle to 0.12 for about 8 s and speed fell to 90 KIAS before it
-  recovered and climbed at 650 to 690 fpm. Inside the scorer's 70-130 KIAS band, but the DIRECT owner
-  should start from the airspeed it is given. Not fixed.
-* **The DIRECT owner ignores the guard's `full_power`.** It climbs on its own speed-and-altitude loop,
-  which reached full throttle in about 10 s. Only the GFC 700 owner applies `full_power`.
-* **The guard's events were swallowed** by a second `guard.update` per frame in the runner, so the trace
-  shows `terrain_guard.events` as 0 though the floor rose. Fixed (pass the advice in); not re-flown.
-* The airplane ended the ESCON run at 4,590 ft climbing, 1.5 nm short of the ridge line at 4,526 ft and
-  heading for a 6,000 ft floor; the trial stops at its time limit, so clearance over the ridge itself was
-  not demonstrated. A run long enough to cross it is the next ESCON test.
+* **A fresh AI-pilot law handed a fast, climbing airplane cuts its power** (run 4). The cruise law is a
+  speed-on-throttle loop around a fixed cruise power, with no idea what a climb needs. `CruiseLaw` now
+  has an opt-in `adopt_slew_kt_s`: the speed command starts at the measured speed, slews to the target,
+  and the throttle integrator is seeded from the measured throttle. At 2 kt/s that was not enough (run 4
+  and 5 both dipped); at 0.4 kt/s it is (run 6). **This is a stopgap.** The principled fix is a measured
+  power-versus-speed-and-climb-rate table feeding the throttle (the profile-and-performance-table work).
+* **The GFC owner must give back the power it raised** (run 3). Fixed and unit-tested; **not re-flown
+  through a level-off under the GFC 700**. A full climb-and-level run with a hand-back at level is the
+  remaining live check.
+* **The AI pilot's own controllers ignore the guard's `full_power`.** They climbed on their own speed and
+  altitude loop, which reached about 0.9 throttle on its own. Only the GFC 700 owner applies `full_power`.
+* The guard's events were swallowed by a second `guard.update` per frame; fixed (runs 2 onward show
+  `events: 2`).
+* The first scorer limited the adopted first phase and the hand-back by the wrong measure (runs ESCON
+  attempt and 5). Both are fixed; the undershoot criterion is in `owner_trial.py`.
+* The geofence's east edge (116.85 W) is short of the 4,526 ft ground, so runs 3-6 used a deliberate,
+  recorded widening (`--extra-box 33.0 33.35 -116.85 -116.70`, `extra_airborne_boxes` in the staged
+  config, session only). The default fence is unchanged.
 
 ## Still not verified
 
-1. The GFC 700 is flown on heading and altitude only. GPSS, the G1000 flight plan and NAV/APR coupling
+1. A GFC 700 level-off with the throttle restore (run 3's bug) and a hand-back at level.
+2. The GFC 700 is flown on heading and altitude only. GPSS, the G1000 flight plan and NAV/APR coupling
    (what the squadron demo uses) are not driven from here yet.
-2. The terrain fence (`terrain_backstop_ft`, 200 ft) never fired; no trial approached it.
-3. A turn-back (floor above the ceiling, or the leash) has not been flown.
-4. Low frame rates and request latency under load.
+3. The terrain fence (`terrain_backstop_ft`, 200 ft) never fired; the closest any run came was 1,586 ft.
+4. A turn-back (floor above the ceiling, or the leash) has not been flown.
+5. Low frame rates and request latency under load.
 
 ## Running the trial
 
