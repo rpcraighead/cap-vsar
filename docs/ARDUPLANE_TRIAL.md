@@ -1,6 +1,6 @@
 # ArduPlane bounded SITL trial — CONOPS gate G
 
-**Status:** protocol only. The backend is built and tested offline
+**Status:** gate G closed by decision 2026-10-15 (see below); the trial was not flown. Protocol only. The backend is built and tested offline
 (`services/ai_pilot/arduplane_backend.py`, `tests/test_arduplane_backend.py`,
 `tests/test_sitl_lifecycle.py`); **nothing below has been flown.** The AI-21
 fixes from the design review are in (LOITER/FBWA hand-back, launcher-owned
@@ -87,6 +87,34 @@ Add to the trial log, then to the tracker item **AI-20** and `CHANGELOG.md`:
 
 Nothing in this document, the README or the CHANGELOG may claim a live result
 until step 5 has been written by the person who flew it.
+
+
+## Gate G decision (2026-10-15): CLOSED. ArduPlane is not adopted.
+
+Decided by Ron (technical lead). **This is a decision, not a trial result:
+cases T1-T8 were never flown, and no ArduPlane result is claimed beyond the
+2026-09-17 log below.** The CONOPS gate asks for one of two outcomes; this is the
+second: *X-Plane's own autopilot remains the backend, because ...*
+
+* The GFC 700 (the airplane's own autopilot) and the AI pilot's local
+  controllers, which write the primary controls through the flight-control
+  bridge, remain the backends. The September `XPlaneDirectBackend` was the
+  earlier form of that controller path.
+* ArduPlane flew CAP 487 once and captured neither the commanded heading nor
+  altitude (AI-24, open since 2026-09-17).
+* It has no localizer or glideslope, so it cannot fly the ILS (finding F6).
+* It latches `override_joystick` and binds UDP 49001, so it cannot coexist with
+  the GFC 700 or the bridge; each handoff is a process lifecycle (F1).
+* The bridge controllers have since flown the C172 campaigns, landings and
+  the C182T search patterns (see CHANGELOG), so ArduPlane is not needed on the
+  path to a flight demonstration. The development plan already listed it as a
+  comparison option only.
+
+Consequences: AI-20 and AI-24 are `resolved` by decision (AI-24 is **not fixed**;
+reopen it only if ArduPlane is wanted again). `arduplane_backend.py`,
+`fly_arduplane_backend.py`, `cap487.parm` and the pre-checks and cases above stay
+in the tree as an unsupported comparison option and are not maintained. The
+`--backend arduplane` switch on `maneuver_server` stays deferred indefinitely.
 
 ---
 

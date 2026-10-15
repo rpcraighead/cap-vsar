@@ -2,7 +2,7 @@
 
 **Generated from `docs/bugs/tracker.json` by `scripts/render_bug_tracker.py` — edit the JSON, not this file.**
 
-Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 218 items, 25 open.
+Source analysis: [`PROJECT_REVIEW_2026-09-08.md`](PROJECT_REVIEW_2026-09-08.md). Opened 2026-09-08. 218 items, 23 open.
 
 IDs are the review's finding IDs. Suffixed letters (X-8a) are sub-items split out because they are worked separately.
 
@@ -184,7 +184,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [AI-2](#ai-2) | P1 | high | Complete live CAP 487 maneuver-controller acceptance | infra | C15 | M | AI-1 | open |
 | [AI-21](#ai-21) | P1 | high | ArduPlane backend: release-to-MANUAL and the SITL attach window are unsafe per the Plane-4.7.1 source | infra | C15 | M | — | fixed |
 | [AI-23](#ai-23) | P1 | high | ArduPlane boots into RTL with a default Home 8000 miles away and banks hard on attach | infra | C15 | M | AI-21 | fixed |
-| [AI-24](#ai-24) | P1 | high | ArduPlane ACKs GUIDED_CHANGE_HEADING/ALTITUDE then ignores them and keeps loitering | infra | C15 | M | AI-23 | open |
+| [AI-24](#ai-24) | P1 | high | ArduPlane ACKs GUIDED_CHANGE_HEADING/ALTITUDE then ignores them and keeps loitering | infra | C15 | M | AI-23 | resolved |
 | [AI-3](#ai-3) | P1 | high | Live RREF comma header discarded by AI pilot receiver | infra | C15 | S | — | fixed |
 | [AI-5](#ai-5) | P1 | high | Live altitude selection does not establish commanded climb | infra | C15 | M | — | fixed |
 | [AI-6](#ai-6) | P1 | high | Controller shutdown pause request does not pause live X-Plane | infra | C15 | M | — | fixed |
@@ -203,7 +203,7 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 | [AI-15](#ai-15) | P2 | medium | Any local process can acquire or revoke aircraft control with no credential (red team RT-7) | infra | C15 | M | — | open |
 | [AI-16](#ai-16) | P2 | medium | Taxi coordinator launders an unauthorized departure and lets a clarification hold skip return-to-start (red team RT-8) | infra | C15 | S | AI-8 | open |
 | [AI-17](#ai-17) | P2 | medium | Stale skill file asserts PIC authority and four retired mutation tools; README count stale (red team RT-9, RT-12) | infra | C15 | S | — | open |
-| [AI-20](#ai-20) | P2 | medium | ArduPlane backend bounded SITL trial (CONOPS gate G) | infra | C15 | M | AI-2 | open |
+| [AI-20](#ai-20) | P2 | medium | ArduPlane backend bounded SITL trial (CONOPS gate G) | infra | C15 | M | AI-2 | resolved |
 | [AI-4](#ai-4) | P2 | medium | Installed exercise aircraft predates CAP 487 identity and has prop lever load error | infra | C15 | M | — | fixed |
 | [D-1](#d-1) | P2 | medium | CHANGELOG entries contradict the code they describe | docs | C14 | S | — | fixed |
 | [D-2](#d-2) | P2 | medium | README and website contradict the code | docs | C14 | M | — | fixed |
@@ -1379,11 +1379,11 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **ArduPlane ACKs GUIDED_CHANGE_HEADING/ALTITUDE then ignores them and keeps loitering**
 
-`P1` · `high` · `bug` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort M · wave 3 · **open**
+`P1` · `high` · `bug` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort M · wave 3 · **resolved**
 
 - **Files:** `xplane/ardupilot/cap487.parm`, `services/ai_pilot/arduplane_backend.py`, `docs/ARDUPLANE_TRIAL.md`, `docs/bugs/AI-24_ARDUPLANE_GUIDED_TUNING.md`
 - **Problem:** Leg 3 flew on 2026-09-17 (trace arduplane_backend_20260917-230653.jsonl): ArduPlane was in GUIDED, the gate accepted, and 33 samples of 'executing' ran with no fault - but the aircraft flew a continuous left circle (heading 261 -> 178 through a full 360 and onward) and descended 4,616 -> 2,974 ft, tracking neither the commanded heading 300 nor altitude 4,500. Both MAV_CMD_GUIDED_CHANGE_HEADING and _ALTITUDE were ACKed MAV_RESULT_ACCEPTED - select() raises otherwise - so ArduPilot accepted the commands and did not act on them; the behaviour is ModeGuided's default loiter. Prime suspect is the GUIDED_* heading controller: cap487.parm sets GUIDED_P 5000 / GUIDED_I 0 / GUIDED_D 0, values invented as placeholders with no knowledge of the correct scale for that AC_PID. TECS is equally unvalidated - the descent was never arrested. Entry condition was benign: stable GFC 700 handoff at 4,677 ft, 110 KIAS, wings level, no terrain or weather factor.
-- **Fix:** 
+- **Fix:** Resolved by decision 2026-10-15: not pursued, because gate G (AI-20) is closed and ArduPlane is not on the AI pilot's path. The defect is NOT fixed: ArduPlane still ACKs GUIDED_CHANGE_HEADING/ALTITUDE and loiters, and GUIDED_P 5000 is still an unvalidated placeholder. Reopen only if ArduPlane is wanted again; docs/bugs/AI-24_ARDUPLANE_GUIDED_TUNING.md is the hand-off.
 - **Done when:** From a stable handoff, a commanded heading is captured within 3 degrees and held, and a commanded altitude within 100 ft with VS under 150 fpm, for 3 s - i.e. the gate emits 'achieved' (trial cases T1 and T2). Bank stays inside ROLL_LIMIT_DEG throughout and the aircraft stays in the 3,000-6,000 ft block.
 - **Depends on:** AI-23
 
@@ -1594,11 +1594,13 @@ A cluster is a PR-sized unit of work: items that touch the same files and should
 
 **ArduPlane backend bounded SITL trial (CONOPS gate G)**
 
-`P2` · `medium` · `task` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort M · wave 3 · **open**
+`P2` · `medium` · `task` · Deployment / infrastructure · cluster C15 (Service boundaries (architecture)) · effort M · wave 3 · **resolved**
 
 - **Files:** `services/ai_pilot/arduplane_backend.py`, `services/ai_pilot/mavlink_min.py`, `scripts/fly_arduplane_backend.py`, `scripts/setup_ardupilot_sitl.sh`, `xplane/ardupilot/xplane_plane_cap487.json`, `xplane/ardupilot/cap487.parm`, `docs/ARDUPLANE_TRIAL.md`
 - **Problem:** The ArduPlane FlightBackend is built and tested offline (2026-09-17: 29 backend tests, 14 MAVLink codec tests) but has never flown. The AI Mission Pilot CONOPS gate G requires a bounded SITL trial that either demonstrates X-Plane 12 compatibility, CAP 487 tuning and coherent takeover, or records why the X-Plane autopilot remains the backend. Two things are unverified and rig-specific: the joystick axis indices in xplane_plane_cap487.json, and whether SITL re-asserts sim/operation/override/override_joystick after a MANUAL-mode release (trial case T4). The `--backend arduplane` switch on maneuver_server is deliberately deferred until the trial has flown.
-- **Fix:** 2026-09-17 handoff session (Ron authorized): SITL built at Plane-4.7.1 (dbe7921) but NEVER ATTACHED to the aircraft - no ArduPlane leg was flown and gate G is undecided. Two other legs flew and captured through the real gate: XPlaneAutopilotBackend commanded 210/4500 captured 209.3/4500 roll +0.8 VS -0; XPlaneDirectBackend commanded 240/3600 captured 240.6/3603 at 110.0 KIAS roll -0.6 VS +1 fpm (trace direct_backend_20260917-211851.jsonl), taking the aircraft directly from a live GFC 700. Handoff findings, which are the part of gate G the CONOPS calls coherent takeover: (1) the aircraft does not hold itself between controllers - a ~30 s gap after releasing the autopilot departed CAP 487 twice, 70 deg bank/-3700 fpm and then inverted, so handoffs must be OVERLAPPED and each backend must disengage the incumbent itself via servos_off_any; this also means the ArduPlane handoff is a process lifecycle, not a mode change, because SITL seizes override_joystick on attach and cannot coexist with the GFC 700. (2) The gate fault path fired for real at AGL 999 against the 1000 ft floor, revoking the lease and pausing the sim - it presents as frozen telemetry. (3) The 3000-6000 ft block is tight over terrain east of Ramona; fly west over the coastal plain. (4) pymavlink will not install on this workstation, validating the stdlib codec. See docs/ARDUPLANE_TRIAL.md trial log for the full record.
+- **Fix:** Resolved by decision 2026-10-15 (Ron, technical lead): gate G is CLOSED without the T1-T8 cases being flown. ArduPlane is not adopted. The GFC 700 and the AI pilot's own bridge controllers remain the backends, because: ArduPlane flew once (2026-09-17) and never captured a commanded heading or altitude (AI-24); it has no localizer or glideslope and cannot fly the ILS; it latches override_joystick and binds UDP 49001, so it cannot coexist with the GFC 700 or the flight-control bridge and every handoff is a process lifecycle; and the bridge controllers have since flown the C172 campaigns, landings and the C182T search patterns. The backend, launcher and parameter file stay in the tree as an unsupported comparison option. Record: docs/ARDUPLANE_TRIAL.md, 'Gate G decision'.
+
+Earlier record (2026-09-17, kept): 2026-09-17 handoff session (Ron authorized): SITL built at Plane-4.7.1 (dbe7921) but NEVER ATTACHED to the aircraft - no ArduPlane leg was flown and gate G is undecided. Two other legs flew and captured through the real gate: XPlaneAutopilotBackend commanded 210/4500 captured 209.3/4500 roll +0.8 VS -0; XPlaneDirectBackend commanded 240/3600 captured 240.6/3603 at 110.0 KIAS roll -0.6 VS +1 fpm (trace direct_backend_20260917-211851.jsonl), taking the aircraft directly from a live GFC 700. Handoff findings, which are the part of gate G the CONOPS calls coherent takeover: (1) the aircraft does not hold itself between controllers - a ~30 s gap after releasing the autopilot departed CAP 487 twice, 70 deg bank/-3700 fpm and then inverted, so handoffs must be OVERLAPPED and each backend must disengage the incumbent itself via servos_off_any; this also means the ArduPlane handoff is a process lifecycle, not a mode change, because SITL seizes override_joystick on attach and cannot coexist with the GFC 700. (2) The gate fault path fired for real at AGL 999 against the 1000 ft floor, revoking the lease and pausing the sim - it presents as frozen telemetry. (3) The 3000-6000 ft block is tight over terrain east of Ramona; fly west over the coastal plain. (4) pymavlink will not install on this workstation, validating the stdlib codec. See docs/ARDUPLANE_TRIAL.md trial log for the full record.
 - **Done when:** docs/ARDUPLANE_TRIAL.md pre-checks P1-P9 pass and cases T1-T8 are recorded with trace filenames, the parameters actually used, and the gate G decision in the CONOPS's own words (adopt / X-Plane autopilot remains because ...), written by the person who flew it. Authorizing the trial is the technical lead's decision with Mission Pilot validators.
 - **Depends on:** AI-2
 

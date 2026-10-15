@@ -3,6 +3,21 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-10-15 — Gate G closed: ArduPlane not adopted
+
+Status: **decision recorded; no code changed.** Ron closed CONOPS gate G without
+flying cases T1-T8. The GFC 700 and the AI pilot's bridge controllers remain the
+backends. AI-20 and AI-24 are resolved by decision; AI-24 is not fixed. Reasons
+and consequences: `docs/ARDUPLANE_TRIAL.md`, "Gate G decision".
+
+## 2026-10-15 — C182T prop lever: first sweep says the write does not land (branch `feat/c182-prop-control`)
+
+Status: **channel implemented and unit-tested, never run in the simulator.** The
+p2 sweep read the lever back as 0.0 and a constant commanded prop speed for every
+lever position, so no lever-to-RPM map exists. Keep `prop_cruise_ratio` at 1.0.
+`scripts/c182t_prop_probe.py` (syntax-checked only) separates the causes.
+Record: `docs/C182T_AI_PILOT_PROP_2026-10-15.md`.
+
 ## 2026-10-11 — First live C182T AI pilot flight: expanding square passes (branch `feat/c182-ai-pilot-baseline`)
 
 Status: **flown once, passed; profile still `tuning_validated=False`.**
