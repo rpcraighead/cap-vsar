@@ -72,6 +72,9 @@ max_kias = 0.0
 
 # --- tuning: controller constants and observer windows, not handbook figures ---
 [landing]
+toe_brakes = true
+# Trace-led earlier flare trial; not yet live-confirmed.
+flare_start_agl_ft = 28.0
 # C172 values moved up by the final-approach speed difference. NOT VALIDATED.
 final_speed_add_kias = 5.0
 threshold_kias = [64.0, 72.0]
@@ -114,7 +117,7 @@ landing = "Section 4 Normal Landing: 70-80 KIAS flaps up, 60-70 KIAS flaps FULL"
 missed = "Section 4 Balked Landing: flaps 20, 55 KIAS; retract above 70 KIAS"
 "vfe/va" = "Section 2 Figure 2-1"
 acf = "scripts/build_c182t_package.py ACF_PATCHES: Vs 51, Vso 41, Vx 65, Vy 80, Vfe 140/100, Vno 140, Vne 175; flap detents 10/20/38 deg"
-tuning = "NOT VALIDATED: base throttles, flap gates, threshold window and touchdown pitch are the C172 criteria shifted to the C182T speeds; see docs/C182T_AI_PILOT_PORT_2026-10-11.md"
+tuning = "NOT VALIDATED: base throttles, flap gates, threshold window and touchdown pitch are C172 criteria shifted to C182T speeds; 28 ft flare onset is trace-led and not yet live-confirmed; see docs/C182T_AI_PILOT_PORT_2026-10-11.md"
 
 [performance]
 # MEASURED, not handbook: the airspeed that settles at a fixed throttle with the autopilot holding a

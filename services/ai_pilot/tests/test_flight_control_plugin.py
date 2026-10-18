@@ -3,8 +3,13 @@ import importlib.util
 import json
 from pathlib import Path
 import queue
+import socket
 import sys
+import threading
+import time
 import types
+
+import pytest
 
 from xplane.capvsar_flight_control_core import CHANNELS
 
@@ -30,6 +35,7 @@ class FakeXP(types.ModuleType):
         self.accessors = {}
         self.writes = []
         self.commands = []
+        self.logs = []
 
     def findDataRef(self, name):
         if name.endswith("ENGN_thro_use[0]"):
@@ -75,7 +81,7 @@ class FakeXP(types.ModuleType):
         self.accessors[name] = callbacks
         return name
     def unregisterDataAccessor(self, name): self.accessors.pop(name)
-    def log(self, message): pass
+    def log(self, message): self.logs.append(message)
 
 
 def load_plugin(monkeypatch, tmp_path, *, activate_fake=True, mode=None):
@@ -146,6 +152,129 @@ def test_surface_sink_owns_toe_brakes_and_releases_them(monkeypatch, tmp_path):
     assert sink.override_state() is False
     assert sink.read_brakes() == (0., 0.)
     plugin.XPluginStop()
+
+
+def test_landing_sink_uses_bounded_toe_brake_path_and_reads_back_both_sides(monkeypatch, tmp_path):
+    fake, plugin = load_plugin(monkeypatch, tmp_path)
+    sink = type(plugin.core.sink)(landing=True, toe_brakes=True)
+    sink.set_override(True)
+    sink.write_control("brake", .35)
+    assert sink.override_state() is True
+    assert sink.brakes == ("sim/cockpit2/controls/left_brake_ratio",
+                           "sim/cockpit2/controls/right_brake_ratio")
+    assert sink.read_brakes() == (.35, .35)
+    assert fake.refs["sim/operation/override/override_toe_brakes"] == 1
+    sink.set_override(False)
+    assert sink.read_brakes() == (0., 0.)
+    plugin.XPluginStop()
+
+
+def test_landing_sink_can_use_toe_brake_path_for_c172(monkeypatch, tmp_path):
+    _, plugin = load_plugin(monkeypatch, tmp_path)
+    sink = type(plugin.core.sink)(landing=True, toe_brakes=True)
+    assert sink.brakes == ("sim/cockpit2/controls/left_brake_ratio",
+                           "sim/cockpit2/controls/right_brake_ratio")
+    sink.write_control("brake", .32)
+    assert sink.read_brakes() == (.32, .32)
+    plugin.XPluginStop()
+
+
+def test_plugin_fault_is_written_to_xplane_log(monkeypatch, tmp_path):
+    fake, plugin = load_plugin(monkeypatch, tmp_path)
+    plugin.core.fault_pause("test timing fault")
+    plugin._log_fault()
+    assert any("test timing fault" in line for line in fake.logs)
+    plugin.XPluginStop()
+
+
+def test_stale_unix_socket_is_removed_before_binding(monkeypatch, tmp_path):
+    fake, plugin = load_plugin(monkeypatch, tmp_path)
+    path = tmp_path / "stale-bridge.sock"
+    path.write_text("stale socket inode")
+    plugin.config["socket_path"] = str(path)
+    thread = threading.Thread(target=plugin._serve, daemon=True)
+    thread.start()
+    deadline = time.monotonic() + 2
+    while not plugin.bound_socket and time.monotonic() < deadline:
+        time.sleep(.01)
+    assert plugin.bound_socket and path.exists()
+    assert any("removed stale socket" in line for line in fake.logs)
+    plugin.stop_event.set()
+    thread.join(timeout=1)
+    if path.exists(): path.unlink()
+    assert not path.exists()
+
+
+def test_plugin_retries_bind_while_previous_listener_quits(monkeypatch, tmp_path):
+    fake, plugin = load_plugin(monkeypatch, tmp_path)
+    path = tmp_path / "busy-bridge.sock"
+    plugin.config["socket_path"] = str(path)
+    owner = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    owner.bind(str(path))
+    owner.listen(1)
+    thread = threading.Thread(target=plugin._serve, daemon=True)
+    thread.start()
+    deadline = time.monotonic() + 1
+    while not any("retrying bind" in line for line in fake.logs) and time.monotonic() < deadline:
+        time.sleep(.01)
+    assert any("retrying bind" in line for line in fake.logs)
+    owner.close()
+    deadline = time.monotonic() + 2
+    while not plugin.bound_socket and time.monotonic() < deadline:
+        time.sleep(.01)
+    assert plugin.bound_socket and path.exists()
+    plugin.stop_event.set()
+    thread.join(timeout=1)
+    plugin.XPluginStop()
+    if path.exists(): path.unlink()
+
+
+def test_plugin_request_queue_deadline_is_per_action(monkeypatch, tmp_path):
+    _, plugin = load_plugin(monkeypatch, tmp_path)
+    helper = plugin.queue_deadline_for_action
+    assert helper("lab_reset") == 20.
+    assert helper("lab_start") == 3.
+    assert helper("exchange") == .20
+
+    path = tmp_path / "deadline-callsite.sock"
+    plugin.config["socket_path"] = str(path)
+    observed_actions = []
+    def observed_deadline(action):
+        observed_actions.append(action)
+        return helper(action)
+    plugin.queue_deadline_for_action = observed_deadline
+    thread = threading.Thread(target=plugin._serve, daemon=True)
+    thread.start()
+    deadline = time.monotonic() + 2
+    while not plugin.bound_socket and time.monotonic() < deadline:
+        time.sleep(.01)
+    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    client.settimeout(2)
+    client.connect(str(path))
+    client.sendall(json.dumps({"action": "lab_reset", "secret": plugin.config["secret"]}).encode() + b"\n")
+    request, answer, expires_at = plugin.requests.get(timeout=1)
+    assert request["action"] == "lab_reset"
+    assert observed_actions == ["lab_reset"]
+    assert 19.8 <= expires_at - time.monotonic() <= 20.
+    answer.put_nowait({"ok": True})
+    assert json.loads(client.recv(4096).split(b"\n", 1)[0])["ok"]
+    client.close()
+    plugin.stop_event.set()
+    thread.join(timeout=1)
+    plugin.XPluginStop()
+    if path.exists(): path.unlink()
+
+
+def test_plugin_import_without_landing_module_defines_fallback(monkeypatch, tmp_path):
+    monkeypatch.setitem(sys.modules, "xp", FakeXP())
+    monkeypatch.setitem(sys.modules, "capvsar_landing", None)
+    monkeypatch.syspath_prepend(str(Path(__file__).parents[3] / "xplane"))
+    path = Path(__file__).parents[3] / "xplane/PI_capvsar_flight_control.py"
+    spec = importlib.util.spec_from_file_location("fallback_flight_control_plugin", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    with pytest.raises(RuntimeError, match="Landing laboratory module is not installed"):
+        module.LandingLab()
 
 
 def test_plugin_registers_fresh_candidate_namespace_on_verified_garmin_return(monkeypatch, tmp_path):

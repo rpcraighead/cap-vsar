@@ -21,6 +21,12 @@ class SurfaceLab(QualificationLab):
     def __init__(self, xp, sink, config):
         super().__init__(xp, sink, config)
         self.authority = authority_for(AUTHORITY, config)
+        self.takeoff_flap_ratio = config.get("surface_takeoff_flap_ratio", 0.)
+        if (type(self.takeoff_flap_ratio) not in (int, float)
+                or not math.isfinite(self.takeoff_flap_ratio)
+                or not 0. <= self.takeoff_flap_ratio <= 1.):
+            raise ValueError("Surface takeoff flap setting outside 0..1")
+        self.authority["flap"] = (0., self.takeoff_flap_ratio)
         if config.get("parking") != "KSEE East Transient Parking 12":
             raise ValueError("Surface laboratory requires surveyed KSEE parking 12")
         self.parking_brake = xp.findDataRef("sim/cockpit2/controls/parking_brake_ratio")
@@ -34,6 +40,9 @@ class SurfaceLab(QualificationLab):
             value = controls[name]
             if type(value) not in (int, float) or not math.isfinite(value) or not low <= value <= high:
                 raise ValueError("Surface control limit: " + name)
+            if (name == "flap" and value != 0.
+                    and abs(value-self.takeoff_flap_ratio) > 1e-6):
+                raise ValueError("Surface flap must match the staged takeoff profile")
 
     def reset(self, core, checkpoint=None):
         self.verify_identity()

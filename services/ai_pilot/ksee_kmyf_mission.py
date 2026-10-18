@@ -166,7 +166,7 @@ class MissionController:
                 self._advance("mibby", v)
         if self.stage == "vector_heading":
             target_true = (self.vector_heading_mag+variation)%360
-            target_ias = 100.
+            target_ias = p.cruise_kias
         if self.stage == "missed_runway":
             target_true = RUNWAY.heading_true_deg
             target_alt, target_ias = max(3000., self.missed_turn_alt_ft), p.missed_kias

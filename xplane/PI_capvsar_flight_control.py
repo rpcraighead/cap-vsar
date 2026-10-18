@@ -7,6 +7,7 @@ flight loop touches X-Plane SDK state. This plugin has not been live qualified.
 from __future__ import annotations
 
 import json
+import errno
 import os
 from pathlib import Path
 import queue
@@ -20,11 +21,24 @@ from capvsar_flight_control_core import CHANNELS, ControlBridge
 from capvsar_flight_control_mapping import candidate_prefix
 from capvsar_telemetry import Telemetry
 from capvsar_qualification import QualificationLab
+
+
+def request_queue_deadline_s(action):
+    # Reset may recalculate weather and aircraft state while paused.
+    if action == "lab_reset":
+        return 20.0
+    if action == "lab_start":
+        return 3.0
+    return 0.20
+
+
 try:
     from capvsar_landing import LandingLab
 except ModuleNotFoundError as error:
     if error.name != "capvsar_landing":
         raise
+
+
     class LandingLab:
         def __init__(self, *_args, **_kwargs):
             raise RuntimeError("Landing laboratory module is not installed")
@@ -245,6 +259,8 @@ class XPlaneSink:
 
 
 class PythonInterface:
+    queue_deadline_for_action = staticmethod(request_queue_deadline_s)
+
     def __init__(self):
         self.accessors = []
         self.core = None
@@ -264,6 +280,7 @@ class PythonInterface:
         self.server = None
         self.server_thread = None
         self.bound_socket = False
+        self.logged_fault = None
 
     def XPluginStart(self):
         config = json.loads(CONFIG.read_text()) if CONFIG.is_file() else None
@@ -280,7 +297,8 @@ class PythonInterface:
             surface = config.get("mode") == "surface"
             mission = config.get("mode") == "mission"
             braked = landing or surface or mission
-            self.core = ControlBridge(XPlaneSink(landing=braked, toe_brakes=surface or mission,
+            toe_brakes = surface or mission or (landing and bool(config.get("landing_toe_brakes")))
+            self.core = ControlBridge(XPlaneSink(landing=braked, toe_brakes=toe_brakes,
                                                  prop=bool(config.get("constant_speed_prop")),
                                                  gfc=mission and bool(config.get("gfc_owner"))), session,
                                       atomic=config.get("protocol") == "atomic-v1",
@@ -335,6 +353,7 @@ class PythonInterface:
         self.stop_event.set()
         if self.core and not self.observe_only and self.core.state not in ("MANUAL", "PAUSED_FAULT", "FAULT_PAUSE_PENDING"):
             self.core.fault_pause("Flight-control plugin disabled")
+            self._log_fault()
         if self.core and self.core.sink.brakes:
             self.core.sink.write_control("brake", 0.0)
         if self.loop:
@@ -369,7 +388,36 @@ class PythonInterface:
 
     def _serve(self):
         path = self.config["socket_path"]
-        if os.path.exists(path):
+        active_deadline = time.monotonic() + 60.
+        active_logged = False
+        while os.path.exists(path) and not self.stop_event.is_set():
+            probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            try:
+                probe.settimeout(.2)
+                probe.connect(path)
+            except OSError as error:
+                if error.errno in (errno.ECONNREFUSED, errno.ENOENT):
+                    try:
+                        os.unlink(path)
+                        xp.log("CAP V-SAR bridge: removed stale socket %s" % path)
+                    except OSError as unlink_error:
+                        xp.log("CAP V-SAR bridge: stale socket removal failed: %s" % unlink_error)
+                        return
+                    break
+                else:
+                    xp.log("CAP V-SAR bridge: socket path unavailable: %s" % error)
+                    return
+            else:
+                if not active_logged:
+                    xp.log("CAP V-SAR bridge: active listener already owns %s; retrying bind for up to 60 s" % path)
+                    active_logged = True
+            finally:
+                probe.close()
+            if time.monotonic() >= active_deadline:
+                xp.log("CAP V-SAR bridge: bind retry timed out for %s" % path)
+                return
+            self.stop_event.wait(.25)
+        if self.stop_event.is_set():
             return
         server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.server = server
@@ -401,12 +449,21 @@ class PythonInterface:
                         if not isinstance(request, dict) or request.pop("secret", None) != self.config["secret"]:
                             raise ValueError("Unauthorized control request")
                         answer = queue.Queue(maxsize=1)
-                        reply_timeout = (20.0 if request.get("action") == "lab_reset" else
-                                         3.0 if request.get("action") == "lab_start" else 0.25)
-                        self.requests.put_nowait((request, answer, time.monotonic() + 0.20))
+                        action = request.get("action")
+                        reply_timeout = (20.0 if action == "lab_reset" else
+                                         3.0 if action == "lab_start" else 0.25)
+                        self.requests.put_nowait((request, answer,
+                                                  time.monotonic() + self.queue_deadline_for_action(action)))
                         result = answer.get(timeout=reply_timeout)
                     except (ValueError, queue.Empty, queue.Full, OSError) as error:
-                        result = {"error": str(error)}
+                        if isinstance(error, queue.Empty):
+                            message = "flight loop did not answer within %.2f s" % reply_timeout
+                        elif isinstance(error, queue.Full):
+                            message = "request queue full"
+                        else:
+                            message = str(error) or type(error).__name__
+                        result = {"error": message,
+                                  "status": self.core.status() if self.core else {"state": "INACTIVE"}}
                     try:
                         conn.sendall(json.dumps(result, allow_nan=False).encode() + b"\n")
                     except OSError:
@@ -601,6 +658,7 @@ class PythonInterface:
                 if self.lab and self.core.state == "ACTIVE":
                     self.lab.verify_identity()
                 self.core.tick()
+                self._log_fault()
                 if isinstance(self.lab, (LandingLab, SurfaceLab, MissionLab)):
                     left, right = self.core.sink.read_brakes()
                     self.actuator_readback = {
@@ -608,6 +666,7 @@ class PythonInterface:
                         "bridge_state": self.core.state, "brake_left": left, "brake_right": right}
         except Exception as error:
             self.core.fault_pause("Bridge loop failed: %s" % error)
+            self._log_fault()
         return -1
 
     def capture_loop(self, sinceLast, elapsed, counter, refCon):
@@ -623,4 +682,11 @@ class PythonInterface:
             self.telemetry_error = str(error)
             if not self.observe_only and self.core.state in ("ACTIVE", "WAIT_GFC", "GFC700"):
                 self.core.fault_pause("Telemetry capture failed: %s" % error)
+                self._log_fault()
         return -1
+
+    def _log_fault(self):
+        if self.core and self.core.fault_reason and self.core.fault_reason != self.logged_fault:
+            self.logged_fault = self.core.fault_reason
+            xp.log("CAP V-SAR bridge fault (%s): %s" %
+                   (self.core.state, self.core.fault_reason))

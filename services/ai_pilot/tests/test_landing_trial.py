@@ -1,5 +1,5 @@
 """Landing brake lease, geometry and independent touchdown/stop criteria."""
-from services.ai_pilot.aircraft_profiles import C172SP
+from services.ai_pilot.aircraft_profiles import C172SP, C182T
 import math
 
 import pytest
@@ -7,8 +7,18 @@ import pytest
 from xplane.capvsar_flight_control_core import CHANNELS, ControlBridge
 from xplane.capvsar_landing import (AIRPORT_ELEV_FT, FAR_END, GLIDEPATH_AIMPOINT_M,
                                    HEADING_TRUE_DEG, RUNWAYS, RUNWAY_LENGTH_M,
-                                   THRESHOLD, runway_coordinates)
+                                   THRESHOLD, landing_agl_in_bounds,
+                                   runway_coordinates)
 from services.ai_pilot.landing_trial import LandingController, LandingObserver, TOUCHDOWN_MIN_M
+
+
+def test_landing_bridge_allows_only_small_ground_contact_agl_roundoff():
+    assert landing_agl_in_bounds(-.001, True)
+    assert landing_agl_in_bounds(0., True)
+    assert not landing_agl_in_bounds(-.051, True)
+    assert not landing_agl_in_bounds(-.001, False)
+    assert landing_agl_in_bounds(250., False)
+    assert not landing_agl_in_bounds(250.001, False)
 
 
 def test_kmyf_28r_geometry_uses_installed_runway_direction():
@@ -28,6 +38,15 @@ def test_unflared_glidepath_intersects_new_aimpoint():
         AIRPORT_ELEV_FT + GLIDEPATH_AIMPOINT_M * math.tan(math.radians(3.)) * 3.28084)
     c.step(snapshot(GLIDEPATH_AIMPOINT_M, agl_ft=20., gs_kt=65., sim=1.1, frame=2))
     assert c.last_commands["target_altitude_ft"] == pytest.approx(AIRPORT_ELEV_FT)
+
+
+def test_trace_led_flare_start_is_profile_specific():
+    c182 = LandingController(profile=C182T)
+    c172 = LandingController(profile=C172SP)
+    c182.step(snapshot(0, agl_ft=25., gs_kt=68.))
+    c172.step(snapshot(0, agl_ft=25., gs_kt=65.))
+    assert c182.phase == "flare"
+    assert c172.phase == "approach"
 
 
 def test_ksan_27_uses_installed_runway_and_displaced_threshold():
@@ -76,10 +95,62 @@ def test_atomic_landing_frame_caps_brake_and_fault_releases_it():
     controls["brake"] = .36
     with pytest.raises(ValueError, match="brake"):
         bridge.submit_frame(bridge.session, 1, 3, .18, controls)
-    now[0] = .19
-    bridge.tick()
+    bridge.tick()  # establish the previous flight-loop timestamp
+    now[0] = .4
+    bridge.tick()  # one late simulator callback is tolerated; physics did not advance in the hitch
+    assert bridge.status()["state"] == "ACTIVE"
+    bridge.tick()  # the controller still must provide its next frame
     assert sink.paused and not sink.override and sink.brake == 0.
     assert bridge.status()["retired"]
+
+
+def test_atomic_frame_survives_one_400ms_flight_loop_stall_but_not_a_stopped_controller():
+    class Sink:
+        def __init__(self): self.override = self.paused = False
+        def ap_engaged(self): return False
+        def override_state(self): return self.override
+        def set_override(self, enabled): self.override = enabled
+        def write_control(self, channel, value): pass
+        def pause(self): self.paused = True
+        def is_paused(self): return self.paused
+    now = [0.]
+    sink = Sink()
+    bridge = ControlBridge(sink, "c"*32, clock=lambda: now[0], atomic=True)
+    controls = {c: 0. for c in CHANNELS}
+    bridge.submit_frame(bridge.session, 0, 1, .18, controls)
+    bridge.prepare("DIRECT", bridge.session, 0)
+    bridge.submit_frame(bridge.session, 1, 2, .18, controls)
+    bridge.activate(bridge.session, 1)
+    bridge.tick()  # establish the previous flight-loop timestamp
+    now[0] = .4
+    assert bridge.tick()["state"] == "ACTIVE"
+    assert not sink.paused and sink.override
+    assert bridge.tick()["state"] == "PAUSED_FAULT"
+    assert sink.paused and not sink.override
+
+
+def test_gfc_owner_gets_one_late_callback_grace_then_heartbeat_faults():
+    class Sink:
+        def __init__(self): self.override = False; self.paused = False
+        def ap_engaged(self): return True
+        def override_state(self): return False
+        def set_override(self, enabled): self.override = enabled
+        def write_control(self, channel, value): pass
+        def pause(self): self.paused = True
+        def is_paused(self): return self.paused
+    now = [0.]
+    sink = Sink()
+    bridge = ControlBridge(sink, "e"*32, clock=lambda: now[0], atomic=True)
+    bridge.state = "GFC700"
+    bridge.owner = "GFC700"
+    bridge.retired = True
+    bridge.last_heartbeat = 0.
+    bridge.last_tick_time = 0.
+    now[0] = .5
+    assert bridge.tick()["state"] == "GFC700"
+    now[0] = .516
+    assert bridge.tick()["state"] == "PAUSED_FAULT"
+    assert sink.paused and not sink.override
 
 
 def snapshot(along, cross=0., ground=0, gs_kt=70., brake=0., sim=1., frame=1,
@@ -118,7 +189,22 @@ def test_brake_stays_off_in_air_then_moderate_after_touchdown():
     touchdown = snapshot(100, ground=1, gs_kt=58, sim=2, frame=2, agl_ft=0)
     assert c.step(touchdown)["brake"] == 0
     later = snapshot(200, ground=1, gs_kt=40, sim=4, frame=3, agl_ft=0)
-    assert .15 <= c.step(later)["brake"] <= .35
+    assert .15 <= c.step(later)["brake"] <= .32
+
+
+def test_landing_end_metrics_capture_toe_brake_readback_and_rollout_deceleration():
+    observer = LandingObserver(profile=C172SP)
+    first = snapshot(-100, ground=1, gs_kt=40, sim=1., frame=1, agl_ft=0., brake=.32)
+    second = snapshot(-99, ground=1, gs_kt=39, sim=1.2, frame=2, agl_ft=0., brake=.35)
+    first["actuator_readback"].update(brake_left=.32, brake_right=.32)
+    second["actuator_readback"].update(brake_left=.35, brake_right=.35)
+    observer.touchdown = {"sim_time_s": .8}
+    observer.last_rollout_speed = (.8, 41/1.94384)
+    observer.observe(first)
+    report = observer.observe(second)
+    assert report["brake_readback_max"] == {"left": .35, "right": .35}
+    assert report["rollout_deceleration_mps2"]["samples"] == 2
+    assert report["rollout_deceleration_mps2"]["median"] > 0
 
 
 def test_flare_begins_below_half_the_prior_agl_trigger():

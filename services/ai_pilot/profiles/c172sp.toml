@@ -8,7 +8,7 @@ key = "C172SP"
 acf_name = "Cessna_172SP_G1000.acf"
 display_name = "X-Plane 12 stock Cessna 172SP G1000"
 # true only after a sortie in THIS aircraft has been flown and scored with these values
-tuning_validated = true
+tuning_validated = false
 
 [speeds_kias]
 # Sourced from the bundled X-Plane_C172_Pilot_Operating_Manual.pdf (describes the simulator aircraft,
@@ -61,11 +61,14 @@ max_kias = 0.0
 
 # --- tuning: controller constants and observer windows, not handbook figures ---
 [landing]
+# Trial path selected after low T18 rollout deceleration; awaiting live confirmation.
+toe_brakes = true
 # The 62-68 KIAS threshold window and 5-7 deg touchdown pitch are LandingObserver engineering criteria.
 final_speed_add_kias = 5.0
 threshold_kias = [62.0, 68.0]
 touchdown_pitch_deg = [5.0, 7.0]
 touchdown_max_groundspeed_kt = 78.0
+flare_start_agl_ft = 17.5
 
 [engine]
 # the engine must exceed this RPM 5 s into the takeoff roll
@@ -95,7 +98,7 @@ cruise_ratio = 1.0
 "vr/vx/vy" = "bundled X-Plane_C172_Pilot_Operating_Manual.pdf: rotate 55, Vx 62, Vy 74 KIAS (docs/C172_KSEE_KMYF_IFR_TRIAL.md)"
 "vfe/va" = "same manual: flaps 10 deg 110 KIAS, 10-30 deg 85 KIAS; Va 105 KIAS at 2550 lb"
 "other speeds" = "controller values flown on the 2026-10-11 KSEE-KMYF sortie (services/ai_pilot/ksee_kmyf_mission.py, landing_trial.py)"
-tuning = "C172 trials 2026-10-10/11; the 62-68 KIAS threshold window and 5-7 deg touchdown pitch are LandingObserver engineering criteria"
+tuning = "C172 trials 2026-10-10/11; the T18 toe-brake path is selected after weak rollout deceleration but remains unconfirmed; the 62-68 KIAS threshold window and 5-7 deg touchdown pitch are LandingObserver engineering criteria"
 
 [performance]
 # MEASURED, not handbook: the airspeed that settles at a fixed throttle with the autopilot holding a

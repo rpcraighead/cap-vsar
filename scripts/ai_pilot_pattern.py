@@ -27,13 +27,14 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from services.ai_pilot.aircraft_profiles import PROFILES
 from services.ai_pilot.control_ownership import ControllerLock
-from services.ai_pilot.experiment import BridgeClient, Recorder, digest
+from services.ai_pilot.experiment import (BridgeClient, Recorder, digest, FRAME_LEASE_S,
+                                          wait_for_ready_snapshot)
 from services.ai_pilot.terrain_guard import TerrainGuard
 from xplane.capvsar_mission import AIRBORNE_MAX_ALTITUDE_FT
 from services.ai_pilot.search_patterns import (PatternObserver, SearchPatternController,
                                                creeping_line, expanding_square, parallel_track,
                                                track_miles)
-from scripts.ai_pilot_experiment import inventory
+from scripts.ai_pilot_experiment import inventory, validate_staged_profile
 
 CHANNELS = ("roll", "pitch", "yaw", "throttle", "flap", "trim", "brake")
 
@@ -54,6 +55,7 @@ def run(args):
     channels = CHANNELS + (("prop",) if profile.constant_speed_prop else ())
     waypoints = build_pattern(args)
     inv = inventory(args.xplane, include_mission=True, profile=args.profile)
+    validate_staged_profile(config, profile, inv, mode="mission")
     for name, installed in inv["installed_bridge_sha256"].items():
         if installed != inv["source_sha256"]["xplane/" + name]:
             raise ValueError("Installed mission bridge mismatch: " + name)
@@ -84,6 +86,7 @@ def run(args):
     guard_said = ""
     previous_frame = None
     try:
+        wait_for_ready_snapshot(client, timeout_s=120.)
         status = client.request("fault_pause", reason="pattern trial setup")
         deadline = time.monotonic() + 3
         while not status["pause_confirmed"]:
@@ -92,15 +95,10 @@ def run(args):
             time.sleep(.03)
             status = client.request("status")
         recorder.write("setup", client.request("lab_reset", session=session))
-        deadline = time.monotonic() + 15
-        while True:
-            snap = client.request("snapshot")
-            if (snap["session"] == session and snap["values"]["paused"] == 1
-                    and snap["override_state"] is False and snap["ap_engaged"] is False):
-                break
-            if time.monotonic() > deadline:
-                raise ValueError("Pattern readiness not confirmed")
-            time.sleep(.1)
+        snap = wait_for_ready_snapshot(
+            client, timeout_s=120.,
+            validate=lambda s: (s["session"] == session and s["values"]["paused"] == 1
+                                and s["override_state"] is False and s["ap_engaged"] is False))
         measured = snap["controls"]
         controls = {"roll": 0., "pitch": max(-.4, min(.4, measured.get("pitch", 0.))), "yaw": 0.,
                     "throttle": max(.2, min(1., measured.get("throttle", .6))), "flap": 0.,
@@ -117,7 +115,7 @@ def run(args):
         while time.monotonic() - start_wall < args.max_wall_s:
             seq += 1
             response = client.request("exchange", session=session, generation=generation, sequence=seq,
-                                      expires_at=time.monotonic() + .18, controls=controls)
+                                      expires_at=time.monotonic() + FRAME_LEASE_S, controls=controls)
             if response["bridge"]["state"] != "ACTIVE":
                 raise ValueError("Mission bridge lost authority")
             snap = response["snapshot"]

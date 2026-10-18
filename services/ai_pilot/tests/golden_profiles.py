@@ -15,14 +15,16 @@ C172SP = AircraftProfile(
     missed_kias=74., vfe_kias=((1/3, 110.), (1., 85.)), va_kias=105.,
     takeoff_flap_ratio=0., flap_retract_kias=70., flap_retract_agl_ft=300.,
     search_kias=90.,
-    tuning_validated=True,
+    landing_toe_brakes=True,
+    tuning_validated=False,
     sources={
         "vr/vx/vy": "bundled X-Plane_C172_Pilot_Operating_Manual.pdf: rotate 55, Vx 62, Vy 74 KIAS "
                     "(docs/C172_KSEE_KMYF_IFR_TRIAL.md)",
         "vfe/va": "same manual: flaps 10 deg 110 KIAS, 10-30 deg 85 KIAS; Va 105 KIAS at 2550 lb",
         "other speeds": "controller values flown on the 2026-10-11 KSEE-KMYF sortie "
                         "(services/ai_pilot/ksee_kmyf_mission.py, landing_trial.py)",
-        "tuning": "C172 trials 2026-10-10/11; the 62-68 KIAS threshold window and 5-7 deg "
+        "tuning": "C172 trials 2026-10-10/11; the T18 toe-brake path is selected after weak rollout "
+                  "deceleration but remains unconfirmed; the 62-68 KIAS threshold window and 5-7 deg "
                   "touchdown pitch are LandingObserver engineering criteria",
     },
 )
@@ -68,6 +70,7 @@ C182T = AircraftProfile(
     flap_stage_names=("10deg", "20deg", "38deg"),
     touchdown_pitch_deg=(5., 8.),
     touchdown_max_groundspeed_kt=80.,
+    flare_start_agl_ft=28.,
     missed_flap_ratio=2/3, ils_flap_ratio=1/3,
     min_roll_rpm=2000.,
     # The C172 taxi law, unchanged; the IO-540's idle thrust and the governed
@@ -79,6 +82,7 @@ C182T = AircraftProfile(
     # Cruise ratio is full forward until the cruise-cycle trial measures the
     # lever-to-RPM map (docs/C182T_AI_PILOT_PROP_2026-10-15.md).
     constant_speed_prop=True, prop_cruise_ratio=1.,
+    landing_toe_brakes=True,
     tuning_validated=False,
     sources={
         "handbook": "Cessna 182T NAV III GFC 700 AFCS information manual, P/N 182TPHBUS, "
@@ -92,7 +96,7 @@ C182T = AircraftProfile(
         "acf": "scripts/build_c182t_package.py ACF_PATCHES: Vs 51, Vso 41, Vx 65, Vy 80, "
                "Vfe 140/100, Vno 140, Vne 175; flap detents 10/20/38 deg",
         "tuning": "NOT VALIDATED: base throttles, flap gates, threshold window and touchdown "
-                  "pitch are the C172 criteria shifted to the C182T speeds; see "
-                  "docs/C182T_AI_PILOT_PORT_2026-10-11.md",
+                  "pitch are C172 criteria shifted to C182T speeds; 28 ft flare onset is trace-led "
+                  "and not yet live-confirmed; see docs/C182T_AI_PILOT_PORT_2026-10-11.md",
     },
 )

@@ -64,22 +64,48 @@ class RunwayEntryGuidance:
         if self.phase == "enter" and distance <= 5 and o.groundspeed_mps <= 1.5:
             self.phase = "lineup"
             target = self.geometry.lineup
-            distance = math.hypot(target.east_m-p.east_m, target.north_m-p.north_m)
         if self.phase == "lineup":
             start = self.geometry.centerline_entry
             de = p.east_m-start.east_m
             dn = p.north_m-start.north_m
+            heading_rad = math.radians(self.geometry.heading_true_deg)
+            along = de*math.sin(heading_rad) + dn*math.cos(heading_rad)
             cross = (de*math.cos(math.radians(self.geometry.heading_true_deg))
                      - dn*math.sin(math.radians(self.geometry.heading_true_deg)))
             if abs(cross) > self.geometry.runway_width_m/2-2:
                 self.fault = "outside 27R runway width"
                 return GroundCommand(brake=.35, reason=self.fault)
-            heading_error = abs(wrap180(self.geometry.heading_true_deg-o.heading_true_deg))
-            if distance <= 3 and o.groundspeed_mps <= .5 and heading_error <= 5:
+            signed_heading_error = wrap180(self.geometry.heading_true_deg-o.heading_true_deg)
+            heading_error = abs(signed_heading_error)
+            if along > 45.:
+                self.fault = "overshot the 27R line-up point"
+                return GroundCommand(brake=.35, reason=self.fault)
+            if heading_error > 115.:
+                self.fault = "runway entry heading outside capture"
+                return GroundCommand(brake=.35, reason=self.fault)
+            at_lineup_position = along >= 30. - 3. and abs(cross) <= 3.
+            if at_lineup_position and o.groundspeed_mps <= .5 and heading_error <= 3:
                 if self.taxi.phase is TaxiPhase.CLEARED_TO_LINE_UP:
                     self.taxi.mark_lined_up()
                 self.phase = "complete"
                 return GroundCommand(brake=.35, reason="27R lineup complete")
+            # Once runway entry has begun, use along/cross-track coordinates
+            # throughout. Bearing to the lineup point reverses after a small
+            # overshoot and can fault while the C182T is still aligning.
+            if at_lineup_position and heading_error <= 3:
+                return GroundCommand(brake=.35, reason="brake at 27R lineup point")
+            remaining = 30. - along
+            speed = min(2., math.sqrt(max(0., 2*(remaining-3.)))) if remaining > 3 else .8
+            if at_lineup_position and heading_error > 3:
+                speed = min(speed, .3)
+            if heading_error > 45:
+                speed = min(speed, 1.)
+            if o.groundspeed_mps > speed + .3:
+                return GroundCommand(brake=clamp(.12*(o.groundspeed_mps-speed), .05, .35),
+                                     reason="slow for 27R line-up")
+            yaw = clamp(.025*signed_heading_error - .06*cross, -1., 1.)
+            throttle = self.profile.taxi_throttle(speed, o.groundspeed_mps)
+            return GroundCommand(yaw=yaw, throttle=throttle, reason="lineup")
         else:
             a, b = self.geometry.hold, self.geometry.centerline_entry
             dx, dy = b.east_m-a.east_m, b.north_m-a.north_m

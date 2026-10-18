@@ -34,13 +34,14 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from services.ai_pilot.aircraft_profiles import PROFILES
 from services.ai_pilot.control_ownership import ControllerLock
-from services.ai_pilot.experiment import BridgeClient, Recorder, digest
+from services.ai_pilot.experiment import (BridgeClient, Recorder, digest, FRAME_LEASE_S,
+                                          wait_for_ready_snapshot)
 from services.ai_pilot.gfc_owner import GfcOwner
 from services.ai_pilot.owner_trial import OwnerTrialObserver
 from services.ai_pilot.search_patterns import CruiseLaw
 from services.ai_pilot.terrain_guard import TerrainGuard
 from xplane.capvsar_mission import AIRBORNE_MAX_ALTITUDE_FT
-from scripts.ai_pilot_experiment import inventory
+from scripts.ai_pilot_experiment import inventory, validate_staged_profile
 
 CHANNELS = ("roll", "pitch", "yaw", "throttle", "flap", "trim", "brake")
 # Slow on purpose. At 2.0 kt/s the first live hand-back mid-climb (ESCON run 4, 2026-10-15) still
@@ -93,6 +94,7 @@ def run(args):
     profile = PROFILES[args.profile]
     channels = CHANNELS + (("prop",) if profile.constant_speed_prop else ())
     inv = inventory(args.xplane, include_mission=True, profile=args.profile)
+    validate_staged_profile(config, profile, inv, mode="mission")
     for name, installed in inv["installed_bridge_sha256"].items():
         if installed != inv["source_sha256"]["xplane/" + name]:
             raise ValueError("Installed mission bridge mismatch: " + name)
@@ -116,6 +118,7 @@ def run(args):
     session = secrets.token_hex(16)
     samples = 0
     try:
+        wait_for_ready_snapshot(client, timeout_s=120.)
         status = client.request("fault_pause", reason="owner trial setup")
         deadline = time.monotonic() + 3
         while not status["pause_confirmed"]:
@@ -124,15 +127,10 @@ def run(args):
             time.sleep(.03)
             status = client.request("status")
         recorder.write("setup", client.request("lab_reset", session=session))
-        deadline = time.monotonic() + 15
-        while True:
-            snap = client.request("snapshot")
-            if (snap["session"] == session and snap["values"]["paused"] == 1
-                    and snap["override_state"] is False and snap["ap_engaged"] is False):
-                break
-            if time.monotonic() > deadline:
-                raise ValueError("Readiness not confirmed")
-            time.sleep(.1)
+        snap = wait_for_ready_snapshot(
+            client, timeout_s=120.,
+            validate=lambda s: (s["session"] == session and s["values"]["paused"] == 1
+                                and s["override_state"] is False and s["ap_engaged"] is False))
         v0 = snap["values"]
         altitude = round(v0["altitude_indicated_ft"] / 10.) * 10.
         observer.altitude_ft = altitude
@@ -154,7 +152,7 @@ def run(args):
                     raise ValueError("Wall deadline exceeded")
                 seq += 1
                 reply = client.request("exchange", session=client_session[0], generation=generation,
-                                       sequence=seq, expires_at=time.monotonic() + .18,
+                                       sequence=seq, expires_at=time.monotonic() + FRAME_LEASE_S,
                                        controls=frame_now[0])
                 if reply["bridge"]["state"] != "ACTIVE":
                     raise ValueError("Bridge lost authority in %s" % name)

@@ -64,6 +64,15 @@ def test_surface_lab_rejects_takeoff_controls_outside_profile(monkeypatch, tmp_p
         lab.validate_controls({**valid, "flap": .1})
 
 
+def test_surface_lab_accepts_only_the_staged_profile_takeoff_flap(monkeypatch, tmp_path):
+    _, _, lab = lab_setup(monkeypatch, tmp_path, surface_takeoff_flap_ratio=1/3)
+    valid = {"roll": 0., "pitch": 0., "yaw": 0., "throttle": 0.,
+             "flap": 1/3, "trim": 0., "brake": .35}
+    lab.validate_controls(valid)
+    with pytest.raises(ValueError, match="staged takeoff profile"):
+        lab.validate_controls({**valid, "flap": .25})
+
+
 def test_ground_contact_agl_filter_tolerates_small_negative_noise(monkeypatch, tmp_path):
     _, plugin, lab = lab_setup(monkeypatch, tmp_path)
     plugin.core.state = "ACTIVE"

@@ -14,13 +14,15 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from services.ai_pilot.control_ownership import ControllerLock
-from services.ai_pilot.experiment import BridgeClient, Recorder, digest
+from services.ai_pilot.experiment import (BridgeClient, Recorder, digest, FRAME_LEASE_S,
+                                          wait_for_ready_snapshot)
 from services.ai_pilot.ground_guidance import GroundObservation, TaxiGuidance
 from services.ai_pilot.ksee_surface import read_survey
 from services.ai_pilot.runway_entry import RunwayEntryGuidance
-from services.ai_pilot.takeoff_guidance import TakeoffGuidance, TakeoffObservation
+from services.ai_pilot.takeoff_guidance import (TakeoffGuidance, TakeoffObservation,
+                                                takeoff_stage_complete)
 from services.ai_pilot.taxi import ClearanceSource, TaxiCoordinator, TaxiPhase
-from scripts.ai_pilot_experiment import inventory
+from scripts.ai_pilot_experiment import inventory, validate_staged_profile
 from services.ai_pilot.aircraft_profiles import PROFILES
 
 
@@ -46,6 +48,7 @@ def run(args):
     takeoff = TakeoffGuidance(taxi, runway="27R", runway_heading_true_deg=heading,
                               runway_length_m=length, field_elevation_ft=388., profile=profile)
     inv = inventory(args.xplane, include_surface=True, profile=args.profile)
+    validate_staged_profile(config, profile, inv, mode="surface")
     inv["profile_tuning_validated"] = profile.tuning_validated
     for name, installed in inv["installed_bridge_sha256"].items():
         if installed != inv["source_sha256"]["xplane/"+name]:
@@ -79,6 +82,7 @@ def run(args):
     last_climb_sim = None
     samples = 0
     try:
+        wait_for_ready_snapshot(client, timeout_s=120.)
         status = client.request("fault_pause", reason="KSEE surface reset between trials")
         deadline = time.monotonic()+3
         while not status["pause_confirmed"]:
@@ -89,25 +93,14 @@ def run(args):
         reset_kwargs = {"checkpoint": "D8 hold"} if args.start_at == "hold" else {}
         reset = client.request("lab_reset", session=session, **reset_kwargs)
         recorder.write("setup", reset)
-        deadline = time.monotonic()+15
-        while True:
-            try:
-                snapshot = client.request("snapshot")
-                v = snapshot["values"]
-                ready = (snapshot["session"] == session and v["paused"] == 1
-                         and all(abs(v[f"local_{axis}_m"]-value) < 1
-                                 for axis, value in zip("xyz", reset["local_position_m"]))
-                         and snapshot["override_state"] is False
-                         and snapshot["ap_engaged"] is False
-                         and v["parking_brake_ratio"] <= .05)
-                recorder.write("setup_snapshot", snapshot)
-                if ready:
-                    break
-            except (RuntimeError, OSError):
-                pass
-            if time.monotonic() > deadline:
-                raise ValueError("Parking reset not confirmed")
-            time.sleep(.1)
+        snapshot = wait_for_ready_snapshot(
+            client, timeout_s=120.,
+            validate=lambda s: (s["session"] == session and s["values"]["paused"] == 1
+                                and all(abs(s["values"][f"local_{axis}_m"]-value) < 1
+                                        for axis, value in zip("xyz", reset["local_position_m"]))
+                                and s["override_state"] is False and s["ap_engaged"] is False
+                                and s["values"]["parking_brake_ratio"] <= .05))
+        recorder.write("setup_snapshot", snapshot)
         started = client.request("lab_start", session=session, controls=controls,
                                  snapshot_frame=snapshot["frame"],
                                  snapshot_wall_time_s=snapshot["wall_time_s"])
@@ -118,7 +111,7 @@ def run(args):
         while time.monotonic()-wall_started < args.max_wall_s:
             sequence += 1
             response = client.request("exchange", session=session, generation=generation,
-                                      sequence=sequence, expires_at=time.monotonic()+.18,
+                                      sequence=sequence, expires_at=time.monotonic()+FRAME_LEASE_S,
                                       controls=controls)
             if response["bridge"]["state"] != "ACTIVE":
                 raise ValueError("Surface bridge lost active authority")
@@ -196,7 +189,7 @@ def run(args):
                 command = takeoff.step(takeoff_observation)
                 if command.intervention_required:
                     raise ValueError("Takeoff intervention: " + command.reason)
-                if command.phase == "climb" and takeoff_observation.agl_ft >= 300:
+                if takeoff_stage_complete(command, takeoff_observation, profile):
                     result = {"outcome": "PASS", "phase": "initial_takeoff",
                               "samples": samples, "max_agl_ft": takeoff_observation.agl_ft,
                               "takeoff_kias": v["kias"]}

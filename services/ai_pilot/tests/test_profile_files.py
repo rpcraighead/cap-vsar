@@ -9,6 +9,7 @@ from services.ai_pilot import aircraft_profiles
 from services.ai_pilot.aircraft_profiles import C172SP, C182T, PROFILES, AircraftProfile, profile_for
 from services.ai_pilot.profile_loader import PROFILE_DIR, ProfileError, load_profile, load_profiles
 from services.ai_pilot.tests import golden_profiles
+from scripts.ai_pilot_experiment import validate_staged_profile
 
 
 # --- the migration: moving the numbers to files changed none of them ----------------------------
@@ -24,13 +25,45 @@ def test_the_registry_is_built_from_the_files_and_the_module_attributes_still_wo
     assert set(PROFILES) == {"C172SP", "C182T"}
     assert C172SP is PROFILES["C172SP"] and C182T is PROFILES["C182T"]
     assert profile_for("Cessna_182T_G1000.acf") is C182T and profile_for("C172SP") is C172SP
-    assert C172SP.tuning_validated is True and C182T.tuning_validated is False
+    assert C172SP.tuning_validated is False and C182T.tuning_validated is False
     assert C182T.constant_speed_prop and not C172SP.constant_speed_prop
+    assert C182T.landing_toe_brakes and C172SP.landing_toe_brakes
+    assert C182T.flare_start_agl_ft == 28. and C172SP.flare_start_agl_ft == 17.5
 
 
 def test_every_profile_in_the_directory_is_a_valid_profile():
     for profile in load_profiles().values():
         assert isinstance(profile, AircraftProfile) and profile.sources.get("tuning")
+
+
+def test_staged_surface_profile_checks_aircraft_hash_prop_and_takeoff_flap():
+    inv = {"aircraft": {"path": "/sim/Cessna_182T_G1000.acf", "sha256": "a"*64}}
+    config = {"mode": "surface", "aircraft_path": inv["aircraft"]["path"],
+              "aircraft_sha256": inv["aircraft"]["sha256"],
+              "constant_speed_prop": True, "surface_takeoff_flap_ratio": C182T.takeoff_flap_ratio}
+    validate_staged_profile(config, C182T, inv, mode="surface")
+    for changed in ({**config, "constant_speed_prop": False},
+                    {**config, "surface_takeoff_flap_ratio": 0.},
+                    {**config, "aircraft_sha256": "b"*64}):
+        with pytest.raises(ValueError, match="Staged|aircraft"):
+            validate_staged_profile(changed, C182T, inv, mode="surface")
+
+
+def test_staged_landing_config_selects_toe_brakes_for_c182_profile():
+    inv = {"aircraft": {"path": "/sim/Cessna_182T_G1000.acf", "sha256": "a"*64}}
+    config = {"mode": "landing", "aircraft_path": inv["aircraft"]["path"],
+              "aircraft_sha256": inv["aircraft"]["sha256"],
+              "constant_speed_prop": True, "landing_toe_brakes": True}
+    validate_staged_profile(config, C182T, inv, mode="landing")
+    with pytest.raises(ValueError, match="brake path"):
+        validate_staged_profile({**config, "landing_toe_brakes": False}, C182T, inv, mode="landing")
+    from xplane.capvsar_qualification import STOCK_SHA256
+    c172_inventory = {"aircraft": {"path": "/sim/Cessna_172SP_G1000.acf",
+                                    "sha256": STOCK_SHA256}}
+    c172_config = {"mode": "landing", "aircraft_path": c172_inventory["aircraft"]["path"],
+                   "aircraft_sha256": c172_inventory["aircraft"]["sha256"],
+                   "constant_speed_prop": False, "landing_toe_brakes": True}
+    validate_staged_profile(c172_config, C172SP, c172_inventory, mode="landing")
 
 
 # --- strictness: an aircraft file must state everything and nothing may be misspelt -----------
@@ -184,7 +217,7 @@ def test_no_module_source_names_a_default_aircraft_in_a_signature():
 
 
 @pytest.mark.parametrize("script", ["ai_pilot_pattern.py", "ai_pilot_ksee_kmyf.py", "ai_pilot_surface.py",
-                                    "ai_pilot_experiment.py"])
+                                    "ai_pilot_landing.py", "ai_pilot_experiment.py"])
 def test_the_runners_refuse_to_start_without_a_named_aircraft(script):
     import subprocess
     import sys
@@ -192,6 +225,7 @@ def test_the_runners_refuse_to_start_without_a_named_aircraft(script):
     args = {"ai_pilot_pattern.py": ["--config", "c", "--output", "o", "--pattern", "parallel", "--lat", "0", "--lon", "0"],
             "ai_pilot_ksee_kmyf.py": ["--config", "c", "--output", "o"],
             "ai_pilot_surface.py": ["--config", "c", "--output", "o"],
+            "ai_pilot_landing.py": ["fly", "--config", "c", "--output", "o"],
             "ai_pilot_experiment.py": ["observe", "--config", "c", "--output", "o"]}[script]
     done = subprocess.run([sys.executable, str(scripts / script), *args], capture_output=True, text=True, timeout=60)
     assert done.returncode == 2 and "--profile" in done.stderr, done.stderr[-400:]

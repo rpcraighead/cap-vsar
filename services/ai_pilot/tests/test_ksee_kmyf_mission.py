@@ -1,5 +1,5 @@
 """Key chart gates and the runway-rollout envelope found by the live sortie."""
-from services.ai_pilot.aircraft_profiles import C172SP
+from services.ai_pilot.aircraft_profiles import C172SP, C182T
 import time
 from types import SimpleNamespace
 
@@ -31,6 +31,14 @@ def test_departure_turn_waits_for_790_ft():
     controller.step(snapshot(sim_time_s=10.1, altitude_indicated_ft=790.))
     assert controller.stage == "pgy_intercept"
     assert controller.last_diagnostics["target_true_deg"] == 73.
+
+
+def test_vector_heading_speed_uses_the_selected_aircraft_profile():
+    controller = MissionController("vector_heading", profile=C182T)
+    controller.vector_heading_mag = 90.
+    controller.vector_alt_ft = 5000.
+    controller.step(snapshot())
+    assert controller.last_diagnostics["target_kias"] == C182T.cruise_kias
 
 
 def test_pilot_directed_bakel_vector_at_3500_ft():

@@ -25,8 +25,6 @@ def wrap180(x):
 
 
 class LandingController:
-    FLARE_START_AGL_FT = 17.5
-
     def __init__(self, runway="KMYF 28R", *, profile: AircraftProfile):
         self.runway = RUNWAYS[runway]
         self.profile = profile
@@ -89,7 +87,7 @@ class LandingController:
                 self.touchdown_sim = sim
                 self.touchdown_aileron = self.last_air_roll
             self.phase = "rollout"
-        elif agl_ft < self.FLARE_START_AGL_FT and along > -50:
+        elif agl_ft < self.profile.flare_start_agl_ft and along > -50:
             if self.flare_started_sim is None:
                 self.flare_started_sim = sim
                 self.flare_entry_pitch = self.last_pitch_target if self.last_pitch_target is not None else v["pitch_deg"]
@@ -102,6 +100,8 @@ class LandingController:
             # then shed it as nosewheel steering takes over.
             self.heading_i *= max(0., 1. - dt / 1.5)
             # Brake only after main gear contact and some nosewheel-settling time.
+            # Toe-brake readback now confirms effective C182T braking, so the
+            # earlier .32 ramp is sufficient and keeps the C172 path moderate.
             brake = clamp((sim - self.touchdown_sim - .7) / 2., 0., .32)
             if gs_kt < 4:
                 brake = .25
@@ -285,6 +285,9 @@ class LandingObserver:
         self.threshold = None
         self.flap_stages = set()
         self.max_brake = 0.
+        self.brake_readback_max = [0., 0.]
+        self.rollout_decelerations = []
+        self.last_rollout_speed = None
         self.braked_samples = 0
         self.flare_aileron_samples = 0
         self.rollout_aileron_samples = 0
@@ -387,6 +390,9 @@ class LandingObserver:
                 return self.fail("Stale or invalid native brake readback")
             brake = max(a["brake_left"], a["brake_right"])
             self.max_brake = max(self.max_brake, brake)
+            self.brake_readback_max = [max(old, float(new)) for old, new in
+                                       zip(self.brake_readback_max,
+                                           (a["brake_left"], a["brake_right"]))]
             if (brake > .351 or abs(a["brake_left"] - a["brake_right"]) > .02
                     or (not v["on_ground"] and brake > .02)):
                 return self.fail("Brake limit, symmetry or airborne braking violated")
@@ -415,6 +421,15 @@ class LandingObserver:
                 self.last_air_heading_deg = v["heading_true_deg"]
                 self.last_air_roll_deg = v["roll_deg"]
             if self.touchdown is not None:
+                if v["on_ground"]:
+                    if self.last_rollout_speed is not None:
+                        old_sim, old_speed = self.last_rollout_speed
+                        dt = sim - old_sim
+                        if dt > 0 and brake >= .15:
+                            deceleration = (old_speed - v["groundspeed_mps"]) / dt
+                            if deceleration > 0:
+                                self.rollout_decelerations.append(deceleration)
+                    self.last_rollout_speed = (sim, v["groundspeed_mps"])
                 if not v["on_ground"] and agl_ft > 3:
                     return self.fail("Bounced above 3 ft")
                 if brake >= .15:
@@ -440,10 +455,20 @@ class LandingObserver:
         return self.report()
 
     def report(self):
+        ordered = sorted(self.rollout_decelerations)
+        p90 = ordered[min(len(ordered)-1, int(.9*len(ordered)))] if ordered else None
+        median = (ordered[len(ordered)//2] if len(ordered) % 2 else
+                  (ordered[len(ordered)//2-1] + ordered[len(ordered)//2]) / 2
+                  if ordered else None)
         return {"outcome": self.outcome, "reason": self.reason, "samples": self.samples,
                 "threshold": self.threshold, "touchdown": self.touchdown, "last": self.last,
                 "flap_stages": sorted(self.flap_stages),
                 "max_brake": self.max_brake, "braked_samples": self.braked_samples,
+                "brake_readback_max": {"left": self.brake_readback_max[0],
+                                        "right": self.brake_readback_max[1]},
+                "rollout_deceleration_mps2": {
+                    "median": median,
+                    "p90": p90, "samples": len(ordered)},
                 "max_flare_rebound_ft": self.max_flare_rebound_ft,
                 "flare_aileron_samples": self.flare_aileron_samples,
                 "rollout_aileron_samples": self.rollout_aileron_samples,

@@ -26,6 +26,8 @@ class ControlBridge:
     CANDIDATE_SKEW_S = 0.08
     EXECUTIVE_AGE_S = 0.40
     TRANSFER_TIMEOUT_S = 1.0
+    ATOMIC_STALL_GAP_S = 0.20
+    MAX_CONSECUTIVE_STALL_GRACES = 3
 
     def __init__(self, sink, session: str, clock=time.monotonic, *, atomic=False,
                  channels=CHANNELS, brake_max=.35):
@@ -53,6 +55,10 @@ class ControlBridge:
         self.frame_sequence = -1
         self.frame_deadline = None
         self.frame_generation = None
+        self.last_tick_time = None
+        self.last_tick_gap_s = 0.
+        self.frame_stall_graces = 0
+        self.heartbeat_stall_graces = 0
         self.pause_confirmed = False
 
     def candidate(self, session: str, channel: str, value: float) -> None:
@@ -93,6 +99,10 @@ class ControlBridge:
             if (type(value) not in (int, float) or not math.isfinite(value)
                     or not low <= value <= high):
                 raise ValueError("Invalid actuator: %s" % channel)
+        # Timely replacement frames break a stall streak; late replacements
+        # keep it so a slow controller cannot renew grace indefinitely.
+        if self.frame_deadline is None or now < self.frame_deadline:
+            self.frame_stall_graces = 0
         self.candidates = {c: (float(controls[c]), now) for c in self.channels}
         self.frame_sequence = sequence
         self.frame_deadline = expires_at
@@ -119,24 +129,34 @@ class ControlBridge:
         self.frame_sequence = -1
         self.frame_deadline = None
         self.frame_generation = None
+        self.frame_stall_graces = 0
         self.generation += 1
         self.last_heartbeat = self.clock()
+        self.heartbeat_stall_graces = 0
         return self.status()
 
     def _fresh(self):
         if self.atomic:
             if self.frame_generation != self.generation:
                 raise ValueError("No frame for current generation")
-            if self.frame_deadline is None or self.clock() >= self.frame_deadline:
+            if self.frame_deadline is None:
                 raise ValueError("Atomic frame expired")
+            if self.clock() >= self.frame_deadline:
+                # A few late callbacks are tolerated for cold-start and brief
+                # stalls. Only an in-time replacement frame resets the streak.
+                if (self.last_tick_gap_s <= self.ATOMIC_STALL_GAP_S
+                        or self.frame_stall_graces >= self.MAX_CONSECUTIVE_STALL_GRACES):
+                    raise ValueError("Atomic frame expired")
+                self.frame_stall_graces += 1
         required = self.channels if self.owner == "DIRECT" else ARDUPLANE_CHANNELS
         if not set(required) <= set(self.candidates):
             raise ValueError("Incomplete candidate output")
-        stamps = [self.candidates[c][1] for c in required]
-        if self.clock() - min(stamps) > self.CANDIDATE_AGE_S:
-            raise ValueError("Stale candidate output")
-        if max(stamps) - min(stamps) > self.CANDIDATE_SKEW_S:
-            raise ValueError("Skewed independent candidate packets")
+        if not self.atomic:
+            stamps = [self.candidates[c][1] for c in required]
+            if self.clock() - min(stamps) > self.CANDIDATE_AGE_S:
+                raise ValueError("Stale candidate output")
+            if max(stamps) - min(stamps) > self.CANDIDATE_SKEW_S:
+                raise ValueError("Skewed independent candidate packets")
         return {c: self.candidates[c][0] for c in required}
 
     def prepare(self, owner: str, session: str, expected_generation: int) -> dict:
@@ -153,7 +173,11 @@ class ControlBridge:
             raise
         self.generation += 1
         self.state = "PREPARING"
-        self.last_heartbeat = self.clock()
+        now = self.clock()
+        if (self.last_heartbeat is None
+                or now - self.last_heartbeat <= self.EXECUTIVE_AGE_S):
+            self.heartbeat_stall_graces = 0
+        self.last_heartbeat = now
         return self.status()
 
     def heartbeat(self, session: str, generation: int) -> None:
@@ -161,7 +185,11 @@ class ControlBridge:
                 or (self.retired and self.state != "GFC700")
                 or self.state not in ("PREPARING", "WAIT_AP_OFF", "ACTIVE", "WAIT_GFC", "GFC700")):
             raise ValueError("Revoked executive heartbeat")
-        self.last_heartbeat = self.clock()
+        now = self.clock()
+        if (self.last_heartbeat is None
+                or now - self.last_heartbeat <= self.EXECUTIVE_AGE_S):
+            self.heartbeat_stall_graces = 0
+        self.last_heartbeat = now
 
     def activate(self, session: str, generation: int) -> dict:
         if session != self.session or generation != self.generation or self.state != "PREPARING":
@@ -353,12 +381,28 @@ class ControlBridge:
 
     def tick(self) -> dict:
         now = self.clock()
+        self.last_tick_gap_s = (0. if self.last_tick_time is None else now - self.last_tick_time)
+        self.last_tick_time = now
         if self.state in ("FAULT_PAUSE_PENDING", "PAUSED_FAULT"):
             self._confirm_pause()
         if self.state in ("PREPARING", "WAIT_AP_OFF", "ACTIVE", "WAIT_GFC", "GFC700"):
             if self.last_heartbeat is None or now - self.last_heartbeat > self.EXECUTIVE_AGE_S:
-                self._fault("Executive heartbeat expired")
-                return self.status()
+                if (self.state in ("ACTIVE", "WAIT_GFC", "GFC700")
+                        and self.last_tick_gap_s > self.ATOMIC_STALL_GAP_S
+                        and self.heartbeat_stall_graces < self.MAX_CONSECUTIVE_STALL_GRACES
+                        and (self.state != "ACTIVE"
+                             or self.frame_stall_graces < self.MAX_CONSECUTIVE_STALL_GRACES)):
+                    # A few cold-start or resumed callbacks are allowed; an
+                    # in-time heartbeat and frame must arrive to reset a streak.
+                    self.heartbeat_stall_graces += 1
+                    if self.state == "ACTIVE":
+                        # DIRECT also needs the frame lease to get one fresh
+                        # packet on the resumed callback; _fresh enforces the
+                        # hard stop on the following normal callback.
+                        self.last_heartbeat = now
+                else:
+                    self._fault("Executive heartbeat expired")
+                    return self.status()
         if self.state == "WAIT_AP_OFF":
             if self.sink.ap_engaged() is False:
                 try:

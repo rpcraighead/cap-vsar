@@ -31,6 +31,36 @@ AIRCRAFT_PATHS = {
 }
 
 
+def validate_staged_profile(config, profile, inv, *, mode):
+    """Fail before reset/taxi if the installed lab is staged for another profile."""
+    if config.get("mode") != mode:
+        raise ValueError("Staged bridge mode does not match %s trial" % mode)
+    aircraft = inv["aircraft"]
+    configured_path = Path(config.get("aircraft_path", "")).resolve()
+    if configured_path != Path(aircraft["path"]).resolve() or Path(aircraft["path"]).name != profile.acf_name:
+        raise ValueError("Staged aircraft path does not match profile %s" % profile.key)
+    staged_hash = config.get("aircraft_sha256")
+    if staged_hash is not None and staged_hash != aircraft["sha256"]:
+        raise ValueError("Staged aircraft hash does not match loaded package")
+    if profile.acf_name == "Cessna_172SP_G1000.acf":
+        from xplane.capvsar_qualification import STOCK_SHA256
+        if aircraft["sha256"] != STOCK_SHA256:
+            raise ValueError("Loaded C172 aircraft hash is not the pinned stock package")
+    elif staged_hash != aircraft["sha256"]:
+        raise ValueError("Staged aircraft hash is required for a rebuilt package")
+    if bool(config.get("constant_speed_prop", False)) != profile.constant_speed_prop:
+        raise ValueError("Staged constant-speed prop setting does not match profile %s" % profile.key)
+    if mode == "surface":
+        ratio = config.get("surface_takeoff_flap_ratio", 0.)
+        if (type(ratio) not in (int, float)
+                or abs(ratio-profile.takeoff_flap_ratio) > 1e-6):
+            raise ValueError("Staged takeoff flap ratio does not match profile %s" % profile.key)
+    if mode == "landing":
+        expected_toe_brakes = profile.landing_toe_brakes
+        if bool(config.get("landing_toe_brakes", False)) != expected_toe_brakes:
+            raise ValueError("Staged landing brake path does not match profile %s" % profile.key)
+
+
 def inventory(xplane, include_landing=False, include_surface=False, include_mission=False,
               *, profile):
     aircraft = xplane / AIRCRAFT_PATHS[profile]
@@ -104,8 +134,10 @@ def stage_observer(destination, qualification_aircraft=None, mode="qualification
             if runway not in RUNWAYS:
                 raise ValueError("Unknown landing runway: " + runway)
             config["runway"] = runway
+            config["landing_toe_brakes"] = profile_for(qualification_aircraft.name).landing_toe_brakes
         if mode == "surface":
             config["parking"] = "KSEE East Transient Parking 12"
+            config["surface_takeoff_flap_ratio"] = profile_for(qualification_aircraft.name).takeoff_flap_ratio
         if mode == "mission":
             # Terrain lookahead in every snapshot, the GFC 700 as a second owner,
             # and a last-ditch terrain fence (None disables the fence).

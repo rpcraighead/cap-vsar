@@ -78,6 +78,7 @@ class AircraftProfile:
     flap_stage_names: tuple[str, str, str] = ("10deg", "20deg", "30deg")
     touchdown_pitch_deg: tuple[float, float] = (5., 7.)
     touchdown_max_groundspeed_kt: float = 78.
+    flare_start_agl_ft: float = 17.5
     missed_flap_ratio: float = 1/3
     ils_flap_ratio: float = 1/3
     min_roll_rpm: float = 1800.         # engine must exceed this 5 s into the roll
@@ -94,6 +95,7 @@ class AircraftProfile:
     # phase flies the lever full forward (takeoff, climb, approach, balked landing).
     constant_speed_prop: bool = False
     prop_cruise_ratio: float = 1.
+    landing_toe_brakes: bool = False
     tuning_validated: bool = False
     sources: dict = field(default_factory=dict)
     # Measured throttle-for-(airspeed, vertical speed) table; None means "not measured", and the
@@ -112,6 +114,8 @@ class AircraftProfile:
             raise ValueError("takeoff flap ratio outside 0..1")
         if self.threshold_kias[0] >= self.threshold_kias[1]:
             raise ValueError("threshold speed window inverted")
+        if not math.isfinite(self.flare_start_agl_ft) or not 10. <= self.flare_start_agl_ft <= 60.:
+            raise ValueError("flare start height must be 10..60 ft AGL")
         if not self.threshold_kias[0] <= self.final_approach_kias <= self.threshold_kias[1]:
             raise ValueError("final approach speed must sit inside the threshold window")
         for gate in self.landing_flap_gates:

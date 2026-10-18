@@ -1,8 +1,9 @@
 """Takeoff gates with a synthetic stock-C172 observation stream."""
-from services.ai_pilot.aircraft_profiles import C172SP
+from services.ai_pilot.aircraft_profiles import C172SP, C182T
 import unittest
 
-from services.ai_pilot.takeoff_guidance import TakeoffGuidance, TakeoffObservation
+from services.ai_pilot.takeoff_guidance import (TakeoffCommand, TakeoffGuidance, TakeoffObservation,
+                                                takeoff_stage_complete)
 from services.ai_pilot.taxi import (
     ClearanceSource, RoutePurpose, TaxiCoordinator, TaxiLeg, TaxiRoute, TaxiPhase,
 )
@@ -57,6 +58,45 @@ class TakeoffGuidanceTests(unittest.TestCase):
                                                    altitude_msl_ft=2000,
                                                    climb_distance_nm=3))
         self.assertEqual(at_2000.target_kias, 74.)
+
+    def test_c182_takeoff_hold_commands_profile_flaps_before_roll(self):
+        pilot = TakeoffGuidance(self.taxi, runway="27R",
+                                runway_heading_true_deg=282,
+                                runway_length_m=1628, field_elevation_ft=388,
+                                profile=C182T)
+        self.clear()
+
+        set_flaps = pilot.step(self.observation(flap_ratio=0))
+        self.assertEqual(set_flaps.phase, "hold")
+        self.assertEqual(set_flaps.flap, C182T.takeoff_flap_ratio)
+        self.assertEqual((set_flaps.throttle, set_flaps.brake), (0., .35))
+
+        roll = pilot.step(self.observation(flap_ratio=C182T.takeoff_flap_ratio))
+        self.assertEqual((roll.phase, roll.throttle, roll.flap),
+                         ("roll", 1., C182T.takeoff_flap_ratio))
+
+    def test_c172_takeoff_hold_keeps_profile_flaps_at_zero(self):
+        self.clear()
+
+        mis_set = self.pilot.step(self.observation(flap_ratio=1/3))
+        self.assertEqual((mis_set.phase, mis_set.throttle, mis_set.brake, mis_set.flap),
+                         ("hold", 0., .35, 0.))
+
+        roll = self.pilot.step(self.observation(flap_ratio=0))
+
+        self.assertEqual((roll.phase, roll.flap), ("roll", 0.))
+
+    def test_c182_takeoff_completion_waits_for_verified_flap_retraction(self):
+        command = TakeoffCommand(phase="climb", flap=0.)
+        observation = self.observation(agl_ft=301, kias=71, flap_ratio=1/3)
+        self.assertFalse(takeoff_stage_complete(command, observation, C182T))
+        retracted = self.observation(agl_ft=301, kias=71, flap_ratio=0.)
+        self.assertTrue(takeoff_stage_complete(command, retracted, C182T))
+
+    def test_c172_takeoff_completion_needs_no_flap_retraction(self):
+        command = TakeoffCommand(phase="climb", flap=0.)
+        observation = self.observation(agl_ft=300, kias=62, flap_ratio=0.)
+        self.assertTrue(takeoff_stage_complete(command, observation, C172SP))
 
     def test_runway_excursion_or_low_power_rejects_and_latches(self):
         self.clear()

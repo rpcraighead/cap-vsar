@@ -50,6 +50,8 @@ SCHEMA = {
         "threshold_kias": ("threshold_kias", "pair"),
         "touchdown_pitch_deg": ("touchdown_pitch_deg", "pair"),
         "touchdown_max_groundspeed_kt": ("touchdown_max_groundspeed_kt", "float"),
+        "flare_start_agl_ft": ("flare_start_agl_ft", "float"),
+        "toe_brakes": ("landing_toe_brakes", "bool"),
     },
     "engine": {"min_roll_rpm": ("min_roll_rpm", "float")},
     "throttle": {

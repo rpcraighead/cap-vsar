@@ -55,6 +55,14 @@ M_PER_DEG_LON = DEFAULT_RUNWAY.m_per_deg_lon
 RUNWAY_LENGTH_M = DEFAULT_RUNWAY.length_m
 UNIT_N, UNIT_E = DEFAULT_RUNWAY.unit_n, DEFAULT_RUNWAY.unit_e
 HEADING_TRUE_DEG = DEFAULT_RUNWAY.heading_true_deg
+
+
+def landing_agl_in_bounds(agl_m, on_ground):
+    """Allow small negative AGL roundoff only after ground contact."""
+    floor = -.05 if on_ground else 0.
+    return math.isfinite(agl_m) and floor <= agl_m <= 250.
+
+
 AUTHORITY = {"roll": (-.35, .35), "pitch": (-.45, .45), "yaw": (-1., 1.),
              "throttle": (0., .65), "flap": (0., 1.), "trim": (-.6, .6),
              "brake": (0., .35)}
@@ -178,7 +186,8 @@ class LandingLab(QualificationLab):
             self.resume_pending = False
         along, cross = self.runway.coordinates(v["latitude_deg"], v["longitude_deg"])
         if (v["paused"] or abs(cross) > 180 or not -2450 <= along <= self.runway.length_m + 80
-                or not 0 <= v["agl_m"] <= 250 or not 0 <= v["kias"] <= 110
+                or not landing_agl_in_bounds(v["agl_m"], bool(v["on_ground"]))
+                or not 0 <= v["kias"] <= 110
                 or abs(v["roll_deg"]) > 35 or abs(v["pitch_deg"]) > 20
                 or (v["on_ground"] and along < -70)
                 or time.monotonic() - self.trial_started > 240):
