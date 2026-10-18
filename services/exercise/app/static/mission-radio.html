@@ -30,7 +30,7 @@
     <div class="net-control"><label for="netSelect">MISSION NET</label><div class="select-row"><button id="previousNet" type="button" aria-label="Previous mission net">−</button><select id="netSelect"><option value="primary">PRIMARY</option></select><button id="nextNet" type="button" aria-label="Next mission net">+</button></div></div>
     <div class="volume-control"><label for="volume">HEADSET VOLUME <output id="volumeValue">70%</output></label><input id="volume" type="range" min="0" max="100" value="70" aria-label="Headset volume"></div>
    </div>
-   <div class="receiver-status"><div><span class="signal-dot" id="signalDot"></span><strong id="connectionState" role="status">Radio disconnected</strong><span id="speaker">Join the net to listen.</span></div><div class="meter" aria-label="Receive audio level"><span id="rxMeter"></span></div></div>
+   <div class="receiver-status"><div><span class="signal-dot" id="signalDot"></span><strong id="connectionState" role="status">Radio disconnected</strong><span id="speaker">Join the net to listen.</span> <span id="linkQuality" class="link-quality" aria-live="polite" hidden></span></div><div class="meter" aria-label="Receive audio level"><span id="rxMeter"></span></div></div>
    <div class="ptt-area"><button id="ptt" class="ptt" type="button" disabled aria-pressed="false"><span class="ptt-icon" aria-hidden="true">◉</span><span><strong id="pttLabel">HOLD TO TALK</strong><small id="pttHint">Connect your headset to begin</small></span><kbd>SPACE</kbd></button><p class="ptt-help">Press and hold. Release to listen. <span>One net at a time.</span></p></div>
    <div id="notice" class="notice" role="status" hidden></div>
   </section>

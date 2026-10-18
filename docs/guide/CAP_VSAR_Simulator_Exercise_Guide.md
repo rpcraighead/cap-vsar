@@ -413,7 +413,7 @@ Once aircrews complete their Ready Room checks and launch, **Mission Base** coor
 * **What to do if it doesn't work:**
   * If your browser blocks microphone access, verify you opened the station over `https://` and granted microphone permission when prompted.
   * If you transmit continuously for 60 seconds, the transmit gate automatically unkeys your microphone to protect the net; release PTT for 1 second before keying again.
-  * If a station comes in with static and dropouts, that is the exercise's radio reach at work: the station is far from the Mission Base antenna at Gillespie Field, low, or behind terrain. Ask the aircraft to climb or to work the Julian repeater; a low aircraft east of Julian may be out of reach of both. Static that gets worse as a sortie flies away from base is normal; sudden total silence from a station that was clear a moment ago is not, and is worth a radio check.
+  * If a station comes in with static and dropouts, that is the exercise's radio reach at work: the station is far from the Mission Base antenna at Gillespie Field, low, or behind terrain. Ask the aircraft to climb or to work the Julian repeater; a low aircraft east of Julian may be out of reach of both. The Base Radio page says what it hears next to the station's name (`Clear`, `Some static`, `Weak and choppy`, `Barely readable`) and whether the traffic came direct to base or via the Julian repeater; the same note appears under the station in the Form 110 log. Static that gets worse as a sortie flies away from base is normal; sudden total silence from a station that was clear a moment ago is not, and is worth a radio check.
 
 ---
 

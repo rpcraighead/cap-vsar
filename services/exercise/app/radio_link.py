@@ -254,7 +254,7 @@ def impair_frame(pcm: bytes, imp: dict, phase: int, dropped: bool) -> tuple[byte
 
 # --------------------------------------------------------------- routing
 
-NOMINAL = {"path": "nominal", "via": None, "margin": 1.0,
+NOMINAL = {"path": "nominal", "via": None, "via_name": None, "to_base": None, "margin": 1.0,
            "heard": "position not reported; link assumed good"}
 
 
@@ -268,7 +268,7 @@ def _best_to_base(station: dict, base: radio_sites.RadioSite, sites, *, conditio
     lat, lon, alt = station["lat"], station["lon"], station["alt_ft"]
     opts = {"conditions": conditions, "terrain_ft": terrain_ft, "radio_horizon": radio_horizon}
     direct = path_margin(lat, lon, alt, base.lat, base.lon, base.antenna_msl_ft, **opts)
-    best = {"path": "direct", "via": None, "margin": direct}
+    best = {"path": "direct", "via": None, "via_name": None, "margin": direct, "to_base": True}
     for site in sites:
         if site.role != "repeater":
             continue
@@ -277,9 +277,10 @@ def _best_to_base(station: dict, base: radio_sites.RadioSite, sites, *, conditio
                            base.antenna_msl_ft, **opts)
         via = min(up, down)
         if via > best["margin"]:
-            best = {"path": "repeater", "via": site.id, "margin": via, "site": site}
+            best = {"path": "repeater", "via": site.id, "via_name": site.name or site.id, "margin": via,
+                    "to_base": True, "site": site}
     if best["margin"] <= 0.0:
-        return {"path": "none", "via": None, "margin": 0.0,
+        return {"path": "none", "via": None, "via_name": None, "margin": 0.0, "to_base": True,
                 "heard": "out of range of base and repeater"}
     if best["path"] == "direct":
         best["heard"] = "heard direct at %s, %s" % (base.name or base.id, quality_word(best["margin"]))
@@ -313,8 +314,10 @@ def link_between(a: dict, b: dict, sites, *, conditions: float = 1.0, terrain_ft
     m = path_margin(a["lat"], a["lon"], a["alt_ft"], b["lat"], b["lon"], b["alt_ft"],
                     conditions=conditions, terrain_ft=terrain_ft, radio_horizon=radio_horizon)
     if m <= 0.0:
-        return {"path": "none", "via": None, "margin": 0.0, "heard": "out of range, direct"}
-    return {"path": "direct", "via": None, "margin": m, "heard": "heard direct, %s" % quality_word(m)}
+        return {"path": "none", "via": None, "via_name": None, "margin": 0.0, "to_base": False,
+                "heard": "out of range, direct"}
+    return {"path": "direct", "via": None, "via_name": None, "margin": m, "to_base": False,
+            "heard": "heard direct, %s" % quality_word(m)}
 
 
 class LinkState:
@@ -343,6 +346,7 @@ class LinkState:
         return out
 
     def describe(self) -> dict:
-        return {"path": self.link["path"], "via": self.link["via"],
+        return {"path": self.link["path"], "via": self.link["via"], "via_name": self.link.get("via_name"),
+                "to_base": self.link.get("to_base"),
                 "margin": round(self.link["margin"], 3), "quality": quality_word(self.link["margin"]),
                 "heard": self.link["heard"]}

@@ -29,3 +29,13 @@
 .commlog-table tr.tx td.dir { color: var(--gold, #ffd700); }
 .commlog-table tr.rx td.dir { color: var(--accent, #4a86e8); }
 .commlog-empty td { color: var(--dim, #8b939f); font-style: italic; }
+
+/* ---------------------------------------------------------------- T38
+   How a station is heard: the link pill by the speaker line and the note
+   under the station in the Form 110 log. Text and colour together. */
+.link-quality{display:inline-block;margin-left:8px;padding:2px 9px;border-radius:10px;font-size:12px;font-weight:700;letter-spacing:.01em;border:1px solid var(--line);color:var(--muted);background:var(--panel);vertical-align:middle}
+.link-quality.good{color:var(--green);border-color:var(--green)}
+.link-quality.warn{color:var(--accent);border-color:var(--accent)}
+.link-quality.bad{color:var(--red);border-color:var(--red)}
+.link-quality[hidden]{display:none}
+.commlog-table .link-note{display:block;font-size:11px;color:var(--muted);font-weight:400}

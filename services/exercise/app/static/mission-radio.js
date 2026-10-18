@@ -7,6 +7,7 @@ const state = {
   started: 0, lastPong: 0, lastRx: 0, channels: [], config: null, timeout: null,
   wantOnline: false, reconnectTimer: null, reconnectAttempt: 0,
   txStarted: 0, txReceiver: 'main', lastLogged: null, rxLogTimer: null,
+  links: {}, currentSpeaker: null,   // T38: what the base hears from each station
   toneTimer: null, monitor: false,
 };
 const airband = {
@@ -31,6 +32,44 @@ function rxIsSuppressed(tx, txReceiver, receiver) {
 }
 
 // A failure on the secondary receiver must not tear down the primary.
+// BEGIN T38 PURE LINK QUALITY
+// What the base radio shows for a station's link (the server's `link`
+// message): the quality the listener hears and the path the traffic took, in
+// plain words. Nothing technical reaches the screen; a station with no known
+// position (`nominal`) shows nothing at all.
+const LINK_QUALITY_LABELS = {clear: 'Clear', weak: 'Some static',
+                             broken: 'Weak and choppy', unusable: 'Barely readable'};
+function linkQualityLabel(quality) { return LINK_QUALITY_LABELS[quality] || ''; }
+function linkPathLabel(link) {
+  if (!link) return '';
+  if (link.path === 'repeater') {
+    const name = String(link.via_name || '').replace(/\s*\(.*\)\s*$/, '').trim();
+    return name ? `via ${name} repeater` : 'via the repeater';
+  }
+  if (link.path === 'direct') return link.to_base === false ? 'aircraft to aircraft' : 'direct to base';
+  if (link.path === 'none') return 'out of range of base and repeater';
+  return '';
+}
+function linkTone(link) {
+  if (!link || link.path === 'nominal' || !link.quality) return '';
+  if (link.path === 'none' || link.quality === 'unusable') return 'bad';
+  return link.quality === 'clear' ? 'good' : 'warn';
+}
+function linkText(link) {
+  if (!link || link.path === 'nominal' || !link.quality) return '';
+  const quality = linkQualityLabel(link.quality), path = linkPathLabel(link);
+  return path ? `${quality} \u00b7 ${path}` : quality;
+}
+// END T38 PURE LINK QUALITY
+
+function showLinkQuality(link) {
+  const el = $('linkQuality'); if (!el) return;
+  const text = linkText(link), tone = linkTone(link);
+  if (el.textContent === text && (el.dataset.tone || '') === tone) return;   // aria-live: only real changes
+  el.textContent = text; el.dataset.tone = tone;
+  el.className = 'link-quality' + (tone ? ' ' + tone : ''); el.hidden = !text;
+}
+
 function failureScope(receiver) {
   return receiver === 'airband' ? 'airband' : 'console';
 }
@@ -134,6 +173,7 @@ function restoreCommLog(raw, limit = LOG_LIMIT) {
     t: r.t, from: text(r.from, ''), to: text(r.to, 'ALL'), traffic: text(r.traffic, ''),
     outgoing: r.outgoing === true, net: text(r.net, 'MISSION NET'),
     seconds: Number.isFinite(r.seconds) ? r.seconds : null,
+    ...(typeof r.link === 'string' && r.link ? {link: r.link} : {}),   // T38: only when the entry has one
   }));
 }
 
@@ -169,6 +209,12 @@ function form110Row(doc, entry, onEdit) {
     const td = doc.createElement('td');
     if (cls) td.className = cls;
     td.textContent = text;          // textContent, never innerHTML (F-6)
+    if (text === cells[3][1] && entry.link) {   // T38: how the station was heard
+      const note = doc.createElement('span');
+      note.className = 'link-note';
+      note.textContent = entry.link;
+      td.appendChild(note);
+    }
     row.appendChild(td);
   }
   const traffic = doc.createElement('td');
@@ -225,12 +271,12 @@ function persistCommLog() {
   if (storage) saveCommLog(storage, commLog);
 }
 
-function logEntry({from, to = 'ALL', net, outgoing = false, seconds = null, traffic = ''}) {
+function logEntry({from, to = 'ALL', net, outgoing = false, seconds = null, traffic = '', link = ''}) {
   const entry = {
     id: `e${Date.now().toString(36)}${commLog.length}`,
     t: Date.now() / 1000, from, to, traffic, outgoing,
     net: net || channel()?.name || $('netSelect').value || 'MISSION NET',
-    seconds,
+    seconds, link,
   };
   commLog.unshift(entry);
   if (commLog.length > LOG_LIMIT) commLog.length = LOG_LIMIT;
@@ -759,6 +805,7 @@ function receive(data,receiver='main') {
     if(receiver==='main') {
       cancelReconnect();state.reconnectAttempt=0;silenceMic();state.held.clear();
       $('netSelect').value=message.channel;$('speaker').textContent='Listening for traffic.';
+      state.links={};state.currentSpeaker=null;showLinkQuality(null);
       notice();openAirbandSocket(state.generation);
     } else {
       $('airbandNet').value=message.channel;$('airbandSpeaker').textContent='Listening for traffic.';
@@ -789,17 +836,27 @@ function receive(data,receiver='main') {
     // audio still played, but the speaker label never updated and the
     // transmission was never written to the CAP Form 110 log.
     $(receiver==='airband'?'airbandSpeaker':'speaker').textContent=`${message.speaker} transmitting`;
+    if(receiver==='main'){state.currentSpeaker=message.speaker;showLinkQuality(state.links[message.speaker]);}
     // F-9: one entry per station per transmission, not one per packet.
     const lastLogged=receiver==='airband'?airband.lastLogged:state.lastLogged;
     if(message.speaker && message.speaker!==lastLogged) {
       if(receiver==='airband')airband.lastLogged=message.speaker;
       else state.lastLogged=message.speaker;
       logEntry({from:message.speaker,to:($('callsign').value||'MISSION BASE').trim(),
-                net:message.net||(receiver==='airband'?airbandChannel():channel())?.name});
+                net:message.net||(receiver==='airband'?airbandChannel():channel())?.name,
+                link:receiver==='main'?linkText(state.links[message.speaker]):''});
     }
     const oldTimer=receiver==='airband'?airband.rxLogTimer:state.rxLogTimer;clearTimeout(oldTimer);
     const timer=setTimeout(()=>{if(receiver==='airband')airband.lastLogged=null;else state.lastLogged=null;},3000);
     if(receiver==='airband')airband.rxLogTimer=timer;else state.rxLogTimer=timer;
+  } else if(message.type==='link') {
+    // T38: the server says how this station is heard; sent once per change.
+    if(receiver==='main' && message.speaker) {
+      state.links[message.speaker]=message;
+      if(state.currentSpeaker===message.speaker) showLinkQuality(message);
+      const entry=commLog.find(e=>!e.outgoing&&e.from===message.speaker);
+      if(entry && Date.now()/1000-entry.t<60) { entry.link=linkText(message); renderLog(); persistCommLog(); }
+    }
   } else if(message.type==='pong') radioState.lastPong=Date.now();
   else if(message.type==='error'){
     if(failureScope(receiver)!=='airband')handleServerError(message.message);  // FE-5: only errors a human must fix stop the radio
