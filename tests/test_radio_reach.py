@@ -4,6 +4,7 @@ pick up static and dropouts according to the link to the speaker, a `link`
 message tells the face what it is hearing through, and the scenario's
 `radio_reach` effect turns the whole thing off. Uses test_radio's fixtures.
 """
+import importlib
 import math
 import sys
 from array import array
@@ -17,7 +18,19 @@ sys.path.insert(0, str(HERE.parent / "services" / "exercise"))
 
 from test_radio import sockets, join, hello          # noqa: E402,F401  (pytest fixtures)
 from app import radio                                 # noqa: E402
-from app.hub import hub                               # noqa: E402
+
+# `hub` is bound per test, not at import: radio.py reaches the hub lazily
+# (`from .hub import hub` inside reach_conditions and station_endpoint), so it
+# always sees whatever `app.hub` is in sys.modules *now*. test_backup_exercise_db
+# and test_console pop every app.* module to get a console on their own database
+# and do not put the old ones back, so a hub imported here at collection time is
+# a different object from the one the radio code consults once those files have
+# run, and the positions and effects this file sets on it are never seen.
+hub = None
+
+
+def current_hub():
+    return importlib.import_module("app.hub").hub
 
 FAR_AND_LOW = {"callsign": "CAP 487", "lat": 30.0, "lon": -116.97, "alt_ft": 50.0}      # 170 NM south, on the deck
 IN_THE_BLOCK = {"callsign": "CAP 487", "lat": 33.17, "lon": -117.08, "alt_ft": 4500.0}  # ESCON at 4,500 ft
@@ -29,6 +42,8 @@ def tone(n=960, amp=8000):
 
 @pytest.fixture
 def scenario(monkeypatch):
+    global hub
+    hub = current_hub()
     monkeypatch.setattr(hub, "scenario", {"effects": {"radio_reach": True, "radio_conditions": 1.0}})
     monkeypatch.setattr(hub, "aircraft", {})
     yield hub
