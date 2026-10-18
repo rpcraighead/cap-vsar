@@ -47,6 +47,10 @@ class EffectsIn(BaseModel):
     df_antenna_profile: str | None = Field(default=None, max_length=64)
     df_antenna_location: str | None = Field(default=None, max_length=16)
     mounting: int | None = Field(default=None, ge=0, le=1)
+    # T33: tactical-net static/dropouts by reach to the fixed sites, and the
+    # 0..1 conditions hook (weather, atmospherics) that scales the margin.
+    radio_reach: bool | None = None
+    radio_conditions: float | None = Field(default=None, ge=0.0, le=1.0)
     antenna_offset_deg: float | None = Field(default=None, ge=-180.0, le=360.0)
     error_code: int | None = Field(default=None, ge=-1, le=12)
     beacon_has_gps: bool | None = None

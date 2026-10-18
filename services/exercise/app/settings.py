@@ -46,6 +46,11 @@ DEFAULT_EFFECTS = {
     "airframe_shadowing": False,
     "df_antenna_profile": "c182_belly",
     "wing_null_max_loss_db": 24.0,
+    # T33: tactical-net audio degrades with reach to the fixed radio sites
+    # (static and dropouts, app/radio_link.py). radio_conditions 0..1 scales
+    # the signal margin for weather or atmospherics; 1.0 is a clear day.
+    "radio_reach": True,
+    "radio_conditions": 1.0,
 }
 
 SEED = {

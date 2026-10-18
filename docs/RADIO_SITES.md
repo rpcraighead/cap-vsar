@@ -1,8 +1,8 @@
 # Fixed radio sites: base antenna and repeater (T31)
 
-**Status (2026-10-18):** data model, reach function and a read-only endpoint are in; nothing in the live radio
-path uses them yet, because the voice net does not gate delivery on position at all (see §1). This document is
-the design the next step should follow, and the questions the user has to answer first (§6).
+**Status (2026-10-18, T33):** data model, reach function and a read-only endpoint (T31) plus the link-quality
+model applied on the live voice path (T33, §8): a listener's relayed audio picks up static and dropouts according
+to its link to the speaker. §6 records the user's decisions and what is still open.
 
 User request: "Placement of base staff antennas and repeaters (static) is important. There's a repeater on
 Palomar mountain for example. For this exercise, let's assume that the antenna for base is at KSEE, and that the
@@ -102,24 +102,67 @@ larger one (the voice server mixes per channel, not per pair of stations) and is
   `GET /api/radio/sites`; optionally the repeater's fixed link drawn to the base.
 * Ready room briefing pack: "Mission Base antenna: Gillespie Field. Repeater: Julian (JLI) on the primary pair."
 
-## 6. Open questions for the user
+## 6. Decisions (user, 2026-10-18) and what is still open
 
-1. **Antenna heights:** base mast height at KSEE (30 ft assumed) and the repeater's antenna above the VORTAC
-   site (40 ft assumed)? Real sites also have feedline loss and ERP; the model uses geometry only.
-2. **Do ground teams use the repeater?** If yes, what antenna height and power for a hand-held (5 W at 6 ft) and
-   a vehicle radio (50 W at 8 ft)? Geometry alone treats them like a very low aircraft.
-3. **Does the aircraft's DF hear the repeater?** The DF is tuned to the beacon band; the repeater is on the
-   tactical net. The engine should keep them separate unless the exercise wants a "repeater as training beacon"
-   case.
-4. **Delivery policy:** block a transmission that has no path, or deliver it degraded (hiss, dropouts) the way
-   the DF audio degrades with signal? Blocking is simple and teaches siting; degradation is more realistic.
-5. **Second repeater / talk-around:** should the exercise carry both pairs (e.g. Palomar on the secondary pair)
-   and the simplex talk-around channel the TDFM-136B feature list mentions?
-6. **Symmetry:** base-to-aircraft on the same path, or model the base's higher power?
+**Decided**
+
+1. **Antenna heights:** base antenna 30 ft AGL at KSEE, confirmed. The repeater stays at 40 ft AGL: a VORTAC site
+   carries its own counterpoise and tower, and 40 ft is a conservative figure for a CAP repeater antenna on such a
+   site; a better basis would be the real R-site survey, which the wing holds. Geometry only; no ERP or feedline.
+2. **Out of range never hard-blocks.** A transmission degrades gradually: static and dropouts that get worse with
+   distance, terrain obstruction and how close the station is to the radio horizon (the signal margin, §8), and
+   becomes unusable only far beyond the horizon or deep in a terrain shadow.
+3. **Ground teams talk to aircraft directly.** Air-to-ground is a direct line-of-sight link with the same
+   degradation; the repeater is for the aircraft/ground-to-base path. Ground teams report no position today, so
+   their links are nominal (good) until they do.
+4. **Repeaters have nothing to do with DF.** The direction finder listens to the beacon band; the propagation
+   engine (`PI_capvsar_df.py`) and the console's DF stub never see the sites or the link model
+   (`tests/test_radio_link.py::DirectionFindingIsSeparate` pins that).
+
+**Still open**
+
+5. **Second repeater / talk-around:** both pairs (Palomar on the secondary pair) and the simplex talk-around
+   channel the TDFM-136B feature list mentions.
+6. **Symmetry:** base-to-aircraft uses the same path and margin as aircraft-to-base; the base's higher power is
+   not modelled.
+7. **Ground-team positions:** a way for a team to report where it is (phone GPS on the radio page, or a typed
+   grid), which would make the air-ground and ground-base links real rather than nominal.
+8. **Screens:** the `link` message is sent to each listening face but the pages do not show it yet (UI work).
+
+## 8. Link quality: static and dropouts by signal margin (T33)
+
+`services/exercise/app/radio_link.py`, applied in `radio.py` `MumbleRadio.deliver_audio` to the tactical-net
+(`main`) face only, per listener and per speaker, behind the sortie effect `radio_reach` (default on in
+`DEFAULT_EFFECTS`; set it false with the other injected effects to turn the model off) and the 0..1 hook
+`radio_conditions` (weather or atmospherics; 1.0 is a clear day; no weather physics is modelled).
+
+* **Signal margin 0..1 per path** = horizon score × terrain score × conditions. Horizon: 1 inside 60 % of the
+  two-ended radio-horizon distance, falling smoothly to 0 at 115 % of it. Terrain: the engine's diffraction-loss
+  shape (0 dB above a 1,000 ft Fresnel-ish graze zone, 20 dB grazing, 40 dB at 500 ft of obstruction) mapped to
+  1 − loss/40 dB; unchecked terrain (the console has none) counts as clear. For a station-to-base link the path is
+  the better of direct and via a repeater (the repeater path's margin is the weaker of its two legs); air-to-air
+  and air-to-ground are direct.
+* **Impairment, monotonic and gradual in the margin m:** static level (1−m)^1.5; speech level 0.35 + 0.65 m;
+  dropped fraction 0.9·((0.7−m)/0.7)^1.5 (none above m = 0.7); mean dropout length 0.06 + 0.54 (1−m) s; usable
+  above m = 0.05. A seeded `DropoutGate` turns the rate into a reproducible on/off sequence per 20 ms frame.
+* **Where it is applied:** the voice travels browser → websocket → console → Mumble, and back the same way as
+  20 ms PCM frames relayed per listening face. `deliver_audio` looks up the listener (its roster role: base staff
+  sit at the base antenna; aircraft come from `/api/positions` telemetry matched by callsign; ground teams and
+  anything without a position are nominal) and the speaker (another browser radio's role and callsign, or the
+  Mumble user name), computes the link every 2 s, and processes each relayed frame: a dropped frame becomes
+  silence, the others get seeded static mixed in at the computed level with the speech lowered. A clear link
+  passes frames untouched at no cost. The face is sent one `{"type": "link", speaker, path, via, margin,
+  quality, heard}` message when its link to a speaker changes, for the radio page to show.
+* **Not modelled:** the airband face (a local base radio), the base's own transmit power, ground-team positions,
+  weather (only the hook), and the DF.
 
 ## 7. Tests
 
-`tests/test_radio_sites.py`: pinned coordinates and sources, pair convention, site validation, JSON override,
+`tests/test_radio_link.py` (margin and impairment boundaries and monotonicity, seeded dropouts, frame processing,
+routing including the gradual fall with distance and altitude, the DF separation) and `tests/test_radio_reach.py`
+(the live path: a far, low aircraft heard at base with static and dropouts; an aircraft in the search block heard
+clear; the effect switch and a missing scenario pass audio through; conditions degrade a clear link; ground teams
+nominal). `tests/test_radio_sites.py`: pinned coordinates and sources, pair convention, site validation, JSON override,
 the horizon rule equal to the engine's, an aircraft at 4,500 ft near Julian reaching the repeater while a low
 aircraft behind a synthetic 7,000 ft ridge east of JLI does not, the repeater's fixed link to KSEE, routing
 direct -> via repeater -> none, and the read-only route.

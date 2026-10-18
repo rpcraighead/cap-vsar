@@ -23,6 +23,7 @@ from starlette.concurrency import run_in_threadpool
 
 from .roles import any_role, base_or_instructor
 from . import access
+from . import radio_link, radio_sites
 from .mumble_channels import browser_nets
 
 router = APIRouter()
@@ -157,6 +158,51 @@ def _aircraft_arg(value) -> str:
     return value
 
 
+# ---------------------------------------------------------------- T33: reach
+# How often a listener's link to each speaker is recomputed from positions.
+LINK_REFRESH_S = 2.0
+
+
+def _norm_callsign(value) -> str:
+    return re.sub(r'[^A-Z0-9]', '', str(value or '').upper())
+
+
+def reach_conditions():
+    """None when the reach model is off (no scenario loaded, or the sortie's
+    `radio_reach` effect is false); otherwise the 0..1 conditions factor."""
+    from .hub import hub
+    scenario = hub.scenario
+    if not scenario:
+        return None
+    effects = scenario.get('effects') or {}
+    if not effects.get('radio_reach', True):
+        return None
+    try:
+        return max(0.0, min(1.0, float(effects.get('radio_conditions', 1.0))))
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def station_endpoint(callsign, role) -> dict:
+    """Where a station is, for the link model. Aircraft come from the
+    telemetry the console already receives; base staff sit at the base
+    antenna; ground teams report no position today (nominal link); anything
+    else is unknown (nominal link)."""
+    from .hub import hub
+    wanted = _norm_callsign(callsign)
+    for key, ac in hub.aircraft.items():
+        if wanted and _norm_callsign(key) == wanted:
+            return {"kind": "aircraft", "lat": ac.get("lat"), "lon": ac.get("lon"),
+                    "alt_ft": ac.get("alt_ft"), "callsign": key}
+    if role in ('base', 'instructor', 'evaluator'):
+        return {"kind": "base"}
+    if role == 'ground_team':
+        return {"kind": "ground"}
+    if role == 'aircrew':
+        return {"kind": "aircraft"}        # no telemetry yet: nominal until it reports
+    return {"kind": "unknown"}
+
+
 def classify_crew(assigned_name: str | None, callsign: str = '') -> str:
     """'pilot', 'copilot', 'crew' (observer/scanner) or 'other'.
 
@@ -262,6 +308,9 @@ class MumbleRadio:
         self.rx_announced = {}
         self.credit = FRAME_BYTES * 5
         self.credit_at = time.monotonic()
+        # T33: per-speaker link state (impairment, dropout gate, noise phase).
+        self.links: dict = {}
+        self.links_at: dict = {}
 
     def tuned_ack(self):
         """The join acknowledgement, as this radio currently stands.
@@ -291,6 +340,44 @@ class MumbleRadio:
     def admit(self, sock, session, required):
         """Record the credential a face joined with (A9, A13)."""
         self.face_session[sock] = (session, required)
+
+    def role(self):
+        """The roster role behind this radio, from any admitted face."""
+        for session, _required in self.face_session.values():
+            if session and session.get('role'):
+                return session['role']
+        return None
+
+    def link_to(self, speaker_name, speaker_radio):
+        """This listener's link state for `speaker_name`, refreshed every
+        LINK_REFRESH_S from the current positions; None when the model is off."""
+        conditions = reach_conditions()
+        if conditions is None:
+            self.links.clear()
+            return None
+        now = time.monotonic()
+        state = self.links.get(speaker_name)
+        if state is not None and now - self.links_at.get(speaker_name, 0) < LINK_REFRESH_S:
+            return state
+        listener = station_endpoint(self.callsign, self.role())
+        if speaker_radio is not None:
+            speaker = station_endpoint(speaker_radio.callsign, speaker_radio.role())
+        else:
+            speaker = station_endpoint(speaker_name, None)
+        try:
+            sites = radio_sites.configured()["sites"]
+            link = radio_link.link_between(listener, speaker, sites, conditions=conditions)
+        except (ValueError, OSError) as error:
+            log.warning('radio reach model unavailable (%s); passing audio through', type(error).__name__)
+            return None
+        seed = "%s|%s|%s|%s|%.2f" % (self.callsign, speaker_name, link["path"], link["via"], link["margin"])
+        self.links_at[speaker_name] = now
+        if state is None:
+            state = self.links[speaker_name] = radio_link.LinkState(link, seed)
+            state.announce = True
+        elif state.update(link, seed):
+            state.announce = True
+        return state
 
     def detach(self, sock):
         """Remove one face. True when that was the last one."""
@@ -375,6 +462,16 @@ class MumbleRadio:
             self.enqueue({"type": "rx", "speaker": name, "session": session,
                           "receiver": self.receiver_kind, "net": self.channel_name})
             self.rx_announced[session] = now
+        # T33: static and dropouts by reach to the fixed sites. Only the
+        # tactical net is modelled; the airband face is a local base radio.
+        if self.receiver_kind == 'main':
+            link = self.link_to(name, speaker_radio)
+            if link is not None:
+                if getattr(link, 'announce', False):
+                    link.announce = False
+                    self.enqueue({"type": "link", "speaker": name, "receiver": self.receiver_kind,
+                                  **link.describe()})
+                pcm = link.process(pcm)
         self.enqueue(struct.pack('<II', epoch, session) + pcm)
 
     async def connect(self, key):

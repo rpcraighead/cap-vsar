@@ -33,8 +33,8 @@ import math
 import os
 from dataclasses import dataclass
 
-from .geo import distance_nm
-from .propagation import radio_horizon_nm
+from .geo import distance_nm                    # noqa: F401  (re-exported for radio_link)
+from .propagation import radio_horizon_nm        # noqa: F401
 from . import settings
 
 ROLES = ("base_antenna", "repeater")
@@ -188,6 +188,12 @@ def _link(lat1, lon1, alt1_ft, lat2, lon2, alt2_ft, *, terrain_ft=None, radio_ho
             "terrain_checked": terrain_ft is not None, "terrain_blocked": blocked,
             "clearance_ft": None if clearance is None else round(clearance),
             "reachable": bool(within and not blocked)}
+
+
+def point_link(lat1, lon1, alt1_ft, lat2, lon2, alt2_ft, *, terrain_ft=None, radio_horizon=True) -> dict:
+    """Reach between two stations at known positions (air-air, air-ground)."""
+    return _link(lat1, lon1, alt1_ft, lat2, lon2, alt2_ft, terrain_ft=terrain_ft,
+                 radio_horizon=radio_horizon)
 
 
 def path(lat, lon, alt_ft, site: RadioSite, *, terrain_ft=None, radio_horizon=True) -> dict:

@@ -54,6 +54,7 @@ EFFECT_LABELS = {
     "cone_of_confusion": "Cone of confusion",
     "multipath": "Multipath",
     "airframe_shadowing": "Wing blanking",
+    "radio_reach": "Radio reach (static and dropouts by site)",
 }
 
 
