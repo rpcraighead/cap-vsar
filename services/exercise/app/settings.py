@@ -68,4 +68,28 @@ SEED = {
     "alert_lat": 33.1283, "alert_lon": -117.2800, "alert_radius_nm": 12.0,
 }
 
+# Fixed radio sites for this exercise (T31; model and reach rules in
+# app/radio_sites.py, design in docs/RADIO_SITES.md). Positions are data so
+# another exercise can put the base and the repeater elsewhere (Palomar, say)
+# without a code change: set CAPVSAR_RADIO_SITES to a JSON file of the same
+# shape. Antenna heights are placeholders until the user confirms them.
+RADIO_SITES = [
+    # Gillespie Field airport reference point and field elevation: OurAirports
+    # airports.csv (2026-10-12) as loaded into the flight planner's
+    # services/flightplanner/data/aviation_data.db, row KSEE
+    # (32.826198577881, -116.97200012207, 388 ft). The repository's own KSEE
+    # 27R threshold survey (services/ai_pilot/flight_controller.py) gives the
+    # same 388 ft field elevation.
+    {"id": "BASE-KSEE", "role": "base_antenna", "name": "Mission Base, Gillespie Field (KSEE)",
+     "lat": 32.826199, "lon": -116.972000, "ground_elev_ft": 388.0, "antenna_agl_ft": 30.0},
+    # Julian VORTAC: X-Plane 12 "Resources/default data/earth_nav.dat",
+    # line 22664: "3  33.140458333 -116.585936111  5560  11400 ... JLI ENRT K2
+    # JULIAN VORTAC" (row type 3 = VOR, elevation 5,560 ft MSL, 114.00 MHz).
+    {"id": "RPT-JLI", "role": "repeater", "name": "Julian (JLI VORTAC)",
+     "lat": 33.140458, "lon": -116.585936, "ground_elev_ft": 5560.0, "antenna_agl_ft": 40.0},
+]
+# National CAP pair: the repeater transmits 148.125 and listens on 143.550
+# ("primary"); "secondary" is 148.150 / 143.700 (docs/CA_WING_REPEATERS.md).
+REPEATER_PAIR = "primary"
+
 

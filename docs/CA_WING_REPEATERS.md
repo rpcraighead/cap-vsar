@@ -53,7 +53,9 @@ site number in the source table — either a numbering collision in Northern
 vs. Southern California sub-lists, or a transcription issue upstream. Not
 resolved here.
 
-Not currently wired into any instrument or scenario — `cap-fm-tdfm-136b`
-doesn't reference specific repeater sites today. This is reference material
-for whenever the CAP mission net simulation wants real CA Wing channel names
-instead of generic training frequencies.
+The pair convention above is what the exercise console's fixed-site model
+uses (`services/exercise/app/radio_sites.py`, design in `docs/RADIO_SITES.md`):
+the default exercise puts a repeater on the primary pair at the Julian VORTAC
+(JLI) and the Mission Base antenna at Gillespie Field (KSEE). The instruments
+(`cap-fm-tdfm-136b`) still do not reference specific sites; the site table
+remains reference material for real CA Wing channel names.

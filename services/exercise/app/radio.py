@@ -59,6 +59,28 @@ CHANNEL_ACTIVITY: dict[str, float] = {}
 BY_USERNAME: dict = {}
 
 
+@router.get('/api/radio/sites', dependencies=[any_role])
+def radio_sites_view(lat: float | None = None, lon: float | None = None, alt_ft: float | None = None):
+    """The exercise's fixed radio sites (T31): where the base antenna and the
+    repeater are, the repeater pair, each repeater's fixed link to the base,
+    and, given a position, how a transmission from there would reach base.
+    Radio-horizon only: the console has no terrain, so `terrain_checked` is
+    false and a ridge the simulator would see is not modelled here."""
+    from . import radio_sites
+    cfg = radio_sites.configured()
+    sites = cfg["sites"]
+    base = next(s for s in sites if s.role == "base_antenna")
+    result = {"sites": [s.as_dict() for s in sites], "repeater_pair": cfg["repeater_pair"],
+              "links": [radio_sites.site_link(s, base) for s in sites if s.role == "repeater"]}
+    if lat is not None and lon is not None:
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            raise HTTPException(400, "lat/lon outside the globe")
+        if alt_ft is None or not -1500 <= alt_ft <= 60000:
+            raise HTTPException(400, "alt_ft (MSL) is required with lat/lon, -1500..60000")
+        result["route"] = radio_sites.route(lat, lon, alt_ft, sites)
+    return result
+
+
 @router.get('/api/radio/config', dependencies=[any_role])
 def config():
     max_sessions = int(os.getenv('CAPVSAR_RADIO_MAX_SESSIONS', '16'))

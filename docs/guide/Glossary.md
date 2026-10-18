@@ -53,6 +53,7 @@ This glossary explains Civil Air Patrol Emergency Services abbreviations, aviati
 ## M
 
 - **MART Vol. II (Mission Aircrew Reference Text, Volume II):** The Civil Air Patrol Mission Observer and SAR/DR reference manual covering visual search, electronic search patterns, and direction-finding procedures.
+- **Mission Base Antenna:** The fixed antenna through which Mission Base hears the tactical net directly; in this exercise it stands at Gillespie Field (`KSEE`, `388 ft MSL`). Stations without a clear path to it are heard through the repeater or not at all.
 - **Mission Base (`/base`):** The ground command post screen where the Incident Commander, Air Operations Branch Director, and Mission Radio Operator track aircraft, plot DF lines of position, and manage tasking.
 - **Mission Observer (MO):** The right-seat aircrew member (`OBS-423`, `OBS-415`) responsible for navigation, radio communications (`TDFM-136B` and `GMA 1347`), direction finding (`Becker SAR-DF 517` or `RHOTHETA RT-600`), and reporting bearings and Ops Normal calls to Mission Base.
 - **Mission Radio Operator (MRO):** The ground station operator (`MRO 1`, `MRO 2`) at `/radio` who operates the base radios, maintains the `CAPF 110` log, and tracks 30-minute Ops Normal check-ins.
@@ -72,6 +73,7 @@ This glossary explains Civil Air Patrol Emergency Services abbreviations, aviati
 
 ## R
 
+- **Repeater:** A fixed radio relay on high ground that receives the tactical net on its input frequency and retransmits it on its output frequency, extending reach beyond line of sight of Mission Base. In this exercise the repeater sits on the Julian VORTAC site (`JLI`, `5,560 ft MSL`) on the national primary pair (`148.125 MHz` out, `143.550 MHz` in). A station is heard through the repeater only when it can see the repeater and the repeater can see Mission Base.
 - **RHOTHETA RT-600:** The multi-band airborne direction-finding unit (`121.5 MHz` and `406.028 MHz` COSPAS-SARSAT hex ID decode) installed in `CAP 415`.
 
 ## S
