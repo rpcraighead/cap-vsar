@@ -4,46 +4,240 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CAP V-SAR - Exercise & Fleet Setup</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232563eb'%3E%3Cpath d='M12 2L3 7v6c0 5.25 3.75 10.15 9 11 5.25-.85 9-5.75 9-11V7l-9-5z'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/vendor/fonts/fonts.css">
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/onboarding.css">
 </head>
-<body class="setup-body">
+<body class="setup-body onb">
 
-<header>
-  <div class="brand"><b>CAP V-SAR</b> <span>Exercise & Fleet Setup</span></div>
+<header class="onb-topbar">
+  <div class="brand">
+    <span class="onb-brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2L3 7v6c0 5.25 3.75 10.15 9 11 5.25-.85 9-5.75 9-11V7l-9-5z"/>
+        <path d="M12 7l2.2 4.5 5 .7-3.6 3.5.85 5-4.45-2.35L7.55 20.7l.85-5L4.8 12.2l5-.7L12 7z"/>
+      </svg>
+    </span>
+    <b>CAP V-SAR</b>
+    <span>Exercise &amp; Fleet Setup</span>
+  </div>
+
+  <div class="onb-safety-pill" title="Simulated search and rescue exercise environment">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+      <line x1="12" y1="9" x2="12" y2="13"/>
+      <line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>
+    <span>EXERCISE TRAFFIC &middot; NOT A REAL DISTRESS</span>
+  </div>
+
   <div id="status" class="status online">Setup Mode</div>
   <div class="spacer"></div>
-  <a class="navlink" href="/">Home</a>
-  <a class="navlink" href="/instructor">Exercise Console</a>
-  <a class="navlink" href="/base">Mission Base</a>
-  <a class="navlink" href="/radio">Base Radio</a>
-  <a class="navlink" href="/debrief">Debrief</a>
-  <div id="userBadge" class="user-badge mono">👤 Instructor</div>
-  <button id="logoutBtn" class="ghost btn-sm">Log out</button>
+
+  <nav class="onb-nav" aria-label="Exercise consoles">
+    <a class="navlink" href="/">Flight Deck</a>
+    <a class="navlink" href="/ready">Ready Room</a>
+    <a class="navlink" href="/instructor">Exercise Console</a>
+    <a class="navlink" href="/base">Mission Base</a>
+    <a class="navlink" href="/radio">Base Radio</a>
+    <a class="navlink" href="/debrief">Debrief</a>
+  </nav>
+
+  <span id="zuluClock" class="onb-clock mono" aria-label="UTC time">--:--:--Z</span>
+
+  <button type="button" id="themeToggleBtn" class="onb-icon-btn" title="Toggle light/dark mode" aria-label="Toggle color theme">
+    <svg id="themeIconSun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="5"/>
+      <line x1="12" y1="1" x2="12" y2="3"/>
+      <line x1="12" y1="21" x2="12" y2="23"/>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+      <line x1="1" y1="12" x2="3" y2="12"/>
+      <line x1="21" y1="12" x2="23" y2="12"/>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+    </svg>
+  </button>
+
+  <div id="userBadge" class="user-badge mono">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+      <circle cx="12" cy="7" r="4"/>
+    </svg>
+    <span id="userBadgeText">Instructor</span>
+  </div>
+  <button id="logoutBtn" class="ghost btn-sm" type="button">Sign out</button>
 </header>
 
 <main class="setup-main">
   <div class="setup-container">
-    <div class="setup-header-block">
-      <h1>Exercise Director Setup</h1>
-      <p class="subtitle">Configure participating aircraft, aircrew members, and ground communications staff. Generate secure login codes and scannable QR codes for immediate mobile or desktop onboarding.</p>
-    </div>
 
-    <!-- Step 1: Exercise Parameters -->
-    <div class="setup-card">
-      <div class="card-title">1. Exercise Parameters</div>
-      <div class="form-grid">
-        <div>
-          <label for="exName">Exercise Name</label>
-          <input id="exName" value="Civil Air Patrol SAREX Exercise" placeholder="e.g. CAWG Pauma Valley SAREX">
-        </div>
+    <!-- Print-only Briefing Sheet Banner -->
+    <div class="onb-print-header" aria-hidden="true">
+      <div class="onb-print-header-left">
+        <div class="onb-print-kicker">CIVIL AIR PATROL &middot; V-SAR TRAINING PLATFORM &middot; EXERCISE TRAFFIC ONLY</div>
+        <h2 id="printExerciseTitle">Civil Air Patrol SAREX Exercise</h2>
+        <p>Sign in with your assigned Google account at <strong>/login</strong>, or scan your seat QR badge / enter the badge code below.</p>
+      </div>
+      <div class="onb-print-header-right mono">
+        <div id="printTimestamp">ISSUED UTC</div>
+        <div id="printSeatSummary">0 SEATS PROVISIONED</div>
       </div>
     </div>
 
-    <!-- Step 2: Fleet & Airplanes -->
-    <div class="setup-card">
+    <!-- Hero Header & Operational Telemetry Strip -->
+    <section class="setup-header-block">
+      <div class="onb-hero-top">
+        <div>
+          <div class="onb-eyebrow">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+              <polyline points="2 17 12 22 22 17"/>
+              <polyline points="2 12 12 17 22 12"/>
+            </svg>
+            <span>EXERCISE DIRECTOR ONBOARDING &amp; SEAT ASSIGNMENT</span>
+          </div>
+          <h1>Exercise Director Setup</h1>
+          <p class="subtitle">Configure participating search aircraft, aircrew seats, and ground communications watches. Assign participant Google email addresses (with printable badge codes as an offline fallback) and track live sign-ins before launch.</p>
+        </div>
+
+        <div class="onb-kpi-strip" role="region" aria-label="Roster telemetry summary">
+          <div class="onb-kpi-card">
+            <span class="onb-kpi-label">Search Aircraft</span>
+            <strong class="onb-kpi-value mono" id="kpiAircraftCount">1</strong>
+            <span class="onb-kpi-sub" id="kpiAircraftSub">CAP 423</span>
+          </div>
+          <div class="onb-kpi-card">
+            <span class="onb-kpi-label">Provisioned Seats</span>
+            <strong class="onb-kpi-value mono" id="kpiSeatCount">0</strong>
+            <span class="onb-kpi-sub" id="kpiSeatSub">Command, Base, Air &amp; UDF</span>
+          </div>
+          <div class="onb-kpi-card">
+            <span class="onb-kpi-label">Seats Signed In</span>
+            <strong class="onb-kpi-value mono" id="kpiJoinedCount">0 / 0</strong>
+            <span class="onb-kpi-sub" id="kpiJoinedSub">Awaiting participant sign-in</span>
+          </div>
+          <div class="onb-kpi-card">
+            <span class="onb-kpi-label">Ready Room Live</span>
+            <strong class="onb-kpi-value mono" id="kpiReadyCount">--</strong>
+            <span class="onb-kpi-sub" id="kpiReadySub">Comms &amp; station check</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5-Step Onboarding Workflow Stepper -->
+      <nav class="onb-workflow-stepper" id="onbStepperNav" aria-label="Onboarding setup steps">
+        <button type="button" id="stepTab1" class="onb-step-item is-active" data-step-target="1">
+          <span class="onb-step-num">1</span>
+          <span class="onb-step-copy">
+            <span class="onb-step-title">Exercise details</span>
+            <span class="onb-step-desc">Mission name &amp; sign-in mode</span>
+          </span>
+        </button>
+        <button type="button" id="stepTab2" class="onb-step-item" data-step-target="2">
+          <span class="onb-step-num">2</span>
+          <span class="onb-step-copy">
+            <span class="onb-step-title">Add aircraft, crew &amp; staff</span>
+            <span class="onb-step-desc">Assign seats &amp; Google emails</span>
+          </span>
+        </button>
+        <button type="button" id="stepTab3" class="onb-step-item" data-step-target="3">
+          <span class="onb-step-num">3</span>
+          <span class="onb-step-copy">
+            <span class="onb-step-title">Review readiness</span>
+            <span class="onb-step-desc">Validate roster &amp; save seats</span>
+          </span>
+        </button>
+        <button type="button" id="stepTab4" class="onb-step-item" data-step-target="4">
+          <span class="onb-step-num">4</span>
+          <span class="onb-step-copy">
+            <span class="onb-step-title">Invite participants</span>
+            <span class="onb-step-desc">Sign-in links, email &amp; badges</span>
+          </span>
+        </button>
+        <button type="button" id="stepTab5" class="onb-step-item" data-step-target="5">
+          <span class="onb-step-num">5</span>
+          <span class="onb-step-copy">
+            <span class="onb-step-title">Track who has joined</span>
+            <span class="onb-step-desc">Sign-ins &amp; Ready Room status</span>
+          </span>
+        </button>
+      </nav>
+    </section>
+
+    <!-- STEP 1: Exercise Parameters -->
+    <section class="setup-card onb-step-section" id="stepPanel1" data-step-panel="1">
       <div class="card-title-row">
-        <div class="card-title">2. Aircraft Fleet Configuration</div>
-        <div class="stepper-group">
+        <div class="card-title">
+          <span class="onb-section-badge">STEP 1</span>
+          <span>Exercise Details &amp; Identity</span>
+        </div>
+        <span class="onb-status-chip onb-chip-ok" id="step1StatusChip">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          <span>Configured</span>
+        </span>
+      </div>
+      <p class="hint">Define the official exercise designation shown on participant invitations, the <code>/join</code> boarding pass, and the Mission Base log header.</p>
+
+      <div class="onb-step1-grid">
+        <div class="onb-field-group">
+          <div class="onb-label-row">
+            <label for="exName">Exercise Name</label>
+            <span class="onb-char-count mono" id="exNameCharCount">32 / 100</span>
+          </div>
+          <input id="exName" type="text" maxlength="100" value="Civil Air Patrol SAREX Exercise" placeholder="e.g. CAWG Pauma Valley SAREX" aria-describedby="exNameValidation">
+          <div id="exNameValidation" class="onb-field-feedback is-valid">
+            <span>Displayed across all participant invitations, boarding passes, and printable QR cards.</span>
+          </div>
+          <div class="onb-preset-row">
+            <span class="onb-preset-label">Quick presets:</span>
+            <button type="button" class="onb-chip-btn" data-ex-preset="Civil Air Patrol SAREX Exercise">Standard SAREX</button>
+            <button type="button" class="onb-chip-btn" data-ex-preset="CAWG Grid Search &amp; ELT Homing Exercise">ELT Homing Sortie</button>
+            <button type="button" class="onb-chip-btn" data-ex-preset="Joint Air-Ground UDF Triangulation Exercise">Air-Ground UDF</button>
+          </div>
+        </div>
+
+        <div class="onb-policy-box" aria-label="Sign-in and credential policy">
+          <div class="onb-policy-title">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <span>Sign-In &amp; Credential Summary</span>
+          </div>
+          <ul class="onb-policy-list">
+            <li>
+              <span class="onb-policy-key">Google Sign-In</span>
+              <span class="onb-policy-val mono" id="setupOidcStatus">Checking status...</span>
+            </li>
+            <li>
+              <span class="onb-policy-key">Offline Badge Fallback</span>
+              <span class="onb-policy-val mono">PREFIX-N-&lt;32-hex&gt; + QR</span>
+            </li>
+            <li>
+              <span class="onb-policy-key">Short 6-Char Code</span>
+              <span class="onb-policy-val onb-untracked-tag" title="Planned short code alias is not yet enabled">Not yet tracked (Google or full badge code used)</span>
+            </li>
+            <li>
+              <span class="onb-policy-key">Last Roster Update</span>
+              <span class="onb-policy-val mono" id="setupLastUpdated">Loaded from server</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- STEP 2: Fleet, Aircrew & Ground Staff -->
+    <section class="setup-card onb-step-section" id="stepPanel2" data-step-panel="2">
+      <div class="card-title-row">
+        <div class="card-title">
+          <span class="onb-section-badge">STEP 2</span>
+          <span>Aircraft Fleet, Aircrew &amp; Ground Staff</span>
+        </div>
+        <div class="stepper-group" role="group" aria-label="Number of participating airplanes">
           <span class="stepper-label">Number of Airplanes:</span>
           <button type="button" class="btn-stepper" data-count="1">1</button>
           <button type="button" class="btn-stepper" data-count="2">2</button>
@@ -51,70 +245,292 @@
           <button type="button" class="btn-stepper" data-count="4">4</button>
         </div>
       </div>
-      <p class="hint">Configure tail numbers, callsigns, direction finder heads, and crew positions for each participating search aircraft.</p>
-      
-      <div id="aircraftGrid" class="aircraft-grid"></div>
-    </div>
+      <p class="hint">Configure tail numbers, CAP callsigns, direction-finding (DF) receiver heads, and crew seats. Enter a participant's Google email address to let them sign in with Google directly into their seat, or leave the email box blank for badge-only use.</p>
 
-    <!-- Step 3: Ground Base & Communications Staff -->
-    <div class="setup-card">
-      <div class="card-title">3. Ground Operations & Mission Radio Staff</div>
-      <p class="hint">Assign ground roles for Mission Base, communications watches, and mobile Urban Direction Finding (UDF) teams.</p>
-      
+      <div id="aircraftGrid" class="aircraft-grid" aria-live="polite"></div>
+
+      <div class="onb-subsection-divider"></div>
+
+      <div class="card-title-row">
+        <div class="card-title">
+          <span class="onb-section-badge onb-badge-subtle">2B</span>
+          <span>Ground Operations, Mission Radio &amp; Command Staff</span>
+        </div>
+        <span class="onb-meta-note mono" id="groundStaffCountBadge">3 Ground + 1 Command Seats</span>
+      </div>
+      <p class="hint">Assign ground roles and optional Google sign-in emails for Mission Base radio watches, mobile Urban Direction Finding (UDF) teams, and the Exercise Director. One seat per email address across the exercise.</p>
+
       <div class="staff-grid">
-        <div class="staff-option-box">
-          <label class="checkbox-label">
-            <input type="checkbox" id="staffMro1" checked disabled>
-            <b>Mission Radio Operator 1 (MRO 1)</b>
-          </label>
-          <span class="notes">Primary VHF-FM tactical net controller & CAP Form 110 logging watch.</span>
+        <div class="staff-option-box is-checked is-locked" id="staffBoxMro1">
+          <div class="onb-staff-top">
+            <label class="checkbox-label" for="staffMro1">
+              <input type="checkbox" id="staffMro1" checked disabled>
+              <b>Mission Radio Operator 1 (MRO 1)</b>
+            </label>
+            <span class="onb-role-pill role-base">BASE &middot; REQUIRED</span>
+          </div>
+          <span class="notes">Primary VHF-FM tactical net controller &amp; CAP Form 110 communications logging watch (opens <code>/base</code> &amp; <code>/radio</code>).</span>
+          <div class="onb-seat-email-block">
+            <label for="staffEmailMro1">Assigned Google Email <span class="onb-opt-note">(optional &mdash; blank for badge-only)</span></label>
+            <input type="email" id="staffEmailMro1" class="staff-email-input" data-staff-key="MRO 1" placeholder="e.g. mro1@cawg.cap.gov" autocomplete="off" spellcheck="false" maxlength="254">
+            <div class="onb-field-feedback" id="staffEmailErrMro1" data-email-err="staff-MRO 1"></div>
+          </div>
         </div>
 
-        <div class="staff-option-box">
-          <label class="checkbox-label">
-            <input type="checkbox" id="staffMro2" checked>
-            <b>Mission Radio Operator 2 (MRO 2)</b>
-          </label>
-          <span class="notes">Aeronautical VHF-AM airband watch (123.100 MHz SAR & flight line).</span>
+        <div class="staff-option-box is-checked" id="staffBoxMro2">
+          <div class="onb-staff-top">
+            <label class="checkbox-label" for="staffMro2">
+              <input type="checkbox" id="staffMro2" checked>
+              <b>Mission Radio Operator 2 (MRO 2)</b>
+            </label>
+            <span class="onb-role-pill role-base">BASE &middot; OPTIONAL</span>
+          </div>
+          <span class="notes">Secondary aeronautical VHF-AM airband watch (123.100 MHz SAR &amp; flight line guard, opens <code>/base</code> &amp; <code>/radio</code>).</span>
+          <div class="onb-seat-email-block">
+            <label for="staffEmailMro2">Assigned Google Email <span class="onb-opt-note">(optional &mdash; blank for badge-only)</span></label>
+            <input type="email" id="staffEmailMro2" class="staff-email-input" data-staff-key="MRO 2" placeholder="e.g. mro2@cawg.cap.gov" autocomplete="off" spellcheck="false" maxlength="254">
+            <div class="onb-field-feedback" id="staffEmailErrMro2" data-email-err="staff-MRO 2"></div>
+          </div>
         </div>
 
-        <div class="staff-option-box">
-          <label class="checkbox-label">
-            <input type="checkbox" id="staffUdf1" checked>
-            <b>Ground Search Team 1 (UDF 1)</b>
-          </label>
-          <span class="notes">Mobile vehicle or foot team utilizing smartphone PTT walkie-talkie & bearing reports.</span>
+        <div class="staff-option-box is-checked" id="staffBoxUdf1">
+          <div class="onb-staff-top">
+            <label class="checkbox-label" for="staffUdf1">
+              <input type="checkbox" id="staffUdf1" checked>
+              <b>Ground Search Team 1 (UDF 1)</b>
+            </label>
+            <span class="onb-role-pill role-ground">UDF &middot; MOBILE</span>
+          </div>
+          <span class="notes">Primary mobile vehicle or foot DF team utilizing push-to-talk radio &amp; bearing reports (opens <code>/radio</code>).</span>
+          <div class="onb-seat-email-block">
+            <label for="staffEmailUdf1">Assigned Google Email <span class="onb-opt-note">(optional &mdash; blank for badge-only)</span></label>
+            <input type="email" id="staffEmailUdf1" class="staff-email-input" data-staff-key="UDF 1" placeholder="e.g. udf1@cawg.cap.gov" autocomplete="off" spellcheck="false" maxlength="254">
+            <div class="onb-field-feedback" id="staffEmailErrUdf1" data-email-err="staff-UDF 1"></div>
+          </div>
         </div>
 
-        <div class="staff-option-box">
-          <label class="checkbox-label">
-            <input type="checkbox" id="staffUdf2">
-            <b>Ground Search Team 2 (UDF 2)</b>
-          </label>
-          <span class="notes">Secondary mobile team for cross-bearing triangulation.</span>
+        <div class="staff-option-box" id="staffBoxUdf2">
+          <div class="onb-staff-top">
+            <label class="checkbox-label" for="staffUdf2">
+              <input type="checkbox" id="staffUdf2">
+              <b>Ground Search Team 2 (UDF 2)</b>
+            </label>
+            <span class="onb-role-pill role-ground">UDF &middot; MOBILE</span>
+          </div>
+          <span class="notes">Secondary mobile ground DF team for cross-bearing triangulation &amp; ELT verification (opens <code>/radio</code>).</span>
+          <div class="onb-seat-email-block">
+            <label for="staffEmailUdf2">Assigned Google Email <span class="onb-opt-note">(optional &mdash; blank for badge-only)</span></label>
+            <input type="email" id="staffEmailUdf2" class="staff-email-input" data-staff-key="UDF 2" placeholder="e.g. udf2@cawg.cap.gov" autocomplete="off" spellcheck="false" maxlength="254">
+            <div class="onb-field-feedback" id="staffEmailErrUdf2" data-email-err="staff-UDF 2"></div>
+          </div>
+        </div>
+
+        <div class="staff-option-box is-checked is-locked" id="staffBoxDirector">
+          <div class="onb-staff-top">
+            <span class="checkbox-label">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 2L3 7v6c0 5.25 3.75 10.15 9 11 5.25-.85 9-5.75 9-11V7l-9-5z"/>
+              </svg>
+              <b>Exercise Director / Incident Commander (IC)</b>
+            </span>
+            <span class="onb-role-pill role-instructor">COMMAND &middot; AUTO</span>
+          </div>
+          <span class="notes">Automatically provisioned with every roster. Controls scenarios, signal conditions, and debrief (opens <code>/instructor</code>).</span>
+          <div class="onb-seat-email-block">
+            <label for="directorEmailInput">Exercise Director Google Email <span class="onb-opt-note">(optional &mdash; or set by server administrator)</span></label>
+            <input type="email" id="directorEmailInput" class="staff-email-input" data-staff-key="INSTR-1" placeholder="e.g. director@cawg.cap.gov" autocomplete="off" spellcheck="false" maxlength="254">
+            <div class="onb-field-feedback" id="directorEmailErr" data-email-err="director_email"></div>
+          </div>
+        </div>
+
+        <div class="staff-option-box is-placeholder">
+          <div class="onb-staff-top">
+            <span class="checkbox-label">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <b>Skills Evaluator / Observer (SET)</b>
+            </span>
+            <span class="onb-untracked-tag">Not yet tracked in setup</span>
+          </div>
+          <span class="notes">Read-only evaluator seat definition exists in station routing (<code>/debrief</code>), but custom staff provisioning is not yet enabled in Setup.</span>
         </div>
       </div>
-    </div>
+    </section>
 
-    <!-- Action Bar -->
-    <div class="setup-actions">
-      <button id="saveSetupBtn" class="primary btn-lg">Generate Roster & Invite Codes</button>
-      <button id="resetSetupBtn" class="ghost">Reset Defaults</button>
-      <button id="printBadgesBtn" class="ghost">🖨️ Print Access Badges</button>
-    </div>
-
-    <!-- Step 4: Participant Roster & QR Badges -->
-    <div id="rosterSection" class="setup-card" style="margin-top:24px">
+    <!-- STEP 3: Review Readiness & Save Roster -->
+    <section class="setup-card onb-step-section" id="stepPanel3" data-step-panel="3">
       <div class="card-title-row">
-        <div class="card-title">4. Participant Access Cards & Scannable QR Badges</div>
+        <div class="card-title">
+          <span class="onb-section-badge">STEP 3</span>
+          <span>Review Configuration Readiness &amp; Save Roster</span>
+        </div>
+        <span class="onb-status-chip onb-chip-ok" id="readinessVerdictBadge">Ready to Save</span>
+      </div>
+      <p class="hint">Verify roster and email assignment checks before saving. Saving the setup updates seat email assignments, generates fresh backup badge codes, and signs out previous participant sessions (you stay signed in as Exercise Director).</p>
+
+      <!-- Inline Server / Validation Error Banner -->
+      <div id="setupValidationBanner" class="login-error-box" role="alert" style="display:none;margin-bottom:16px"></div>
+
+      <div class="onb-readiness-layout">
+        <div class="onb-checklist-panel">
+          <div class="onb-panel-subtitle">Pre-Save Validation Checks</div>
+          <ul class="onb-check-list" id="readinessChecklist" aria-live="polite"></ul>
+        </div>
+
+        <div class="onb-manifest-panel">
+          <div class="onb-panel-subtitle">Planned Seat Manifest (<span id="manifestTotalSeats">0</span> Seats)</div>
+          <div class="onb-manifest-grid" id="readinessSummaryGrid"></div>
+          <div class="onb-reissue-warning">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span><strong>Session Rotation Notice:</strong> Saving setup updates email assignments, rotates backup badge codes, and requires other participants to sign in again. Your own Exercise Director session stays signed in.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Bar -->
+      <div class="setup-actions">
+        <button id="saveSetupBtn" type="button" class="primary btn-lg">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+          </svg>
+          <span id="saveSetupBtnLabel">Save Roster &amp; Seat Invites</span>
+        </button>
+        <button id="copyAllLinksBtn" type="button" class="ghost">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          <span>Copy All Sign-In Details</span>
+        </button>
+        <button id="printBadgesBtn" type="button" class="ghost">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="6 9 6 2 18 2 18 9"/>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+            <rect x="6" y="14" width="12" height="8"/>
+          </svg>
+          <span>Print Offline Badges</span>
+        </button>
+        <button id="resetSetupBtn" type="button" class="ghost">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="1 4 1 10 7 10"/>
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+          </svg>
+          <span>Reset Defaults</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- STEP 4: Invite Participants -->
+    <section id="rosterSection" class="setup-card onb-step-section" data-step-panel="4">
+      <div class="card-title-row">
+        <div class="card-title">
+          <span class="onb-section-badge">STEP 4</span>
+          <span>Invite Participants</span>
+        </div>
         <div class="roster-meta mono" id="rosterCount">0 Participants</div>
       </div>
-      <p class="hint">Participants can scan their assigned QR badge with their smartphone camera or enter the full code printed on it at <code>/login</code>. The QR carries the same code as a link.</p>
+      <p class="hint">Send each participant their sign-in link. Volunteers with an assigned email sign in with Google at <code>/login</code>; "Email this invite" opens your email program with a ready-to-send message naming the exercise, seat, and site address (no email is sent by the server).</p>
 
-      <div id="rosterGrid" class="roster-grid"></div>
-    </div>
+      <!-- Filter & Search Bar -->
+      <div class="onb-roster-toolbar no-print">
+        <div class="onb-filter-pills" role="tablist" aria-label="Filter seats by role">
+          <button type="button" class="onb-filter-pill is-active" data-role-filter="all">All Seats</button>
+          <button type="button" class="onb-filter-pill" data-role-filter="instructor">Command</button>
+          <button type="button" class="onb-filter-pill" data-role-filter="base">Mission Base</button>
+          <button type="button" class="onb-filter-pill" data-role-filter="aircrew">Aircrew</button>
+          <button type="button" class="onb-filter-pill" data-role-filter="ground_team">Ground UDF</button>
+        </div>
+
+        <div class="onb-roster-search-wrap">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input type="search" id="rosterSearchInput" placeholder="Filter by callsign, seat, email, or role..." aria-label="Filter participant invites">
+        </div>
+
+        <div class="onb-delivery-status" title="The server does not send email or SMS; use 'Email this invite' to open your mail app or copy the sign-in link">
+          <span class="onb-delivery-label">Invite Delivery:</span>
+          <span class="onb-untracked-tag">No server email sent &middot; Use mailto or Copy Link</span>
+        </div>
+      </div>
+
+      <!-- Primary Invite List (Copy sign-in link + Email this invite + status chips) -->
+      <div id="inviteList" class="onb-invite-list no-print" aria-live="polite"></div>
+
+      <!-- Collapsible Offline Fallback: Badge Cards -->
+      <details id="offlineBadgeFallback" class="onb-collapsible-fallback">
+        <summary class="onb-collapsible-summary no-print">
+          <div class="onb-collapsible-title">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+              <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            <b>Offline fallback: badge cards</b>
+            <span class="notes" style="margin:0">&mdash; Printable QR badges &amp; backup codes for field or no-internet use</span>
+          </div>
+          <span class="onb-status-chip mono" id="offlineBadgeCountChip">0 Badges</span>
+        </summary>
+        <div class="onb-collapsible-body">
+          <div id="rosterGrid" class="roster-grid" aria-live="polite"></div>
+        </div>
+      </details>
+    </section>
+
+    <!-- STEP 5: Track Who Has Joined -->
+    <section id="attendanceSection" class="setup-card onb-step-section no-print" data-step-panel="5">
+      <div class="card-title-row">
+        <div class="card-title">
+          <span class="onb-section-badge">STEP 5</span>
+          <span>Track Who Has Joined &amp; Station Readiness</span>
+        </div>
+        <div class="onb-attendance-actions">
+          <span class="onb-poll-indicator mono" id="attendanceLastSync">Synced just now</span>
+          <button type="button" id="refreshAttendanceBtn" class="ghost btn-sm">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="23 4 23 10 17 10"/>
+              <polyline points="1 20 1 14 7 14"/>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+            <span>Refresh Status</span>
+          </button>
+          <a href="/ready" class="navlink onb-ready-link">Open Ready Room &rarr;</a>
+        </div>
+      </div>
+      <p class="hint">Monitor each seat's assigned Google email, how and when the volunteer last signed in (Google or badge code), and live Ready Room check-in status. <span class="onb-untracked-tag" style="margin-left:4px">Per-seat revoke without saving Setup: Not yet tracked</span></p>
+
+      <div class="onb-table-wrap">
+        <table id="attendanceTable" class="onb-attendance-table" aria-label="Participant join and readiness status">
+          <thead>
+            <tr>
+              <th scope="col">Seat &amp; Role</th>
+              <th scope="col">Callsign &amp; Console</th>
+              <th scope="col">Assigned Email</th>
+              <th scope="col">Last Sign-In</th>
+              <th scope="col">Ready Room &amp; Comms</th>
+              <th scope="col" class="text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="attendanceTableBody">
+            <tr>
+              <td colspan="6" class="onb-table-empty">Loading participant attendance...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
   </div>
 </main>
+
+<div id="onbToastContainer" class="onb-toast-container" aria-live="polite" aria-atomic="true"></div>
 
 <script src="/static/setup.js"></script>
 </body>

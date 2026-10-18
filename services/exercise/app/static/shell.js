@@ -85,9 +85,15 @@
     if (me && me.role) {
       avatar.textContent = initials(me.callsign || me.title || me.role);
       idText.textContent = me.title || me.role;
-      idSub.textContent = me.callsign ? ' · ' + me.callsign : '';
-      id.href = '/api/auth/logout';
-      id.title = 'Sign out';
+      const viaSuffix = me.via === 'oidc' ? ' · Google' : '';
+      idSub.textContent = (me.callsign ? ' · ' + me.callsign : '') + viaSuffix;
+      id.href = '/login';
+      id.title = me.email ? `Signed in with Google (${me.email}) — click to sign out` : 'Sign out';
+      id.onclick = async (e) => {
+        if (e && typeof e.preventDefault === 'function') e.preventDefault();
+        try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }); } catch (err) { /* leaving anyway */ }
+        location.href = '/login';
+      };
     }
 
     async function refresh() {

@@ -3,39 +3,174 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CAP V-SAR - Participant Access</title>
+  <title>CAP V-SAR - Participant Sign In</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232563eb'%3E%3Cpath d='M12 2L3 7v6c0 5.25 3.75 10.15 9 11 5.25-.85 9-5.75 9-11V7l-9-5z'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/vendor/fonts/fonts.css">
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/onboarding.css">
 </head>
-<body class="login-body">
+<body class="login-body onb">
 
-<div class="login-wrapper">
+<header class="onb-auth-topbar">
+  <div class="onb-brand">
+    <span class="onb-brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2L3 7v6c0 5.25 3.75 10.15 9 11 5.25-.85 9-5.75 9-11V7l-9-5z"/>
+        <path d="M12 7l2.2 4.5 5 .7-3.6 3.5.85 5-4.45-2.35L7.55 20.7l.85-5L4.8 12.2l5-.7L12 7z"/>
+      </svg>
+    </span>
+    <div class="onb-brand-text">
+      <b>CAP V-SAR</b>
+      <span>Participant Sign-In</span>
+    </div>
+  </div>
+
+  <div class="onb-safety-pill">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+      <line x1="12" y1="9" x2="12" y2="13"/>
+      <line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>
+    <span>EXERCISE TRAFFIC &middot; NOT A REAL DISTRESS</span>
+  </div>
+
+  <div class="onb-topbar-right">
+    <span id="loginZuluClock" class="onb-clock mono" aria-label="UTC time">--:--:--Z</span>
+    <button type="button" id="loginThemeToggle" class="onb-icon-btn" title="Toggle light/dark mode" aria-label="Toggle color theme">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="5"/>
+        <line x1="12" y1="1" x2="12" y2="3"/>
+        <line x1="12" y1="21" x2="12" y2="23"/>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+        <line x1="1" y1="12" x2="3" y2="12"/>
+        <line x1="21" y1="12" x2="23" y2="12"/>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<main class="login-wrapper">
   <div class="login-card">
     <div class="login-brand">
+      <div class="login-brand-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2L3 7v6c0 5.25 3.75 10.15 9 11 5.25-.85 9-5.75 9-11V7l-9-5z"/>
+          <path d="M12 7l2.2 4.5 5 .7-3.6 3.5.85 5-4.45-2.35L7.55 20.7l.85-5L4.8 12.2l5-.7L12 7z"/>
+        </svg>
+      </div>
       <div class="login-logo-text">CIVIL AIR PATROL</div>
-      <div class="login-sub-text">VIRTUAL SEARCH & RESCUE (V-SAR)</div>
+      <div class="login-sub-text">VIRTUAL SEARCH &amp; RESCUE (V-SAR)</div>
     </div>
 
     <div class="login-title-block">
-      <h2>Participant Login</h2>
-      <p class="hint">Enter the access code from your briefing card or scan your participant QR badge.</p>
+      <h2>Participant Sign In</h2>
+      <p class="hint" id="loginSubtitleHint">Sign in to open the station for your assigned exercise seat.</p>
+      <div id="loginDestPreview" class="onb-pill info mono" style="display:none;margin-top:6px"></div>
     </div>
 
-    <div id="loginError" class="login-error-box" style="display:none"></div>
+    <!-- Active Session Resume Callout -->
+    <div id="activeSessionBanner" class="onb-callout info" style="display:none">
+      <div style="flex:1">
+        <div style="font-weight:700;margin-bottom:2px" id="activeSessionTitle">Active Station Session Found</div>
+        <div style="font-size:12px" id="activeSessionMeta">You are already signed in to an exercise seat.</div>
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+          <a id="activeSessionContinueBtn" href="/" class="onb-btn onb-btn-primary btn-sm">Resume Station &rarr;</a>
+          <button type="button" id="activeSessionLogoutBtn" class="ghost btn-sm">Sign out</button>
+        </div>
+      </div>
+    </div>
 
-    <form id="loginForm" class="login-form">
-      <label for="accessCode">Participant Access Code</label>
-      <input type="text" id="accessCode" class="code-input mono" placeholder="Full code from your badge" autocomplete="off" autofocus required maxlength="128">
+    <div id="loginError" class="login-error-box" role="alert" style="display:none"></div>
 
-      <button type="submit" id="loginSubmitBtn" class="primary btn-block btn-lg" style="margin-top:16px">Connect to Exercise Net</button>
-    </form>
+    <!-- Primary OIDC Sign-In Section (shown only when /api/auth/providers reports oidc.enabled === true) -->
+    <section id="oidcSection" class="onb-oidc-section" style="display:none" aria-label="Sign in with email account">
+      <a id="oidcLoginBtn" href="/auth/oidc/login" class="primary onb-oidc-btn btn-block btn-lg">
+        <span class="onb-oidc-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18">
+            <path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/>
+            <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"/>
+            <path fill="#FBBC05" d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.13-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"/>
+            <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z"/>
+          </svg>
+        </span>
+        <span id="oidcLoginLabel">Sign in with Google</span>
+      </a>
+      <p id="oidcHint" class="onb-oidc-hint">
+        Use the email address the Exercise Director assigned to your seat (or your Exercise Director email). You will open your station automatically.
+      </p>
+    </section>
+
+    <div id="oidcDivider" class="onb-login-divider" style="display:none" aria-hidden="true">
+      <span>or</span>
+    </div>
+
+    <!-- Badge Code Section (primary when offline/unconfigured; clearly secondary when OIDC is enabled) -->
+    <section id="badgeSection" class="onb-badge-login-section" aria-labelledby="badgeSectionTitle">
+      <div class="onb-badge-section-head">
+        <h3 id="badgeSectionTitle" class="onb-badge-section-title">Sign in with a badge code (offline / field use)</h3>
+        <span id="badgeFallbackTag" class="onb-badge-fallback-tag" style="display:none">Offline / field use</span>
+      </div>
+
+      <form id="loginForm" class="login-form" novalidate>
+        <div class="onb-label-row">
+          <label for="accessCode">Participant Badge Code</label>
+          <span class="mono" style="font-size:11px;color:var(--onb-muted)">From your briefing card</span>
+        </div>
+
+        <div class="onb-code-input-wrap">
+          <input type="text" id="accessCode" class="code-input mono" placeholder="Full code from your badge" autocomplete="off" spellcheck="false" required maxlength="128" aria-describedby="codeFormatHint">
+          <button type="button" id="pasteCodeBtn" class="ghost btn-sm" title="Paste code or invite link from clipboard">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+            </svg>
+            <span>Paste</span>
+          </button>
+        </div>
+
+        <div id="codeFormatHint" class="onb-field-feedback">
+          <span>Tip: You can paste either your badge code or a full <code>/join/...</code> invite link.</span>
+        </div>
+
+        <button type="submit" id="loginSubmitBtn" class="primary btn-block btn-lg" style="margin-top:14px">
+          <span>Sign in with Badge Code</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="5" y1="12" x2="19" y2="12"/>
+            <polyline points="12 5 19 12 12 19"/>
+          </svg>
+        </button>
+      </form>
+    </section>
+
+    <div class="onb-onboarding-steps" aria-label="Participant onboarding steps">
+      <div class="onb-mini-step">
+        <span class="onb-mini-step-num">1</span>
+        <div><strong>Sign in with Google or Badge Code</strong> &mdash; Use the email assigned by the Exercise Director, or enter the badge code from your printed briefing card.</div>
+      </div>
+      <div class="onb-mini-step">
+        <span class="onb-mini-step-num">2</span>
+        <div><strong>Automatic Station Routing</strong> &mdash; Your seat opens Flight Deck, Mission Base, Base Radio, or the Exercise Director Console automatically.</div>
+      </div>
+      <div class="onb-mini-step">
+        <span class="onb-mini-step-num">3</span>
+        <div><strong>Ready Room Comms Check</strong> &mdash; Verify your headset audio and mission net check-in at <a href="/ready" style="color:var(--onb-accent)">/ready</a> before sortie launch.</div>
+      </div>
+    </div>
 
     <div class="login-footer-notice">
-      <span>EXERCISE TRAFFIC ONLY • SECURE PARTICIPANT GATEWAY</span>
+      <div>EXERCISE TRAFFIC ONLY &bull; PARTICIPANT SIGN-IN</div>
+      <div style="margin-top:6px">
+        <a href="/setup" style="color:var(--onb-muted);text-decoration:underline">Exercise Director Setup</a>
+        &nbsp;&middot;&nbsp;
+        <a href="/ready" style="color:var(--onb-muted);text-decoration:underline">Ready Room Status</a>
+      </div>
     </div>
   </div>
-</div>
+</main>
 
 <script src="/static/login.js"></script>
 </body>
 </html>
-
