@@ -40,17 +40,18 @@ def login_page():
 
 
 @router.post("/api/auth/login")
-def api_login(payload: LoginPayload, response: Response):
+def api_login(payload: LoginPayload, request: Request, response: Response):
     res = access.authenticate_code(payload.code)
     if not res:
         raise HTTPException(401, "Invalid participant access code. Please verify your code or scan your QR badge.")
     user, sess_id = res
+    access.revoke_previous_session(request)
     response.set_cookie(
         key=access.SESSION_COOKIE,
         value=sess_id,
         httponly=True,
         secure=True,
-        max_age=86400,
+        max_age=int(access.session_lifetime_s()),   # the same lifetime the row carries
         samesite="lax"
     )
     return {
@@ -254,9 +255,10 @@ async def confirm_join(code: str, request: Request):
     if not res:
         return RedirectResponse("/login?error=invalid_code", status_code=303)
     user, sess_id = res
+    access.revoke_previous_session(request)
     resp = RedirectResponse(user.get("target_url") or "/", status_code=303)
     resp.set_cookie(access.SESSION_COOKIE, sess_id, secure=True, httponly=True,
-                    max_age=86400, samesite="lax")
+                    max_age=int(access.session_lifetime_s()), samesite="lax")
     resp.delete_cookie(JOIN_CSRF_COOKIE, secure=True, httponly=True, samesite="strict")
     return resp
 
@@ -311,22 +313,43 @@ def api_setup_badge(roster_id: str, origin: str, request: Request):
                     headers={"Cache-Control": "private, no-store"})
 
 
+def _keep_caller_signed_in(request: Request, response: Response, previous: dict | None) -> None:
+    """B7 (review T11): saving the setup regenerates the roster and revokes every
+    session, the director's own included, so the page that just saved was logged
+    out and the new INSTR-1 code shown once. Re-issue the caller's session on the
+    new director row and set the cookie on this response."""
+    if not previous or not request.cookies.get(access.SESSION_COOKIE):
+        return
+    new_id = access.reissue_instructor_session(previous)
+    if new_id:
+        response.set_cookie(key=access.SESSION_COOKIE, value=new_id, httponly=True, secure=True,
+                            max_age=int(access.session_lifetime_s()), samesite="lax")
+
+
 @router.post("/api/setup")
-def api_save_setup(payload: SetupPayload, request: Request):
+def api_save_setup(payload: SetupPayload, request: Request, response: Response):
     access.enforce("instructor", request)
-    return access.save_exercise_setup(
-        name=payload.name,
-        num_aircraft=payload.num_aircraft,
-        aircraft_list=[a.model_dump(exclude_none=True) for a in payload.aircraft],
-        staff_list=[st.model_dump(exclude_none=True) for st in payload.staff],
-    )
+    previous = access.get_session_from_request(request)
+    try:
+        result = access.save_exercise_setup(
+            name=payload.name,
+            num_aircraft=payload.num_aircraft,
+            aircraft_list=[a.model_dump(exclude_none=True) for a in payload.aircraft],
+            staff_list=[st.model_dump(exclude_none=True) for st in payload.staff],
+            director_email=payload.director_email,
+        )
+    except ValueError as error:          # duplicate or malformed seat email
+        raise HTTPException(422, str(error))
+    _keep_caller_signed_in(request, response, previous)
+    return result
 
 
 @router.post("/api/setup/reset")
-def api_reset_setup(request: Request):
+def api_reset_setup(request: Request, response: Response):
     access.enforce("instructor", request)
+    previous = access.get_session_from_request(request)
     default_setup = access.get_exercise_setup()
-    return access.save_exercise_setup(
+    result = access.save_exercise_setup(
         name=default_setup.get("name", "Civil Air Patrol SAREX Exercise"),
         num_aircraft=1,
         aircraft_list=[{
@@ -341,4 +364,6 @@ def api_reset_setup(request: Request):
             {"role": "ground_team", "title": "Ground Team / UDF 1 Leader", "callsign": "UDF 1"}
         ]
     )
+    _keep_caller_signed_in(request, response, previous)
+    return result
 

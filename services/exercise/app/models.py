@@ -225,6 +225,15 @@ class LoginPayload(BaseModel):
 _OPT_CALLSIGN = r"^([A-Za-z0-9 ._-]{2,32})?$"
 
 
+def _email_or_none(value):
+    """A seat's email: trimmed, ASCII lower-cased, None when blank, 422 (plain
+    words) when malformed or non-ASCII. Dots and plus-tags are kept:
+    canonicalising them is how one person would claim another's seat
+    (identity plan §5.6). The rule lives in oidc.parse_setup_email."""
+    from .oidc import parse_setup_email
+    return parse_setup_email(value)
+
+
 class AircraftIn(BaseModel):
     """One aircraft of the exercise (X2-12). Was an untyped dict: a non-string
     callsign raised inside save_exercise_setup and answered 500. Keys this
@@ -237,6 +246,25 @@ class AircraftIn(BaseModel):
     tail: str = Field("", max_length=32)
     df_model: str = Field("", max_length=64)
     crew: list[Literal["pilot", "observer", "scanner"]] | None = Field(default=None, max_length=3)
+    # Seat -> email for the OIDC sign-in; keys must be crew seats of this aircraft.
+    emails: dict[Literal["pilot", "observer", "scanner"], str | None] | None = None
+
+    @field_validator("emails", mode="before")
+    @classmethod
+    def _normalise_emails(cls, value):
+        if value is None:
+            return None
+        if not isinstance(value, dict):
+            raise ValueError("emails must map crew seats to addresses")
+        return {k: _email_or_none(v) for k, v in value.items()}
+
+    @model_validator(mode="after")
+    def _emails_match_crew(self):
+        crew = self.crew if self.crew is not None else ["pilot", "observer"]
+        for key in (self.emails or {}):
+            if key not in crew:
+                raise ValueError("emails key '%s' is not a crew seat of this aircraft" % key)
+        return self
 
 
 class StaffIn(BaseModel):
@@ -248,6 +276,12 @@ class StaffIn(BaseModel):
     role: Literal["base", "aircrew", "ground_team"] = "base"
     title: str = Field("", max_length=120)
     callsign: str = Field("", pattern=_OPT_CALLSIGN)
+    email: str | None = None
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalise_email(cls, value):
+        return _email_or_none(value)
 
 
 class SetupPayload(BaseModel):
@@ -255,5 +289,11 @@ class SetupPayload(BaseModel):
     num_aircraft: int = Field(1, ge=0, le=32)
     aircraft: list[AircraftIn] = Field(default_factory=list, max_length=32)
     staff: list[StaffIn] = Field(default_factory=list, max_length=64)
+    director_email: str | None = None
+
+    @field_validator("director_email", mode="before")
+    @classmethod
+    def _normalise_director_email(cls, value):
+        return _email_or_none(value)
 
 

@@ -100,7 +100,9 @@ def _status(seat: str, checks: dict, pres: dict | None, ac: dict | None,
     return "invited"
 
 
-def build_ready_state() -> dict:
+def build_ready_state(*, include_email: bool = False) -> dict:
+    """`include_email`: only an instructor viewer is shown the addresses seats
+    were assigned to; everyone sees when and how a seat last signed in."""
     now = time.time()
     setup = access.get_exercise_setup()
     roster = access.get_roster()
@@ -145,6 +147,9 @@ def build_ready_state() -> dict:
             "checks": checks,
             "page": (pres or {}).get("page", ""),
             "seen_ago": round(now - pres["last_seen"], 1) if pres else None,
+            "last_login": row.get("last_login"),
+            "last_login_via": row.get("last_login_via"),
+            **({"email": row.get("email")} if include_email else {}),
         })
 
     scenario = None
@@ -173,7 +178,7 @@ def ready_state(request: Request):
     sess = access.get_session_from_request(request)
     key = (sess or {}).get("code") or "DEV"
     hub.touch_presence(key, role=(sess or {}).get("role", ""))
-    state = build_ready_state()
+    state = build_ready_state(include_email=access.is_instructor(request))
     state["me"] = {"key": key, "role": (sess or {}).get("role") or ("instructor" if access.dev_open() else ""),
                    "callsign": (sess or {}).get("callsign", ""),
                    "checks": hub.presence.get(key, {}).get("checks", {})}
