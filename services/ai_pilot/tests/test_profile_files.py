@@ -1,5 +1,6 @@
 """Aircraft profiles as data: the migration proof, and the loader's strictness."""
 from dataclasses import replace
+import json
 from pathlib import Path
 import shutil
 
@@ -9,7 +10,7 @@ from services.ai_pilot import aircraft_profiles
 from services.ai_pilot.aircraft_profiles import C172SP, C182T, PROFILES, AircraftProfile, profile_for
 from services.ai_pilot.profile_loader import PROFILE_DIR, ProfileError, load_profile, load_profiles
 from services.ai_pilot.tests import golden_profiles
-from scripts.ai_pilot_experiment import validate_staged_profile
+from scripts.ai_pilot_experiment import stage_observer, validate_staged_profile
 
 
 # --- the migration: moving the numbers to files changed none of them ----------------------------
@@ -64,6 +65,19 @@ def test_staged_landing_config_selects_toe_brakes_for_c182_profile():
                    "aircraft_sha256": c172_inventory["aircraft"]["sha256"],
                    "constant_speed_prop": False, "landing_toe_brakes": True}
     validate_staged_profile(c172_config, C172SP, c172_inventory, mode="landing")
+
+
+def test_stage_mission_gfc_envelope_is_trial_specific(monkeypatch, tmp_path):
+    from xplane import capvsar_qualification
+    monkeypatch.setattr(capvsar_qualification, "aircraft_identity_ok", lambda *_args: True)
+    aircraft = tmp_path / "Cessna_172SP_G1000.acf"
+    aircraft.write_text("test aircraft")
+    destination = tmp_path / "gfc-stage"
+    stage_observer(destination, aircraft, mode="mission", gfc_trial_envelope=True)
+    config = json.loads((destination / "capvsar_flight_control_config.json").read_text())
+    assert config["gfc_trial_envelope"] is True
+    assert config["airborne_max_altitude_ft"] == 8500.
+    assert config["extra_airborne_boxes"] == [[33., 33.35, -116.85, -116.70]]
 
 
 # --- strictness: an aircraft file must state everything and nothing may be misspelt -----------

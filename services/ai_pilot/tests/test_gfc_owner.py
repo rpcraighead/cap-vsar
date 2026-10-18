@@ -147,6 +147,27 @@ def test_engage_hands_the_airplane_to_the_autopilot_with_modes_taken_by_command(
     assert owner.problems(rig.request("snapshot")) == []
 
 
+def test_gfc_handover_preserves_ai_power_and_owner_restores_that_power(rig):
+    core = rig.plugin.core
+    controls = {**FRAME, "throttle": .8}
+    core.submit_frame(SESSION, core.generation, 3, time.monotonic()+.18, controls)
+    owner = owner_for(rig)
+    owner.engage(80., 4060., entry_throttle=.8)
+    assert rig.xp.refs[THROTTLE][0] == pytest.approx(.8)
+    owner.set_throttle(1.)
+    owner.step(rig.request("snapshot"), heading_mag=80., altitude_ft=4060.,
+               cruise_throttle=.8)
+    assert rig.xp.refs[THROTTLE][0] == pytest.approx(.8)
+
+
+def test_heading_selection_does_not_repeat_across_the_360_degree_seam(rig):
+    owner = owner_for(rig)
+    owner.engage(359.5, 4060.)
+    selected_count = rig.xp.commands.count("sim/autopilot/heading")
+    owner.step(rig.request("snapshot"), heading_mag=.5, altitude_ft=4060.)
+    assert rig.xp.commands.count("sim/autopilot/heading") == selected_count
+
+
 def test_modes_are_toggles_so_a_second_selection_does_not_switch_them_off(rig):
     owner = owner_for(rig)
     owner.engage(80., 4060.)

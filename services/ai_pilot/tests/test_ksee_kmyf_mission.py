@@ -6,7 +6,9 @@ from types import SimpleNamespace
 import pytest
 
 from services.ai_pilot.ksee_kmyf_mission import MissionController
-from xplane.capvsar_mission import MissionLab
+from xplane.capvsar_mission import (AIRBORNE_MAX_ALTITUDE_FT, GFC_TRIAL_EAST_BOX,
+                                    GFC_TRIAL_MAX_ALTITUDE_FT, MissionLab,
+                                    mission_altitude_ceiling)
 
 
 def snapshot(**changes):
@@ -39,6 +41,18 @@ def test_vector_heading_speed_uses_the_selected_aircraft_profile():
     controller.vector_alt_ft = 5000.
     controller.step(snapshot())
     assert controller.last_diagnostics["target_kias"] == C182T.cruise_kias
+
+
+def test_gfc_trial_envelope_is_named_bounded_and_leaves_default_mission_unchanged():
+    assert mission_altitude_ceiling({}) == AIRBORNE_MAX_ALTITUDE_FT == 6500.
+    trial = {"gfc_trial_envelope": True,
+             "airborne_max_altitude_ft": GFC_TRIAL_MAX_ALTITUDE_FT}
+    assert mission_altitude_ceiling(trial) == 8500.
+    assert GFC_TRIAL_EAST_BOX == (33.00, 33.35, -116.85, -116.70)
+    with pytest.raises(ValueError, match="fixed 8,500 ft"):
+        mission_altitude_ceiling({**trial, "airborne_max_altitude_ft": 9000.})
+    with pytest.raises(ValueError, match="named GFC trial"):
+        mission_altitude_ceiling({"airborne_max_altitude_ft": 8500.})
 
 
 def test_pilot_directed_bakel_vector_at_3500_ft():

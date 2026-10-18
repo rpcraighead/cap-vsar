@@ -23,6 +23,7 @@ Not yet flown in the simulator. Simulator engineering only.
 """
 from __future__ import annotations
 
+import math
 import secrets
 import time
 
@@ -68,7 +69,8 @@ class GfcOwner:
         return status
 
     # ---- DIRECT -> GFC700 --------------------------------------------------
-    def engage(self, heading_mag, altitude_ft, vs_fpm=None, *, timeout_s=2.0):
+    def engage(self, heading_mag, altitude_ft, vs_fpm=None, *, entry_throttle=None,
+               timeout_s=2.0):
         """Hand the airplane from the AI pilot's controllers to the GFC 700.
 
         The caller must stop submitting DIRECT frames after this returns, and
@@ -88,7 +90,12 @@ class GfcOwner:
                 raise GfcOwnerError("Autopilot engagement not observed")
             self.sleep(0.02)
         self.selected = {}
-        self._entry_throttle = self._throttle = None
+        if entry_throttle is not None and (type(entry_throttle) not in (int, float)
+                                           or not math.isfinite(entry_throttle)
+                                           or not 0 <= entry_throttle <= 1):
+            raise ValueError("Invalid DIRECT entry throttle")
+        self._entry_throttle = float(entry_throttle) if entry_throttle is not None else None
+        self._throttle = None
         self.select(heading_mag, altitude_ft, vs_fpm)
         return status
 
@@ -179,7 +186,9 @@ class GfcOwner:
                 variation = v["heading_true_deg"] - v["heading_mag_deg"]
                 target_hdg = (advice.return_heading_true - variation) % 360
         changes = {}
-        if abs(target_hdg - self.selected.get("heading_mag", -999)) >= HEADING_TOLERANCE_DEG:
+        selected_heading = self.selected.get("heading_mag")
+        if (selected_heading is None or
+                abs((target_hdg - selected_heading + 180) % 360 - 180) >= HEADING_TOLERANCE_DEG):
             changes["heading_mag"] = round(target_hdg, 1)
         if abs(target_alt - self.selected.get("altitude_ft", -9999)) >= RETARGET_FT:
             changes["altitude_ft"] = round(target_alt)

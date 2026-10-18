@@ -98,7 +98,8 @@ def inventory(xplane, include_landing=False, include_surface=False, include_miss
 
 
 def stage_observer(destination, qualification_aircraft=None, mode="qualification",
-                   runway="KMYF 28R", terrain_backstop_ft=200, extra_boxes=()):
+                   runway="KMYF 28R", terrain_backstop_ft=200, extra_boxes=(),
+                   gfc_trial_envelope=False):
     """Stage an explicit observation or expiring laboratory installation."""
     aircraft_sha256 = None
     if qualification_aircraft is not None:
@@ -142,6 +143,14 @@ def stage_observer(destination, qualification_aircraft=None, mode="qualification
             # Terrain lookahead in every snapshot, the GFC 700 as a second owner,
             # and a last-ditch terrain fence (None disables the fence).
             config.update(terrain_lookahead=True, gfc_owner=True)
+            if gfc_trial_envelope:
+                from xplane.capvsar_mission import (GFC_TRIAL_EAST_BOX,
+                                                    GFC_TRIAL_MAX_ALTITUDE_FT)
+                if extra_boxes:
+                    raise ValueError("The named GFC trial envelope supplies its own geofence extension")
+                config.update(gfc_trial_envelope=True,
+                              airborne_max_altitude_ft=GFC_TRIAL_MAX_ALTITUDE_FT,
+                              extra_airborne_boxes=[list(GFC_TRIAL_EAST_BOX)])
             if terrain_backstop_ft is not None:
                 config["terrain_backstop_ft"] = terrain_backstop_ft
             if extra_boxes:
@@ -243,6 +252,8 @@ def main():
                          metavar=("LAT_MIN", "LAT_MAX", "LON_MIN", "LON_MAX"),
                          help="widen the airborne geofence for this session with one more box "
                               "(Southern California trial area only); repeatable")
+    mission.add_argument("--gfc-trial-envelope", action="store_true",
+                         help="stage the named GFC-only east extension and 8,500 ft mission ceiling")
     mission.add_argument("--terrain-backstop-ft", type=float, default=200.,
                          help="pause if terrain within 1.5 nm is closer than this below the "
                               "airplane (above 1,000 ft AGL only); 0 disables")
@@ -260,7 +271,8 @@ def main():
                        mode="landing" if args.command == "stage-landing" else "surface" if args.command == "stage-surface" else "mission" if args.command == "stage-mission" else "qualification",
                        runway=args.runway if args.command == "stage-landing" else "KMYF 28R",
                        **({"terrain_backstop_ft": args.terrain_backstop_ft or None,
-                           "extra_boxes": args.extra_box}
+                           "extra_boxes": args.extra_box,
+                           "gfc_trial_envelope": args.gfc_trial_envelope}
                           if args.command == "stage-mission" else {}))
     return 0
 

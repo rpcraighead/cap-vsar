@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import errno
+import math
 import os
 from pathlib import Path
 import queue
@@ -204,6 +205,15 @@ class XPlaneSink:
                 raise RuntimeError("Throttle readback unavailable")
             return values[0]
         return xp.getDataf(self.controls[channel])
+
+    def handover_gfc_throttle(self, value):
+        """Move the DIRECT engine command into the physical lever before release."""
+        if type(value) not in (int, float) or not math.isfinite(value) or not 0 <= value <= 1:
+            raise ValueError("Invalid GFC hand-over throttle")
+        xp.setDatavf(self.cockpit_throttle, [float(value)], 0, 1)
+        actual = [0.0]
+        if xp.getDatavf(self.cockpit_throttle, actual, 0, 1) != 1 or abs(actual[0]-value) > .01:
+            raise RuntimeError("GFC hand-over throttle readback mismatch")
 
     def _prop_range(self):
         low, high = (xp.getDataf(ref) for ref in self.prop_range)
@@ -493,6 +503,10 @@ class PythonInterface:
                 if action == "transfer_gfc" and self.lab:
                     self.lab.verify_identity()
                     self.lab.require_gfc_flight(self.snapshot)
+                if action == "transfer_gfc" and self.core.state == "ACTIVE":
+                    throttle = self.core.candidates.get("throttle", (None,))[0]
+                    if throttle is not None:
+                        self.core.sink.handover_gfc_throttle(throttle)
                 if action in ("gfc_select", "set_virtual_aux") and self.lab:
                     self.lab.verify_identity()
                 if self.lab and action in ("prepare", "activate", "submit_frame", "exchange", "lab_resume", "lab_start"):

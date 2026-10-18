@@ -25,6 +25,21 @@ AIRBORNE_BOXES = ((32.65, 33.06, -117.40, -116.75),
 # Highest indicated altitude the airborne envelope accepts. An executive's terrain
 # guard must keep its ceiling below this, or a floor it raises would pause the sim.
 AIRBORNE_MAX_ALTITUDE_FT = 6500.
+# A separately staged, named GFC trial envelope. Normal mission installations
+# remain capped at AIRBORNE_MAX_ALTITUDE_FT; this value leaves a 500 ft margin
+# above the terrain executive's 8,000 ft ceiling for the observed 7,000 ft floor.
+GFC_TRIAL_MAX_ALTITUDE_FT = 8500.
+GFC_TRIAL_EAST_BOX = (33.00, 33.35, -116.85, -116.70)
+
+
+def mission_altitude_ceiling(config):
+    if config.get("gfc_trial_envelope") is True:
+        if config.get("airborne_max_altitude_ft") != GFC_TRIAL_MAX_ALTITUDE_FT:
+            raise ValueError("GFC trial envelope requires its fixed 8,500 ft ceiling")
+        return GFC_TRIAL_MAX_ALTITUDE_FT
+    if "airborne_max_altitude_ft" in config:
+        raise ValueError("A higher mission ceiling requires the named GFC trial envelope")
+    return AIRBORNE_MAX_ALTITUDE_FT
 
 
 def in_airborne_region(lat, lon, boxes=AIRBORNE_BOXES):
@@ -67,6 +82,7 @@ class MissionLab(QualificationLab):
     def __init__(self, xp, sink, config):
         super().__init__(xp, sink, config)
         self.authority = authority_for(AUTHORITY, config)
+        self.airborne_max_altitude_ft = mission_altitude_ceiling(config)
         backstop = config.get("terrain_backstop_ft")
         if backstop is not None and (type(backstop) not in (int, float) or not 50 <= backstop <= 2000):
             raise ValueError("terrain_backstop_ft must be 50-2000 ft or absent")
@@ -113,7 +129,8 @@ class MissionLab(QualificationLab):
         ias = xp.getDataf(xp.findDataRef("sim/flightmodel/position/indicated_airspeed"))
         agl = xp.getDataf(xp.findDataRef("sim/flightmodel/position/y_agl"))
         airborne = (in_airborne_region(lat, lon, self.boxes)
-                    and 500 <= alt <= 6500 and 50 <= ias <= 140 and agl >= 60)
+                    and 500 <= alt <= self.airborne_max_altitude_ft
+                    and 50 <= ias <= 140 and agl >= 60)
         rollout = (32.805 <= lat <= 32.825 and -117.15 <= lon <= -117.12
                    and 380 <= alt <= 500 and 0 <= ias <= 80 and -1 <= agl <= 3
                    and xp.getDatai(xp.findDataRef("sim/flightmodel/failures/onground_any")) == 1)
@@ -184,7 +201,7 @@ class MissionLab(QualificationLab):
                         and abs(v["roll_deg"]) <= 15 and abs(v["pitch_deg"]) <= 15)
         airborne = (not v["on_ground"]
                     and in_airborne_region(v["latitude_deg"], v["longitude_deg"], self.boxes)
-                    and 300 <= v["altitude_indicated_ft"] <= AIRBORNE_MAX_ALTITUDE_FT
+                    and 300 <= v["altitude_indicated_ft"] <= self.airborne_max_altitude_ft
                     and 40 <= v["kias"] <= 145
                     and abs(v["roll_deg"]) <= 38 and abs(v["pitch_deg"]) <= 24)
         if gfc:

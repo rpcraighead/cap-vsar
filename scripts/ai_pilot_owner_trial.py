@@ -40,7 +40,7 @@ from services.ai_pilot.gfc_owner import GfcOwner
 from services.ai_pilot.owner_trial import OwnerTrialObserver
 from services.ai_pilot.search_patterns import CruiseLaw
 from services.ai_pilot.terrain_guard import TerrainGuard
-from xplane.capvsar_mission import AIRBORNE_MAX_ALTITUDE_FT
+from xplane.capvsar_mission import mission_altitude_ceiling
 from scripts.ai_pilot_experiment import inventory, validate_staged_profile
 
 CHANNELS = ("roll", "pitch", "yaw", "throttle", "flap", "trim", "brake")
@@ -108,7 +108,8 @@ def run(args):
     owner = GfcOwner(client)
     max_climb = profile.sustainable_climb_fpm()      # None until the aircraft's table is measured
     climbing_fpm = .6 * (max_climb if max_climb else 500.)
-    guard = TerrainGuard(ceiling_ft=AIRBORNE_MAX_ALTITUDE_FT - 500, max_climb_fpm=max_climb)
+    guard = TerrainGuard(ceiling_ft=mission_altitude_ceiling(config) - 500,
+                         max_climb_fpm=max_climb)
     observer = OwnerTrialObserver(altitude_ft=0., aircraft_name=profile.acf_name,
                                   require_capture=not args.handback_in_climb,
                                   speed_target_kias=args.kias or profile.search_kias)
@@ -239,7 +240,8 @@ def run(args):
         target_mag = (v["heading_mag_deg"] + args.turn_deg) % 360
         observer.enter("gfc", snap, heading_target_true=target_true)
         snapshot_owner[0] = "GFC700"
-        owner.engage(heading_mag=target_mag, altitude_ft=altitude)
+        owner.engage(heading_mag=target_mag, altitude_ft=altitude,
+                     entry_throttle=frame_now[0]["throttle"])
         recorder.write("handover", {"to": "GFC700", "frame": snap["frame"], "heading_mag": target_mag,
                                     "altitude_ft": altitude})
         gfc_start, previous, climb_since = None, None, None
@@ -256,6 +258,7 @@ def run(args):
             if bad:
                 raise ValueError(bad)
             advice = owner.step(snap, heading_mag=target_mag, altitude_ft=altitude, guard=guard,
+                                cruise_throttle=frame_now[0]["throttle"],
                                 max_climb_fpm=max_climb)
             advice = apply_guard(snap, advice)
             if advice is not None and advice.turn_back:
