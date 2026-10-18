@@ -58,3 +58,11 @@ build/
 docs/figures/*.png
 !docs/figures/manual/
 .ci-out/
+
+# Exercise guide deliverables (docs/guide/build_guide_outputs.py rebuilds the
+# HTML, Word and PDF files from the Markdown sources and screenshots; at 11-15 MB
+# each they are not worth a copy per revision). LibreOffice's lock files too.
+docs/guide/*.html
+docs/guide/*.docx
+docs/guide/*.pdf
+.~lock.*#
