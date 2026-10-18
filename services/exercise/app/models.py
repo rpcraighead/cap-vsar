@@ -217,7 +217,8 @@ class MessageIn(BaseModel):
 
 
 class LoginPayload(BaseModel):
-    code: str
+    # A badge is "LABEL-<32 hex>"; nothing legitimate is longer than this.
+    code: str = Field(max_length=256)
 
 
 

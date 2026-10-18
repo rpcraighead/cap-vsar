@@ -22,6 +22,7 @@ import hashlib
 import secrets
 import hmac
 import json
+import logging
 import os
 import sqlite3
 import time
@@ -29,6 +30,8 @@ import uuid
 from contextlib import contextmanager
 
 from fastapi import HTTPException, Request
+
+log = logging.getLogger("capvsar.console.access")
 
 TOKEN_HEADER = "X-CAPVSAR-Token"
 SESSION_COOKIE = "capvsar_session"
@@ -344,6 +347,9 @@ def authenticate_code(code: str) -> tuple[dict, str] | None:
             (clean_code,)
         ).fetchone()
         if not row:
+            # Review T11: a refused code used to leave no trace at all, so a
+            # guessing run was invisible. The value itself is never logged.
+            log.warning("login refused: unknown participant code (%d chars)", len(clean_code))
             return None
         d = dict(row)
         sess_id = secrets.token_urlsafe(32)
@@ -531,6 +537,39 @@ def enforce_read(request: Request) -> None:
     raise HTTPException(
         403, "Log in at /login (or send a role token in the "
              f"{TOKEN_HEADER} header) to read exercise state.")
+
+
+# A13 (review T11): how often an open socket (/ws, the radio stream) re-reads
+# its session. Sessions are revoked by logout, expiry and roster regeneration,
+# none of which used to reach a socket that had authenticated once.
+SOCKET_RECHECK_S = 60.0
+
+
+def session_satisfies(role: str, sess: dict | None) -> bool:
+    """enforce()'s decision for a credential already resolved from a socket.
+
+    A websocket carries no X-CAPVSAR-Token after the handshake, so the token
+    branch reduces to: the role has no token configured and the console is an
+    explicitly open dev console. Anything else needs the session's role to be
+    in SATISFIED_BY, exactly as the REST routes require.
+    """
+    if sess and sess.get("role", "") in SATISFIED_BY.get(role, ()):
+        return True
+    accepted = [t for t in (token_for(r) for r in SATISFIED_BY[role]) if t]
+    return not accepted and dev_open()
+
+
+def socket_still_admitted(sess: dict | None, *, required: bool) -> bool:
+    """Re-check of an open socket's credential (A13).
+
+    `required` is whether a session existed when the socket was admitted. A
+    socket admitted on a session must still have one; a socket admitted
+    anonymously on an open dev console (the only way in without one) stays as
+    long as the console is still open.
+    """
+    if sess:
+        return True
+    return not required and dev_open()
 
 
 def is_instructor(request: Request) -> bool:

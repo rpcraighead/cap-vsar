@@ -17,6 +17,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -693,3 +694,47 @@ class HardenedCredentialTests(unittest.TestCase):
         for code in ('INSTR-1', 'MRO-1', 'OBS-423', 'UDF-1', 'login-shortcuts-section'):
             self.assertNotIn(code, raw)
         self.assertIn('maxlength="128"', raw)
+
+
+class SocketSessionRecheckTests(unittest.TestCase):
+    """A13 (review T11): an open /ws keeps its credential only while the session exists.
+
+    The socket authenticated once in admit() and then looped on receive_text()
+    for as long as the tab stayed open, so a participant whose badge was pulled
+    (roster regeneration, logout, expiry) kept the live feed.
+    """
+
+    def setUp(self):
+        self.main, self.client, self.db = build_app(instructor='instr-token')
+        from app import access
+        self.access = access
+        self.saved = access.SOCKET_RECHECK_S
+        access.SOCKET_RECHECK_S = 0.15
+
+    def tearDown(self):
+        self.access.SOCKET_RECHECK_S = self.saved
+        os.unlink(self.db)
+
+    def test_a_revoked_session_closes_an_open_console_socket(self):
+        from starlette.websockets import WebSocketDisconnect
+        login = self.client.post('/api/auth/login', json={'code': credential('MRO-1')})
+        sid = login.cookies['capvsar_session']
+        hub = self.main.hub
+        with self.client.websocket_connect('/ws', headers={'Authorization': 'Bearer ' + sid}) as ws:
+            self.assertEqual(ws.receive_json()['type'], 'state')
+            time.sleep(0.4)                              # re-checked while valid: still here
+            self.assertEqual(len(hub.clients), 1)
+            self.access.delete_session(sid)
+            with self.assertRaises(WebSocketDisconnect):
+                ws.receive_json()
+        self.assertFalse(hub.clients)
+
+    def test_roster_regeneration_closes_open_console_sockets(self):
+        from starlette.websockets import WebSocketDisconnect
+        login = self.client.post('/api/auth/login', json={'code': credential('MRO-1')})
+        sid = login.cookies['capvsar_session']
+        with self.client.websocket_connect('/ws', headers={'Authorization': 'Bearer ' + sid}) as ws:
+            ws.receive_json()
+            self.access.save_exercise_setup('Replacement', 0, [], [])
+            with self.assertRaises(WebSocketDisconnect):
+                ws.receive_json()

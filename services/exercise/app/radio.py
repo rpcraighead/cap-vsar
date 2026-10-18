@@ -70,8 +70,9 @@ def config():
             "securePort": int(os.getenv('CAPVSAR_RADIO_HTTPS_PORT', '443'))}
 
 
-@router.get('/api/radio/rx')
+@router.get('/api/radio/rx', dependencies=[any_role])
 def rx_status():
+    """Who is keyed on which net: exercise state, so a login is needed to read it."""
     now = time.monotonic()
     return {
         "main_rx": (now - CHANNEL_ACTIVITY.get('primary', 0) < 0.4),
@@ -223,6 +224,9 @@ class MumbleRadio:
         # must not stall the other face on the same desk, and a queue that
         # overflows takes down that face only.
         self.faces: dict = {}
+        # A9/A13: the session each face joined with, and whether one was
+        # required (False only for the anonymous join of an open dev console).
+        self.face_session: dict = {}
         self.attach(sock)
         self.connected = asyncio.Event()
         self.failed = False
@@ -262,11 +266,16 @@ class MumbleRadio:
         self.dropped[sock] = asyncio.Event()
         return queue
 
+    def admit(self, sock, session, required):
+        """Record the credential a face joined with (A9, A13)."""
+        self.face_session[sock] = (session, required)
+
     def detach(self, sock):
         """Remove one face. True when that was the last one."""
         self.faces.pop(sock, None)
         self.dropped.pop(sock, None)
         self.drop_reason.pop(sock, None)
+        self.face_session.pop(sock, None)
         return not self.faces
 
     def drop_face(self, sock, reason):
@@ -412,7 +421,7 @@ class MumbleRadio:
         self.channel_name = choice['name']
         self.enqueue(self.tuned_ack())
 
-    async def command(self, data):
+    async def command(self, data, sock=None):
         action = data.get('action')
         if action == 'tune':
             await self.tune(data.get('channel'))
@@ -440,9 +449,18 @@ class MumbleRadio:
         elif action == 'ping':
             self.enqueue({"type": "pong"})
         elif action == 'ics':
-            # Reachable only through a joined socket, and since FE-4 a join
-            # requires an authenticated session whenever roles are configured,
-            # so this shares the REST route's gate rather than needing its own.
+            # A9 (review T11): this used to rely on the join gate alone, which
+            # only asks for *a* session with a callsign. A UDF or an aircrew
+            # seat (aircraft_id "") could set PILOT isolation or split COM on
+            # the console-wide state every aircraft follows. It now shares
+            # POST /api/radio/ics's gate: base or instructor, or the explicitly
+            # open dev console. The session is re-read rather than taken from
+            # the join (A13), so a revoked badge cannot keep the gate open.
+            session = self.face_session.get(sock, (None, True))[0]
+            if sock is not None:
+                session = await run_in_threadpool(access.get_session_from_request, sock)
+            if not access.session_satisfies('base', session):
+                raise ValueError('The intercom is set by mission base or the instructor.')
             # A seat in an aircraft changes that aircraft's intercom, not the
             # whole net's.
             state = apply_ics(_target_ics(self.aircraft_id), data)
@@ -514,7 +532,23 @@ class MumbleRadio:
                 data = json.loads(msg['text'])
                 if not isinstance(data, dict):
                     raise ValueError('Invalid radio command.')
-                await self.command(data)
+                await self.command(data, sock)
+
+    async def session_guard(self, sock):
+        """A13: a joined face keeps its credential only while the session exists.
+
+        Logout, the 24 h expiry and roster regeneration all delete the session
+        row, and none of them used to reach a radio that had joined before.
+        Re-read off the event loop (X2-5) every SOCKET_RECHECK_S; a face whose
+        session is gone is dropped with a reason, the desk's other faces and the
+        Mumble client are left alone.
+        """
+        _, required = self.face_session.get(sock, (None, False))
+        while True:
+            await asyncio.sleep(access.SOCKET_RECHECK_S)
+            fresh = await run_in_threadpool(access.get_session_from_request, sock)
+            if not access.socket_still_admitted(fresh, required=required):
+                raise ValueError('Your login has ended. Log in again and reconnect the radio.')
 
     async def close(self):
         self.closed = True
@@ -604,9 +638,13 @@ async def stream(sock: WebSocket):
         # and the desk stays one station on the net instead of appearing twice.
         key = radio_key(name, receiver)
         existing = OPERATORS.get(key)
+        # A13: a session is required unless this is the anonymous join of an
+        # open dev console (the elif above is the only other way in).
+        required = session is not None
         if existing is not None and not existing.closed and not existing.failed:
             radio, shared = existing, True
             queue = radio.attach(sock)
+            radio.admit(sock, session, required)
             # Tell the new face where the radio already is, or it waits for a
             # `tuned` that was sent before it existed.
             queue.put_nowait(radio.tuned_ack())
@@ -614,6 +652,7 @@ async def stream(sock: WebSocket):
             if len(SESSIONS) >= int(os.getenv('CAPVSAR_RADIO_MAX_SESSIONS', '16')):
                 raise ValueError('All browser radio connections are occupied.')
             radio, shared = MumbleRadio(sock, name, receiver=receiver), False
+            radio.admit(sock, session, required)
             SESSIONS.add(radio)
             OPERATORS[key] = radio
             await radio.connect(hello.get('channel', 'primary'))
@@ -624,7 +663,8 @@ async def stream(sock: WebSocket):
                                                  radio.callsign)
             # The watchdog belongs to the radio (X2-7), not to this face.
             radio.start_watchdog()
-        pumps = [radio.sender(sock), radio.receiver(sock), radio.face_dropped(sock)]
+        pumps = [radio.sender(sock), radio.receiver(sock), radio.face_dropped(sock),
+                 radio.session_guard(sock)]
         tasks = [asyncio.create_task(coro) for coro in pumps]
         done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         for task in done:
