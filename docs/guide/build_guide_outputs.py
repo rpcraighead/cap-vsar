@@ -2,7 +2,7 @@
 """Build HTML, DOCX, and PDF deliverables for the CAP V-SAR User Guide package.
 
 Usage:
-    nice -n 10 /home/ron/.venvs/onb/bin/python docs/guide/build_guide_outputs.py
+    nice -n 10 ~/.venvs/onb/bin/python docs/guide/build_guide_outputs.py
 """
 from __future__ import annotations
 

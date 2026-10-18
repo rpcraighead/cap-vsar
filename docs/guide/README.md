@@ -53,10 +53,10 @@ All 20 figures referenced in `CAP_VSAR_Simulator_Exercise_Guide.md` are stored i
 
 ### Rebuild `.html`, `.docx`, and `.pdf` from the Markdown Sources
 
-Run `build_guide_outputs.py` with `nice -n 10` using the `/home/ron/.venvs/onb` virtual environment:
+From the repository's top-level directory, run `build_guide_outputs.py` with `nice -n 10` using the `~/.venvs/onb` virtual environment:
 
 ```bash
-nice -n 10 /home/ron/.venvs/onb/bin/python /home/ron/Projects/cap-vsar-c182-ai-pilot/docs/guide/build_guide_outputs.py
+nice -n 10 ~/.venvs/onb/bin/python docs/guide/build_guide_outputs.py
 ```
 
 This script:

@@ -591,14 +591,14 @@ In keeping with Civil Air Patrol training integrity, features that are planned o
 
 ### A.2 Starting the Exercise Console Locally for a Training Session
 
-From a terminal on the Linux workstation, start the Exercise Console service using the Python virtual environment:
+From a terminal on the Linux workstation, in the repository's top-level directory, start the Exercise Console service using the Python virtual environment:
 
 ```bash
-PYTHONPATH=/home/ron/Projects/cap-vsar-c182-ai-pilot:/home/ron/Projects/cap-vsar-c182-ai-pilot/services/exercise \
+PYTHONPATH=.:services/exercise \
   CAPVSAR_DB=/tmp/capvsar_exercise.db \
   CAPVSAR_DEV_OPEN=1 \
   ~/.venvs/onb/bin/uvicorn app.main:app \
-  --app-dir /home/ron/Projects/cap-vsar-c182-ai-pilot/services/exercise \
+  --app-dir services/exercise \
   --host 0.0.0.0 --port 8700
 ```
 
@@ -609,13 +609,13 @@ PYTHONPATH=/home/ron/Projects/cap-vsar-c182-ai-pilot:/home/ron/Projects/cap-vsar
 
 ```bash
 # 1. Install the direction-finding and station reporting script into X-Plane 12:
-python3 /home/ron/Projects/cap-vsar-c182-ai-pilot/scripts/deploy_xplane_plugin.py
+python3 scripts/deploy_xplane_plugin.py
 
 # 2. Install the four DF/radio instruments into Air Manager 4.2+:
-python3 /home/ron/Projects/cap-vsar-c182-ai-pilot/scripts/deploy_df_instruments.py
+python3 scripts/deploy_df_instruments.py
 
 # 3. Install or package the Cessna 182T Mission Observer panel:
-python3 /home/ron/Projects/cap-vsar-c182-ai-pilot/scripts/deploy_mo_panel.py
+python3 scripts/deploy_mo_panel.py
 ```
 
 ### A.4 Setting Up Sign-In with Google (Plain-Language Guide for Server Operators)
