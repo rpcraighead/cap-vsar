@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0B1220">
+  <meta name="description" content="The simulated radios in the aircraft, on the ground and at Mission Base, and how radio reach is modeled in CAP-VSAR.">
+  <title>Comms — CAP-VSAR</title>
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Comms — CAP-VSAR">
+  <meta property="og:description" content="The simulated radios in the aircraft, on the ground and at Mission Base, and how radio reach is modeled in CAP-VSAR.">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="assets/brand/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/brand/favicon.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="assets/css/reel.css">
+  <script src="assets/js/main.js" defer></script>
+  <script src="assets/js/reel.js" defer></script>
+<noscript><style>@media(max-width:900px){.site-header{height:auto;flex-wrap:wrap;padding-block:.5rem}.primary-nav{display:flex;position:static;flex-direction:row;flex-wrap:wrap;gap:.25rem .9rem;padding:.25rem 0 .5rem;width:100%;background:none}.primary-nav a{font-size:.9rem;padding:.4rem 0;border:0}.primary-nav .nav-pill{margin-top:0}}.menu-toggle,.pause-control,.clip-pause,.reel-controls{display:none}</style></noscript>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+  <a class="brand" href="index.html" aria-label="CAP-VSAR home"><img src="assets/brand/logo.svg" alt="CAP-VSAR bearing mark" width="180" height="48"></a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="primary-nav">Menu</button>
+  <nav id="primary-nav" class="primary-nav" aria-label="Main navigation">
+    <a href="index.html">Home</a><a href="comms.html" aria-current="page">Comms</a><a href="df.html">DF &amp; Beacons</a><a href="foreflight.html">ForeFlight</a><a href="caltopo.html">CalTopo</a><a href="ai-pilot.html">AI Pilot</a><a href="airplane.html">The Airplane</a><a href="flight-planner.html">Flight Planner</a><a href="hosting.html">Hosting</a><a href="how-its-built.html">How It's Built</a><a class="nav-pill" href="index.html#get-started">Get started</a>
+  </nav>
+</header>
+<main id="main" tabindex="-1">
+  <section class="page-title"><div class="wrap"><p class="eyebrow">COMMUNICATIONS</p><h1>Radios that behave like radios.</h1><p class="lede">Exercises fall apart on the radio: the wrong mic selected, a repeater nobody can hit, a report in the wrong words. The simulator gives every seat a radio in front of them and a net that behaves like a net.</p></div></section>
+
+  <section class="section" aria-labelledby="comms-hero-title"><div class="wrap">
+    <h2 id="comms-hero-title" class="visually-hidden-heading">The base station</h2>
+    <figure class="figure"><button class="shot-open" type="button" data-lightbox="assets/img/comms-base-dual.webp" data-alt="Base radio station with two simulated radio faces, push-to-talk controls, and the mission log."><img src="assets/img/comms-base-dual.webp" alt="Two radio control faces sit above push-to-talk controls and a mission log." width="1600" height="1000"><span class="zoom-hint">Open image</span></button><figcaption><strong>Base Radio.</strong> The Mission Radio Operator's (MRO) station: a Motorola APX-style control head on the tactical net, an Icom-style airband face beside it, push-to-talk on the spacebar, and the Form 110 log below.</figcaption></figure>
+  </div></section>
+
+  <section class="section paper" id="aircraft" aria-labelledby="aircraft-title"><div class="wrap">
+    <p class="eyebrow">IN THE AIRCRAFT</p><h2 id="aircraft-title">The right seat's radios.</h2>
+    <div class="prose">
+      <p>On the Mission Observer station sit a Technisonic TDFM-136B tactical radio and a Garmin GMA 1347 audio panel, drawn from the manufacturers' manuals and wired to the simulator.</p>
+      <p>The audio panel carries the trap every new observer falls into: pressing the top <strong>COM3</strong> button lets you hear Mission Base; to talk you must press <strong>COM3 MIC</strong>. Most "the FM radio isn't transmitting" calls we have heard in training come down to this. The panel also has the intercom isolation the pilot uses while working SoCal Approach on COM1, and the clearance recorder that replays the last call you missed.</p>
+      <p>The TDFM-136B covers 136–174 MHz in analog FM and P25, with CAP channels programmed and a guard receiver that keeps listening to AIRGUARD in the background while you work the main channel.</p>
+    </div>
+    <div class="figure-pair">
+      <figure class="figure"><button class="shot-open" type="button" data-lightbox="assets/img/comms-tdfm-136b.webp" data-alt="Training replica of the Technisonic TDFM-136B face: channel 1 on the command net, guard on the second line, keypad and toggles."><img src="assets/img/comms-tdfm-136b.webp" alt="Tactical radio face shows the command channel on line one and the guard channel on line two, with a keypad and three toggles." width="800" height="420" loading="lazy"><span class="zoom-hint">Open image</span></button><figcaption><strong>TDFM-136B.</strong> Channel 1 on the command net, guard on the second line, the keypad and toggles where the real ones are.</figcaption></figure>
+      <figure class="figure figure-detail"><button class="shot-open" type="button" data-lightbox="assets/img/comms-gma-1347-com-row.webp" data-alt="The COM and MIC button rows of the training replica audio panel: COM1 MIC, COM1, COM2 MIC, COM2, COM3 MIC, COM3."><img src="assets/img/comms-gma-1347-com-row.webp" alt="Audio panel buttons in two columns: the MIC buttons on the left, the COM listen buttons on the right." width="240" height="400" loading="lazy"><span class="zoom-hint">Open image</span></button><figcaption><strong>GMA 1347.</strong> COM1, COM2, COM3 and the MIC row; pressing the wrong one is the lesson.</figcaption></figure>
+    </div>
+    <figure class="figure"><button class="shot-open" type="button" data-lightbox="assets/img/mo-station-layout.webp" data-alt="Layout of the Mission Observer station: the multifunction display showing the search and rescue map, the direction finder head, the tactical radio and the audio panel."><img src="assets/img/mo-station-layout.webp" alt="Mission Observer station layout with the multifunction display showing the search and rescue map, and the direction finder, tactical radio and audio panel on the right." width="1600" height="900" loading="lazy"><span class="zoom-hint">Open image</span></button><figcaption><strong>The Mission Observer station.</strong> The layout as the panel software builds it: the direction finder, the tactical radio and the audio panel beside the simulator's own multifunction display (the screen shown is a simulator capture of an illustrative search pattern).</figcaption></figure>
+  </div></section>
+
+  <section class="section" id="base" aria-labelledby="base-title"><div class="wrap">
+    <p class="eyebrow">AT MISSION BASE</p><h2 id="base-title">The MRO's station.</h2>
+    <div class="prose">
+      <p>The Base Radio page is the MRO's station: a Motorola APX-style VHF-FM control head on the tactical net, an Icom-style airband face beside it, push-to-talk on the touchscreen or the spacebar, a monitor button for weak signals, and a 60-second time-out that unkeys a stuck mic to protect the net.</p>
+      <p>Below it the CAP Form 110 fills itself in: Zulu time, station, channel, message. Quick reports for radio checks and ops-normal, and an export for the Incident Commander.</p>
+    </div>
+    <div class="figure-pair">
+      <figure class="figure"><button class="shot-open" type="button" data-lightbox="assets/img/comms-base-apx.webp" data-alt="Base Radio page with the APX-style tactical control head, the push-to-talk station and the CAP Form 110 log with quick-report buttons."><img src="assets/img/comms-base-apx.webp" alt="Tactical control head above a push-to-talk station and a Form 110 log with quick-report buttons." width="1600" height="1000" loading="lazy"><span class="zoom-hint">Open image</span></button><figcaption><strong>The tactical net.</strong> The APX-style control head, the push-to-talk station and the Form 110 log with its quick reports and export.</figcaption></figure>
+      <figure class="figure"><button class="shot-open" type="button" data-lightbox="assets/img/comms-base-icom.webp" data-alt="Base Radio page with the Icom-style airband face selected on the same station."><img src="assets/img/comms-base-icom.webp" alt="Airband radio face on the same base station, with its own frequency display and controls." width="1600" height="1000" loading="lazy"><span class="zoom-hint">Open image</span></button><figcaption><strong>The airband watch.</strong> The Icom-style face MRO 2 keeps beside the tactical net.</figcaption></figure>
+    </div>
+    <figure class="clip" data-clip="base-radio-link"><div class="clip-stage"><img class="slide-poster" src="assets/video/base-radio-link-poster.webp" alt="Base Radio page with a status pill reading Some static, via Julian repeater, above a Form 110 log row." width="1280" height="720" loading="lazy"><video muted playsinline loop preload="metadata" poster="assets/video/base-radio-link-poster.webp" aria-label="Base Radio page with a status pill reading Some static, via Julian repeater, above a Form 110 log row."><source src="assets/video/base-radio-link.webm" type="video/webm"><source src="assets/video/base-radio-link.mp4" type="video/mp4"></video></div><div class="clip-controls"><p class="clip-caption"><strong>Heard through the repeater.</strong> The Base Radio tells the Mission Radio Operator how the call is coming in, and logs it.</p><button class="clip-pause" type="button">Pause clip</button></div></figure>
+    <figure class="figure"><button class="shot-open" type="button" data-lightbox="assets/img/comms-mission-radio.webp" data-alt="The current Base Radio page: radio selection, the control head, the mission net selector, headset volume and the operator setup column."><img src="assets/img/comms-mission-radio.webp" alt="Base Radio page with the control head, net selector, headset volume and an operator setup column." width="1440" height="900" loading="lazy"><span class="zoom-hint">Open image</span></button><figcaption><strong>Base Radio today.</strong> Choose the radio, pick the net, set the headset, join. The push-to-talk and the log sit below the fold.</figcaption></figure>
+  </div></section>
+
+  <section class="section paper" id="ground" aria-labelledby="ground-title"><div class="wrap">
+    <p class="eyebrow">GROUND TEAMS</p><h2 id="ground-title">The same net from the truck.</h2>
+    <div class="prose"><p>An Urban Direction Finding (UDF) team joins the same net from a phone in the truck. Air-to-ground is direct, line of sight. On the model the team reaches base direct to the Gillespie Field antenna or through the repeater, like the aircraft; because the phone does not yet report its position, the console treats a ground team's link as good.</p></div>
+  </div></section>
+
+  <section class="section" id="reach" aria-labelledby="reach-title"><div class="wrap">
+    <p class="eyebrow">HOW REACH IS SIMULATED</p><h2 id="reach-title">Where the antennas stand decides who hears whom.</h2>
+    <div class="prose">
+      <p>Where the fixed equipment stands decides who can hear whom. For the sample exercise the Mission Base antenna is placed at Gillespie Field, 30 feet up on the valley floor, and a repeater is placed on the Julian VORTAC site at 5,560 feet, on the wing's assigned repeater pair (the frequencies are not published here; the console carries them). Those are exercise choices, not a survey of real CAP sites; other exercises can put them elsewhere, Palomar for example.</p>
+      <p>A station reaches a site when it is inside the radio horizon for both antenna heights and the terrain between them does not block the path. The simulator does not cut you off when you drift out of range. It gets worse the way a real net does: the further you are from the base antenna, the lower you are, or the more terrain is in the way, the more static and dropouts you hear, until the net is unusable. An aircraft at 4,500 feet near Julian is heard clearly through the repeater; a low aircraft in the canyons east of Julian may reach neither.</p>
+      <p>The Exercise Director can switch the effect off, or dial in a worse day. On the console the two settings are called Radio reach and Radio conditions, from Normal to Very poor. The Base Radio page tells the operator what it is hearing next to the station's name: Clear, Some static, Weak and choppy or Barely readable, and whether the call came direct to base or through the Julian repeater.</p>
+      <p>The repeater plays no part in direction finding. The DF listens to the beacon, not to the net.</p>
+    </div>
+    <figure class="diagram">
+      <svg viewBox="0 0 1200 600" role="img" aria-labelledby="c1-title c1-desc">
+        <title id="c1-title">Three paths from an aircraft to Mission Base</title>
+        <desc id="c1-desc">Side view. The base antenna stands 30 feet up at Gillespie Field on the valley floor at the left. The Julian repeater stands on a mountain at 5,560 feet in the middle. An aircraft at 4,500 feet reaches the base directly and through the repeater. A second, low aircraft in the canyons east of Julian is blocked by the ridge on both paths. A ground team on the road reaches the aircraft directly. A dashed curve marks the radio horizon from the base antenna.</desc>
+        <defs>
+          <pattern id="c1-grid" width="60" height="60" patternUnits="userSpaceOnUse"><path d="M60 0H0V60" fill="none" stroke="#a9c7b2" stroke-opacity=".1"/></pattern>
+          <pattern id="c1-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0v8" stroke="#ff6a13" stroke-width="3"/></pattern>
+          <linearGradient id="c1-sky" x2="0" y2="1"><stop stop-color="#0b1220"/><stop offset="1" stop-color="#172d35"/></linearGradient>
+          <path id="c1-plane" d="M0-24 5-7 24 2v5L5 3 4 19l7 5v4L0 24l-11 4v-4l7-5 1-16-19 4V2l19-9Z"/>
+        </defs>
+        <rect width="1200" height="600" fill="url(#c1-sky)"/>
+        <rect width="1200" height="600" fill="url(#c1-grid)"/>
+        <!-- terrain: valley floor, the Julian ridge, a second ridge, the canyon -->
+        <path d="M0 600V505Q130 500 260 500T500 470Q640 400 740 250T820 165Q860 175 900 300T950 225Q985 215 1020 300T1090 415Q1130 430 1200 330V600Z" fill="#2f4a3a"/>
+        <path d="M0 600V505Q130 500 260 500T500 470Q640 400 740 250T820 165Q860 175 900 300T950 225Q985 215 1020 300T1090 415Q1130 430 1200 330V600Z" fill="none" stroke="#7fbf4d" stroke-opacity=".55" stroke-width="2"/>
+        <path d="M0 520Q300 518 520 490Q660 440 760 300" fill="none" stroke="#b2bc86" stroke-opacity=".25" stroke-width="1.5"/>
+        <!-- radio horizon from the base antenna -->
+        <path d="M140 470Q520 300 1200 120" fill="none" stroke="#7fe0ea" stroke-opacity=".35" stroke-width="2" stroke-dasharray="4 8"/>
+        <text class="diagram-chip" x="700" y="225" fill="#7fe0ea" fill-opacity=".8">RADIO HORIZON FROM THE BASE ANTENNA</text>
+        <!-- blocked paths from the low aircraft (drawn first so the clear paths sit on top) -->
+        <path d="M1100 395L945 300" fill="none" stroke="#ff8a47" stroke-width="3"/>
+        <path d="M1100 395L985 255" fill="none" stroke="#ff8a47" stroke-width="3"/>
+        <rect x="905" y="205" width="110" height="110" fill="url(#c1-hatch)" fill-opacity=".55" transform="rotate(-20 960 260)"/>
+        <!-- clear paths -->
+        <line x1="430" y1="130" x2="140" y2="468" stroke="#27c7d9" stroke-width="3.5"/>
+        <line x1="430" y1="130" x2="820" y2="128" stroke="#27c7d9" stroke-width="3" stroke-dasharray="12 8"/>
+        <line x1="820" y1="128" x2="140" y2="468" stroke="#27c7d9" stroke-width="3" stroke-dasharray="12 8"/>
+        <line x1="430" y1="130" x2="330" y2="495" stroke="#7fe0ea" stroke-width="2" stroke-dasharray="5 6"/>
+        <!-- base antenna at KSEE -->
+        <g stroke="#e6ecf2" stroke-width="3" fill="none"><path d="M140 505V468m-12 0h24M128 480h24"/><circle cx="140" cy="466" r="4" fill="#27c7d9" stroke="none"/></g>
+        <!-- repeater on Julian -->
+        <g stroke="#e6ecf2" stroke-width="3" fill="none"><path d="M820 165V128m-14 0h28M806 142h28"/><circle cx="820" cy="126" r="4" fill="#27c7d9" stroke="none"/></g>
+        <!-- ground team truck -->
+        <g transform="translate(330 500)" stroke="#e6ecf2" stroke-width="2.5" fill="none"><path d="M-14 8V-4h18l9 12Zm-3 0h34M-6-4v-9"/><circle cx="-8" cy="11" r="3.5" fill="#0b1220"/><circle cx="10" cy="11" r="3.5" fill="#0b1220"/></g>
+        <!-- aircraft -->
+        <g fill="#e6ecf2" stroke="#0b1220" stroke-width="2"><use href="#c1-plane" transform="translate(430 130) rotate(90)"/><use href="#c1-plane" transform="translate(1100 395) rotate(-95) scale(.85)"/></g>
+        <!-- labels -->
+        <g class="diagram-chip">
+          <text x="60" y="548">KSEE · BASE ANTENNA · 30 FT</text>
+          <text x="848" y="112">JLI · REPEATER · 5,560 FT</text>
+          <text x="848" y="130" fill="#9aa7b5">REPEATER PAIR · NOT PUBLISHED</text>
+          <text x="470" y="105">AIRCRAFT AT 4,500 FT</text>
+          <text x="1020" y="470">LOW, EAST OF THE RIDGE</text>
+          <text x="372" y="522" fill="#9aa7b5">GROUND TEAM</text>
+        </g>
+        <g class="diagram-label" font-size="14">
+          <text x="215" y="300" fill="#7fe0ea">direct to base</text>
+          <text x="560" y="160" fill="#7fe0ea">via the repeater</text>
+          <text x="450" y="330" fill="#7fe0ea" font-size="13">aircraft to ground, direct</text>
+          <text x="1000" y="180" fill="#ff8a47">blocked by the ridge</text>
+        </g>
+        <!-- legend -->
+        <g transform="translate(60 40)">
+          <line x1="0" y1="8" x2="36" y2="8" stroke="#27c7d9" stroke-width="3.5"/><text class="diagram-note" x="46" y="13">clear, direct</text>
+          <line x1="150" y1="8" x2="186" y2="8" stroke="#27c7d9" stroke-width="3" stroke-dasharray="12 8"/><text class="diagram-note" x="196" y="13">clear, through the repeater</text>
+          <line x1="400" y1="8" x2="436" y2="8" stroke="#ff8a47" stroke-width="3"/><text class="diagram-note" x="446" y="13">blocked: static, dropouts, then nothing</text>
+        </g>
+      </svg>
+      <figcaption><strong>Three paths.</strong> Direct to the base antenna, via the mountain-top repeater, or blocked by the ridge.</figcaption>
+    </figure>
+  </div></section>
+
+  <section class="section paper" id="net" aria-labelledby="net-title"><div class="wrap">
+    <p class="eyebrow">THE VOICE NET</p><h2 id="net-title">One mission net, several channels.</h2>
+    <div class="prose"><p>One mission net, several channels: a briefing room, Mission Base, Mission Net PRIMARY and ALTERNATE, an intercom per aircraft, and an Instructor–SET channel (SET: Skills Evaluator Training, the evaluators' qualification) for the evaluators to talk without being heard.</p></div>
+    <div class="table-wrap"><table class="spec-table"><caption class="visually-hidden-heading">Channels on the mission voice net</caption><thead><tr><th scope="col">Channel</th><th scope="col">Who is on it</th></tr></thead><tbody>
+      <tr><th scope="row"><span class="mono">Briefing Room</span></th><td>Everyone, before launch and at debrief.</td></tr>
+      <tr><th scope="row"><span class="mono">Mission Base</span></th><td>Base staff talking among themselves.</td></tr>
+      <tr><th scope="row"><span class="mono">Mission Net PRIMARY</span></th><td>The tactical net: aircraft, ground teams and net control.</td></tr>
+      <tr><th scope="row"><span class="mono">Mission Net ALTERNATE</span></th><td>The second tactical channel.</td></tr>
+      <tr><th scope="row"><span class="mono">Aircraft intercoms</span></th><td>One per aircraft, for the crew in that cockpit.</td></tr>
+      <tr><th scope="row"><span class="mono">Instructor – SET</span></th><td>Evaluators only. It is never offered on the base radio.</td></tr>
+    </tbody></table></div>
+  </div></section>
+
+  <section class="section honesty-section" aria-labelledby="limits-title"><div class="wrap"><aside class="callout callout-signal"><h2 id="limits-title">Honest limits.</h2><p>The base's transmit power is not modeled (the same path works both ways). Ground teams do not yet report where they are, so their links are assumed good. On the live voice net the reach is computed from the radio horizon today; the terrain check is in the model and the tests, but the console does not yet have terrain data of its own to apply it as you talk. The airband face is a local radio with no propagation model of its own.</p></aside></div></section>
+
+  <nav class="page-next" aria-label="Next page"><div class="wrap button-row"><p class="next-label">Next</p><a class="button button-primary" href="df.html">DF &amp; Beacons <span aria-hidden="true">→</span></a></div></nav>
+</main>
+<footer class="site-footer"><div class="footer-grid wrap"><div><a class="brand" href="index.html"><img src="assets/brand/logo.svg" alt="CAP-VSAR" width="180" height="48"></a><p>Virtual search and rescue training for crews and staff.</p></div><div><nav aria-label="Footer navigation"><div class="footer-links"><a href="index.html">Home</a><a href="comms.html" aria-current="page">Comms</a><a href="df.html">DF &amp; Beacons</a><a href="foreflight.html">ForeFlight</a><a href="caltopo.html">CalTopo</a><a href="ai-pilot.html">AI Pilot</a><a href="airplane.html">The Airplane</a><a href="flight-planner.html">Flight Planner</a><a href="hosting.html">Hosting</a><a href="how-its-built.html">How It's Built</a></div></nav><p>Exercise guide: in review, not yet published.</p></div><div class="footer-notice"><p class="footer-brand-line"><strong>Unofficial training tool. Not affiliated with or endorsed by Civil Air Patrol.</strong></p><p>CAP-VSAR is an unofficial training project built by Civil Air Patrol members. It is not an official Civil Air Patrol product and is not endorsed by Civil Air Patrol. "Civil Air Patrol" and "CAP" identify the organization this training is for; no CAP seal, emblem or wing patch is used here. Everything on this site is simulation: it is not for real flight planning, real direction finding or a real search.</p><p>Product names are the property of their owners and are used to identify the equipment being simulated.</p><p><strong>Not for operational use.</strong></p></div></div><div class="footer-last wrap">© 2026 the CAP-VSAR contributors · source code under the Apache-2.0 license; public link to follow</div></footer>
+<dialog class="lightbox" aria-label="Expanded image"><button class="lightbox-close" type="button" aria-label="Close expanded image">Close</button><img alt=""></dialog>
+</body></html>

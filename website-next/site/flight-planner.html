@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0B1220">
+  <meta name="description" content="The CAP-VSAR Flight Planner: where the first AI-built app came from, what it does now inside the exercise, who uses it, and what it cannot be used for.">
+  <title>Flight Planner — CAP-VSAR</title>
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Flight Planner — CAP-VSAR">
+  <meta property="og:description" content="The CAP-VSAR Flight Planner: where the first AI-built app came from, what it does now inside the exercise, who uses it, and what it cannot be used for.">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="assets/brand/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/brand/favicon.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="assets/css/reel.css">
+  <style>
+  </style>
+  <script src="assets/js/main.js" defer></script>
+  <script src="assets/js/reel.js" defer></script>
+<noscript><style>@media(max-width:900px){.site-header{height:auto;flex-wrap:wrap;padding-block:.5rem}.primary-nav{display:flex;position:static;flex-direction:row;flex-wrap:wrap;gap:.25rem .9rem;padding:.25rem 0 .5rem;width:100%;background:none}.primary-nav a{font-size:.9rem;padding:.4rem 0;border:0}.primary-nav .nav-pill{margin-top:0}}.menu-toggle,.pause-control,.clip-pause,.reel-controls{display:none}</style></noscript>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+  <a class="brand" href="index.html" aria-label="CAP-VSAR home"><img src="assets/brand/logo.svg" alt="CAP-VSAR bearing mark" width="180" height="48"></a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="primary-nav">Menu</button>
+  <nav id="primary-nav" class="primary-nav" aria-label="Main navigation">
+    <a href="index.html">Home</a><a href="comms.html">Comms</a><a href="df.html">DF &amp; Beacons</a><a href="foreflight.html">ForeFlight</a><a href="caltopo.html">CalTopo</a><a href="ai-pilot.html">AI Pilot</a><a href="airplane.html">The Airplane</a><a href="flight-planner.html" aria-current="page">Flight Planner</a><a href="hosting.html">Hosting</a><a href="how-its-built.html">How It's Built</a><a class="nav-pill" href="index.html#get-started">Get started</a>
+  </nav>
+</header>
+<main id="main" tabindex="-1">
+  <section class="page-title"><div class="wrap"><p class="eyebrow">THE FLIGHT PLANNER</p><h1>The first app became the Air Operations desk.</h1><p class="lede">Before there was a simulator project there was a flight planner: a route and fuel planner for a squadron's Cessna 172S, written with an AI coding assistant. It was folded into CAP-VSAR in September 2026, re-based on CAP 487, and given the one job the exercise needed most: turning an assignment into a search pattern the crew can fly.</p></div></section>
+
+  <section class="section" aria-labelledby="planner-hero-title"><div class="wrap">
+    <h2 id="planner-hero-title" class="visually-hidden-heading">The planner with a search pattern</h2>
+    <figure class="figure"><button class="shot-open" type="button" data-lightbox="assets/img/planner-escon-square.webp" data-alt="Flight Planner showing an expanding-square search pattern around the ESCON fix on the FAA sectional, with the navigation log below."><img src="assets/img/planner-escon-square.webp" alt="Expanding-square search pattern drawn around the ESCON fix on the sectional chart, with a navigation log of its legs below." width="1440" height="900"><span class="zoom-hint">Open image</span></button><figcaption><strong>Flight Planner.</strong> A route from KCRQ to the datum, an eight-leg expanding square around ESCON and on to KRNM, drawn on the FAA sectional, with the navigation log under the map. The airplane is CAP 487. For the simulator only.</figcaption></figure>
+  </div></section>
+
+  <section class="section paper" id="history" aria-labelledby="history-title"><div class="wrap">
+    <p class="eyebrow">WHERE IT CAME FROM</p><h2 id="history-title" class="section-title">A route planner first, a search-pattern tool now.</h2>
+    <div class="prose">
+      <p>It started as a stand-alone web app. Its own first commit, in February 2026, says it was built with an AI assistant, and its README says in under four hours. It planned routes for a Cessna 172S with real performance tables, charts, terrain, weather and weight and balance, and it ran as a public web service on a cloud platform. In July it got a map-first screen and a built-in guide.</p>
+      <p>The exercise needed something it did not have: a way to build the Air Operations Branch Director's assignment as flyable waypoints. In September 2026 the planner was brought into the CAP-VSAR project. The original stand-alone line still exists in its own repository; the copy inside this project is the one in use.</p>
+    </div>
+    <div class="table-wrap"><table class="spec-table"><caption class="visually-hidden-heading">How the planner changed, by date</caption><thead><tr><th scope="col">When</th><th scope="col">What changed</th></tr></thead><tbody>
+      <tr><th scope="row">February 2026</th><td>First version: route, nav log, charts, airport data, performance and weight and balance for a 172S. Built with an AI assistant.</td></tr>
+      <tr><th scope="row">March to July 2026</th><td>Terrain profile, airport diagrams, IFR charts, live weather, a cloud deployment, then the map-first screen and the in-app guide.</td></tr>
+      <tr><th scope="row">7 September 2026</th><td>Folded into CAP-VSAR. Three CAP search patterns (expanding square, creeping line, parallel track), an X-Plane flight-plan export, and a push to the exercise console.</td></tr>
+      <tr><th scope="row">September 2026</th><td>Re-based on CAP 487 (the 182T): its tables replace the 172S's, which were removed. FAA chart tiles cached on the box so the map works with no internet. Sign-in forwarded to the console. Moved behind the exercise's single secure front door.</td></tr>
+      <tr><th scope="row">10 October 2026</th><td>Honesty fixes: an unknown datum is an error and never a default airport, terrain it cannot read is "unknown" and never sea level, winds are never invented, and the console push is anchored on the search centre.</td></tr>
+    </tbody></table></div>
+  </div></section>
+
+  <section class="section" id="does" aria-labelledby="does-title"><div class="wrap">
+    <p class="eyebrow">WHAT IT DOES NOW</p><h2 id="does-title" class="section-title">Plan the flight, then build the search.</h2>
+    <div class="prose">
+      <ul>
+        <li><strong>Routes.</strong> Type airports, navaids and your own points, or drag a leg's midpoint on the map to bend it and snap to a nearby fix. The navigation log gives distance, true course, wind correction, magnetic heading (from the World Magnetic Model), ground speed, time and fuel, with a fuel breakdown for taxi and takeoff, climb, cruise and reserve.</li>
+        <li><strong>The airplane.</strong> Cruise, takeoff and landing figures come from a Cessna 182T information manual sample for CAP 487, and weight and balance checks the loaded airplane against its weight-dependent center-of-gravity envelope.</li>
+        <li><strong>Charts.</strong> The FAA sectional and the IFR low and high charts, served from a tile cache on the box, so a base with no internet still has a map over any area that was cached while online.</li>
+        <li><strong>Terrain, airports and weather.</strong> A terrain profile with a clearance rating, airport and runway details, and weather from outside services when a connection exists. With none, weather is marked simulated and the route says it was planned in still air.</li>
+        <li><strong>Search patterns.</strong> Expanding square (<span class="mono">SS</span>), creeping line (<span class="mono">CS</span>) and parallel track (<span class="mono">PS</span>), built from a datum or a box and named the way the G1000's search pages name them: <span class="mono">DATUM</span>, <span class="mono">SS01</span> and so on. <em>Apply to Route</em> puts them in the navigation log.</li>
+        <li><strong>Exports.</strong> <em>Export .FMS</em> writes an X-Plane flight plan for the G1000, up to 97 pattern waypoints. <em>Push to V-SAR</em> creates the sortie's scenario in the exercise console, with the search area's center as the alert and a 5 nautical mile alert radius, and broadcasts a message. The pattern's waypoints stay in the planner and in the <span class="mono">.fms</span> file; the console receives the center and the count. Pushing needs a signed-in Exercise Director; building a pattern and downloading the file need no sign-in.</li>
+      </ul>
+      <p>The planner and the G1000's search pages share their pattern geometry and are tested against one fixture, so the pattern in the navigation log and the one on the display agree to a few meters.</p>
+    </div>
+  </div></section>
+
+  <section class="section paper" id="patterns" aria-labelledby="patterns-title"><div class="wrap">
+    <p class="eyebrow">THE SEARCH PATTERN DIALOG</p><h2 id="patterns-title" class="section-title">From an assignment to a flyable pattern.</h2>
+    <div class="two-col">
+      <div class="prose">
+        <p>The Air Operations Branch Director takes the assignment from the ICS 204 and opens the pattern dialog. The datum can be a fix, an airport or a point typed as latitude and longitude. The dialog asks for the track spacing and legs for an expanding square, for the start and end and the sweep width of a creeping line, or for the box and the lane spacing of a parallel track, and previews the result on the map with its length, time and fuel.</p>
+        <p>The example here is the exercise's own datum, the ESCON fix on the approach to KCRQ, with a one-mile spacing and eight legs: nine waypoints, about twenty nautical miles.</p>
+        <p>When the pattern is pushed to the console, the practice beacon is not placed on the datum. The planner moves it a fixed distance, 2.5 nautical miles by default, on a bearing worked out from the plan, so the same plan always gives the same beacon and the plan does not hand the crew the answer.</p>
+      </div>
+      <figure class="figure"><button class="shot-open" type="button" data-lightbox="assets/img/planner-sar-dialog.webp" data-alt="The Search and Rescue Pattern Generator dialog: Expanding Square selected, datum at the ESCON fix, one nautical mile spacing, eight legs, a summary line and four buttons: Preview on Map, Apply to Route, Export X-Plane .FMS and Push to V-SAR Console."><img src="assets/img/planner-sar-dialog.webp" alt="Search and rescue pattern dialog with Expanding Square selected, a datum, track spacing of one mile, eight legs, a summary of twenty miles and nine waypoints, and buttons to preview, apply, export and push." width="1068" height="818" loading="lazy"><span class="zoom-hint">Open image</span></button><figcaption><strong>The pattern dialog.</strong> Nine waypoints from the datum: preview, apply to the route, export the file or push it to the console.</figcaption></figure>
+    </div>
+  </div></section>
+
+  <section class="section" id="users" aria-labelledby="users-title"><div class="wrap">
+    <p class="eyebrow">WHO USES IT</p><h2 id="users-title" class="section-title">Mostly the Air Operations desk, before launch.</h2>
+    <div class="table-wrap"><table class="spec-table"><caption class="visually-hidden-heading">Who uses the Flight Planner and for what</caption><thead><tr><th scope="col">Seat</th><th scope="col">What they do in it</th></tr></thead><tbody>
+      <tr><th scope="row">Air Operations Branch Director</th><td>Builds the patterns from the ICS 204 assignments and exports the <span class="mono">.fms</span> file the crew loads into the G1000.</td></tr>
+      <tr><th scope="row">Exercise Director</th><td>Pushes a planned sortie to the console, which creates the scenario with the search area as its alert and tells Mission Base.</td></tr>
+      <tr><th scope="row">Mission Pilot and Mission Observer</th><td>The exercise guide lists them with the Air Operations Branch Director for this step: build or check the pattern, read the terrain profile, load the file in the simulator and fly the assignment the base is tracking.</td></tr>
+    </tbody></table></div>
+    <div class="prose">
+      <p>It runs on the same box as the rest of the exercise, as a container reached under <span class="mono">/planner/</span> on the same address, so one sign-in covers the portal, Mission Base and the planner. How that box is laid out is on <a href="hosting.html">the Hosting page</a>.</p>
+    </div>
+  </div></section>
+
+  <section class="section paper" id="loading" aria-labelledby="loading-title"><div class="wrap">
+    <p class="eyebrow">THE AIRPLANE'S NUMBERS</p><h2 id="loading-title" class="section-title">A baseline, stated as one.</h2>
+    <div class="two-col">
+      <div class="prose">
+        <p>CAP 487's figures come from the 182T's information manual: limits, takeoff and landing tables, climb and cruise. Weight and balance starts from the manual's sample empty weight and moment, 1,924 pounds and 70.9 thousand pound-inches, which is a baseline for planning and not a measurement of the simulated airplane. The aircraft builder uses 1,970 pounds, and the planner's own screen says that the simulator's setting must be changed to match before the two are compared.</p>
+        <p>In the example here a pilot, a front passenger, a little baggage and 60 gallons of fuel come to 2,674 pounds, inside the weight and balance limits.</p>
+      </div>
+      <figure class="figure"><button class="shot-open" type="button" data-lightbox="assets/img/planner-weight-balance.webp" data-alt="The Weight and Balance dialog for CAP 487: the sample baseline note, empty weight and moment, loading fields, and a result of 2,674 pounds with the center of gravity inside the limits."><img src="assets/img/planner-weight-balance.webp" alt="Weight and balance dialog for CAP 487 with example loading entered and a green result: total weight 2,674 pounds, center of gravity 39.07 inches, within takeoff weight and center-of-gravity limits." width="988" height="1032" loading="lazy"><span class="zoom-hint">Open image</span></button><figcaption><strong>Weight and balance.</strong> Example loading, the manual's sample baseline, and a plain pass or fail against the limits.</figcaption></figure>
+    </div>
+  </div></section>
+
+  <section class="section honesty-section" aria-labelledby="planner-limits-title"><div class="wrap"><aside class="callout callout-signal"><h2 id="planner-limits-title">Not for real navigation.</h2><p>The planner is for simulation and carries a "simulation use only" notice at every start. Its airport and navaid data comes from the public OurAirports dataset, not from the FAA's own data. Terrain heights are sampled and approximate, parts of the weather can be simulated, notices to air missions are placeholders, and a few waypoint types (named RNAV intersections) are not in its data, so you drop a user waypoint at the coordinates instead. The 182T figures are a manual's sample baseline, not measurements of this airplane. Its flight-plan file follows X-Plane's published format, but the planner's own guide says loading it on the G1000 in a running simulator had not been checked, so compare the names and coordinates with the brief. Brief every real flight with official sources.</p></aside></div></section>
+
+  <nav class="page-next" aria-label="Next page"><div class="wrap button-row"><p class="next-label">Next</p><a class="button button-primary" href="index.html#get-started">Get started <span aria-hidden="true">→</span></a></div></nav>
+
+</main>
+<footer class="site-footer"><div class="footer-grid wrap"><div><a class="brand" href="index.html"><img src="assets/brand/logo.svg" alt="CAP-VSAR" width="180" height="48"></a><p>Virtual search and rescue training for crews and staff.</p></div><div><nav aria-label="Footer navigation"><div class="footer-links"><a href="index.html">Home</a><a href="comms.html">Comms</a><a href="df.html">DF &amp; Beacons</a><a href="foreflight.html">ForeFlight</a><a href="caltopo.html">CalTopo</a><a href="ai-pilot.html">AI Pilot</a><a href="airplane.html">The Airplane</a><a href="flight-planner.html" aria-current="page">Flight Planner</a><a href="hosting.html">Hosting</a><a href="how-its-built.html">How It's Built</a></div></nav><p>Exercise guide: in review, not yet published.</p></div><div class="footer-notice"><p class="footer-brand-line"><strong>Unofficial training tool. Not affiliated with or endorsed by Civil Air Patrol.</strong></p><p>CAP-VSAR is an unofficial training project built by Civil Air Patrol members. It is not an official Civil Air Patrol product and is not endorsed by Civil Air Patrol. "Civil Air Patrol" and "CAP" identify the organization this training is for; no CAP seal, emblem or wing patch is used here. Everything on this site is simulation: it is not for real flight planning, real direction finding or a real search.</p><p>Product names are the property of their owners and are used to identify the equipment being simulated.</p><p>X-Plane and Laminar Research, Garmin and G1000, and Cessna are the property of their owners, named only to identify what the planner plans for. The chart in the first picture is the FAA sectional, shown as the planner draws it. CAP-VSAR is unofficial and is not affiliated with or endorsed by any of them.</p><p><strong>Not for operational use.</strong></p></div></div><div class="footer-last wrap">© 2026 the CAP-VSAR contributors · source code under the Apache-2.0 license; public link to follow</div></footer>
+<dialog class="lightbox" aria-label="Expanded image"><button class="lightbox-close" type="button" aria-label="Close expanded image">Close</button><img alt=""></dialog>
+</body></html>

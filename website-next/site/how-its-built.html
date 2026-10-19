@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0B1220">
+  <meta name="description" content="How CAP-VSAR is built: three AI coding assistants, one changelog, one commander, and what each seat needs to take part.">
+  <title>How It's Built — CAP-VSAR</title>
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="How It's Built — CAP-VSAR">
+  <meta property="og:description" content="How CAP-VSAR is built: three AI coding assistants, one changelog, one commander, and what each seat needs to take part.">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="assets/brand/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/brand/favicon.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="assets/css/reel.css">
+  <script src="assets/js/main.js" defer></script>
+  <script src="assets/js/reel.js" defer></script>
+<noscript><style>@media(max-width:900px){.site-header{height:auto;flex-wrap:wrap;padding-block:.5rem}.primary-nav{display:flex;position:static;flex-direction:row;flex-wrap:wrap;gap:.25rem .9rem;padding:.25rem 0 .5rem;width:100%;background:none}.primary-nav a{font-size:.9rem;padding:.4rem 0;border:0}.primary-nav .nav-pill{margin-top:0}}.menu-toggle,.pause-control,.clip-pause,.reel-controls{display:none}</style></noscript>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+  <a class="brand" href="index.html" aria-label="CAP-VSAR home"><img src="assets/brand/logo.svg" alt="CAP-VSAR bearing mark" width="180" height="48"></a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="primary-nav">Menu</button>
+  <nav id="primary-nav" class="primary-nav" aria-label="Main navigation">
+    <a href="index.html">Home</a><a href="comms.html">Comms</a><a href="df.html">DF &amp; Beacons</a><a href="foreflight.html">ForeFlight</a><a href="caltopo.html">CalTopo</a><a href="ai-pilot.html">AI Pilot</a><a href="airplane.html">The Airplane</a><a href="flight-planner.html">Flight Planner</a><a href="hosting.html">Hosting</a><a href="how-its-built.html" aria-current="page">How It's Built</a><a class="nav-pill" href="index.html#get-started">Get started</a>
+  </nav>
+</header>
+<main id="main" tabindex="-1">
+  <section class="page-title"><div class="wrap"><p class="eyebrow">HOW IT'S BUILT</p><h1>One instructor, three assistants, one changelog.</h1><p class="lede">CAP-VSAR was built by three AI coding assistants working the same code, directed by a flight instructor and an AI orchestrator.<!-- OWNER DECISION (T7, CLAIMS_AND_RISKS.md §3): credentials/billet wording (item 3); "squadron commander" removed from this page until decided. --> The interesting part is not the models. It is how they keep each other honest.</p></div></section>
+
+  <section class="section" id="truth" aria-labelledby="truth-title"><div class="wrap">
+    <p class="eyebrow">THREE MODELS, ONE TRUTH</p><h2 id="truth-title">Nobody works from private notes.</h2>
+    <div class="prose">
+      <p>Claude Code and OpenAI Codex work inside the editor next to the project files; Gemini works in Google's Antigravity. They cannot see inside each other, and left alone they would drift into three versions of the truth. So none of them works from private notes. Every session reads the project changelog before touching anything and corrects it in place before finishing, and every assistant quotes from one shared knowledge base instead of its own memory.</p>
+      <p>The orchestrator is a small tool called AgentDeck: one planning session with a live task board, delegating work to three worker terminals, each in its own copy of the repository. The human plans, approves, flies the simulator and listens for the DF null on the correct wing.</p>
+    </div>
+    <figure class="diagram">
+      <svg viewBox="0 0 1200 670" role="img" aria-labelledby="w1-title w1-desc">
+        <title id="w1-title">One instructor, three assistants, one changelog</title>
+        <desc id="w1-desc">A person at the top, the flight instructor, who plans, approves and flies the simulator. Below them an orchestrator card, AgentDeck, with a task board. Below that, three worker lanes: Claude Code, OpenAI Codex and Gemini in Antigravity, each in its own copy of the repository, with arrows between them labeled review, and fix with a failing test first. Under the lanes a shared bar every worker reads and writes: the changelog and the knowledge base. At the bottom a gate, the full test suite on every push, and a box for the public copy fed by a sanitizer. An arrow from the simulator back to the person is labeled flown in the sim.</desc>
+        <defs><pattern id="w1-grid" width="50" height="50" patternUnits="userSpaceOnUse"><path d="M50 0H0V50" fill="none" stroke="#a9c7b2" stroke-opacity=".1"/></pattern>
+          <marker id="w1-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5 0 10Z" fill="#7fe0ea"/></marker>
+          <marker id="w1-arrow-o" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5 0 10Z" fill="#ff8a47"/></marker></defs>
+        <rect width="1200" height="670" fill="#0b1220"/><rect width="1200" height="670" fill="url(#w1-grid)"/>
+        <!-- the person -->
+        <g transform="translate(600 58)"><circle r="14" fill="none" stroke="#e6ecf2" stroke-width="2.5"/><path d="M-26 46q0-28 26-28t26 28" fill="none" stroke="#e6ecf2" stroke-width="2.5"/></g>
+        <text class="diagram-head" x="650" y="60">THE INSTRUCTOR</text>
+        <text class="diagram-note" x="650" y="82">A flight instructor. Plans, approves,</text><text class="diagram-note" x="650" y="102">flies the simulator, says what is wrong.</text>
+        <path d="M600 110V140" stroke="#7fe0ea" stroke-width="2.5" marker-end="url(#w1-arrow)"/>
+        <!-- orchestrator -->
+        <rect x="400" y="145" width="400" height="80" rx="10" fill="#182338" stroke="#27c7d9"/>
+        <text class="diagram-head" x="420" y="178">AGENTDECK</text><text class="diagram-note" x="420" y="202">One planning session, a live task board.</text>
+        <g transform="translate(735 160)" fill="none" stroke="#7fe0ea" stroke-width="2"><rect width="50" height="50" rx="4"/><path d="M8 14h16M8 26h30M8 38h22"/></g>
+        <!-- three lanes -->
+        <path d="M600 225V250H220V270M600 250V270M600 250H980V270" fill="none" stroke="#7fe0ea" stroke-width="2"/>
+        <g>
+          <rect x="80" y="275" width="280" height="120" rx="10" fill="#111a2b" stroke="#3a4a66"/><text class="diagram-head" x="100" y="308" font-size="19">CLAUDE CODE</text><text class="diagram-note" x="100" y="334">In the editor, next to the files.</text><text class="diagram-chip" x="100" y="372" fill="#9aa7b5">OWN COPY OF THE REPOSITORY</text>
+          <rect x="460" y="275" width="280" height="120" rx="10" fill="#111a2b" stroke="#3a4a66"/><text class="diagram-head" x="480" y="308" font-size="19">OPENAI CODEX</text><text class="diagram-note" x="480" y="334">In the editor, next to the files.</text><text class="diagram-chip" x="480" y="372" fill="#9aa7b5">OWN COPY OF THE REPOSITORY</text>
+          <rect x="840" y="275" width="280" height="120" rx="10" fill="#111a2b" stroke="#3a4a66"/><text class="diagram-head" x="860" y="308" font-size="19">GEMINI IN ANTIGRAVITY</text><text class="diagram-note" x="860" y="334">In Google's agent workspace.</text><text class="diagram-chip" x="860" y="372" fill="#9aa7b5">OWN COPY OF THE REPOSITORY</text>
+        </g>
+        <!-- review arrows between lanes -->
+        <path d="M362 318H455" stroke="#ff8a47" stroke-width="2" marker-end="url(#w1-arrow-o)"/><path d="M742 318H835" stroke="#ff8a47" stroke-width="2" marker-end="url(#w1-arrow-o)"/>
+        <path d="M838 356H745" stroke="#ff8a47" stroke-width="2" marker-end="url(#w1-arrow-o)"/><path d="M458 356H365" stroke="#ff8a47" stroke-width="2" marker-end="url(#w1-arrow-o)"/>
+        <text class="diagram-chip" x="410" y="308" text-anchor="middle" fill="#ff8a47">REVIEW</text><text class="diagram-chip" x="790" y="308" text-anchor="middle" fill="#ff8a47">REVIEW</text>
+        <text class="diagram-chip" x="410" y="376" text-anchor="middle" fill="#ff8a47">FIX</text><text class="diagram-chip" x="790" y="376" text-anchor="middle" fill="#ff8a47">FIX</text>
+        <text class="diagram-note" x="80" y="648">Review: one assistant checks another's work against the real runtime. Fix: every change lands with a test that fails first.</text>
+        <!-- shared bar -->
+        <path d="M220 395V425M600 395V425M980 395V425" stroke="#7fe0ea" stroke-width="2" stroke-dasharray="4 4"/>
+        <rect x="80" y="430" width="1040" height="64" rx="10" fill="#f3efe6" stroke="#cfc7b7"/>
+        <g font-family="ui-monospace,monospace" font-size="13" font-weight="700" fill="#15202b" letter-spacing=".06em"><text x="100" y="458">THE CHANGELOG</text><text x="620" y="458">THE KNOWLEDGE BASE</text></g>
+        <g font-family="system-ui,sans-serif" font-size="13.5" fill="#4b5868"><text x="100" y="480">Read before touching anything. Corrected in place before finishing.</text><text x="620" y="480">One shared source every assistant quotes from, not its own memory.</text></g>
+        <!-- gate and public copy -->
+        <path d="M600 494V525" stroke="#7fe0ea" stroke-width="2.5" marker-end="url(#w1-arrow)"/>
+        <rect x="330" y="530" width="300" height="90" rx="10" fill="#111a2b" stroke="#7fbf4d"/><text class="diagram-head" x="350" y="562" font-size="19">EVERY PUSH, THE FULL SUITE</text><text class="diagram-note" x="350" y="588">The whole test suite runs on the</text><text class="diagram-note" x="350" y="606">squadron's own server before anything moves on.</text>
+        <path d="M630 575H700" stroke="#7fe0ea" stroke-width="2.5" marker-end="url(#w1-arrow)"/>
+        <rect x="710" y="530" width="300" height="90" rx="10" fill="#111a2b" stroke="#3a4a66" stroke-dasharray="6 5"/><text class="diagram-head" x="730" y="562" font-size="19">THE PUBLIC COPY</text><text class="diagram-note" x="730" y="588">A script strips the private material</text><text class="diagram-note" x="730" y="606">before anything is published.</text>
+        <!-- flown in the sim: back to the commander -->
+        <path d="M80 335H40V95H540" fill="none" stroke="#7fbf4d" stroke-width="2.5" stroke-dasharray="8 6"/><text class="diagram-chip" x="80" y="112" fill="#7fbf4d" font-size="11">FLOWN, THEN CORRECTED</text>
+        
+      </svg>
+      <figcaption><strong>The loop is the force multiplier.</strong> Three workers that read each other's homework, and a human who checks them against the real airplane.</figcaption>
+    </figure>
+  </div></section>
+
+  <section class="section paper" id="deck" aria-labelledby="deck-title"><div class="wrap">
+    <p class="eyebrow">AT THE DESK</p><h2 id="deck-title">What the orchestrator sees.</h2>
+    <div class="prose"><p>Two views of an evening's work on AgentDeck. The three workers run side by side, each in its own copy of the repository, while the board keeps the task list and who is on what.</p></div>
+    <figure class="clip" data-clip="agentdeck-workers"><div class="clip-stage"><img class="slide-poster" src="assets/video/agentdeck-workers-poster.webp" alt="Three terminal panes side by side, each with a file tree and a transcript." width="1280" height="720" loading="lazy"><video muted playsinline loop preload="metadata" poster="assets/video/agentdeck-workers-poster.webp" aria-label="Three terminal panes side by side, each with a file tree and a transcript."><source src="assets/video/agentdeck-workers.webm" type="video/webm"><source src="assets/video/agentdeck-workers.mp4" type="video/mp4"></video></div><div class="clip-controls"><p class="clip-caption"><strong>Three workers, one evening.</strong> Claude, Codex and Antigravity working in parallel on separate tasks: one on the exercise console, one on the landing brakes and autopilot hand-over, one on the user guide. Each reads the same changelog first.</p><button class="clip-pause" type="button">Pause clip</button></div></figure>
+    <figure class="figure figure-board"><button class="shot-open" type="button" data-lightbox="assets/img/how-its-built-agentdeck-board.webp" data-alt="AgentDeck's dashboard: the Workers list with Claude, Codex and Antigravity and the task each is on, and the Tasks list with running and done tasks and their times."><img src="assets/img/how-its-built-agentdeck-board.webp" alt="Dashboard with a Workers list of three assistants and the task each holds, and a Tasks list showing running and finished tasks." width="778" height="592" loading="lazy"><span class="zoom-hint">Open image</span></button><figcaption><strong>The board.</strong> Who is working, on which task, for how long; what is running and what is done. The human reads this, not three transcripts.</figcaption></figure>
+  </div></section>
+
+  <section class="section" id="qa" aria-labelledby="qa-title"><div class="wrap">
+    <p class="eyebrow">DEV, QA AND TEST</p><h2 id="qa-title">A rhythm, not a sprint.</h2>
+    <div class="prose"><p>Work moves in a rhythm. A read-only review first, with findings and evidence. Then fixes, each with a test that fails before and passes after. Then a second model reviews the first model's work against the real runtime: that is how a licensing mismatch and a crash-on-redraw in the Mission Observer panel were caught, by one assistant checking another's. The full test suite runs on the project's own continuous-integration (CI) server on every push, and a script strips private material to build a public copy when one is published.</p></div>
+  </div></section>
+
+  <section class="section paper" id="strengths" aria-labelledby="strengths-title"><div class="wrap">
+    <p class="eyebrow">WORKING TO THEIR STRENGTHS</p><h2 id="strengths-title">From the record.</h2>
+    <div class="prose"><p>From the record: Gemini built the first Mission Observer panel; Claude reviewed it and fixed the defects it found, and later wrote the exercise guide and the sign-in; Codex worked the DF propagation and flew the C182 on the simulator. The instructor flew the airplane and said what was wrong.</p></div>
+  </div></section>
+
+  <section class="section" id="stations" aria-labelledby="stations-title"><div class="wrap">
+    <p class="eyebrow">STATIONS AND HARDWARE</p><h2 id="stations-title">Who needs what.</h2>
+    <div class="table-wrap"><table class="spec-table"><caption class="visually-hidden-heading">What each seat needs</caption><thead><tr><th scope="col">Seat</th><th scope="col">Needs</th></tr></thead><tbody>
+      <tr><th scope="row">Base staff: Incident Commander (IC), Air Operations Branch Director (AOBD), Mission Radio Operator (MRO), Mission Staff Assistant (MSA)</th><td>A laptop or tablet with a browser and a headset</td></tr>
+      <tr><th scope="row">Mission Observer (MO)</th><td>A second screen or tablet for the MO station (Air Manager) and a headset</td></tr>
+      <tr><th scope="row">Mission Pilot (MP)</th><td>X-Plane 12, a yoke and pedals, a headset; the CAP 487 package built locally</td></tr>
+      <tr><th scope="row">Ground team</th><td>A phone with a browser and a headset</td></tr>
+      <tr><th scope="row">Exercise Director (ED) / Skills Evaluator (SET)</th><td>A laptop with a browser</td></tr>
+    </tbody></table></div>
+    <p><a class="button button-secondary" href="index.html#org-chart">Back to the seats on Home</a></p>
+  </div></section>
+
+  <nav class="page-next" aria-label="Next page"><div class="wrap button-row"><p class="next-label">Next</p><a class="button button-primary" href="index.html#get-started">Get started <span aria-hidden="true">→</span></a></div></nav>
+</main>
+<footer class="site-footer"><div class="footer-grid wrap"><div><a class="brand" href="index.html"><img src="assets/brand/logo.svg" alt="CAP-VSAR" width="180" height="48"></a><p>Virtual search and rescue training for crews and staff.</p></div><div><nav aria-label="Footer navigation"><div class="footer-links"><a href="index.html">Home</a><a href="comms.html">Comms</a><a href="df.html">DF &amp; Beacons</a><a href="foreflight.html">ForeFlight</a><a href="caltopo.html">CalTopo</a><a href="ai-pilot.html">AI Pilot</a><a href="airplane.html">The Airplane</a><a href="flight-planner.html">Flight Planner</a><a href="hosting.html">Hosting</a><a href="how-its-built.html" aria-current="page">How It's Built</a></div></nav><p>Exercise guide: in review, not yet published.</p></div><div class="footer-notice"><p class="footer-brand-line"><strong>Unofficial training tool. Not affiliated with or endorsed by Civil Air Patrol.</strong></p><p>CAP-VSAR is an unofficial training project built by Civil Air Patrol members. It is not an official Civil Air Patrol product and is not endorsed by Civil Air Patrol. "Civil Air Patrol" and "CAP" identify the organization this training is for; no CAP seal, emblem or wing patch is used here. Everything on this site is simulation: it is not for real flight planning, real direction finding or a real search.</p><p>Product names are the property of their owners and are used to identify the equipment being simulated.</p><p>AgentDeck is the program's own coordination tool. Claude, Codex, Gemini, GPT and Antigravity are products of their owners, named only to identify the tools used.</p><p><strong>Not for operational use.</strong></p></div></div><div class="footer-last wrap">© 2026 the CAP-VSAR contributors · source code under the Apache-2.0 license; public link to follow</div></footer>
+<dialog class="lightbox" aria-label="Expanded image"><button class="lightbox-close" type="button" aria-label="Close expanded image">Close</button><img alt=""></dialog>
+</body></html>

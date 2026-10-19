@@ -1,0 +1,362 @@
+[
+  {
+    "source": "a-bearing/logo-dark.svg",
+    "png": "a-bearing/png/logo-dark.png",
+    "width": 728,
+    "height": 192
+  },
+  {
+    "source": "a-bearing/icon-dark.svg",
+    "png": "a-bearing/png/icon-dark-32.png",
+    "width": 32,
+    "height": 32
+  },
+  {
+    "source": "a-bearing/icon-dark.svg",
+    "png": "a-bearing/png/icon-dark-180.png",
+    "width": 180,
+    "height": 180
+  },
+  {
+    "source": "a-bearing/icon-dark.svg",
+    "png": "a-bearing/png/icon-dark-512.png",
+    "width": 512,
+    "height": 512
+  },
+  {
+    "source": "a-bearing/lockup-dark.svg",
+    "png": "a-bearing/png/lockup-dark.png",
+    "width": 728,
+    "height": 208
+  },
+  {
+    "source": "a-bearing/logo-light.svg",
+    "png": "a-bearing/png/logo-light.png",
+    "width": 728,
+    "height": 192
+  },
+  {
+    "source": "a-bearing/icon-light.svg",
+    "png": "a-bearing/png/icon-light-32.png",
+    "width": 32,
+    "height": 32
+  },
+  {
+    "source": "a-bearing/icon-light.svg",
+    "png": "a-bearing/png/icon-light-180.png",
+    "width": 180,
+    "height": 180
+  },
+  {
+    "source": "a-bearing/icon-light.svg",
+    "png": "a-bearing/png/icon-light-512.png",
+    "width": 512,
+    "height": 512
+  },
+  {
+    "source": "a-bearing/lockup-light.svg",
+    "png": "a-bearing/png/lockup-light.png",
+    "width": 728,
+    "height": 208
+  },
+  {
+    "source": "a-bearing/logo-white.svg",
+    "png": "a-bearing/png/logo-white.png",
+    "width": 728,
+    "height": 192
+  },
+  {
+    "source": "a-bearing/icon-white.svg",
+    "png": "a-bearing/png/icon-white-32.png",
+    "width": 32,
+    "height": 32
+  },
+  {
+    "source": "a-bearing/icon-white.svg",
+    "png": "a-bearing/png/icon-white-180.png",
+    "width": 180,
+    "height": 180
+  },
+  {
+    "source": "a-bearing/icon-white.svg",
+    "png": "a-bearing/png/icon-white-512.png",
+    "width": 512,
+    "height": 512
+  },
+  {
+    "source": "a-bearing/lockup-white.svg",
+    "png": "a-bearing/png/lockup-white.png",
+    "width": 728,
+    "height": 208
+  },
+  {
+    "source": "a-bearing/logo-black.svg",
+    "png": "a-bearing/png/logo-black.png",
+    "width": 728,
+    "height": 192
+  },
+  {
+    "source": "a-bearing/icon-black.svg",
+    "png": "a-bearing/png/icon-black-32.png",
+    "width": 32,
+    "height": 32
+  },
+  {
+    "source": "a-bearing/icon-black.svg",
+    "png": "a-bearing/png/icon-black-180.png",
+    "width": 180,
+    "height": 180
+  },
+  {
+    "source": "a-bearing/icon-black.svg",
+    "png": "a-bearing/png/icon-black-512.png",
+    "width": 512,
+    "height": 512
+  },
+  {
+    "source": "a-bearing/lockup-black.svg",
+    "png": "a-bearing/png/lockup-black.png",
+    "width": 728,
+    "height": 208
+  },
+  {
+    "source": "b-wing-pulse/logo-dark.svg",
+    "png": "b-wing-pulse/png/logo-dark.png",
+    "width": 728,
+    "height": 192
+  },
+  {
+    "source": "b-wing-pulse/icon-dark.svg",
+    "png": "b-wing-pulse/png/icon-dark-32.png",
+    "width": 32,
+    "height": 32
+  },
+  {
+    "source": "b-wing-pulse/icon-dark.svg",
+    "png": "b-wing-pulse/png/icon-dark-180.png",
+    "width": 180,
+    "height": 180
+  },
+  {
+    "source": "b-wing-pulse/icon-dark.svg",
+    "png": "b-wing-pulse/png/icon-dark-512.png",
+    "width": 512,
+    "height": 512
+  },
+  {
+    "source": "b-wing-pulse/lockup-dark.svg",
+    "png": "b-wing-pulse/png/lockup-dark.png",
+    "width": 728,
+    "height": 208
+  },
+  {
+    "source": "b-wing-pulse/logo-light.svg",
+    "png": "b-wing-pulse/png/logo-light.png",
+    "width": 728,
+    "height": 192
+  },
+  {
+    "source": "b-wing-pulse/icon-light.svg",
+    "png": "b-wing-pulse/png/icon-light-32.png",
+    "width": 32,
+    "height": 32
+  },
+  {
+    "source": "b-wing-pulse/icon-light.svg",
+    "png": "b-wing-pulse/png/icon-light-180.png",
+    "width": 180,
+    "height": 180
+  },
+  {
+    "source": "b-wing-pulse/icon-light.svg",
+    "png": "b-wing-pulse/png/icon-light-512.png",
+    "width": 512,
+    "height": 512
+  },
+  {
+    "source": "b-wing-pulse/lockup-light.svg",
+    "png": "b-wing-pulse/png/lockup-light.png",
+    "width": 728,
+    "height": 208
+  },
+  {
+    "source": "b-wing-pulse/logo-white.svg",
+    "png": "b-wing-pulse/png/logo-white.png",
+    "width": 728,
+    "height": 192
+  },
+  {
+    "source": "b-wing-pulse/icon-white.svg",
+    "png": "b-wing-pulse/png/icon-white-32.png",
+    "width": 32,
+    "height": 32
+  },
+  {
+    "source": "b-wing-pulse/icon-white.svg",
+    "png": "b-wing-pulse/png/icon-white-180.png",
+    "width": 180,
+    "height": 180
+  },
+  {
+    "source": "b-wing-pulse/icon-white.svg",
+    "png": "b-wing-pulse/png/icon-white-512.png",
+    "width": 512,
+    "height": 512
+  },
+  {
+    "source": "b-wing-pulse/lockup-white.svg",
+    "png": "b-wing-pulse/png/lockup-white.png",
+    "width": 728,
+    "height": 208
+  },
+  {
+    "source": "b-wing-pulse/logo-black.svg",
+    "png": "b-wing-pulse/png/logo-black.png",
+    "width": 728,
+    "height": 192
+  },
+  {
+    "source": "b-wing-pulse/icon-black.svg",
+    "png": "b-wing-pulse/png/icon-black-32.png",
+    "width": 32,
+    "height": 32
+  },
+  {
+    "source": "b-wing-pulse/icon-black.svg",
+    "png": "b-wing-pulse/png/icon-black-180.png",
+    "width": 180,
+    "height": 180
+  },
+  {
+    "source": "b-wing-pulse/icon-black.svg",
+    "png": "b-wing-pulse/png/icon-black-512.png",
+    "width": 512,
+    "height": 512
+  },
+  {
+    "source": "b-wing-pulse/lockup-black.svg",
+    "png": "b-wing-pulse/png/lockup-black.png",
+    "width": 728,
+    "height": 208
+  },
+  {
+    "source": "c-chart-tile/logo-dark.svg",
+    "png": "c-chart-tile/png/logo-dark.png",
+    "width": 728,
+    "height": 192
+  },
+  {
+    "source": "c-chart-tile/icon-dark.svg",
+    "png": "c-chart-tile/png/icon-dark-32.png",
+    "width": 32,
+    "height": 32
+  },
+  {
+    "source": "c-chart-tile/icon-dark.svg",
+    "png": "c-chart-tile/png/icon-dark-180.png",
+    "width": 180,
+    "height": 180
+  },
+  {
+    "source": "c-chart-tile/icon-dark.svg",
+    "png": "c-chart-tile/png/icon-dark-512.png",
+    "width": 512,
+    "height": 512
+  },
+  {
+    "source": "c-chart-tile/lockup-dark.svg",
+    "png": "c-chart-tile/png/lockup-dark.png",
+    "width": 728,
+    "height": 208
+  },
+  {
+    "source": "c-chart-tile/logo-light.svg",
+    "png": "c-chart-tile/png/logo-light.png",
+    "width": 728,
+    "height": 192
+  },
+  {
+    "source": "c-chart-tile/icon-light.svg",
+    "png": "c-chart-tile/png/icon-light-32.png",
+    "width": 32,
+    "height": 32
+  },
+  {
+    "source": "c-chart-tile/icon-light.svg",
+    "png": "c-chart-tile/png/icon-light-180.png",
+    "width": 180,
+    "height": 180
+  },
+  {
+    "source": "c-chart-tile/icon-light.svg",
+    "png": "c-chart-tile/png/icon-light-512.png",
+    "width": 512,
+    "height": 512
+  },
+  {
+    "source": "c-chart-tile/lockup-light.svg",
+    "png": "c-chart-tile/png/lockup-light.png",
+    "width": 728,
+    "height": 208
+  },
+  {
+    "source": "c-chart-tile/logo-white.svg",
+    "png": "c-chart-tile/png/logo-white.png",
+    "width": 728,
+    "height": 192
+  },
+  {
+    "source": "c-chart-tile/icon-white.svg",
+    "png": "c-chart-tile/png/icon-white-32.png",
+    "width": 32,
+    "height": 32
+  },
+  {
+    "source": "c-chart-tile/icon-white.svg",
+    "png": "c-chart-tile/png/icon-white-180.png",
+    "width": 180,
+    "height": 180
+  },
+  {
+    "source": "c-chart-tile/icon-white.svg",
+    "png": "c-chart-tile/png/icon-white-512.png",
+    "width": 512,
+    "height": 512
+  },
+  {
+    "source": "c-chart-tile/lockup-white.svg",
+    "png": "c-chart-tile/png/lockup-white.png",
+    "width": 728,
+    "height": 208
+  },
+  {
+    "source": "c-chart-tile/logo-black.svg",
+    "png": "c-chart-tile/png/logo-black.png",
+    "width": 728,
+    "height": 192
+  },
+  {
+    "source": "c-chart-tile/icon-black.svg",
+    "png": "c-chart-tile/png/icon-black-32.png",
+    "width": 32,
+    "height": 32
+  },
+  {
+    "source": "c-chart-tile/icon-black.svg",
+    "png": "c-chart-tile/png/icon-black-180.png",
+    "width": 180,
+    "height": 180
+  },
+  {
+    "source": "c-chart-tile/icon-black.svg",
+    "png": "c-chart-tile/png/icon-black-512.png",
+    "width": 512,
+    "height": 512
+  },
+  {
+    "source": "c-chart-tile/lockup-black.svg",
+    "png": "c-chart-tile/png/lockup-black.png",
+    "width": 728,
+    "height": 208
+  }
+]

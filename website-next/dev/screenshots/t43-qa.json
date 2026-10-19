@@ -1,0 +1,55 @@
+{
+ "checks": [
+  "desktop: hero reel initialised, map first, 5 slides (static,video,video,video,video), active 0, missing 0",
+  "desktop: controls shown and 5 dots match",
+  "desktop: at most one video playing",
+  "desktop: Next advances to slide 2, announces, marks the dot",
+  "desktop: active video slide plays",
+  "desktop: hero Pause control pauses the reel video",
+  "desktop: Resume restarts it",
+  "desktop: off-screen reel pauses",
+  "desktop: back on screen it plays again",
+  "desktop: arrow keys move between slides",
+  "desktop: no console or page errors []",
+  "mobile: hero reel initialised, map first, 5 slides (static,video,video,video,video), active 0, missing 0",
+  "mobile: controls shown and 5 dots match",
+  "mobile: at most one video playing",
+  "mobile: Next advances to slide 2, announces, marks the dot",
+  "mobile: active video slide plays",
+  "mobile: hero Pause control pauses the reel video",
+  "mobile: Resume restarts it",
+  "mobile: off-screen reel pauses",
+  "mobile: back on screen it plays again",
+  "mobile: arrow keys move between slides",
+  "mobile: no console or page errors []",
+  "reduced motion: no video plays, no video state, map stays",
+  "reduced motion: clips on DF show posters, none play",
+  "reduced motion: no errors []",
+  "df: clips resolved [{\"id\":\"df-needle-homing\",\"state\":\"poster\",\"hidden\":false,\"note\":true,\"button\":true},{\"id\":\"df-faces\",\"state\":\"poster\",\"hidden\":false,\"note\":true,\"button\":true},{\"id\":\"mission-base-plot\",\"state\":\"video\",\"hidden\":false,\"note\":false,\"button\":false},{\"id\":\"console-effects\",\"state\":\"video\",\"hidden\":false,\"note\":false,\"button\":false},{\"id\":\"debrief-scoring\",\"state\":\"video\",\"hidden\":false,\"note\":false,\"button\":false}]",
+  "df: poster-only clips carry the Still badge and hide their button",
+  "df: mission-base-plot plays in view",
+  "df: mission-base-plot Pause clip pauses it",
+  "df: mission-base-plot Play clip resumes",
+  "df: mission-base-plot pauses off-screen",
+  "df: no errors []",
+  "ai-pilot: clips [{\"id\":\"c182-landing-ai\",\"state\":\"video\",\"hidden\":false},{\"id\":\"gfc-handover\",\"state\":\"pending\",\"hidden\":true},{\"id\":\"f4-case1-arrival\",\"state\":\"pending\",\"hidden\":true}]",
+  "airplane: clips [{\"id\":\"airplane-panel\",\"state\":\"pending\",\"hidden\":true}]",
+  "how-its-built: clips [{\"id\":\"agentdeck-workers\",\"state\":\"video\",\"hidden\":false}]",
+  "comms: clips [{\"id\":\"base-radio-link\",\"state\":\"video\",\"hidden\":false}]"
+ ],
+ "failures": [],
+ "weights": {
+  "home desktop": {
+   "bytes": 16796665,
+   "resources": 34
+  },
+  "home mobile": {
+   "bytes": 18133751,
+   "resources": 34
+  },
+  "df desktop": {
+   "bytes": 8134197,
+   "resources": 23
+  }
+ }
+}

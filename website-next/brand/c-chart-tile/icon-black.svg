@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+<title id="title">CAP-VSAR / Chart tile / black / icon</title><desc id="desc">Run the whole search before anyone leaves the ground. Unofficial training tool. Not affiliated with or endorsed by Civil Air Patrol.</desc>
+<rect x="16" y="16" width="96" height="96" rx="16" fill="none" stroke="#000000" stroke-width="3.5"/>
+      
+      <path d="M64 64H80V80H48V48H96V96H32V32" fill="none" stroke="#000000" stroke-width="4.5" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="64" cy="64" r="7" fill="#000000"/>
+</svg>

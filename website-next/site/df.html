@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0B1220">
+  <meta name="description" content="The simulated direction finders, how the practice beacon's signal travels through terrain, and the traps a Mission Observer learns to read through.">
+  <title>DF &amp; Beacons — CAP-VSAR</title>
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="DF &amp; Beacons — CAP-VSAR">
+  <meta property="og:description" content="The simulated direction finders, how the practice beacon's signal travels through terrain, and the traps a Mission Observer learns to read through.">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="assets/brand/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/brand/favicon.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="assets/css/reel.css">
+  <script src="assets/js/main.js" defer></script>
+  <script src="assets/js/reel.js" defer></script>
+<noscript><style>@media(max-width:900px){.site-header{height:auto;flex-wrap:wrap;padding-block:.5rem}.primary-nav{display:flex;position:static;flex-direction:row;flex-wrap:wrap;gap:.25rem .9rem;padding:.25rem 0 .5rem;width:100%;background:none}.primary-nav a{font-size:.9rem;padding:.4rem 0;border:0}.primary-nav .nav-pill{margin-top:0}}.menu-toggle,.pause-control,.clip-pause,.reel-controls{display:none}</style></noscript>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+  <a class="brand" href="index.html" aria-label="CAP-VSAR home"><img src="assets/brand/logo.svg" alt="CAP-VSAR bearing mark" width="180" height="48"></a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="primary-nav">Menu</button>
+  <nav id="primary-nav" class="primary-nav" aria-label="Main navigation">
+    <a href="index.html">Home</a><a href="comms.html">Comms</a><a href="df.html" aria-current="page">DF &amp; Beacons</a><a href="foreflight.html">ForeFlight</a><a href="caltopo.html">CalTopo</a><a href="ai-pilot.html">AI Pilot</a><a href="airplane.html">The Airplane</a><a href="flight-planner.html">Flight Planner</a><a href="hosting.html">Hosting</a><a href="how-its-built.html">How It's Built</a><a class="nav-pill" href="index.html#get-started">Get started</a>
+  </nav>
+</header>
+<main id="main" tabindex="-1">
+  <section class="page-title"><div class="wrap"><p class="eyebrow">DIRECTION FINDING</p><h1>The beacon lies to you a little, all the time.</h1><p class="lede">A ridge between you and the ELT, the wrong wing down in a turn, a signal that exists for less than half a second every fifty seconds. Teaching a Mission Observer to read through that is most of the job, so the simulated receiver had to be wrong in the same ways the real one is wrong.</p></div></section>
+
+  <section class="section" aria-labelledby="heads-hero-title"><div class="wrap">
+    <h2 id="heads-hero-title" class="visually-hidden-heading">The two direction-finder heads</h2>
+    <div class="figure-pair">
+      <figure class="figure"><button class="shot-open" type="button" data-lightbox="assets/img/df-becker-517.webp" data-alt="Training replica of the Becker 517 direction-finder face with bearing pointer, signal strength, STORE and CLR controls."><img src="assets/img/df-becker-517.webp" alt="Becker direction-finder training face shows bearing and signal controls." width="1600" height="900" loading="lazy"><span class="zoom-hint">Open image</span></button><figcaption><strong>Becker 517.</strong> The older of the two heads: a bearing pointer and a signal bar.</figcaption></figure>
+      <figure class="figure"><button class="shot-open" type="button" data-lightbox="assets/img/df-rt600.webp" data-alt="Training replica of the RHOTHETA RT-600 control head on the Mission Observer station, showing a 406 MHz bearing on the compass rose."><img src="assets/img/df-rt600.webp" alt="RHOTHETA direction-finder training head shows a bearing on a compass rose beside the tactical radio." width="1600" height="900" loading="lazy"><span class="zoom-hint">Open image</span></button><figcaption><strong>RHOTHETA RT-600.</strong> The one that decodes the 406 burst.</figcaption></figure>
+    </div>
+  </div></section>
+
+  <section class="section paper" id="heads" aria-labelledby="heads-title"><div class="wrap">
+    <p class="eyebrow">THE TWO HEADS</p><h2 id="heads-title">Button for button, from the manuals.</h2>
+    <div class="prose"><p>In the sample exercise, CAP 423 carries a Becker 517; CAP 415 carries the RHOTHETA RT-600, the newer of the two heads. Both are drawn from the manufacturers' manuals, button for button, and both read the same simulated signal.</p></div>
+    <div class="table-wrap"><table class="spec-table"><caption class="visually-hidden-heading">What each direction-finder head does</caption><thead><tr><th scope="col">Feature</th><th scope="col">Becker 517</th><th scope="col">RHOTHETA RT-600</th></tr></thead><tbody>
+      <tr><th scope="row">121.5 / 243.0 homing</th><td>Bearing pointer and signal strength, 3 kHz DF tone</td><td>Bearing on a compass rose, dual-watch scan</td></tr>
+      <tr><th scope="row">406 MHz</th><td>Emergency mode: one channel, <span class="mono">406.025</span>. Training mode: tunable 400–410</td><td>All 19 COSPAS-SARSAT channels in selectable groups</td></tr>
+      <tr><th scope="row">After a turn</th><td>CLR clears the bearing averaging</td><td>CLR resets the filter; a spread bar shows quality</td></tr>
+      <tr><th scope="row">Overhead</th><td>STORE silences the DF tone so you hear the raw warble peak and null; TIMEHOLD (edit menu) holds the last bearing between 406 bursts</td><td>Holds the decoded 406 bearing between bursts</td></tr>
+      <tr><th scope="row">Antenna</th><td>TOP / BOTTOM must match the airframe; wrong setting mirrors left and right</td><td>Wing blanking in a bank is an exercise effect applied to both heads; see "How the signal travels"</td></tr>
+    </tbody></table></div>
+    <div class="clip-grid"><figure class="clip" data-clip="df-needle-homing"><div class="clip-stage"><img class="slide-poster" src="assets/video/df-needle-homing-poster.webp" alt="Direction-finder face with the bearing needle just right of center and the signal bar half full." width="1280" height="720" loading="lazy"><video muted playsinline loop preload="metadata" poster="assets/video/df-needle-homing-poster.webp" aria-label="Direction-finder face with the bearing needle just right of center and the signal bar half full."><source src="assets/video/df-needle-homing.webm" type="video/webm"><source src="assets/video/df-needle-homing.mp4" type="video/mp4"></video></div><div class="clip-controls"><p class="clip-caption"><strong>The needle settles.</strong> Inbound on the beacon, the Becker 517's needle swings to center as the signal climbs.</p><button class="clip-pause" type="button">Pause clip</button></div></figure><figure class="clip" data-clip="df-faces"><div class="clip-stage"><img class="slide-poster" src="assets/video/df-faces-poster.webp" alt="RHOTHETA face showing a decoded 406 bearing on the compass rose." width="1280" height="720" loading="lazy"><video muted playsinline loop preload="metadata" poster="assets/video/df-faces-poster.webp" aria-label="RHOTHETA face showing a decoded 406 bearing on the compass rose."><source src="assets/video/df-faces.webm" type="video/webm"><source src="assets/video/df-faces.mp4" type="video/mp4"></video></div><div class="clip-controls"><p class="clip-caption"><strong>A 406 burst, decoded.</strong> The RT-600 scans, then shows the bearing and holds it.</p><button class="clip-pause" type="button">Pause clip</button></div></figure></div>
+    <div class="figure-pair">
+      <figure class="figure"><button class="shot-open" type="button" data-lightbox="assets/img/df-becker-517-face.webp" data-alt="Close view of the Becker 517 training face: bearing display reading 337, signal bar, page, offset, mount and frequency fields, with SQL, Clr, Store, Rep, Page and DIM controls."><img src="assets/img/df-becker-517-face.webp" alt="Becker face close up with the bearing display, signal bar and the Clr, Store and Rep buttons." width="520" height="520" loading="lazy"><span class="zoom-hint">Open image</span></button><figcaption><strong>The 517 face.</strong> Bearing, signal strength, STORE and CLR, drawn from the manual.</figcaption></figure>
+      <figure class="figure"><button class="shot-open" type="button" data-lightbox="assets/img/df-rt600-face.webp" data-alt="Close view of the RHOTHETA RT-600 training face: scan, decode and DF modes, a 406.025 bearing on the compass rose, the SARSAT channel group and the frequency field."><img src="assets/img/df-rt600-face.webp" alt="RHOTHETA face close up with scan and decode modes, a bearing on the compass rose and the 406.025 frequency." width="520" height="520" loading="lazy"><span class="zoom-hint">Open image</span></button><figcaption><strong>The RT-600 face.</strong> Scan, decode and the 19-channel grid on one display.</figcaption></figure>
+    </div>
+  </div></section>
+
+  <section class="section" id="signal" aria-labelledby="signal-title"><div class="wrap">
+    <p class="eyebrow">HOW THE SIGNAL TRAVELS</p><h2 id="signal-title">The terrain is in the simulator, so that is where the model lives.</h2>
+    <div class="prose">
+      <p>The propagation model lives inside X-Plane, because that is the only place the real terrain is. Each update the program running inside X-Plane samples the straight path between the aircraft and the beacon, probes the simulator's own terrain at each point, and asks whether the ground pokes above the ray. Then it adds up what a real receiver would lose:</p>
+      <ul>
+        <li>the radio horizon, from both the aircraft's height and the beacon's;</li>
+        <li>free-space loss for the band, with a calibrated link budget;</li>
+        <li>terrain: 20 dB when the path grazes a ridge, up to 40 dB in deep shadow;</li>
+        <li>the airframe: in a bank toward the beacon, the lowered wing on the beacon's side sits between a belly antenna and the signal and can shade it by up to 24 dB — the wing null CAP crews are taught to fly;</li>
+        <li>the 406 beacon's burst: 440 milliseconds every 50 seconds, and nothing in between;</li>
+        <li>the cone of confusion directly above the beacon, where the needle has nothing to point at;</li>
+        <li>multipath: an intermittent false bearing the director can switch on, offset a fixed amount (40° by default) to stand in for a reflection off a ridge.</li>
+      </ul>
+      <p>What is left decides the needle, the signal bar and the audio the observer hears.</p>
+    </div>
+    <figure class="diagram">
+      <svg viewBox="0 0 1200 560" role="img" aria-labelledby="d1-title d1-desc">
+        <title id="d1-title">Asking the simulator what is in the way</title>
+        <desc id="d1-desc">Cutaway side view. A practice beacon sits on a hillside at the lower right. An aircraft flies at the upper left. A straight ray joins them, with small sample ticks along it. A ridge rises above the ray partway along, and the blocked part of the ray is hatched. The ground curves away underneath. A shaded fan under the aircraft's wing marks the wing null. Chips name the losses: the radio horizon, terrain loss of 20 to 40 dB, wing null up to 24 dB, and the 406 burst of 440 milliseconds every 50 seconds.</desc>
+        <defs>
+          <pattern id="d1-grid" width="60" height="60" patternUnits="userSpaceOnUse"><path d="M60 0H0V60" fill="none" stroke="#a9c7b2" stroke-opacity=".1"/></pattern>
+          <pattern id="d1-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0v8" stroke="#ff6a13" stroke-width="3"/></pattern>
+          <radialGradient id="d1-glow"><stop stop-color="#ff8a47" stop-opacity=".7"/><stop offset=".4" stop-color="#ff6a13" stop-opacity=".25"/><stop offset="1" stop-color="#ff6a13" stop-opacity="0"/></radialGradient>
+          <linearGradient id="d1-sky" x2="0" y2="1"><stop stop-color="#0b1220"/><stop offset="1" stop-color="#172d35"/></linearGradient>
+          <path id="d1-plane" d="M0-24 5-7 24 2v5L5 3 4 19l7 5v4L0 24l-11 4v-4l7-5 1-16-19 4V2l19-9Z"/>
+        </defs>
+        <rect width="1200" height="560" fill="url(#d1-sky)"/>
+        <rect width="1200" height="560" fill="url(#d1-grid)"/>
+        <!-- the earth's curve, exaggerated, and the terrain on it -->
+        <path d="M0 560V470Q300 400 600 410T1200 470V560Z" fill="#1f3a30"/>
+        <path d="M0 470Q150 445 300 420T520 330Q580 250 640 300T760 395Q860 385 940 360T1050 330Q1120 325 1200 360V560H0Z" fill="#2f4a3a"/>
+        <path d="M0 470Q150 445 300 420T520 330Q580 250 640 300T760 395Q860 385 940 360T1050 330Q1120 325 1200 360" fill="none" stroke="#7fbf4d" stroke-opacity=".6" stroke-width="2"/>
+        <path d="M0 470Q300 400 600 410T1200 470" fill="none" stroke="#b2bc86" stroke-opacity=".35" stroke-width="1.5" stroke-dasharray="3 7"/>
+        <text class="diagram-chip" x="40" y="520" fill="#9aa7b5">THE EARTH CURVES AWAY UNDER THE RAY</text>
+        <!-- beacon on the hillside -->
+        <circle cx="1020" cy="340" r="70" fill="url(#d1-glow)"/>
+        <g fill="none" stroke="#ff8a47"><circle cx="1020" cy="340" r="22" stroke-width="2"/><circle cx="1020" cy="340" r="36" stroke-opacity=".5"/></g>
+        <circle cx="1020" cy="340" r="9" fill="#ff6a13" stroke="#ffd5b6" stroke-width="3"/>
+        <text class="diagram-chip" x="1046" y="318" fill="#ffd5b6">ELT</text>
+        <!-- the ray and its sample ticks -->
+        <line x1="190" y1="120" x2="1020" y2="340" stroke="#27c7d9" stroke-width="3"/>
+        <g stroke="#7fe0ea" stroke-width="2">
+          <path d="M224 129l-3 10M258 138l-3 10M292 147l-3 10M326 156l-3 10M360 165l-3 10M394 174l-3 10M428 183l-3 10M462 192l-3 10M496 201l-3 10M530 210l-3 10M564 219l-3 10M598 228l-3 10M632 237l-3 10M666 246l-3 10M700 255l-3 10M734 264l-3 10M768 273l-3 10M802 282l-3 10M836 291l-3 10M870 300l-3 10M904 309l-3 10M938 318l-3 10M972 327l-3 10"/>
+        </g>
+        <text class="diagram-chip" x="400" y="150" fill="#7fe0ea">SAMPLED ALONG THE PATH</text>
+        <!-- the ridge that pokes above the ray -->
+        <path d="M520 330Q580 250 640 300L640 262Q600 215 560 262Z" fill="url(#d1-hatch)" fill-opacity=".6"/>
+        <path d="M560 262Q600 215 640 262" fill="none" stroke="#ff8a47" stroke-width="2.5"/>
+        <text class="diagram-chip" x="520" y="200" fill="#ff8a47">RIDGE ABOVE THE RAY</text>
+        <!-- aircraft and the wing-null fan -->
+        <path d="M190 120L120 330Q190 300 260 330Z" fill="#ff6a13" fill-opacity=".14" stroke="#ff8a47" stroke-opacity=".6" stroke-dasharray="6 6"/>
+        <g fill="#e6ecf2" stroke="#0b1220" stroke-width="2"><use href="#d1-plane" transform="translate(190 120) rotate(100)"/></g>
+        <text class="diagram-chip" x="100" y="355" fill="#ff8a47">WING NULL UNDER THE LOWERED WING</text>
+        <!-- radio horizon tangent -->
+        <path d="M1020 340Q780 240 480 200" fill="none" stroke="#7fe0ea" stroke-opacity=".3" stroke-width="2" stroke-dasharray="4 8"/>
+        <text class="diagram-chip" x="730" y="166" fill="#7fe0ea" fill-opacity=".8">RADIO HORIZON FROM THE BEACON</text>
+        <!-- legend chips -->
+        <g transform="translate(40 40)">
+          <rect width="150" height="30" rx="4" fill="#111a2b" stroke="#3a4a66"/><text class="diagram-chip" x="12" y="19">HORIZON</text>
+          <rect x="165" width="230" height="30" rx="4" fill="#111a2b" stroke="#3a4a66"/><text class="diagram-chip" x="177" y="19">TERRAIN LOSS 20–40 dB</text>
+          <rect x="410" width="215" height="30" rx="4" fill="#111a2b" stroke="#3a4a66"/><text class="diagram-chip" x="422" y="19">WING NULL UP TO 24 dB</text>
+          <rect x="640" width="265" height="30" rx="4" fill="#111a2b" stroke="#3a4a66"/><text class="diagram-chip" x="652" y="19">406 BURST 440 ms EVERY 50 s</text>
+        </g>
+      </svg>
+      <figcaption><strong>Asking the sim what is in the way.</strong> The ridge that shadows the beacon is the one you are flying next to.</figcaption>
+    </figure>
+  </div></section>
+
+  <section class="section paper" id="traps" aria-labelledby="traps-title"><div class="wrap">
+    <p class="eyebrow">TECHNIQUES AND TRAPS</p><h2 id="traps-title">Three ways a correct receiver gives a wrong answer.</h2>
+    <div class="prose">
+      <ul>
+        <li><strong>Fly the null.</strong> Bank toward the suspected side. With a belly antenna the lowered wing now sits between the antenna and the beacon, the signal drops, and the drop tells you which side the beacon is on.</li>
+        <li><strong>Passing overhead.</strong> Inside the cone the needle swings and reverses. That is not a failure. Press STORE, listen for the warble peak and null, call "overhead the beacon", and start the expanding square from that point.</li>
+        <li><strong>Reflections.</strong> A bearing 40° off the others is the exercise's stand-in for a reflection off the Ramona ridge. The cockpit rarely sees it; the base does, because the plotted cut disagrees with the three before it. The base asks the crew to re-fly the leg.</li>
+        <li><strong>TOP or BOTTOM.</strong> Set the antenna mounting to match the airframe or every left and right will be mirrored.</li>
+        <li><strong>406.025, not 406.037.</strong> The Becker in emergency mode listens to one channel. Tune the exercise channel in training mode, or let the RT-600 scan.</li>
+      </ul>
+    </div>
+    <figure class="clip" data-clip="mission-base-plot"><div class="clip-stage"><img class="slide-poster" src="assets/video/mission-base-plot-poster.webp" alt="Mission Base map zoomed on the search block with two aircraft markers moving and two cuts in the bearing log." width="1280" height="720" loading="lazy"><video muted playsinline loop preload="metadata" poster="assets/video/mission-base-plot-poster.webp" aria-label="Mission Base map zoomed on the search block with two aircraft markers moving and two cuts in the bearing log."><source src="assets/video/mission-base-plot.webm" type="video/webm"><source src="assets/video/mission-base-plot.mp4" type="video/mp4"></video></div><div class="clip-controls"><p class="clip-caption"><strong>Two cuts.</strong> Mission Base logs each aircraft's bearing from where it called it and draws the line on the map.</p><button class="clip-pause" type="button">Pause clip</button></div></figure>
+    <figure class="diagram">
+      <svg viewBox="0 0 1200 360" role="img" aria-labelledby="d2-title d2-desc">
+        <title id="d2-title">Wing null, cone of confusion, reflection</title>
+        <desc id="d2-desc">Three panels. Left: an aircraft seen from behind, banked, with the beacon below on one side; the lowered wing's shadow covers the belly antenna and the signal bar drops. Middle: an aircraft directly above the beacon inside a 30-degree cone, with the needle swinging between opposite directions. Right: a ridge bounces the beacon's signal to the aircraft, so the plotted bearing is 40 degrees off the true one; a small map inset shows three cuts crossing together and one bad cut away from them.</desc>
+        <defs>
+          <pattern id="d2-grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#a9c7b2" stroke-opacity=".1"/></pattern>
+          <radialGradient id="d2-glow"><stop stop-color="#ff8a47" stop-opacity=".7"/><stop offset="1" stop-color="#ff6a13" stop-opacity="0"/></radialGradient>
+          <path id="d2-plane" d="M0-24 5-7 24 2v5L5 3 4 19l7 5v4L0 24l-11 4v-4l7-5 1-16-19 4V2l19-9Z"/>
+          <g id="d2-beacon"><circle r="30" fill="url(#d2-glow)"/><circle r="12" fill="none" stroke="#ff8a47" stroke-width="2"/><circle r="6" fill="#ff6a13" stroke="#ffd5b6" stroke-width="2.5"/></g>
+        </defs>
+        <rect width="1200" height="360" fill="#0b1220"/><rect width="1200" height="360" fill="url(#d2-grid)"/>
+        <line x1="400" y1="20" x2="400" y2="340" stroke="#27344a"/><line x1="800" y1="20" x2="800" y2="340" stroke="#27344a"/>
+        <!-- (a) wing null: rear view -->
+        <g transform="translate(0 0)">
+          <text class="diagram-head" x="30" y="48">WING NULL</text>
+          <path d="M30 300Q200 285 370 300" fill="none" stroke="#7fbf4d" stroke-opacity=".6" stroke-width="2"/>
+          <use href="#d2-beacon" transform="translate(70 262)"/>
+          <!-- shadow fan from the lowered wing -->
+          <path d="M215 150L60 262L140 300Z" fill="#ff6a13" fill-opacity=".14" stroke="#ff8a47" stroke-opacity=".6" stroke-dasharray="6 6"/>
+          <!-- aircraft rear view, banked toward the beacon -->
+          <g transform="translate(215 150) rotate(-22)" stroke="#e6ecf2" stroke-width="4" stroke-linecap="round" fill="none"><path d="M-95-10L-20-2H20L95-10"/><path d="M0-30V10"/><rect x="-14" y="-8" width="28" height="24" rx="8" fill="#e6ecf2" stroke="none"/></g>
+          <circle cx="223" cy="172" r="4" fill="#27c7d9"/><text class="diagram-note" x="236" y="192">belly antenna</text>
+          <!-- signal bar dropping -->
+          <g transform="translate(300 70)"><rect width="22" height="110" rx="3" fill="#111a2b" stroke="#3a4a66"/><rect y="78" width="22" height="32" fill="#ff8a47"/><text class="diagram-note" x="30" y="60">signal</text><text class="diagram-note" x="30" y="78">drops</text></g>
+          <text class="diagram-note" x="30" y="322">Bank toward the beacon: the lowered wing</text><text class="diagram-note" x="30" y="342">shields the belly antenna. The signal drops.</text>
+        </g>
+        <!-- (b) cone of confusion -->
+        <g transform="translate(400 0)">
+          <text class="diagram-head" x="30" y="48">CONE OF CONFUSION</text>
+          <path d="M30 300Q200 285 370 300" fill="none" stroke="#7fbf4d" stroke-opacity=".6" stroke-width="2"/>
+          <path d="M200 300L120 70H280Z" fill="#27c7d9" fill-opacity=".1" stroke="#7fe0ea" stroke-opacity=".6" stroke-dasharray="6 6"/>
+          <use href="#d2-beacon" transform="translate(200 300)"/>
+          <g fill="#e6ecf2" stroke="#0b1220" stroke-width="2"><use href="#d2-plane" transform="translate(200 120) rotate(90) scale(.9)"/></g>
+          <!-- swinging needle -->
+          <g transform="translate(305 120)"><circle r="34" fill="#111a2b" stroke="#3a4a66"/><path d="M0 0L-26 -16" stroke="#ff8a47" stroke-width="3" stroke-linecap="round"/><path d="M0 0L26 16" stroke="#ff8a47" stroke-width="3" stroke-opacity=".45" stroke-linecap="round"/><circle r="3" fill="#e6ecf2"/></g>
+          <text class="diagram-chip" x="140" y="90" fill="#7fe0ea">30° CONE</text>
+          <text class="diagram-note" x="30" y="322">Overhead, the needle swings and reverses.</text><text class="diagram-note" x="30" y="342">Press STORE and listen for the null.</text>
+        </g>
+        <!-- (c) reflection -->
+        <g transform="translate(800 0)">
+          <text class="diagram-head" x="30" y="48">REFLECTION</text>
+          <path d="M30 300Q120 290 180 240T250 150Q275 125 300 180T370 300" fill="#2f4a3a" stroke="#7fbf4d" stroke-opacity=".6" stroke-width="2"/>
+          <use href="#d2-beacon" transform="translate(90 262)"/>
+          <g fill="#e6ecf2" stroke="#0b1220" stroke-width="2"><use href="#d2-plane" transform="translate(330 90) rotate(60) scale(.85)"/></g>
+          <!-- true bearing (grazing, weak) and the bounce -->
+          <line x1="90" y1="262" x2="330" y2="90" stroke="#27c7d9" stroke-width="2.5" stroke-dasharray="5 6"/>
+          <path d="M90 262L262 142L330 90" fill="none" stroke="#ff8a47" stroke-width="3"/>
+          <text class="diagram-chip" x="120" y="140" fill="#7fe0ea">TRUE</text>
+          <text class="diagram-chip" x="230" y="210" fill="#ff8a47">BOUNCE · 40° OFF</text>
+          <!-- base map inset: three cuts agree, one does not -->
+          <g transform="translate(40 60)"><rect width="120" height="100" rx="4" fill="#f3efe6"/><g stroke="#146a76" stroke-width="2"><line x1="10" y1="90" x2="75" y2="30"/><line x1="110" y1="92" x2="60" y2="22"/><line x1="8" y1="40" x2="112" y2="62"/></g><line x1="100" y1="10" x2="35" y2="95" stroke="#ff6a13" stroke-width="2.5"/><circle cx="62" cy="45" r="5" fill="none" stroke="#15202b" stroke-width="1.5"/><text x="8" y="14" font-family="ui-monospace,monospace" font-size="9" font-weight="700" fill="#15202b" letter-spacing=".5">BASE MAP</text></g>
+          <text class="diagram-note" x="30" y="322">The base sees the cut that disagrees</text><text class="diagram-note" x="30" y="342">and asks for the leg again.</text>
+        </g>
+      </svg>
+      <figcaption><strong>Wing null, cone of confusion, reflection.</strong> Three ways a correct receiver gives a wrong answer.</figcaption>
+    </figure>
+  </div></section>
+
+  <section class="section" id="control" aria-labelledby="control-title"><div class="wrap">
+    <p class="eyebrow">EXERCISE CONTROL</p><h2 id="control-title">Nobody sees the truth until the director reveals it.</h2>
+    <div class="prose"><p>The Exercise Director places the beacon on the chart, picks the band, writes the alert the base will get, and can switch each effect on or off mid-sortie: radio horizon, 406 burst cadence, cone of confusion, multipath, wing blanking. The console shows the director what each cockpit's needle is seeing. Nobody else sees the true position until the director reveals it for debrief.</p></div>
+    <div class="clip-grid"><figure class="clip" data-clip="console-effects"><div class="clip-stage"><img class="slide-poster" src="assets/video/console-effects-poster.webp" alt="Exercise Console with the injected-effects list, wing blanking switched on, and each aircraft's bearing and signal readout." width="1280" height="720" loading="lazy"><video muted playsinline loop preload="metadata" poster="assets/video/console-effects-poster.webp" aria-label="Exercise Console with the injected-effects list, wing blanking switched on, and each aircraft's bearing and signal readout."><source src="assets/video/console-effects.webm" type="video/webm"><source src="assets/video/console-effects.mp4" type="video/mp4"></video></div><div class="clip-controls"><p class="clip-caption"><strong>An effect, mid-sortie.</strong> The director switches on wing blanking and watches each cockpit's bearing and signal in the readout.</p><button class="clip-pause" type="button">Pause clip</button></div></figure><figure class="clip" data-clip="debrief-scoring"><div class="clip-stage"><img class="slide-poster" src="assets/video/debrief-scoring-poster.webp" alt="Debrief page with scoring cards and a bearing-error chart." width="1280" height="720" loading="lazy"><video muted playsinline loop preload="metadata" poster="assets/video/debrief-scoring-poster.webp" aria-label="Debrief page with scoring cards and a bearing-error chart."><source src="assets/video/debrief-scoring.webm" type="video/webm"><source src="assets/video/debrief-scoring.mp4" type="video/mp4"></video></div><div class="clip-controls"><p class="clip-caption"><strong>Scored.</strong> Closest approach, bearing error and the needle's error over time, per aircraft.</p><button class="clip-pause" type="button">Pause clip</button></div></figure></div>
+    <div class="figure-pair">
+      <figure class="figure"><button class="shot-open" type="button" data-lightbox="assets/img/exercise-console.webp" data-alt="Exercise Director console with an active sortie, signal effects, and aircraft bearing truth."><img src="assets/img/exercise-console.webp" alt="Exercise Director view shows a running sortie and available signal effects." width="1440" height="900" loading="lazy"><span class="zoom-hint">Open image</span></button><figcaption><strong>Exercise Console.</strong> Scenario, effects, truth.</figcaption></figure>
+      <figure class="figure"><button class="shot-open" type="button" data-lightbox="assets/img/debrief-scoring.webp" data-alt="Debrief scoring cards with closest approach, bearing error, track efficiency, and a bearing-error chart."><img src="assets/img/debrief-scoring.webp" alt="Debrief screen summarizes aircraft scores and bearing error over time." width="1440" height="900" loading="lazy"><span class="zoom-hint">Open image</span></button><figcaption><strong>Debrief.</strong> The needle's error over time, with every logged bearing marked against the 10° good-cut band.</figcaption></figure>
+    </div>
+  </div></section>
+
+  <section class="section honesty-section" aria-labelledby="notsee-title"><div class="wrap"><aside class="callout callout-live"><h2 id="notsee-title">What the DF does not see.</h2><p>The direction finder listens to the beacon band. The tactical net, its repeater and the radio-reach model are a separate thing; repeaters have nothing to do with DF, in the simulator or in the airplane.</p><p><a href="comms.html#reach">How radio reach is simulated</a></p></aside></div></section>
+
+  <nav class="page-next" aria-label="Next page"><div class="wrap button-row"><p class="next-label">Next</p><div class="button-row"><a class="button button-secondary" href="comms.html"><span aria-hidden="true">←</span> Comms</a><a class="button button-primary" href="ai-pilot.html">AI Pilot <span aria-hidden="true">→</span></a></div></div></nav>
+</main>
+<footer class="site-footer"><div class="footer-grid wrap"><div><a class="brand" href="index.html"><img src="assets/brand/logo.svg" alt="CAP-VSAR" width="180" height="48"></a><p>Virtual search and rescue training for crews and staff.</p></div><div><nav aria-label="Footer navigation"><div class="footer-links"><a href="index.html">Home</a><a href="comms.html">Comms</a><a href="df.html" aria-current="page">DF &amp; Beacons</a><a href="foreflight.html">ForeFlight</a><a href="caltopo.html">CalTopo</a><a href="ai-pilot.html">AI Pilot</a><a href="airplane.html">The Airplane</a><a href="flight-planner.html">Flight Planner</a><a href="hosting.html">Hosting</a><a href="how-its-built.html">How It's Built</a></div></nav><p>Exercise guide: in review, not yet published.</p></div><div class="footer-notice"><p class="footer-brand-line"><strong>Unofficial training tool. Not affiliated with or endorsed by Civil Air Patrol.</strong></p><p>CAP-VSAR is an unofficial training project built by Civil Air Patrol members. It is not an official Civil Air Patrol product and is not endorsed by Civil Air Patrol. "Civil Air Patrol" and "CAP" identify the organization this training is for; no CAP seal, emblem or wing patch is used here. Everything on this site is simulation: it is not for real flight planning, real direction finding or a real search.</p><p>Product names are the property of their owners and are used to identify the equipment being simulated.</p><p><strong>Not for operational use.</strong></p></div></div><div class="footer-last wrap">© 2026 the CAP-VSAR contributors · source code under the Apache-2.0 license; public link to follow</div></footer>
+<dialog class="lightbox" aria-label="Expanded image"><button class="lightbox-close" type="button" aria-label="Close expanded image">Close</button><img alt=""></dialog>
+</body></html>

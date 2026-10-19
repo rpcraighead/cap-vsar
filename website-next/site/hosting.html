@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0B1220">
+  <meta name="description" content="How a CAP-VSAR exercise is hosted on one machine with everyone else joining over Wi-Fi from a browser: what runs where, what each seat needs, and what the current workstation has and has not been shown to do.">
+  <title>Hosting — CAP-VSAR</title>
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Hosting — CAP-VSAR">
+  <meta property="og:description" content="How a CAP-VSAR exercise is hosted on one machine with everyone else joining over Wi-Fi from a browser: what runs where, what each seat needs, and what the current workstation has and has not been shown to do.">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="assets/brand/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/brand/favicon.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="assets/css/reel.css">
+  <style>
+    /* hosting page only: the architecture diagram has a wide drawing for desktop and a tall one for phones and tablets */
+    .diagram.arch figcaption::after{content:none}
+    .diagram svg.arch-narrow{display:none;min-width:0;max-width:420px;margin-inline:auto}
+    @media(max-width:1000px){.diagram svg.arch-wide{display:none}.diagram svg.arch-narrow{display:block}}
+  </style>
+  <script src="assets/js/main.js" defer></script>
+  <script src="assets/js/reel.js" defer></script>
+<noscript><style>@media(max-width:900px){.site-header{height:auto;flex-wrap:wrap;padding-block:.5rem}.primary-nav{display:flex;position:static;flex-direction:row;flex-wrap:wrap;gap:.25rem .9rem;padding:.25rem 0 .5rem;width:100%;background:none}.primary-nav a{font-size:.9rem;padding:.4rem 0;border:0}.primary-nav .nav-pill{margin-top:0}}.menu-toggle,.pause-control,.clip-pause,.reel-controls{display:none}</style></noscript>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+  <a class="brand" href="index.html" aria-label="CAP-VSAR home"><img src="assets/brand/logo.svg" alt="CAP-VSAR bearing mark" width="180" height="48"></a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="primary-nav">Menu</button>
+  <nav id="primary-nav" class="primary-nav" aria-label="Main navigation">
+    <a href="index.html">Home</a><a href="comms.html">Comms</a><a href="df.html">DF &amp; Beacons</a><a href="foreflight.html">ForeFlight</a><a href="caltopo.html">CalTopo</a><a href="ai-pilot.html">AI Pilot</a><a href="airplane.html">The Airplane</a><a href="flight-planner.html">Flight Planner</a><a href="hosting.html" aria-current="page">Hosting</a><a href="how-its-built.html">How It's Built</a><a class="nav-pill" href="index.html#get-started">Get started</a>
+  </nav>
+</header>
+<main id="main" tabindex="-1">
+  <section class="page-title"><div class="wrap"><p class="eyebrow">HOSTING ARCHITECTURE</p><h1>One machine runs the exercise. Everyone else brings a browser.</h1><p class="lede">A V-SAREX does not need a rack of servers or a cloud account. One strong computer in the room runs the simulator, the observer's panel, the AI pilot and the exercise web pages; everyone else joins over Wi-Fi from a laptop, a tablet or a phone. This page shows how the pieces connect, what each seat needs, and what has and has not been measured on the machine we have.</p></div></section>
+
+  <section class="section" id="layout" aria-labelledby="layout-title"><div class="wrap">
+    <p class="eyebrow">THE LAYOUT</p><h2 id="layout-title" class="section-title">What runs where.</h2>
+    <div class="prose">
+      <p>Everything an exercise needs sits on one wired workstation, called the sim box here. The simulator, the Mission Observer's panel software and the AI pilot are ordinary programs on the box. The exercise pages, the flight planner and the voice server run beside them as containers. A router or access point carries the Wi-Fi. A participant's device needs a browser and a headset; nothing of ours is installed on it.</p>
+    </div>
+    <figure class="diagram arch">
+      <svg class="arch-wide" viewBox="0 0 1200 700" role="img" aria-labelledby="hw-title hw-desc">
+        <title id="hw-title">One sim box, one Wi-Fi network, everyone else on their own device</title>
+        <desc id="hw-desc">A large frame at the left is the sim box, one wired workstation. Inside it, in a left column from top to bottom: the AI pilot service, which talks to X-Plane on the same machine only; X-Plane 12, the simulator, flown at the box, with two plugins, a flight-control bridge that takes the AI pilot's commands and a DF and station plugin that works out radio reach and direction finding and reports the aircraft's position; and Air Manager, which draws the Mission Observer station. In a right column inside the frame, a group of web services in containers: an HTTPS front door, the exercise console with its Setup, Exercise Console, Ready Room, Mission Base, Base Radio and Debrief pages, the flight planner, and the voice server. The DF plugin reports to the front door over a link that stays on the box. A cable runs from the web services to a Wi-Fi router outside the frame, and a second line carries the Air Manager stream to the router for a tablet running Air Player. From the router, Wi-Fi lines reach four device boxes on the right: base staff on a laptop or tablet with a browser and headset; a ground team on a phone; the exercise director and evaluators on a laptop; and the Mission Observer on a tablet or laptop running Air Player plus a Mumble client. A dashed box below the router lists what is not on the box: Google sign-in, live weather and terrain lookups, PilotEdge air traffic control, the source-code server and this website, joined to the router by a dashed optional internet line.</desc>
+        <defs>
+          <pattern id="hw-grid" width="50" height="50" patternUnits="userSpaceOnUse"><path d="M50 0H0V50" fill="none" stroke="#a9c7b2" stroke-opacity=".1"/></pattern>
+          <marker id="hw-ac" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5 0 10Z" fill="#7fe0ea"/></marker>
+          <marker id="hw-ao" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5 0 10Z" fill="#ff8a47"/></marker>
+        </defs>
+        <rect width="1200" height="700" fill="#0b1220"/><rect width="1200" height="700" fill="url(#hw-grid)"/>
+        <!-- legend -->
+        <line x1="40" y1="30" x2="76" y2="30" stroke="#27c7d9" stroke-width="3"/><text class="diagram-note" x="86" y="35">on the box only</text>
+        <line x1="260" y1="30" x2="296" y2="30" stroke="#ff8a47" stroke-width="3"/><text class="diagram-note" x="306" y="35">over the cable or the Wi-Fi</text>
+        <line x1="560" y1="30" x2="596" y2="30" stroke="#9aa7b5" stroke-width="3" stroke-dasharray="6 5"/><text class="diagram-note" x="606" y="35">optional, or outside the box</text>
+        <!-- the sim box -->
+        <rect x="30" y="60" width="760" height="610" rx="14" fill="none" stroke="#27c7d9" stroke-width="2"/>
+        <text class="diagram-chip" x="50" y="88" fill="#7fe0ea">THE SIM BOX · ONE WIRED WORKSTATION</text>
+        <!-- AI pilot -->
+        <rect x="55" y="110" width="325" height="110" rx="10" fill="#111a2b" stroke="#3a4a66"/>
+        <text class="diagram-head" x="75" y="142">AI PILOT SERVICE</text>
+        <text class="diagram-note" x="75" y="166">Flies the search pattern.</text><text class="diagram-note" x="75" y="186">Talks to X-Plane on this</text><text class="diagram-note" x="75" y="204">machine only.</text>
+        <!-- X-Plane -->
+        <rect x="55" y="250" width="325" height="225" rx="10" fill="#111a2b" stroke="#3a4a66"/>
+        <text class="diagram-head" x="75" y="282">X-PLANE 12</text>
+        <text class="diagram-note" x="75" y="304">The simulator, flown at the box.</text>
+        <rect x="75" y="320" width="285" height="56" rx="8" fill="#182338" stroke="#27c7d9" stroke-opacity=".6"/>
+        <text class="diagram-chip" x="90" y="343">FLIGHT-CONTROL BRIDGE</text><text class="diagram-note" x="90" y="365">Takes the AI pilot's commands.</text>
+        <path d="M345 220V318" fill="none" stroke="#27c7d9" stroke-width="2.5" marker-end="url(#hw-ac)"/>
+        <rect x="75" y="390" width="285" height="56" rx="8" fill="#182338" stroke="#27c7d9" stroke-opacity=".6"/>
+        <text class="diagram-chip" x="90" y="413">DF AND STATION PLUGIN</text><text class="diagram-note" x="90" y="435">Radio reach, DF, reports position.</text>
+        <path d="M360 418H398V190H428" fill="none" stroke="#27c7d9" stroke-width="2.5" marker-end="url(#hw-ac)"/>
+        <!-- X-Plane to Air Manager -->
+        <path d="M217 475V503" fill="none" stroke="#27c7d9" stroke-width="2.5" marker-end="url(#hw-ac)"/>
+        <text class="diagram-chip" x="230" y="494" fill="#7fe0ea">DATAREFS</text>
+        <!-- Air Manager -->
+        <rect x="55" y="505" width="325" height="115" rx="10" fill="#111a2b" stroke="#3a4a66"/>
+        <text class="diagram-head" x="75" y="537">AIR MANAGER</text>
+        <text class="diagram-note" x="75" y="559">Mission Observer station:</text><text class="diagram-note" x="75" y="577">DF head, radio, audio panel,</text><text class="diagram-note" x="75" y="595">and the map display.</text>
+        <path d="M217 620V642H860V442" fill="none" stroke="#ff8a47" stroke-width="2.5" marker-end="url(#hw-ao)"/>
+        <text class="diagram-chip" x="430" y="662" fill="#ff8a47">AIR PLAYER STREAM, IF USED</text>
+        <!-- web services -->
+        <rect x="410" y="110" width="335" height="520" rx="10" fill="none" stroke="#3a4a66"/>
+        <text class="diagram-chip" x="430" y="138" fill="#9aa7b5">WEB SERVICES · DOCKER</text>
+        <rect x="430" y="155" width="295" height="70" rx="10" fill="#111a2b" stroke="#3a4a66"/>
+        <text class="diagram-head" x="445" y="185">HTTPS FRONT DOOR</text><text class="diagram-note" x="445" y="208">One address for every browser.</text>
+        <path d="M577 225V243" fill="none" stroke="#27c7d9" stroke-width="2.5" marker-end="url(#hw-ac)"/>
+        <rect x="430" y="245" width="295" height="175" rx="10" fill="#111a2b" stroke="#3a4a66"/>
+        <text class="diagram-head" x="445" y="275">EXERCISE CONSOLE</text>
+        <text class="diagram-note" x="445" y="298">Setup · Exercise Console</text><text class="diagram-note" x="445" y="318">Ready Room · Mission Base</text><text class="diagram-note" x="445" y="338">Base Radio · Debrief</text>
+        <text class="diagram-note" x="445" y="366">Keeps the roster, tracks,</text><text class="diagram-note" x="445" y="386">bearings and logs in a local</text><text class="diagram-note" x="445" y="406">database file.</text>
+        <rect x="430" y="440" width="295" height="75" rx="10" fill="#111a2b" stroke="#3a4a66"/>
+        <text class="diagram-head" x="445" y="468">FLIGHT PLANNER</text><text class="diagram-note" x="445" y="492">Routes, search patterns, .fms files.</text>
+        <rect x="430" y="535" width="295" height="85" rx="10" fill="#111a2b" stroke="#3a4a66"/>
+        <text class="diagram-head" x="445" y="563">VOICE SERVER (MUMBLE)</text><text class="diagram-note" x="445" y="586">The mission net and intercoms.</text><text class="diagram-note" x="445" y="606">Browser radios join it too.</text>
+        <!-- to the router -->
+        <path d="M725 190H765V578H725" fill="none" stroke="#ff8a47" stroke-width="2.5"/>
+        <path d="M765 365H828" fill="none" stroke="#ff8a47" stroke-width="3.5" marker-end="url(#hw-ao)"/>
+        <!-- router -->
+        <rect x="830" y="290" width="130" height="150" rx="10" fill="#182338" stroke="#ff8a47"/>
+        <text class="diagram-head" x="845" y="322">ROUTER</text>
+        <text class="diagram-note" x="845" y="346">Wi-Fi router or</text><text class="diagram-note" x="845" y="364">access point,</text><text class="diagram-note" x="845" y="382">wired to the box.</text>
+        <!-- wifi -->
+        <g fill="none" stroke="#ff8a47" stroke-width="2.5">
+          <path d="M960 365C985 365 985 125 1000 125"/><path d="M960 365C985 365 985 242 1000 242"/><path d="M960 365C985 365 985 352 1000 352"/><path d="M960 365C985 365 985 472 1000 472"/>
+        </g>
+        <g fill="#ff8a47"><circle cx="1000" cy="125" r="4"/><circle cx="1000" cy="242" r="4"/><circle cx="1000" cy="352" r="4"/><circle cx="1000" cy="472" r="4"/></g>
+        <!-- devices -->
+        <g>
+          <rect x="1000" y="70" width="180" height="110" rx="10" fill="#111a2b" stroke="#3a4a66"/><text class="diagram-head" x="1014" y="98">BASE STAFF</text><text class="diagram-note" x="1014" y="122">IC, AOBD, MRO, MSA:</text><text class="diagram-note" x="1014" y="142">laptop or tablet,</text><text class="diagram-note" x="1014" y="162">browser, headset.</text>
+          <rect x="1000" y="195" width="180" height="95" rx="10" fill="#111a2b" stroke="#3a4a66"/><text class="diagram-head" x="1014" y="223">GROUND TEAM</text><text class="diagram-note" x="1014" y="247">A phone with a</text><text class="diagram-note" x="1014" y="267">browser, headset.</text>
+          <rect x="1000" y="305" width="180" height="95" rx="10" fill="#111a2b" stroke="#3a4a66"/><text class="diagram-head" x="1014" y="333">DIRECTOR</text><text class="diagram-note" x="1014" y="357">Director, evaluators:</text><text class="diagram-note" x="1014" y="377">laptop, browser.</text>
+          <rect x="1000" y="415" width="180" height="115" rx="10" fill="#111a2b" stroke="#3a4a66"/><text class="diagram-head" x="1014" y="443">OBSERVER</text><text class="diagram-note" x="1014" y="467">A tablet or laptop</text><text class="diagram-note" x="1014" y="487">with Air Player,</text><text class="diagram-note" x="1014" y="507">plus a Mumble client.</text>
+        </g>
+        <!-- outside -->
+        <path d="M930 440V548" fill="none" stroke="#9aa7b5" stroke-width="2.5" stroke-dasharray="6 5"/>
+        <rect x="880" y="550" width="290" height="110" rx="10" fill="none" stroke="#9aa7b5" stroke-width="2" stroke-dasharray="6 5"/>
+        <text class="diagram-chip" x="895" y="578" fill="#9aa7b5">NOT ON THE BOX</text>
+        <text class="diagram-note" x="895" y="602">Google sign-in · live weather and</text><text class="diagram-note" x="895" y="620">terrain lookups · PilotEdge ATC</text><text class="diagram-note" x="895" y="638">Source code server · this website</text>
+      </svg>
+      <svg class="arch-narrow" viewBox="0 0 340 1210" role="img" aria-labelledby="hn-title hn-desc">
+        <title id="hn-title">One sim box, one Wi-Fi network, everyone else on their own device</title>
+        <desc id="hn-desc">A vertical version of the layout. At the top, four boxes for everyone else on their own device: base staff on a laptop or tablet with a browser and headset; a ground team on a phone; the exercise director and evaluators on a laptop; and the Mission Observer on a tablet running Air Player plus a Mumble client. Wi-Fi leads down to a router or access point, which a cable connects to the sim box below. The sim box holds, from the top: the web services in containers, which are an HTTPS front door, the exercise console with its Setup, Instructor, Ready Room, Mission Base, Base Radio and Debrief pages, the flight planner and the voice server; then X-Plane 12 with two plugins, a DF and station plugin that reports position to the web services and a control bridge that takes the AI pilot's commands; then side by side the AI pilot service, which commands X-Plane on this machine only, and Air Manager, which draws the Mission Observer station from X-Plane's datarefs and can stream it to Air Player. At the foot, a dashed box lists what is not on the box: Google sign-in, live weather and terrain lookups, PilotEdge air traffic control, the source-code server and this website.</desc>
+        <defs>
+          <pattern id="hn-grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#a9c7b2" stroke-opacity=".1"/></pattern>
+          <marker id="hn-ac" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5 0 10Z" fill="#7fe0ea"/></marker>
+          <marker id="hn-ao" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5 0 10Z" fill="#ff8a47"/></marker>
+        </defs>
+        <rect width="340" height="1210" fill="#0b1220"/><rect width="340" height="1210" fill="url(#hn-grid)"/>
+        <!-- legend -->
+        <line x1="14" y1="20" x2="50" y2="20" stroke="#27c7d9" stroke-width="3"/><text class="diagram-note" x="60" y="25">on the box only</text>
+        <line x1="14" y1="42" x2="50" y2="42" stroke="#ff8a47" stroke-width="3"/><text class="diagram-note" x="60" y="47">over the cable or the Wi-Fi</text>
+        <line x1="14" y1="64" x2="50" y2="64" stroke="#9aa7b5" stroke-width="3" stroke-dasharray="6 5"/><text class="diagram-note" x="60" y="69">optional, or outside the box</text>
+        <!-- devices -->
+        <rect x="10" y="86" width="320" height="250" rx="12" fill="none" stroke="#3a4a66"/>
+        <text class="diagram-chip" x="24" y="110" fill="#9aa7b5">EVERYONE ELSE · OWN DEVICE</text>
+        <rect x="22" y="122" width="146" height="92" rx="9" fill="#111a2b" stroke="#3a4a66"/><text class="diagram-head" x="34" y="148">BASE STAFF</text><text class="diagram-note" x="34" y="170">Laptop or tablet,</text><text class="diagram-note" x="34" y="188">with a browser</text><text class="diagram-note" x="34" y="206">and a headset.</text>
+        <rect x="176" y="122" width="146" height="92" rx="9" fill="#111a2b" stroke="#3a4a66"/><text class="diagram-head" x="188" y="148" style="font-size:16.5px">GROUND TEAM</text><text class="diagram-note" x="188" y="170">A phone with a</text><text class="diagram-note" x="188" y="188">browser and a</text><text class="diagram-note" x="188" y="206">headset.</text>
+        <rect x="22" y="224" width="146" height="100" rx="9" fill="#111a2b" stroke="#3a4a66"/><text class="diagram-head" x="34" y="250">DIRECTOR</text><text class="diagram-note" x="34" y="272">Director and</text><text class="diagram-note" x="34" y="290">evaluators: a</text><text class="diagram-note" x="34" y="308">laptop, browser.</text>
+        <rect x="176" y="224" width="146" height="100" rx="9" fill="#111a2b" stroke="#3a4a66"/><text class="diagram-head" x="188" y="250">OBSERVER</text><text class="diagram-note" x="188" y="272">A tablet running</text><text class="diagram-note" x="188" y="290">Air Player, plus</text><text class="diagram-note" x="188" y="308">a Mumble client.</text>
+        <path d="M170 336V374" fill="none" stroke="#ff8a47" stroke-width="2.5" marker-end="url(#hn-ao)"/><text class="diagram-chip" x="182" y="360" fill="#ff8a47">WI-FI</text>
+        <!-- router -->
+        <rect x="10" y="376" width="320" height="64" rx="10" fill="#182338" stroke="#ff8a47"/>
+        <text class="diagram-head" x="24" y="404">ROUTER OR ACCESS POINT</text><text class="diagram-note" x="24" y="426">Wired to the sim box. Not the internet.</text>
+        <path d="M170 440V478" fill="none" stroke="#ff8a47" stroke-width="3.5" marker-end="url(#hn-ao)"/><text class="diagram-chip" x="182" y="464" fill="#ff8a47">CABLE</text>
+        <!-- sim box -->
+        <rect x="10" y="480" width="320" height="602" rx="14" fill="none" stroke="#27c7d9" stroke-width="2"/>
+        <text class="diagram-chip" x="24" y="506" fill="#7fe0ea">THE SIM BOX · ONE WORKSTATION</text>
+        <rect x="22" y="520" width="296" height="190" rx="10" fill="#111a2b" stroke="#3a4a66"/>
+        <text class="diagram-head" x="36" y="548">WEB SERVICES (DOCKER)</text>
+        <text class="diagram-note" x="36" y="572">• HTTPS front door, one address</text>
+        <text class="diagram-note" x="36" y="594">• Exercise console:</text><text class="diagram-note" x="48" y="612">Setup, Instructor, Ready Room,</text><text class="diagram-note" x="48" y="630">Mission Base, Base Radio, Debrief</text>
+        <text class="diagram-note" x="36" y="652">• Flight Planner</text><text class="diagram-note" x="36" y="674">• Voice server (Mumble)</text>
+        <path d="M170 732V714" fill="none" stroke="#27c7d9" stroke-width="2.5" marker-end="url(#hn-ac)"/><text class="diagram-chip" x="182" y="728" fill="#7fe0ea">POSITION</text>
+        <rect x="22" y="734" width="296" height="178" rx="10" fill="#111a2b" stroke="#3a4a66"/>
+        <text class="diagram-head" x="36" y="762">X-PLANE 12</text><text class="diagram-note" x="36" y="782">The simulator, flown at the box.</text>
+        <rect x="36" y="792" width="268" height="52" rx="8" fill="#182338" stroke="#27c7d9" stroke-opacity=".6"/><text class="diagram-chip" x="46" y="812">DF AND STATION PLUGIN</text><text class="diagram-note" x="46" y="832">Radio reach, DF, position.</text>
+        <rect x="36" y="852" width="268" height="52" rx="8" fill="#182338" stroke="#27c7d9" stroke-opacity=".6"/><text class="diagram-chip" x="46" y="872">CONTROL BRIDGE</text><text class="diagram-note" x="46" y="892">Takes the AI pilot's commands.</text>
+        <path d="M92 952V914" fill="none" stroke="#27c7d9" stroke-width="2.5" marker-end="url(#hn-ac)"/>
+        <path d="M249 912V950" fill="none" stroke="#27c7d9" stroke-width="2.5" marker-end="url(#hn-ac)"/><text class="diagram-chip" x="258" y="936" fill="#7fe0ea">DATAREFS</text>
+        <rect x="22" y="954" width="140" height="116" rx="10" fill="#111a2b" stroke="#3a4a66"/><text class="diagram-head" x="34" y="980">AI PILOT</text><text class="diagram-note" x="34" y="1002">Flies the search</text><text class="diagram-note" x="34" y="1020">pattern, on this</text><text class="diagram-note" x="34" y="1038">machine only.</text>
+        <rect x="170" y="954" width="148" height="116" rx="10" fill="#111a2b" stroke="#3a4a66"/><text class="diagram-head" x="182" y="980" style="font-size:18px">AIR MANAGER</text><text class="diagram-note" x="182" y="1002">Observer station:</text><text class="diagram-note" x="182" y="1020">DF, radio, audio,</text><text class="diagram-note" x="182" y="1038">map. Can stream</text><text class="diagram-note" x="182" y="1056">to Air Player.</text>
+        <!-- outside -->
+        <rect x="10" y="1100" width="320" height="100" rx="10" fill="none" stroke="#9aa7b5" stroke-width="2" stroke-dasharray="6 5"/>
+        <text class="diagram-chip" x="24" y="1124" fill="#9aa7b5">NOT ON THE BOX</text>
+        <text class="diagram-note" x="24" y="1146">Google sign-in · live weather and</text><text class="diagram-note" x="24" y="1164">terrain lookups · PilotEdge ATC</text><text class="diagram-note" x="24" y="1182">Source code server · this website</text>
+      </svg>
+      <figcaption><strong>One box, one network.</strong> Cyan lines stay inside the sim box. Orange lines cross the cable or the Wi-Fi, so they are the ones a weak network can hurt. The aircraft's own flying, the AI pilot and the observer's panel on the box never use the Wi-Fi.</figcaption>
+    </figure>
+  </div></section>
+
+  <section class="section paper" id="parts" aria-labelledby="parts-title"><div class="wrap">
+    <p class="eyebrow">THE PARTS</p><h2 id="parts-title" class="section-title">What each part does.</h2>
+    <div class="table-wrap"><table class="spec-table"><caption class="visually-hidden-heading">The parts of a hosted exercise and how each runs</caption><thead><tr><th scope="col">Part</th><th scope="col">What it does</th><th scope="col">How it runs</th></tr></thead><tbody>
+      <tr><th scope="row">X-Plane 12</th><td>The simulator. Flies CAP 487, or the stock Cessna 172, and supplies the terrain and the aircraft's state. Two plugins sit inside it. The DF and station plugin works out radio reach and the direction finder's bearing from the real terrain and reports the aircraft's position to the exercise console. The flight-control bridge lets the AI pilot's commands in, one frame at a time, on a lease that expires in under a fifth of a second.</td><td>A program on the box. The plugins run in XPPython3, the Python plugin host for X-Plane.</td></tr>
+      <tr><th scope="row">Air Manager</th><td>Draws the Mission Observer station: the Becker SAR-DF 517 or RHOTHETA RT-600 direction finder, the TDFM-136B tactical radio, the GMA 1347 audio panel and the map display. It reads everything it shows from X-Plane.</td><td>A program on the box, on a second monitor. It can also stream the station to a tablet or laptop running Air Player.</td></tr>
+      <tr><th scope="row">AI pilot service</th><td>The controller that flies the search pattern, hands the airplane to the autopilot and takes it back. It reaches X-Plane over the box's own network port and the bridge plugin, and its control page listens on the box only.</td><td>A program on the box. See <a href="ai-pilot.html">the AI Pilot page</a>.</td></tr>
+      <tr><th scope="row">Exercise console</th><td>The exercise's pages and memory: Setup, the Exercise Console for the director, the Ready Room, Mission Base, Base Radio (the Mission Radio Operator's headset radio and Form 110 log), Debrief and the sign-in page. It stores the roster, tracks, bearings and logs in a local database file.</td><td>A container, reached through the front door.</td></tr>
+      <tr><th scope="row">Flight Planner</th><td>Builds routes and search patterns and exports them to the G1000 and to the console. See <a href="flight-planner.html">the Flight Planner page</a>.</td><td>A container, on the same address under <span class="mono">/planner/</span>.</td></tr>
+      <tr><th scope="row">Voice server</th><td>The Mumble server that carries the mission net, the briefing room and the aircraft intercoms. Browser radios reach it through the console; desktop Mumble clients connect to it directly.</td><td>A container.</td></tr>
+      <tr><th scope="row">HTTPS front door</th><td>One address for every browser. A browser will only open the microphone on a secure connection, so the box makes its own certificate and each device is asked to trust it once.</td><td>A container (Caddy).</td></tr>
+      <tr><th scope="row">Coordination board</th><td>The engineering board where the AI coding assistants keep their task list. It is not part of an exercise.</td><td>An optional container on its own port, off by default.</td></tr>
+    </tbody></table></div>
+    <div class="prose"><p>The same web services can also be started straight from a Python environment on the box, without containers, as the exercise guide's technical appendix describes. The containers are the arrangement with the single secure front door, which is what other people's microphones need.</p></div>
+  </div></section>
+
+  <section class="section" id="devices" aria-labelledby="devices-title"><div class="wrap">
+    <p class="eyebrow">WHAT A PARTICIPANT BRINGS</p><h2 id="devices-title" class="section-title">A browser, a headset, and for two seats a little more.</h2>
+    <div class="table-wrap"><table class="spec-table"><caption class="visually-hidden-heading">What each seat needs to join a hosted exercise</caption><thead><tr><th scope="col">Seat</th><th scope="col">Device</th><th scope="col">What it opens or runs</th></tr></thead><tbody>
+      <tr><th scope="row">Exercise Director and evaluators</th><td>A laptop</td><td>Browser: Setup, Exercise Console, Debrief. Voice for the Instructor–SET channel needs a desktop Mumble client, because the browser radio never offers that channel.</td></tr>
+      <tr><th scope="row">Base staff: Incident Commander, Air Operations Branch Director, Mission Radio Operator, Mission Staff Assistant</th><td>A laptop or tablet, with a headset</td><td>Browser: Mission Base, Base Radio, Flight Planner. The radio runs in the browser, so there is nothing to install beyond trusting the box's certificate once.</td></tr>
+      <tr><th scope="row">Ground team</th><td>A phone, with a headset</td><td>Browser: Base Radio.</td></tr>
+      <tr><th scope="row">Mission Observer</th><td>A second screen on the box, or a tablet or laptop on the Wi-Fi</td><td>The Air Manager station on the box's second monitor, or the Air Player app on the other device. Voice uses a Mumble client; a desktop client is preferred at a station.</td></tr>
+      <tr><th scope="row">Mission Pilot</th><td>The box itself, with yoke, pedals and headset</td><td>X-Plane directly. When the AI pilot flies, the pilot seat can be empty.</td></tr>
+      <tr><th scope="row">Mission Scanner</th><td>A tablet or second screen</td><td>Browser, signed in to the seat.</td></tr>
+    </tbody></table></div>
+    <div class="prose">
+      <p>Everyone signs in on the same page. Google sign-in is the primary route and a printed badge code is the fallback (see <a href="#outside">what is not on the box</a>). Who does what, seat by seat, is on <a href="index.html#org-chart">the Home page</a>.</p>
+    </div>
+  </div></section>
+
+  <section class="section paper" id="workstation" aria-labelledby="workstation-title"><div class="wrap">
+    <p class="eyebrow">CAN OUR WORKSTATION DO IT?</p><h2 id="workstation-title" class="section-title">Can the workstation we have run all of it?</h2>
+    <aside class="callout callout-live"><h3>The short answer.</h3><p>Probably, for one aircraft and a base of browser seats. It has not been shown. X-Plane with the AI pilot has been measured on this machine and has headroom, and the web services are tiny. Nobody has yet run everything at once with a room of devices and logged the result. Treat the rest of this section as the evidence, the gaps, and a rehearsal that closes them.</p></aside>
+    <div class="prose">
+      <p>The workstation is, at the class level, a desktop with an 8-core, 8-thread Intel Core i7 of the ninth generation (boosting to about 4.7 GHz), about 30 GB of memory, a discrete NVIDIA GPU of the RTX 20 series with 8 GB of video memory, an NVMe drive and wired Ethernet. It has no Wi-Fi radio, so it needs a cable to the router. It runs Linux.</p>
+    </div>
+    <div class="table-wrap"><table class="spec-table status-table"><caption class="visually-hidden-heading">Evidence for and against running everything on the workstation</caption><thead><tr><th scope="col">Question</th><th scope="col">Evidence</th><th scope="col">Status</th></tr></thead><tbody>
+      <tr><th scope="row">Does X-Plane 12 run well with the AI pilot flying?</th><td>In 210 recorded AI-pilot flights between 10 and 18 October 2026, about 406,000 frame-time readings: the median was 13 ms (about 76 frames a second). Ninety-five percent of readings were at or above 44 frames a second and 99 percent at or above 28. The slowest was 50 ms, 20 frames a second. The graphics settings used on those flights were not recorded.</td><td><span class="chip chip-proven">Measured</span></td></tr>
+      <tr><th scope="row">Do the web services strain it?</th><td>On 19 October 2026, with no participants connected, the four containers (front door, exercise console, planner, voice server) used about 70 MB of memory between them and under one percent of one core. An earlier check in September 2026 on the lab server found similar numbers.</td><td><span class="chip chip-proven">Measured idle</span></td></tr>
+      <tr><th scope="row">How much voice traffic is there?</th><td>The project's own estimate is 0.77 megabit per second for each received voice stream. The browser radio accepts 16 sessions by default, which is eight desks with two radios each. The estimate has not been checked against a real exercise.</td><td><span class="chip chip-flown">Documented</span></td></tr>
+      <tr><th scope="row">Can it host more than one live aircraft?</th><td>The design runs one X-Plane for each aircraft station. An Air Manager license is tied to one machine, and extra display seats need Air Player licenses. Two X-Plane instances on one machine have not been tried here. The sample exercise has more than one aircraft, so a second live aircraft means a second simulator computer.</td><td><span class="chip chip-flown">Documented</span></td></tr>
+      <tr><th scope="row">Does everything run at once?</th><td>X-Plane, Air Manager, an Air Player stream, the AI pilot, the web services and a room of devices together have not been run and logged. The frame times above were not taken with a room connected, and whether Air Manager was running at the time is not recorded.</td><td><span class="chip chip-planned">Not measured</span></td></tr>
+      <tr><th scope="row">Will the Wi-Fi carry it?</th><td>The capacity of a particular network with a full room, and how the voice net behaves on it, has not been measured.</td><td><span class="chip chip-planned">Not measured</span></td></tr>
+    </tbody></table></div>
+    <aside class="callout callout-signal"><h3>Recommendation, not a measurement.</h3>
+      <p>For one aircraft and a base: a processor with 8 or more cores, 32 GB of memory or more, a discrete GPU with 8 GB of video memory or more, an SSD, a wired gigabit link to a dedicated access point (not a venue's shared Wi-Fi), and a battery backup. Start the box from a clean desktop with nothing else running. For two or more live aircraft, plan one simulator computer per aircraft and keep this one as the server and base.</p>
+      <p>Before the event, rehearse with everything running and the real devices joined, and fly a 20-minute sortie. The AI pilot's recorder already logs the simulator's frame time, so read it afterwards. A rule of thumb we would use: if the median stays at 30 frames a second or better and the slowest one percent stays above 20, there is headroom. If not, lower the simulator's graphics settings first, then move the web services to a small second computer, which is all they need. The project has run them on a separate lab server that way.</p>
+    </aside>
+  </div></section>
+
+  <section class="section" id="outside" aria-labelledby="outside-title"><div class="wrap">
+    <p class="eyebrow">NOT ON THE SIM BOX</p><h2 id="outside-title" class="section-title">What does not run there.</h2>
+    <div class="prose">
+      <ul>
+        <li><strong>Google sign-in.</strong> It needs the internet. With no internet, or with Google sign-in switched off, the sign-in page hides the Google button and takes badge codes, which need nothing outside the box.</li>
+        <li><strong>Live weather and terrain lookups.</strong> The Flight Planner asks outside services for weather, winds aloft and terrain height. Without a connection it marks weather as simulated, plans in still air and shows terrain it could not read as unknown, not as sea level. Its FAA chart tiles come from a cache on the box.</li>
+        <li><strong>Air traffic control.</strong> ATC is PilotEdge, an internet service the pilot's own X-Plane connects to. The mission net on the box is separate and carries exercise traffic only.</li>
+        <li><strong>Source code, test runs and this website.</strong> They live elsewhere and play no part in an exercise.</li>
+        <li><strong>A cloud copy.</strong> The project's notes describe a cloud deployment as a later option, and the planner's old cloud service is retired. A room on its own network needs neither.</li>
+        <li><strong>Remote participants.</strong> Someone joining from home comes in through the squadron's private network link on the router, not through the sim box. This page describes the room.</li>
+      </ul>
+    </div>
+  </div></section>
+
+  <section class="section paper" id="wifi" aria-labelledby="wifi-title"><div class="wrap">
+    <p class="eyebrow">IF THE WI-FI DROPS</p><h2 id="wifi-title" class="section-title">What happens when the network goes.</h2>
+    <div class="prose">
+      <ul>
+        <li><strong>On the box, nothing stops.</strong> The simulator, the AI pilot, the observer's panel on the box's own monitor and the DF plugin all work without the network. If the plugin cannot reach the console it keeps its last scenario and keeps computing, and it logs the trouble once. Position reports resume when the link returns.</li>
+        <li><strong>Console pages in a browser</strong> (Mission Base, the Exercise Console, Debrief) show a reconnecting status and try again, waiting one second and doubling up to thirty. Mission Base then asks the console for the bearings and messages it missed.</li>
+        <li><strong>The browser radio</strong> releases the push-to-talk and shuts the microphone the moment the link goes, then rejoins by itself on the same schedule. The Form 110 log is held in the browser tab and survives a reload. Export it before closing the tab.</li>
+        <li><strong>Air Player and desktop Mumble clients</strong> depend on those programs' own behavior, which this project has not tested.</li>
+      </ul>
+      <p>The reconnect behavior is fixed in the code and covered by automated tests. The acceptance test the project wrote down, dropping a tablet's Wi-Fi for thirty seconds and watching the radio rejoin, is not recorded as having been run on a real network.</p>
+    </div>
+  </div></section>
+
+  <section class="section" id="ports" aria-labelledby="ports-title"><div class="wrap">
+    <p class="eyebrow">PORTS AND THE FIREWALL</p><h2 id="ports-title" class="section-title">Which doors are open, in outline.</h2>
+    <div class="table-wrap"><table class="spec-table"><caption class="visually-hidden-heading">The network doors a hosted exercise uses</caption><thead><tr><th scope="col">Door</th><th scope="col">Who uses it</th><th scope="col">Notes</th></tr></thead><tbody>
+      <tr><th scope="row">Secure web, port 443</th><td>Every browser, and the simulator plugin's reports.</td><td>The one door participants use. Port 80 serves only the public certificate and sends everything else to the secure address.</td></tr>
+      <tr><th scope="row">Voice, port 64738, TCP and UDP</th><td>Desktop Mumble clients: aircrew and instructors.</td><td>Browser radios do not need it. A server password is required.</td></tr>
+      <tr><th scope="row">The simulator's own port</th><td>The AI pilot talking to X-Plane.</td><td>Stays on the box. Do not open it.</td></tr>
+      <tr><th scope="row">The AI pilot's control page</th><td>Nobody off the box.</td><td>It listens on the box only.</td></tr>
+      <tr><th scope="row">Air Player discovery</th><td>A tablet finding the station on the local network.</td><td>Uses the local subnet. Which ports Air Manager needs is in the vendor's own documentation and is not repeated here.</td></tr>
+      <tr><th scope="row">Engineering board</th><td>The project's builders.</td><td>Its own port, off by default, local network only. Not for participants.</td></tr>
+    </tbody></table></div>
+    <div class="prose">
+      <p>A room on its own Wi-Fi needs nothing forwarded from the internet. On the box, allow the two inbound doors from the local network only. Do not assume the host's firewall also covers ports that Docker publishes; check from another device which doors really answer.</p>
+    </div>
+  </div></section>
+
+  <section class="section paper" id="licensing" aria-labelledby="licensing-title"><div class="wrap">
+    <aside class="callout callout-signal"><h2 id="licensing-title">Licensing, and what this page does not show.</h2>
+      <p>The diagram is drawn for this site. It uses no X-Plane or Laminar Research artwork, no screenshot of the simulator, no Air Manager or Garmin artwork and no logos, in line with the site's rule on third-party material.</p>
+      <p>Each simulator computer runs its own copy of X-Plane under its own license. Air Manager is licensed to one machine, and the extra display seats on tablets need Air Player licenses, which are sold separately. The CAP 487 aircraft package is built on each owner's own computer from their own X-Plane installation and is not distributed.</p>
+    </aside>
+  </div></section>
+
+  <nav class="page-next" aria-label="Next page"><div class="wrap button-row"><p class="next-label">Next</p><a class="button button-primary" href="flight-planner.html">Flight Planner <span aria-hidden="true">→</span></a></div></nav>
+
+</main>
+<footer class="site-footer"><div class="footer-grid wrap"><div><a class="brand" href="index.html"><img src="assets/brand/logo.svg" alt="CAP-VSAR" width="180" height="48"></a><p>Virtual search and rescue training for crews and staff.</p></div><div><nav aria-label="Footer navigation"><div class="footer-links"><a href="index.html">Home</a><a href="comms.html">Comms</a><a href="df.html">DF &amp; Beacons</a><a href="foreflight.html">ForeFlight</a><a href="caltopo.html">CalTopo</a><a href="ai-pilot.html">AI Pilot</a><a href="airplane.html">The Airplane</a><a href="flight-planner.html">Flight Planner</a><a href="hosting.html" aria-current="page">Hosting</a><a href="how-its-built.html">How It's Built</a></div></nav><p>Exercise guide: in review, not yet published.</p></div><div class="footer-notice"><p class="footer-brand-line"><strong>Unofficial training tool. Not affiliated with or endorsed by Civil Air Patrol.</strong></p><p>CAP-VSAR is an unofficial training project built by Civil Air Patrol members. It is not an official Civil Air Patrol product and is not endorsed by Civil Air Patrol. "Civil Air Patrol" and "CAP" identify the organization this training is for; no CAP seal, emblem or wing patch is used here. Everything on this site is simulation: it is not for real flight planning, real direction finding or a real search.</p><p>Product names are the property of their owners and are used to identify the equipment being simulated.</p><p>X-Plane and Laminar Research, Air Manager and Air Player, Garmin, Mumble, Docker, Caddy and PilotEdge are the property of their owners, named only to identify what runs where. The diagram on this page is drawn for this site and uses none of their artwork. CAP-VSAR is unofficial and is not affiliated with or endorsed by any of them.</p><p><strong>Not for operational use.</strong></p></div></div><div class="footer-last wrap">© 2026 the CAP-VSAR contributors · source code under the Apache-2.0 license; public link to follow</div></footer>
+<dialog class="lightbox" aria-label="Expanded image"><button class="lightbox-close" type="button" aria-label="Close expanded image">Close</button><img alt=""></dialog>
+</body></html>

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0B1220">
+  <meta name="description" content="Crews fly a CAP-VSAR exercise with the same ForeFlight workflow they use in the airplane; X-Plane supplies the GPS position.">
+  <title>ForeFlight — CAP-VSAR</title>
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="ForeFlight — CAP-VSAR">
+  <meta property="og:description" content="Crews fly a CAP-VSAR exercise with the same ForeFlight workflow they use in the airplane; X-Plane supplies the GPS position.">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="assets/brand/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/brand/favicon.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="assets/css/reel.css">
+  <script src="assets/js/main.js" defer></script>
+  <script src="assets/js/reel.js" defer></script>
+<noscript><style>@media(max-width:900px){.site-header{height:auto;flex-wrap:wrap;padding-block:.5rem}.primary-nav{display:flex;position:static;flex-direction:row;flex-wrap:wrap;gap:.25rem .9rem;padding:.25rem 0 .5rem;width:100%;background:none}.primary-nav a{font-size:.9rem;padding:.4rem 0;border:0}.primary-nav .nav-pill{margin-top:0}}.menu-toggle,.pause-control,.clip-pause,.reel-controls{display:none}</style></noscript>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+  <a class="brand" href="index.html" aria-label="CAP-VSAR home"><img src="assets/brand/logo.svg" alt="CAP-VSAR bearing mark" width="180" height="48"></a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="primary-nav">Menu</button>
+  <nav id="primary-nav" class="primary-nav" aria-label="Main navigation">
+    <a href="index.html">Home</a><a href="comms.html">Comms</a><a href="df.html">DF &amp; Beacons</a><a href="foreflight.html" aria-current="page">ForeFlight</a><a href="caltopo.html">CalTopo</a><a href="ai-pilot.html">AI Pilot</a><a href="airplane.html">The Airplane</a><a href="flight-planner.html">Flight Planner</a><a href="hosting.html">Hosting</a><a href="how-its-built.html">How It's Built</a><a class="nav-pill" href="index.html#get-started">Get started</a>
+  </nav>
+</header>
+<main id="main" tabindex="-1">
+  <section class="page-title"><div class="wrap"><p class="eyebrow">ELECTRONIC FLIGHT BAG</p><h1>The same tablet, the same taps.</h1><p class="lede">A crew that briefs, files and flies with ForeFlight should rehearse with ForeFlight. X-Plane sends its position to the tablet the way a portable GPS would, so the ownship symbol flies the exercise on the chart in the crew's hands, and nobody learns a simulator-only habit.</p></div></section>
+
+  <section class="section" id="what" aria-labelledby="what-title"><div class="wrap">
+    <p class="eyebrow">WHAT IT IS</p><h2 id="what-title">A native feature of the simulator, not a bolt-on.</h2>
+    <div class="prose">
+      <p>X-Plane can feed mapping apps on a phone or tablet with the simulated airplane's GPS position and attitude. ForeFlight is one of the apps X-Plane's own manual names for this. The app does not know it is talking to a simulator: it shows the airplane where the simulator has it, on the same charts, plates and flight plans the crew uses on the real day.</p>
+      <p>Nothing in CAP-VSAR replaces or changes ForeFlight. The exercise adds the mission around it: the beacon, the net, the base and the scoring.</p>
+    </div>
+  </div></section>
+
+  <section class="section paper" id="why" aria-labelledby="why-title"><div class="wrap">
+    <p class="eyebrow">WHY IT MATTERS</p><h2 id="why-title">Consistency is the training.</h2>
+    <div class="prose">
+      <p>Consistency is the training. The pattern the Air Operations Branch Director (AOBD) built in the Flight Planner, the one on the G1000, and the one on the iPad are the same assignment; the crew's hands do what they do in the real airplane.</p>
+      <p>The Mission Observer works the tablet exactly as in the aircraft: the search area and the assigned pattern on the map, the ownship track across it, the next leg, the airports and the terrain around the block. The Mission Pilot briefs and files the way the crew always does. The habits built on the simulator are the habits flown on the day, because the screens are the same.</p>
+    </div>
+  </div></section>
+
+  <section class="section" id="exercise" aria-labelledby="exercise-title"><div class="wrap">
+    <p class="eyebrow">IN THE EXERCISE</p><h2 id="exercise-title">The simulator supplies the position. The crew flies the plan.</h2>
+    <div class="prose">
+      <ul>
+        <li><strong>The simulator</strong> runs the airplane and sends its GPS position and attitude to the crew's tablet.</li>
+        <li><strong>The crew</strong> loads the sortie's plan in ForeFlight and flies it, with the G1000 and the Flight Planner showing the same assignment.</li>
+        <li><strong>The Mission Observer</strong> uses the tablet as in the real airplane, alongside the direction finder and the tactical radio on the observer station.</li>
+        <li><strong>Mission Base</strong> sees the aircraft on its own map from the simulator's position report, so the base and the cockpit are looking at the same airplane.</li>
+      </ul>
+      <p>Crews on the squadron's private network link can take part from wherever they are on that link, with the tablet fed by the simulator the same way.</p>
+    </div>
+  </div></section>
+
+  <section class="section paper" id="setup" aria-labelledby="setup-title"><div class="wrap">
+    <p class="eyebrow">SETTING IT UP</p><h2 id="setup-title">What the vendors' own documentation says.</h2>
+    <div class="prose">
+      <p>The steps below are the product-level facts from X-Plane's desktop manual and ForeFlight's support pages. Your squadron's own addresses and link details are not published here; your exercise director has them.</p>
+      <ol>
+        <li><strong>In X-Plane</strong>, open Settings and the Network tab. The manual's section on using X-Plane with mobile apps covers ForeFlight and similar apps there, with a choice between sending the data to every device on the network or to a single device by its address. The ports are fixed and do not normally need changing.</li>
+        <li><strong>In ForeFlight</strong>, open the Devices list, choose the X-Plane entry and enable it. The map then reports the simulator as its position source.</li>
+        <li><strong>On the network</strong>, X-Plane's manual expects the tablet to be on the same local network as the simulator computer, and ForeFlight documents the feed as plain UDP on its published port, with a note that broadcasting to every device does not suit every network or firewall. A tunnel is not a local network, so a crew joining over the squadron's private link should expect the single-device option, with the tablet's address on that link, rather than relying on broadcast discovery. Confirm it on your own link before the exercise.</li>
+      </ol>
+    </div>
+    <aside class="callout callout-signal"><h3>Not for real navigation.</h3><p>The Flight Planner's own airport data is not FAA data and is not for real navigation. Brief every real flight with official sources.</p></aside>
+  </div></section>
+
+  <nav class="page-next" aria-label="Next page"><div class="wrap button-row"><p class="next-label">Next</p><a class="button button-primary" href="caltopo.html">CalTopo <span aria-hidden="true">→</span></a></div></nav>
+</main>
+<footer class="site-footer"><div class="footer-grid wrap"><div><a class="brand" href="index.html"><img src="assets/brand/logo.svg" alt="CAP-VSAR" width="180" height="48"></a><p>Virtual search and rescue training for crews and staff.</p></div><div><nav aria-label="Footer navigation"><div class="footer-links"><a href="index.html">Home</a><a href="comms.html">Comms</a><a href="df.html">DF &amp; Beacons</a><a href="foreflight.html" aria-current="page">ForeFlight</a><a href="caltopo.html">CalTopo</a><a href="ai-pilot.html">AI Pilot</a><a href="airplane.html">The Airplane</a><a href="flight-planner.html">Flight Planner</a><a href="hosting.html">Hosting</a><a href="how-its-built.html">How It's Built</a></div></nav><p>Exercise guide: in review, not yet published.</p></div><div class="footer-notice"><p class="footer-brand-line"><strong>Unofficial training tool. Not affiliated with or endorsed by Civil Air Patrol.</strong></p><p>CAP-VSAR is an unofficial training project built by Civil Air Patrol members. It is not an official Civil Air Patrol product and is not endorsed by Civil Air Patrol. "Civil Air Patrol" and "CAP" identify the organization this training is for; no CAP seal, emblem or wing patch is used here. Everything on this site is simulation: it is not for real flight planning, real direction finding or a real search.</p><p>Product names are the property of their owners and are used to identify the equipment being simulated.</p><p>ForeFlight is a product of its owner and is named here only to identify the app crews fly with. CAP-VSAR is not affiliated with or endorsed by ForeFlight.</p><p><strong>Not for operational use.</strong></p></div></div><div class="footer-last wrap">© 2026 the CAP-VSAR contributors · source code under the Apache-2.0 license; public link to follow</div></footer>
+<dialog class="lightbox" aria-label="Expanded image"><button class="lightbox-close" type="button" aria-label="Close expanded image">Close</button><img alt=""></dialog>
+</body></html>

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0B1220">
+  <meta name="description" content="How CAP 487, the Cessna 182T flown in CAP-VSAR, was built for X-Plane 12, and what was added to its G1000.">
+  <title>The Airplane — CAP-VSAR</title>
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="The Airplane — CAP-VSAR">
+  <meta property="og:description" content="How CAP 487, the Cessna 182T flown in CAP-VSAR, was built for X-Plane 12, and what was added to its G1000.">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="assets/brand/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/brand/favicon.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="assets/css/reel.css">
+  <script src="assets/js/main.js" defer></script>
+  <script src="assets/js/reel.js" defer></script>
+<noscript><style>@media(max-width:900px){.site-header{height:auto;flex-wrap:wrap;padding-block:.5rem}.primary-nav{display:flex;position:static;flex-direction:row;flex-wrap:wrap;gap:.25rem .9rem;padding:.25rem 0 .5rem;width:100%;background:none}.primary-nav a{font-size:.9rem;padding:.4rem 0;border:0}.primary-nav .nav-pill{margin-top:0}}.menu-toggle,.pause-control,.clip-pause,.reel-controls{display:none}</style></noscript>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+  <a class="brand" href="index.html" aria-label="CAP-VSAR home"><img src="assets/brand/logo.svg" alt="CAP-VSAR bearing mark" width="180" height="48"></a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="primary-nav">Menu</button>
+  <nav id="primary-nav" class="primary-nav" aria-label="Main navigation">
+    <a href="index.html">Home</a><a href="comms.html">Comms</a><a href="df.html">DF &amp; Beacons</a><a href="foreflight.html">ForeFlight</a><a href="caltopo.html">CalTopo</a><a href="ai-pilot.html">AI Pilot</a><a href="airplane.html" aria-current="page">The Airplane</a><a href="flight-planner.html">Flight Planner</a><a href="hosting.html">Hosting</a><a href="how-its-built.html">How It's Built</a><a class="nav-pill" href="index.html#get-started">Get started</a>
+  </nav>
+</header>
+<main id="main" tabindex="-1">
+  <section class="page-title"><div class="wrap"><p class="eyebrow">CAP 487</p><h1>Building a Cessna 182T that barely existed.</h1><p class="lede">CAP flies 182Ts. X-Plane 12 ships a Cessna 172SP with the G1000 and no 182T at all. So CAP 487, the project's own callsign for it, was built.</p></div></section>
+
+  <section class="section" id="recipe" aria-labelledby="recipe-title"><div class="wrap">
+    <p class="eyebrow">THE RECIPE</p><h2 id="recipe-title">Cockpit from one source, skin from another, numbers from the book.</h2>
+    <div class="prose"><p>The cockpit and systems come from the simulator's own C172SP G1000, read from the operator's licensed copy at build time and never redistributed. The exterior is a pinned, GPL-licensed FlightGear C182 converted to X-Plane format. A build script supplies what makes it a 182T: the IO-540 at 230 horsepower, a three-blade constant-speed propeller and a prop lever in the 3D cockpit, 87 gallons usable, the 182T's speeds, weights and limits, with dimensions from the handbook and the type certificate. Every value in the aircraft file cites where it came from, and a test pins it there.</p></div>
+    <figure class="diagram">
+      <svg viewBox="0 0 1200 620" role="img" aria-labelledby="p1-title p1-desc">
+        <title id="p1-title">How CAP 487 was built</title>
+        <desc id="p1-desc">Three source blocks feed one result. Left column: the cockpit and systems from the simulator's own C172SP G1000, read from the operator's copy and never redistributed; the exterior from a GPL-licensed FlightGear C182, pinned to one version; and a card of numbers from the handbook and type certificate, the IO-540 at 230 horsepower, a three-blade constant-speed propeller with a prop lever, 87 gallons usable, and the 182T's speeds, weights and limits. Arrows run through a build script into the result: CAP 487, built locally, with every value citing its source and a test pinning it.</desc>
+        <defs><pattern id="p1-grid" width="50" height="50" patternUnits="userSpaceOnUse"><path d="M50 0H0V50" fill="none" stroke="#a9c7b2" stroke-opacity=".1"/></pattern>
+          <marker id="p1-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5 0 10Z" fill="#7fe0ea"/></marker></defs>
+        <rect width="1200" height="620" fill="#0b1220"/><rect width="1200" height="620" fill="url(#p1-grid)"/>
+        <!-- source 1: cockpit and systems -->
+        <rect x="40" y="40" width="400" height="160" rx="10" fill="#111a2b" stroke="#3a4a66"/>
+        <g transform="translate(60 70)" fill="none" stroke="#e6ecf2" stroke-width="2.5" stroke-linejoin="round"><rect width="96" height="60" rx="4"/><rect x="8" y="8" width="34" height="30" rx="2" stroke="#27c7d9"/><rect x="52" y="8" width="36" height="30" rx="2" stroke="#27c7d9"/><path d="M14 50h22M60 50h22M48 60v22M30 82h36"/></g>
+        <text class="diagram-head" x="180" y="78">COCKPIT AND SYSTEMS</text>
+        <text class="diagram-note" x="180" y="102">The simulator's own C172SP G1000,</text><text class="diagram-note" x="180" y="121">read from the operator's licensed</text><text class="diagram-note" x="180" y="140">copy at build time.</text>
+        <text class="diagram-chip" x="180" y="164" fill="#9aa7b5">NEVER REDISTRIBUTED</text>
+        <text class="diagram-chip" x="60" y="186" fill="#9aa7b5">FROM THE OPERATOR'S OWN X-PLANE</text>
+        <!-- source 2: exterior -->
+        <rect x="40" y="230" width="400" height="160" rx="10" fill="#111a2b" stroke="#3a4a66"/>
+        <g transform="translate(60 270)" fill="none" stroke="#e6ecf2" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"><path d="M4 44h78l14-10h8l-6 10h10"/><path d="M14 44v-6h60l10 6"/><path d="M22 38 30 16h50l6 22"/><path d="M12 16h78"/><path d="M88 44 86 60h-12"/><circle cx="26" cy="56" r="4"/><circle cx="68" cy="56" r="4"/><path d="M108 38l-12-20"/></g>
+        <text class="diagram-head" x="180" y="268">EXTERIOR</text>
+        <text class="diagram-note" x="180" y="292">A FlightGear C182, GPL-licensed,</text><text class="diagram-note" x="180" y="311">pinned to one version and</text><text class="diagram-note" x="180" y="330">converted to X-Plane format.</text>
+        <text class="diagram-chip" x="180" y="356" fill="#9aa7b5">GPL-2.0 · PINNED</text>
+        <!-- source 3: the numbers -->
+        <rect x="40" y="420" width="400" height="160" rx="10" fill="#f3efe6" stroke="#cfc7b7"/>
+        <text x="60" y="452" font-family="'Arial Narrow','Roboto Condensed','Helvetica Neue',Arial,sans-serif" font-weight="700" font-size="20" fill="#15202b" letter-spacing=".02em">THE NUMBERS, FROM THE BOOK</text>
+        <g font-family="ui-monospace,monospace" font-size="12.5" font-weight="600" fill="#15202b" letter-spacing=".04em">
+          <text x="60" y="480">IO-540 · 230 HP · 87 GAL USABLE</text>
+          <text x="60" y="503">3-BLADE CONSTANT-SPEED PROP · PROP LEVER</text>
+          <text x="60" y="526">182T SPEEDS · WEIGHTS · LIMITS</text>
+          <text x="60" y="556" fill="#4b5868">DIMENSIONS: HANDBOOK AND TYPE CERTIFICATE</text>
+        </g>
+        <!-- arrows into the build script -->
+        <path d="M440 120H540V300" fill="none" stroke="#7fe0ea" stroke-width="2.5"/>
+        <path d="M440 310H540" fill="none" stroke="#7fe0ea" stroke-width="2.5"/>
+        <path d="M440 500H540V320" fill="none" stroke="#7fe0ea" stroke-width="2.5"/>
+        <path d="M540 310H600" fill="none" stroke="#7fe0ea" stroke-width="2.5" marker-end="url(#p1-arrow)"/>
+        <!-- the build script -->
+        <rect x="610" y="250" width="200" height="120" rx="10" fill="#182338" stroke="#27c7d9"/>
+        <text class="diagram-head" x="630" y="285" font-size="18">THE BUILD SCRIPT</text>
+        <text class="diagram-note" x="630" y="312">Patches the aircraft file.</text><text class="diagram-note" x="630" y="332">Every value cites its source.</text><text class="diagram-note" x="630" y="352">A test pins it there.</text>
+        <path d="M810 310H880" fill="none" stroke="#7fe0ea" stroke-width="2.5" marker-end="url(#p1-arrow)"/>
+        <!-- the result -->
+        <rect x="890" y="200" width="270" height="220" rx="10" fill="#111a2b" stroke="#ff6a13" stroke-width="2"/>
+        <text class="diagram-head" x="910" y="238" font-size="26">CAP 487</text>
+        <text class="diagram-note" x="910" y="266">A Cessna 182T for X-Plane 12.</text>
+        <text class="diagram-note" x="910" y="296">Built on the operator's own</text><text class="diagram-note" x="910" y="316">machine, from the recipe.</text>
+        <text class="diagram-chip" x="910" y="350" fill="#ff8a47">BUILT LOCALLY</text>
+        <text class="diagram-chip" x="910" y="372" fill="#ff8a47">NEVER REDISTRIBUTED</text>
+        <text class="diagram-chip" x="910" y="400" fill="#9aa7b5">THE REPOSITORY: RECIPE ONLY</text>
+      </svg>
+      <figcaption><strong>Cockpit from one source, skin from another, numbers from the book.</strong></figcaption>
+    </figure>
+  </div></section>
+
+  <section class="section paper" id="g1000" aria-labelledby="g1000-title"><div class="wrap">
+    <p class="eyebrow">THE G1000 ADDITIONS</p><h2 id="g1000-title">A manifold-pressure gauge and a search page.</h2>
+    <div class="prose">
+      <p>The stock G1000 showed a 172's engine page: a tachometer and no manifold pressure, because the 172 has a fixed-pitch prop. The 182's constant-speed prop needs manifold pressure (MP) and RPM, so the build selects them and the gauge appears.</p>
+      <p>The stock G1000 also had no idea what a search pattern was. An independent extension adds search and rescue pages to the G1000's multifunction display (MFD): parallel track, creeping line, expanding square and grid, named waypoints, range rings, a DF bearing overlay, export to the flight plan, and a guarded ACTIVATE that loads the pattern into the flight management system (FMS) only when pressed twice and only when no AI pilot has control.</p>
+    </div>
+    <figure class="mfd-figure" id="mfd">
+      <div class="mfd-bezel">
+        <span class="mfd-knob mfd-knob-left" aria-hidden="true"></span><span class="mfd-rocker mfd-rocker-left" aria-hidden="true"></span>
+        <div class="mfd-screen"><button class="shot-open" type="button" data-lightbox="assets/img/mfd-sar-plan.webp" data-alt="Simulator screen: the search and rescue mission map in north-up plan view. An expanding-square pattern named SAR_DEMO with waypoints SS01 to SS09 inside range rings; the pattern details (0.5 nautical mile spacing, 8 legs, 4,500 ft); the selected waypoint SS01 and the next leg's bearing, distance and cross-track; engine gauges and the simulator's own map on the left; groundspeed 0 knots."><img src="assets/img/mfd-sar-plan.webp" alt="Simulator screen: the search and rescue mission map in north-up plan view. An expanding-square pattern named SAR_DEMO with waypoints SS01 to SS09 inside range rings; the pattern details (0.5 nautical mile spacing, 8 legs, 4,500 ft); the selected waypoint SS01 and the next leg's bearing, distance and cross-track; engine gauges and the simulator's own map on the left; groundspeed 0 knots." width="1024" height="768" loading="lazy" decoding="async"><span class="zoom-hint">Open image</span></button></div>
+        <span class="mfd-knob mfd-knob-right" aria-hidden="true"></span><span class="mfd-rocker mfd-rocker-right" aria-hidden="true"></span>
+        <div class="mfd-keys" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      </div>
+      <nav class="mfd-views" aria-label="Display views"><a href="assets/img/mfd-sar-plan.webp" aria-current="true" data-alt="Simulator screen: the search and rescue mission map in north-up plan view. An expanding-square pattern named SAR_DEMO with waypoints SS01 to SS09 inside range rings; the pattern details (0.5 nautical mile spacing, 8 legs, 4,500 ft); the selected waypoint SS01 and the next leg's bearing, distance and cross-track; engine gauges and the simulator's own map on the left; groundspeed 0 knots.">Plan</a><a href="assets/img/mfd-sar-editor.webp" data-alt="Simulator screen: the same search and rescue page with the PATTERN row highlighted by the selection cursor, where the pattern type (expanding square) is chosen.">Pattern editor</a><a href="assets/img/mfd-sar-fly.webp" data-alt="Simulator screen: the search and rescue mission map in fly view, heading up and centered on the parked airplane, with the expanding-square pattern drawn around it and the next-leg data below.">Fly view</a><a href="assets/img/mfd-native-map.webp" data-alt="Simulator screen: the simulator's own navigation map at 5 nautical miles with the activated pattern route and its named waypoints SS01 to SS09 drawn over the airport area; engine gauges on the left.">Native map with route</a></nav>
+      <p class="mfd-live" aria-live="polite"></p>
+      <figcaption><strong>The search and rescue pages on the multifunction display (MFD), as shown in the simulator.</strong> The pattern is an illustrative demonstration. These are simulator screens, taken with the airplane parked on the ramp (0 knots, no time-to-go), so the pattern sits next to the airport; the search page is the extension's own pane beside the simulator's native map, and "Native map with route" shows that map after the pattern was activated into the flight plan. The frame around the screen is a drawing, not any manufacturer's product.</figcaption>
+    </figure>
+  </div></section>
+
+  <section class="section" id="measured" aria-labelledby="measured-title"><div class="wrap">
+    <p class="eyebrow">MEASURED, NOT ASSUMED</p><h2 id="measured-title">The performance table was flown.</h2>
+    <div class="prose"><p>The performance table in CAP 487's profile was flown, not copied: 35 throttle-and-climb points held by the aircraft's own autopilot, checked against the handbook's cruise figures (214 hp at full throttle at the test altitude against a rated 230). Handling cards and flight-test cards record the rest.</p></div>
+    <figure class="clip" data-clip="airplane-panel" data-state="pending"><div class="clip-stage"><video muted playsinline loop preload="metadata" aria-label="Aircraft panel with the throttle, prop and mixture levers and an engine page showing manifold pressure."><source src="assets/video/airplane-panel.webm" type="video/webm"><source src="assets/video/airplane-panel.mp4" type="video/mp4"></video></div><div class="clip-controls"><p class="clip-caption"><strong>The 182's panel.</strong> The prop lever and the manifold-pressure gauge the stock 172 never had.</p><button class="clip-pause" type="button">Pause clip</button></div></figure>
+    <div class="table-wrap"><table class="spec-table"><caption class="visually-hidden-heading">CAP 487 at a glance</caption><tbody>
+      <tr><th scope="row">Engine</th><td><span class="mono">IO-540 · 230 hp</span></td></tr>
+      <tr><th scope="row">Propeller</th><td><span class="mono">three-blade, constant-speed · prop lever in the 3D cockpit</span></td></tr>
+      <tr><th scope="row">Fuel</th><td><span class="mono">87 gal usable</span></td></tr>
+      <tr><th scope="row">Speeds, weights, limits</th><td>The 182T's, with dimensions from the handbook and the type certificate</td></tr>
+      <tr><th scope="row">Performance table</th><td><span class="mono">35 points</span>, flown with the aircraft's own autopilot; 214 hp at full throttle at the test altitude against a rated 230</td></tr>
+      <tr><th scope="row">Engine page</th><td>Manifold pressure and RPM selected for the constant-speed prop</td></tr>
+    </tbody></table></div>
+    <aside class="callout callout-signal"><h3>For the operator's own use.</h3><p>The built aircraft is for the operator's own use. The repository holds the recipe and nothing from the simulator's or the donor's files.</p></aside>
+  </div></section>
+
+  <nav class="page-next" aria-label="Next page"><div class="wrap button-row"><p class="next-label">Next</p><a class="button button-primary" href="how-its-built.html">How It's Built <span aria-hidden="true">→</span></a></div></nav>
+</main>
+<footer class="site-footer"><div class="footer-grid wrap"><div><a class="brand" href="index.html"><img src="assets/brand/logo.svg" alt="CAP-VSAR" width="180" height="48"></a><p>Virtual search and rescue training for crews and staff.</p></div><div><nav aria-label="Footer navigation"><div class="footer-links"><a href="index.html">Home</a><a href="comms.html">Comms</a><a href="df.html">DF &amp; Beacons</a><a href="foreflight.html">ForeFlight</a><a href="caltopo.html">CalTopo</a><a href="ai-pilot.html">AI Pilot</a><a href="airplane.html" aria-current="page">The Airplane</a><a href="flight-planner.html">Flight Planner</a><a href="hosting.html">Hosting</a><a href="how-its-built.html">How It's Built</a></div></nav><p>Exercise guide: in review, not yet published.</p></div><div class="footer-notice"><p class="footer-brand-line"><strong>Unofficial training tool. Not affiliated with or endorsed by Civil Air Patrol.</strong></p><p>CAP-VSAR is an unofficial training project built by Civil Air Patrol members. It is not an official Civil Air Patrol product and is not endorsed by Civil Air Patrol. "Civil Air Patrol" and "CAP" identify the organization this training is for; no CAP seal, emblem or wing patch is used here. Everything on this site is simulation: it is not for real flight planning, real direction finding or a real search.</p><p>Product names are the property of their owners and are used to identify the equipment being simulated.</p><p>X-Plane and Laminar Research, Garmin and G1000, Cessna and Skylane, and FlightGear are the property of their owners, named only to identify what the build uses or imitates. The display pictures on this page are screenshots from the simulator (its G1000 rendering with the project's own search and rescue pages) shown inside a generic drawn frame that is not a Garmin product; CAP-VSAR is unofficial and is not affiliated with or endorsed by Garmin or Laminar Research.</p><p><strong>Not for operational use.</strong></p></div></div><div class="footer-last wrap">© 2026 the CAP-VSAR contributors · source code under the Apache-2.0 license; public link to follow</div></footer>
+<dialog class="lightbox" aria-label="Expanded image"><button class="lightbox-close" type="button" aria-label="Close expanded image">Close</button><img alt=""></dialog>
+</body></html>
