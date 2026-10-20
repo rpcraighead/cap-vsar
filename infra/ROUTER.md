@@ -21,6 +21,12 @@ WireGuard**, and there is currently no forward for it.
 
 ## The only forward CAP V-SAR needs
 
+> **Checked 2026-10-19.** A second, complete stack (Mumble, exercise, radio-https, planner containers, all healthy, with the
+> nine-channel tree from `docs/MUMBLE_CHANNELS.md` provisioned) is running on the Linux workstation, which is a different host
+> from ms01. ms01 (192.0.2.151) also still answers on TCP 64738. The forward below targets ms01. This file does not record
+> whether the router's live forward was changed, and it was not queried (no router access from the workstation). If the
+> workstation becomes the host, repoint `dest_ip` on both redirects to the workstation's address and re-test from cellular.
+
 | Service | Protocol / Port | To | Why public |
 |---|---|---|---|
 | Mumble | TCP **and** UDP 64738 | 192.0.2.151 | So base staff and aircrew join the voice net without a VPN client. Server password required. |
