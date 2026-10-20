@@ -23,6 +23,7 @@ sys.path.insert(0, str(ROOT))
 from services.ai_pilot.experiment import BridgeClient, Recorder, Scenario, digest, score_trace
 from services.ai_pilot.control_ownership import ControllerLock
 from services.ai_pilot.aircraft_profiles import PROFILES, profile_for
+from xplane.capvsar_landing import RUNWAYS
 
 
 AIRCRAFT_PATHS = {
@@ -62,8 +63,10 @@ def validate_staged_profile(config, profile, inv, *, mode):
 
 
 def inventory(xplane, include_landing=False, include_surface=False, include_mission=False,
-              *, profile):
-    aircraft = xplane / AIRCRAFT_PATHS[profile]
+              *, profile, aircraft_path=None):
+    # An explicit aircraft folder (a side-by-side build under test) replaces the
+    # standard install path; the staged config path and hash must still match it.
+    aircraft = Path(aircraft_path) if aircraft_path else xplane / AIRCRAFT_PATHS[profile]
     plugins = xplane / "Resources/plugins/PythonPlugins"
     def git(*args):
         return subprocess.check_output(["git", "-C", str(ROOT), *args], text=True).strip()
@@ -131,7 +134,6 @@ def stage_observer(destination, qualification_aircraft=None, mode="qualification
         config.update(mode=mode, aircraft_path=str(qualification_aircraft),
                       expires_unix_s=time.time() + (14300 if mode == "mission" else 10800 if mode in ("landing", "surface") else 3600))
         if mode == "landing":
-            from xplane.capvsar_landing import RUNWAYS
             if runway not in RUNWAYS:
                 raise ValueError("Unknown landing runway: " + runway)
             config["runway"] = runway
@@ -241,7 +243,7 @@ def main():
     landing = commands.add_parser("stage-landing")
     landing.add_argument("destination", type=Path)
     landing.add_argument("--aircraft", type=Path, required=True)
-    landing.add_argument("--runway", choices=("KMYF 28R", "KSAN 27"), default="KMYF 28R")
+    landing.add_argument("--runway", choices=tuple(RUNWAYS), default="KMYF 28R")
     surface = commands.add_parser("stage-surface")
     surface.add_argument("destination", type=Path)
     surface.add_argument("--aircraft", type=Path, required=True)

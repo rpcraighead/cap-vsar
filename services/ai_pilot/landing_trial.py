@@ -309,7 +309,7 @@ class LandingObserver:
         HEADING_TRUE_DEG = self.runway.heading_true_deg
         RUNWAY_LENGTH_M = self.runway.length_m
         TOUCHDOWN_MIN_M = self.runway.aimpoint_m
-        TOUCHDOWN_MAX_M = TOUCHDOWN_MIN_M + 400. * .3048
+        TOUCHDOWN_MAX_M = TOUCHDOWN_MIN_M + self.profile.touchdown_window_ft * .3048
         try:
             v, c = s["values"], s["controls"]
             wind_from = v.get("wind_from_true_deg", HEADING_TRUE_DEG if not self.wind_speed_kt else None)

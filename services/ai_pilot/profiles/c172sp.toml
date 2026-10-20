@@ -68,6 +68,7 @@ final_speed_add_kias = 5.0
 threshold_kias = [62.0, 68.0]
 touchdown_pitch_deg = [5.0, 7.0]
 touchdown_max_groundspeed_kt = 78.0
+touchdown_window_ft = 400.0
 flare_start_agl_ft = 17.5
 
 [engine]

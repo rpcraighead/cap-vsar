@@ -29,7 +29,7 @@ Nothing here is operating guidance for a real aircraft.
 | `[vfe]` | `stages` | `[[flap handle ratio, Vfe KIAS], ...]`, smallest ratio first |
 | `[flaps]` | `takeoff_ratio retract_kias retract_agl_ft missed_ratio ils_ratio stage_names` | flap handling; `stage_names` are the three stage labels the observer expects |
 | `[[flaps.landing_gates]]` | `ratio inside_m max_kias` | landing flap stages, first to last; the last must be ratio 1.0 |
-| `[landing]` | `toe_brakes final_speed_add_kias threshold_kias touchdown_pitch_deg touchdown_max_groundspeed_kt flare_start_agl_ft` | tuning and observer windows; `toe_brakes` selects cockpit toe-brake ratios under `override_toe_brakes` or the legacy `l_brake_add`/`r_brake_add` path; `flare_start_agl_ft` sets the profile-specific transition to flare |
+| `[landing]` | `toe_brakes final_speed_add_kias threshold_kias touchdown_pitch_deg touchdown_max_groundspeed_kt touchdown_window_ft flare_start_agl_ft` | tuning and observer windows; `toe_brakes` selects cockpit toe-brake ratios under `override_toe_brakes` or the legacy `l_brake_add`/`r_brake_add` path; `flare_start_agl_ft` sets the profile-specific transition to flare |
 | `[engine]` | `min_roll_rpm` | engine must exceed this RPM 5 s into the takeoff roll |
 | `[throttle]` | `taxi_base taxi_speed_gain taxi_max cruise_base ils_base approach_base` | tuning: base throttle positions |
 | `[envelope]` | `kias` | the airborne speed band the bridge and observers accept |

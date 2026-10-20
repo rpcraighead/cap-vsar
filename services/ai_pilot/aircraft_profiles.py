@@ -78,6 +78,7 @@ class AircraftProfile:
     flap_stage_names: tuple[str, str, str] = ("10deg", "20deg", "30deg")
     touchdown_pitch_deg: tuple[float, float] = (5., 7.)
     touchdown_max_groundspeed_kt: float = 78.
+    touchdown_window_ft: float = 400.   # touchdown accepted from the aim point to this far beyond it
     flare_start_agl_ft: float = 17.5
     missed_flap_ratio: float = 1/3
     ils_flap_ratio: float = 1/3

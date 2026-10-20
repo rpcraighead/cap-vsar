@@ -58,14 +58,15 @@ def run(args):
         raise ValueError("Installed runway does not match requested runway")
     runway = RUNWAYS[args.runway]
     client = BridgeClient(config)
-    inv = inventory(args.xplane, include_landing=True, profile=args.profile)
+    inv = inventory(args.xplane, include_landing=True, profile=args.profile,
+                    aircraft_path=getattr(args, "aircraft", None))
     validate_staged_profile(config, profile, inv, mode="landing")
     inv["controller_sha256"] = digest(ROOT / "services/ai_pilot/landing_trial.py")
     inv["runner_sha256"] = digest(Path(__file__))
     manifest = {"purpose": args.runway.replace(" ", "-") + "-moderate-braking",
                 "created_utc": datetime.now(timezone.utc).isoformat(),
                 "inventory": inv, "qualification_only": True, "profile": args.profile,
-                "criteria": {"touchdown_along_m": [runway.aimpoint_m, runway.aimpoint_m + 400. * .3048],
+                "criteria": {"touchdown_along_m": [runway.aimpoint_m, runway.aimpoint_m + profile.touchdown_window_ft * .3048],
                              "touchdown_cross_m": [-4, 4],
                              "touchdown_sink_fpm_min": -600, "max_brake_ratio": .35,
                              "pre_touch_pitch_deg": [5, 7],
@@ -203,6 +204,8 @@ def main():
     fly.add_argument("--output", type=Path, required=True)
     fly.add_argument("--runway", choices=tuple(RUNWAYS), default="KMYF 28R")
     fly.add_argument("--profile", choices=sorted(PROFILES), required=True)
+    fly.add_argument("--aircraft", type=Path, default=None,
+                     help="aircraft .acf under test when it is not the standard install path")
     fly.add_argument("--lateral-offset", type=float, default=0.)
     fly.add_argument("--altitude-offset", type=float, default=0.)
     fly.add_argument("--speed-offset", type=float, default=0.)

@@ -80,6 +80,96 @@ def test_stage_mission_gfc_envelope_is_trial_specific(monkeypatch, tmp_path):
     assert config["extra_airborne_boxes"] == [[33., 33.35, -116.85, -116.70]]
 
 
+def test_stage_landing_round_trips_ksee_c182_config(monkeypatch, tmp_path):
+    from scripts.ai_pilot_experiment import digest
+    from xplane import capvsar_qualification
+    from xplane.capvsar_landing import RUNWAYS
+
+    # A synthetic aircraft in pytest's scratch directory, never an installed package.
+    monkeypatch.setattr(capvsar_qualification, "aircraft_identity_ok", lambda *_args: True)
+    aircraft = tmp_path / C182T.acf_name
+    aircraft.write_text("test aircraft")
+    destination = tmp_path / "landing-stage"
+    stage_observer(destination, aircraft, mode="landing", runway="KSEE 27R")
+    config = json.loads((destination / "capvsar_flight_control_config.json").read_text())
+    assert config["mode"] == "landing"
+    assert config["runway"] == "KSEE 27R"
+    assert RUNWAYS[config["runway"]].airport_elev_ft == 388.
+    assert config["aircraft_path"] == str(aircraft)
+    assert config["aircraft_sha256"] == digest(aircraft)
+    assert config["constant_speed_prop"] is True
+    assert config["landing_toe_brakes"] is True
+    assert (destination / "capvsar_landing.py").read_text() == (
+        Path(aircraft_profiles.__file__).parents[2] / "xplane/capvsar_landing.py").read_text()
+    validate_staged_profile(config, C182T, {
+        "aircraft": {"path": str(aircraft), "sha256": digest(aircraft)}}, mode="landing")
+    with pytest.raises(ValueError, match="Unknown landing runway"):
+        stage_observer(tmp_path / "bad-stage", aircraft, mode="landing", runway="UNKNOWN 27")
+
+
+@pytest.mark.parametrize("runner", ["landing", "experiment"])
+@pytest.mark.parametrize("runway", ["KMYF 28R", "KSAN 27", "KSEE 27R", None, "UNKNOWN 27"])
+def test_landing_clis_share_runway_choices_and_keep_kmyf_default(monkeypatch, runner, runway):
+    from contextlib import nullcontext
+    import sys
+    from scripts import ai_pilot_experiment, ai_pilot_landing
+
+    calls = []
+    if runner == "landing":
+        module = ai_pilot_landing
+        argv = ["landing", "fly", "--config", "unused", "--output", "unused", "--profile", "C182T"]
+        monkeypatch.setattr(module, "ControllerLock", nullcontext)
+        monkeypatch.setattr(module, "run", lambda args: calls.append(args.runway) or 0)
+    else:
+        module = ai_pilot_experiment
+        argv = ["experiment", "stage-landing", "unused", "--aircraft", "unused"]
+        monkeypatch.setattr(module, "stage_observer",
+                            lambda *_args, **kwargs: calls.append(kwargs["runway"]))
+    if runway is not None:
+        argv += ["--runway", runway]
+    monkeypatch.setattr(sys, "argv", argv)
+    if runway == "UNKNOWN 27":
+        with pytest.raises(SystemExit) as error:
+            module.main()
+        assert error.value.code == 2
+        assert calls == []
+    else:
+        assert module.main() == 0
+        assert calls == [runway or "KMYF 28R"]
+
+
+def test_ksee_runner_manifest_uses_existing_score_limits(monkeypatch, tmp_path):
+    from argparse import Namespace
+    from scripts import ai_pilot_landing
+    from xplane.capvsar_landing import RUNWAYS
+
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"mode": "landing", "runway": "KSEE 27R"}))
+    manifest = {}
+
+    class ManifestCaptured(Exception):
+        pass
+
+    def capture(_path, value):
+        manifest.update(value)
+        raise ManifestCaptured
+
+    # Stop at manifest creation, before any reset, socket request or flight loop.
+    monkeypatch.setattr(ai_pilot_landing, "BridgeClient", lambda _config: object())
+    monkeypatch.setattr(ai_pilot_landing, "inventory", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(ai_pilot_landing, "validate_staged_profile", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(ai_pilot_landing, "Recorder", capture)
+    args = Namespace(config=config, profile="C182T", runway="KSEE 27R", xplane=tmp_path,
+                     output=tmp_path / "unused.jsonl", lateral_offset=0., altitude_offset=0.,
+                     speed_offset=0., wind_speed_kt=0., wind_from_offset_deg=0.)
+    with pytest.raises(ManifestCaptured):
+        ai_pilot_landing.run(args)
+    assert manifest["entry"]["runway"] == "KSEE 27R"
+    assert manifest["criteria"]["touchdown_along_m"] == pytest.approx([222.62, 466.46])
+    assert manifest["criteria"]["max_stop_along_m"] == RUNWAYS["KSEE 27R"].length_m - 100.
+    assert manifest["criteria"]["max_stop_along_m"] == pytest.approx(1527.6, abs=.1)
+
+
 # --- strictness: an aircraft file must state everything and nothing may be misspelt -----------
 
 @pytest.fixture

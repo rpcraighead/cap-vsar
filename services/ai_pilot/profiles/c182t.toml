@@ -80,6 +80,9 @@ final_speed_add_kias = 5.0
 threshold_kias = [64.0, 72.0]
 touchdown_pitch_deg = [5.0, 8.0]
 touchdown_max_groundspeed_kt = 80.0
+# An airplane floats in ground effect for a couple of hundred feet while it bleeds energy; the C172 window
+# of 400 ft was tuned on short runways. 800 ft is still inside the first third of a 4,900 ft runway.
+touchdown_window_ft = 800.0
 
 [engine]
 # the engine must exceed this RPM 5 s into the takeoff roll

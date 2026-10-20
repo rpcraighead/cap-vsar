@@ -65,6 +65,79 @@ def test_ksan_27_uses_installed_runway_and_displaced_threshold():
     assert observer.wind_from_true_deg == pytest.approx(196.04, abs=.1)
 
 
+@pytest.mark.parametrize("name,threshold,far_end,elevation,displacement,width", [
+    ("KMYF 28R", (32.8128249, -117.1311307), (32.8181752, -117.1447205),
+     424., 366., 46.02),
+    ("KSAN 27", (32.73136873, -117.18062185), (32.73659395, -117.20217254),
+     17., 552., 61.02),
+    # Global Airports apt.dat KSEE header and 9L/27R row (2026-10-18).
+    ("KSEE 27R", (32.8263994, -116.9642836), (32.8294697, -116.9812827),
+     388., 215., 29.87),
+])
+def test_runway_table_pins_installed_geometry(name, threshold, far_end, elevation,
+                                           displacement, width):
+    runway = RUNWAYS[name]
+    assert runway.name == name
+    assert runway.threshold == threshold
+    assert runway.far_end == far_end
+    assert runway.airport_elev_ft == elevation
+    assert runway.displaced_threshold_m == displacement
+    assert runway.width_m == width
+
+
+def test_ksee_27r_derived_geometry_and_c182_guidance():
+    runway = RUNWAYS["KSEE 27R"]
+    assert runway.coordinates(*runway.threshold) == pytest.approx((0, 0))
+    assert runway.coordinates(*runway.far_end) == pytest.approx((runway.length_m, 0), abs=1e-8)
+    assert runway.length_m == pytest.approx(1627.6, abs=.1)
+    assert runway.heading_true_deg == pytest.approx(282.1, abs=.2)
+    assert runway.aimpoint_m == pytest.approx(222.62, abs=.05)
+    controller = LandingController(runway.name, profile=C182T)
+    s = snapshot(0, agl_ft=55., runway=runway.name, heading_deg=runway.heading_true_deg)
+    s["aircraft"]["name"] = C182T.acf_name
+    controller.step(s)
+    assert controller.last_commands["target_altitude_ft"] == pytest.approx(
+        388. + 222.62 * math.tan(math.radians(3.)) * 3.28084)
+    observer = LandingObserver(15., -90., runway.name, profile=C182T)
+    assert observer.wind_from_true_deg == pytest.approx(192.1, abs=.2)
+
+
+@pytest.mark.parametrize("touchdown,stop_margin,outcome,reason", [
+    (221.62, 101., "FAIL", "Touchdown outside acceptance window"),
+    (223.62, 101., "PASS", None),
+    (465.46, 101., "PASS", None),
+    (467.46, 101., "FAIL", "Touchdown outside acceptance window"),
+    (280., 99., "FAIL", "Stopped outside runway stop window"),
+])
+def test_ksee_c182_scorer_uses_aimpoint_window_and_length_minus_100(
+        touchdown, stop_margin, outcome, reason):
+    runway = RUNWAYS["KSEE 27R"]
+    observer = LandingObserver(runway=runway.name, profile=C182T)
+
+    def observe(along, frame, **kwargs):
+        s = snapshot(along, runway=runway.name, heading_deg=runway.heading_true_deg,
+                     gs_kt=65., pitch_deg=6., sim=1. + .1 * (frame - 1),
+                     frame=frame, **kwargs)
+        s["aircraft"]["name"] = C182T.acf_name
+        return observer.observe(s)
+
+    for frame, (along, flap) in enumerate(((-2000, 1/3), (-1300, 2/3),
+                                           (-500, 1.), (2, 1.)), 1):
+        assert observe(along, frame, flap=flap, agl_ft=50.)["outcome"] == "INCOMPLETE"
+    report = observe(touchdown, 5, ground=1, agl_ft=0.)
+    if report["outcome"] == "INCOMPLETE":
+        for frame in range(6, 16):
+            observe(touchdown + (frame - 5) * 20, frame, ground=1, agl_ft=0., brake=.3)
+        s = snapshot(runway.length_m - stop_margin, runway=runway.name,
+                     heading_deg=runway.heading_true_deg, ground=1, agl_ft=0.,
+                     gs_kt=1.5, brake=.3, sim=2.5, frame=16)
+        s["aircraft"]["name"] = C182T.acf_name
+        report = observer.observe(s)
+    assert report["outcome"] == outcome
+    if reason is not None:
+        assert report["reason"] == reason
+
+
 def test_atomic_landing_frame_caps_brake_and_fault_releases_it():
     class Sink:
         def __init__(self):

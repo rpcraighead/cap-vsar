@@ -70,6 +70,7 @@ C182T = AircraftProfile(
     flap_stage_names=("10deg", "20deg", "38deg"),
     touchdown_pitch_deg=(5., 8.),
     touchdown_max_groundspeed_kt=80.,
+    touchdown_window_ft=800.,
     flare_start_agl_ft=28.,
     missed_flap_ratio=2/3, ils_flap_ratio=1/3,
     min_roll_rpm=2000.,
