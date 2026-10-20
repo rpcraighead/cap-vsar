@@ -417,6 +417,9 @@ def test_e2e_prop_disc_spins_about_the_hub_and_the_spinner_never_vanishes(synthe
     target, _ = synthetic_build
     blur_text = (target / "objects" / "flightgear_c182t_prop_blur.obj").read_text()
     assert "FastProp" not in blur_text, "the donor's faceted disc is no longer drawn"
+    head = blur_text.split("POINT_COUNTS", 1)[0]
+    assert "BLEND_GLASS" in head and "ATTR_no_cull" in head
+    assert "ATTR_shadow_blend" not in head
     blur = _block(blur_text, "PropDisc")
     assert "ANIM_hide 0.000000 0.000000 sim/flightmodel2/engines/prop_is_disc[0]" in blur
     assert f"TRIS 0 {3 * conv.PROP_DISC_SEGMENTS}" in blur

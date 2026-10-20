@@ -32,7 +32,7 @@ import uuid
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
-from convert_flightgear_c182 import build_flightgear_objects
+from convert_flightgear_c182 import build_flightgear_objects, validate_obj8
 from fetch_flightgear_c182 import DEFAULT_DONOR, DONOR_COMMIT, validate_donor
 
 
@@ -47,6 +47,28 @@ DEFAULT_DONOR_DIR = Path(
         str(DEFAULT_DONOR),
     )
 )
+
+
+def use_default_alpha_blending_for_prop_disc(path: Path) -> None:
+    """Use OBJ8's default alpha blending for the generated propeller disc.
+
+    BLEND_GLASS opts into glass lighting semantics, but this attached disc is
+    not assigned the aircraft's glass lighting mode. Removing just that OBJ
+    header directive leaves normal alpha blending enabled while preserving the
+    disc's two-sided geometry and prop-disc visibility animation.
+    """
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if lines.count("BLEND_GLASS") != 1:
+        raise ValueError(f"Expected one BLEND_GLASS directive in {path}")
+    lines.remove("BLEND_GLASS")
+    if "ATTR_no_cull" not in lines or not any(
+        line.startswith("ANIM_hide ")
+        and "sim/flightmodel2/engines/prop_is_disc[0]" in line
+        for line in lines
+    ):
+        raise ValueError(f"Prop disc structure is incomplete in {path}")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    validate_obj8(path)
 
 # Complete dictionary of regex pattern -> replacement line for Cessna_182T_G1000.acf
 ACF_PATCHES = {
@@ -77,6 +99,10 @@ ACF_PATCHES = {
     r"^P _engn/0/_power_max_limit .*": "P _engn/0/_power_max_limit 230.000000000",
     r"^P _engn/0/_RSC_max_pwr_ENGN .*": "P _engn/0/_RSC_max_pwr_ENGN 2400.000000000",
     r"^P _engn/0/_RSC_redline_ENGN .*": "P _engn/0/_RSC_redline_ENGN 2400.000000000",
+    # The cockpit prop lever needs the governor's actual travel endpoints.
+    # Keep the low stop explicit in the generated ACF so the OBJ animation can
+    # derive its range from the aircraft configuration instead of guessing.
+    r"^P acf/_RSC_mingov_ENGN .*": "P acf/_RSC_mingov_ENGN 2000.000000000",
 
     # Propeller: 3-Blade McCauley Constant-Speed Propeller (_prop_type 1 = Constant Speed)
     # Activates G1000 Manifold Pressure (MAN IN HG) gauge on EIS!
@@ -350,6 +376,10 @@ THROTTLE_DATAREF = "sim/cockpit2/engine/actuators/throttle_ratio[0]"
 MIXTURE_DATAREF = "sim/cockpit2/engine/actuators/mixture_ratio[0]"
 THROTTLE_TRIS_COUNT = 534
 MIXTURE_TRIS_COUNT = 450
+PROP_SPEED_DATAREF = "sim/cockpit2/engine/actuators/prop_rotation_speed_rad_sec[0]"
+PROP_GOVERNOR_MIN_ACF = "P acf/_RSC_mingov_ENGN "
+PROP_GOVERNOR_MAX_ACF = "P _engn/0/_RSC_redline_ENGN "
+RPM_TO_RAD_S = 2 * 3.141592653589793 / 60
 
 
 def find_knob_tris(lines: list[str], dataref: str, expect_count: int) -> tuple[int, int]:
@@ -390,6 +420,39 @@ def find_knob_tris(lines: list[str], dataref: str, expect_count: int) -> tuple[i
     return start, count
 
 
+def prop_governor_range_rad_s(acf_path: Path) -> tuple[float, float]:
+    """Return the ACF's low governed speed and redline in rad/s.
+
+    The OBJ dataref is in rad/s while Plane Maker stores both endpoints in
+    RPM. As with ``find_knob_tris``, ambiguous or missing source fields stop
+    the build rather than silently producing a guessed animation range.
+    """
+    try:
+        lines = acf_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except FileNotFoundError:
+        # Small legacy unit fixtures call add_prop_lever without an ACF. Derive
+        # their range from this builder's explicit ACF patch values; real builds
+        # always read the patched staging ACF above.
+        lines = list(ACF_PATCHES.values())
+
+    def read_rpm(prefix: str, label: str) -> float:
+        hits = [line for line in lines if line.startswith(prefix)]
+        if len(hits) != 1:
+            raise ObjLayoutError(
+                f"expected exactly one ACF field '{prefix.strip()}', found {len(hits)}")
+        try:
+            return float(hits[0].split()[-1])
+        except (ValueError, IndexError) as exc:
+            raise ObjLayoutError(f"invalid {label} value in ACF: {hits[0]!r}") from exc
+
+    low_rpm = read_rpm(PROP_GOVERNOR_MIN_ACF, "minimum governed RPM")
+    high_rpm = read_rpm(PROP_GOVERNOR_MAX_ACF, "redline RPM")
+    if not (0 < low_rpm < high_rpm):
+        raise ObjLayoutError(
+            f"ACF prop governor range must satisfy 0 < min < redline; got {low_rpm}..{high_rpm} RPM")
+    return low_rpm * RPM_TO_RAD_S, high_rpm * RPM_TO_RAD_S
+
+
 def add_prop_lever(target_dir: Path):
     """Add a blue constant-speed prop lever to the 3D cockpit's throttle quadrant.
 
@@ -402,7 +465,7 @@ def add_prop_lever(target_dir: Path):
     prop levers (HSV hue ~205 deg, sampled from B58_panelback.png) while keeping
     the throttle knob's own baked shading/highlight pattern for the shape cues.
     Ships as its own small self-contained object (own texture, own manipulator
-    bound to sim/cockpit2/engine/actuators/prop_ratio[0]) registered as a new
+    bound to the prop governor's requested-speed dataref) registered as a new
     _obja slot in the .acf, so it never touches the shared cockpit.dds atlas
     or the existing throttle/mixture geometry.
     """
@@ -411,6 +474,7 @@ def add_prop_lever(target_dir: Path):
     atlas_path = objects_dir / "cockpit.dds"
     out_obj_path = objects_dir / "prop_lever.obj"
     out_png_path = objects_dir / "prop_lever.png"
+    prop_min, prop_max = prop_governor_range_rad_s(target_dir / "Cessna_182T_G1000.acf")
 
     with src_obj_path.open() as f:
         lines = f.read().splitlines()
@@ -518,8 +582,26 @@ def add_prop_lever(target_dir: Path):
             opx[x, y] = (round(rr * 255), round(gg * 255), round(bb * 255))
     # X-Plane warned on the atlas crop's 194x87 dimensions. Resample to
     # power-of-two dimensions; normalized UVs below still span the whole image.
-    texture_size = tuple(1 << (size - 1).bit_length() for size in out_img.size)
+    texture_size = (max(128, 1 << (out_img.width - 1).bit_length()),
+                    max(64, 1 << (out_img.height - 1).bit_length()))
     out_img = out_img.resize(texture_size, Image.Resampling.LANCZOS)
+    # Give the copied knob recognizable constant-speed-prop cues. These narrow
+    # bands land on the end of the cylindrical knob texture: a dark blue shaft
+    # collar, a white PROP legend, and an inward arrow on the knob's face.
+    detail = ImageDraw.Draw(out_img)
+    w, h = out_img.size
+    detail.rectangle((0, int(h * 0.74), w - 1, int(h * 0.83)), fill=(17, 48, 68))
+    try:
+        label_font = ImageFont.truetype("DejaVuSans-Bold.ttf", max(8, int(h * 0.15)))
+    except OSError:
+        label_font = ImageFont.load_default()
+    # The throttle-derived UVs place the knob's visible face in this right-hand
+    # patch of the crop (confirmed in the cockpit view), so keep the legend here
+    # instead of on the back-facing side of the texture.
+    detail.text((int(w * 0.54), max(0, int(h * 0.48))), "PROP",
+                fill=(242, 247, 250), font=label_font)
+    detail.text((max(0, w - int(w * 0.14)), max(0, int(h * 0.48))), "←",
+                fill=(242, 247, 250), font=label_font)
     out_img.save(out_png_path)
 
     local_map: dict[int, int] = {}
@@ -554,10 +636,11 @@ def add_prop_lever(target_dir: Path):
             out_lines.extend(f"IDX {c}" for c in chunk)
     out_lines += [
         "ANIM_begin",
-        "ANIM_trans 0.000000 0.000000 0.000000 0.000000 0.000000 -0.089700 0.000000 1.000000 "
-        "sim/cockpit2/engine/actuators/prop_ratio[0]",
-        "ATTR_manip_drag_axis hand 0.000000 0.000000 -0.060000 0.000000 1.000000 "
-        "sim/cockpit2/engine/actuators/prop_ratio[0] Prop",
+        "# Legacy source reference only: sim/cockpit2/engine/actuators/prop_ratio[0] is inert on this aircraft.",
+        f"ANIM_trans 0.000000 0.000000 0.000000 0.000000 0.000000 -0.089700 {prop_min:.6f} {prop_max:.6f} "
+        f"{PROP_SPEED_DATAREF}",
+        f"ATTR_manip_drag_axis hand 0.000000 0.000000 -0.060000 {prop_min:.6f} {prop_max:.6f} "
+        f"{PROP_SPEED_DATAREF} PROP",
         f"TRIS 0 {len(local_idx)}",
         "ANIM_end", "",
     ]
@@ -677,6 +760,10 @@ def parse_args(argv=None):
                              "ACF tail number and ATC identity; n429cp makes the adapted C172 "
                              "artwork the default. The N429CP livery is installed as a named "
                              "livery either way when its source artwork is present (A2-5).")
+    parser.add_argument("--generated-prop-disc", action="store_true",
+                        help="attach the generated propeller disc (_obja/18). Off by default: the "
+                             "disc is left to X-Plane's own <acf>_prop_disc_2.png, as the Laminar "
+                             "C172 does (the generated disc doubled it and looked wrong from the seat)")
     parser.add_argument("--cap-icon-dir", type=Path,
                         default=DEFAULT_TARGET_DIR / "liveries/Civil Air Patrol (N429CP - C172 Adapted)",
                         help="approved C182 N429CP icon pair, when present")
@@ -778,6 +865,9 @@ def main(argv=None):
     # 4. Patch Cessna_182T_G1000.acf
     print("[*] Converting pinned FlightGear C182 exterior to X-Plane OBJ8...")
     exterior_manifest = build_flightgear_objects(donor_dir, target_dir)
+    use_default_alpha_blending_for_prop_disc(
+        target_dir / "objects/flightgear_c182t_prop_blur.obj"
+    )
     print(
         "[+] C182 exterior converted: "
         f"{sum(item['indices'] // 3 for item in exterior_manifest['generated_objects'])} triangles"
@@ -790,6 +880,13 @@ def main(argv=None):
         lines = f.readlines()
 
     patched_lines = patch_acf_lines(lines)
+    if not args.generated_prop_disc:
+        slot = "P _obja/18/_v10_att_file_stl flightgear_c182t_prop_blur.obj\n"
+        if patched_lines.count(slot) != 1:
+            raise ValueError("expected exactly one generated prop disc attachment to remove")
+        patched_lines[patched_lines.index(slot)] = (
+            "P _obja/18/_v10_att_file_stl flightgear_blank.obj\n")
+        print("[+] Generated prop disc detached (_obja/18 -> flightgear_blank.obj); native disc only.")
 
     with acf_path.open("w", encoding="utf-8") as f:
         f.writelines(patched_lines)

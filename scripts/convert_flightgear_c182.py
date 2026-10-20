@@ -500,34 +500,29 @@ PROP_DISC_SEGMENTS = 64
 
 
 def prop_disc_texture(destination: Path, size: int = 512) -> None:
-    """A smooth, radially symmetric blur of three black-backed blades.
+    """A faint radial blade wash with no bright annulus or hard alpha steps.
 
-    From the seat a turning propeller reads as a faint dark veil with a lighter
-    ring where the painted tips pass. The donor's PropBlur.png was a coarse fan of
-    24 hard light/dark wedges (a stroboscopic effect FlightGear animates), which
-    X-Plane drew frozen across the windscreen. This texture is generated, not
-    donor-derived.
+    The former pale, 24%-opaque tip ring made terrain behind the prop look
+    banded even with glass blending. Keep straight-alpha RGB dark and constant
+    through transparent texels so filtering cannot introduce a pale fringe.
+    Feather both the spinner opening and the outer edge; the blur is radial,
+    so rotating it would not change its appearance.
     """
-    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    image = Image.new("RGBA", (size, size), (30, 30, 32, 0))
     px = image.load()
     c = (size - 1) / 2.0
+
+    def smoothstep(value: float) -> float:
+        t = max(0.0, min(1.0, value))
+        return t * t * (3.0 - 2.0 * t)
+
     for y in range(size):
         for x in range(size):
             r = math.hypot(x - c, y - c) / c
-            if r > 1.0:
-                continue
-            if r < 0.15:                       # spinner covers the hub
-                alpha, rgb = 0.0, (30, 30, 32)
-            elif r < 0.86:
-                # blade chord narrows outboard: slightly less coverage further out
-                alpha, rgb = 0.20 - 0.05 * (r - 0.15) / 0.71, (30, 30, 32)
-            elif r < 0.97:
-                alpha, rgb = 0.24, (205, 205, 195)
-            else:
-                alpha, rgb = 0.24 * max(0.0, (1.0 - r) / 0.03), (205, 205, 195)
-            if r < 0.20:
-                alpha *= max(0.0, (r - 0.15) / 0.05)
-            px[x, y] = rgb + (int(round(alpha * 255)),)
+            hub_fade = smoothstep((r - 0.15) / 0.18)
+            tip_fade = 1.0 - smoothstep((r - 0.72) / 0.28)
+            alpha = 0.06 * hub_fade * tip_fade
+            px[x, y] = (30, 30, 32, int(round(alpha * 255)))
     image.save(destination)
 
 
@@ -538,6 +533,10 @@ def write_generated_prop_disc(destination: Path, texture: str, blades: Iterable[
     The disc sits on the propeller axis (PROP_ROTATION), in the plane of the
     donor's own disc, with the radius of the corrected blades (79.0 in after
     c182t_corrections). It is drawn only when X-Plane shows the prop as a disc.
+
+    Retain BLEND_GLASS: matched terrain/sky checks did not improve with
+    default blending, no-shadow or no-depth flags. The soft radial texture
+    removes the pale rim without changing depth behavior or measured geometry.
     """
     blade_vertices, _, _ = _build_mesh(blades)
     disc_vertices, _, _ = _build_mesh(donor_disc)
@@ -568,7 +567,7 @@ def write_generated_prop_disc(destination: Path, texture: str, blades: Iterable[
         indices.extend((0, 1 + k, 1 + (k + 1) % PROP_DISC_SEGMENTS))
     lines = ["A", "800", "OBJ", "",
              "# Generated propeller disc (not donor geometry); see write_generated_prop_disc.",
-             f"TEXTURE {texture}", "ATTR_no_cull", "ATTR_shadow_blend 0.5", "",
+             f"TEXTURE {texture}", "BLEND_GLASS", "ATTR_no_cull", "",
              f"POINT_COUNTS {len(vertices)} 0 0 {len(indices)}"]
     lines.extend("VT " + " ".join(_fmt(value) for value in vertex) for vertex in vertices)
     for offset in range(0, len(indices), 10):
