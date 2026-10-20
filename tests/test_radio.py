@@ -850,3 +850,93 @@ def test_ics_state_is_kept_per_aircraft(sockets):
         assert client.post('/api/radio/ics', json={'mode': 'ALL', 'aircraft_id': '../x'}).status_code == 422
     finally:
         radio.ICS_BY_AIRCRAFT.clear()
+
+
+# ------------------------------------------------------ A9 / A13 (review T11)
+
+def _session_cookie(client, role, callsign, aircraft_id='', assigned_name=''):
+    """Mint a roster-style session for `role` and present it on the client."""
+    sess = access.create_session('X7QM-' + callsign.replace(' ', ''), role, callsign,
+                                 callsign=callsign, aircraft_id=aircraft_id)
+    client.cookies.set(access.SESSION_COOKIE, sess)
+    return sess
+
+
+def _reset_ics():
+    radio.ICS_STATE.update(radio._blank_ics())
+    radio.ICS_BY_AIRCRAFT.clear()
+
+
+def test_ics_over_the_stream_needs_base_or_instructor(sockets, monkeypatch):
+    """A9: the socket `ics` command shares X-14's gate, not just its comment.
+
+    POST /api/radio/ics is base_or_instructor; the same change sent as a radio
+    command after a join only needed a session with a callsign. A UDF or an
+    aircrew seat could set PILOT isolation or split COM for the whole net.
+    """
+    client, _ = sockets
+    db = _configured(monkeypatch)
+    try:
+        before = dict(radio.ICS_STATE)
+        for role, callsign, aircraft in (('ground_team', 'UDF 1', ''),
+                                         ('evaluator', 'SET 1', ''),
+                                         ('aircrew', 'CAP 423', 'ac-1')):
+            _session_cookie(client, role, callsign, aircraft)
+            with join(client) as sock:
+                hello(sock, 'MISSION BASE')
+                sock.send_json({'action': 'ics', 'mode': 'PILOT', 'split_com': True})
+                reply = sock.receive_json()
+                assert reply['type'] == 'error', (role, reply)
+                assert 'mission base' in reply['message'].lower()
+            assert radio.ICS_STATE == before, role
+            assert radio.ICS_BY_AIRCRAFT == {}, role
+        for role, callsign in (('base', 'MRO 1'), ('instructor', 'INSTRUCTOR')):
+            _session_cookie(client, role, callsign)
+            with join(client) as sock:
+                hello(sock, 'MISSION BASE')
+                sock.send_json({'action': 'ics', 'mode': 'PILOT'})
+                reply = sock.receive_json()
+                assert reply['type'] == 'ics' and reply['mode'] == 'PILOT', (role, reply)
+                assert radio.ICS_STATE['pilot_isolated'] is True
+            _reset_ics()
+    finally:
+        _reset_ics()
+        os.unlink(db)
+
+
+def test_a_revoked_session_is_cut_off_the_radio(sockets, monkeypatch):
+    """A13: a joined radio re-checks its session; revocation and expiry propagate."""
+    client, _ = sockets
+    db = _configured(monkeypatch)
+    monkeypatch.setattr(access, 'SOCKET_RECHECK_S', 0.15)
+    try:
+        sess = _session_cookie(client, 'base', 'MRO 1')
+        with join(client) as sock:
+            hello(sock, 'MISSION BASE')
+            time.sleep(0.4)                          # two re-checks with a valid session
+            sock.send_json({'action': 'ping'})
+            assert sock.receive_json()['type'] == 'pong', 'a valid session was cut off'
+            access.delete_session(sess)
+            reply = sock.receive_json()
+            assert reply['type'] == 'error', reply
+            assert 'log in' in reply['message'].lower()
+        assert not radio.SESSIONS
+    finally:
+        os.unlink(db)
+
+
+def test_ics_is_refused_as_soon_as_the_session_is_revoked(sockets, monkeypatch):
+    """A13: a privileged command re-reads the session, not the join-time copy."""
+    client, _ = sockets
+    db = _configured(monkeypatch)
+    try:
+        sess = _session_cookie(client, 'base', 'MRO 1')
+        with join(client) as sock:
+            hello(sock, 'MISSION BASE')
+            access.delete_session(sess)
+            sock.send_json({'action': 'ics', 'mode': 'PILOT'})
+            assert sock.receive_json()['type'] == 'error'
+        assert radio.ICS_STATE['mode'] == 'ALL'
+    finally:
+        _reset_ics()
+        os.unlink(db)

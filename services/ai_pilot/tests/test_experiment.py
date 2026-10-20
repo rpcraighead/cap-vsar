@@ -1,6 +1,8 @@
 import pytest
+import json
 
-from services.ai_pilot.experiment import CycleObserver, Recorder, Scenario, score_trace
+from services.ai_pilot.experiment import (BridgeClient, CycleObserver, Recorder, Scenario,
+                                          score_trace, wait_for_ready_snapshot)
 
 
 def snapshot(t, heading=90):
@@ -128,3 +130,81 @@ def test_invalid_record_shape_is_reported_as_failure(tmp_path, line):
     path = tmp_path / "invalid.jsonl"
     path.write_text(line + "\n")
     assert score_trace(path)["outcome"] == "FAIL"
+
+
+def _readiness_client(acf_path, *, sim_speed=1, paused=0, sim_time=10.):
+    class Client:
+        frame = 0
+        def request(self, action, **_kwargs):
+            if action == "status":
+                return {"state": "MANUAL"}
+            self.frame += 1
+            return {"age_s": .02, "frame": self.frame,
+                    "aircraft": {"name": "Cessna_172SP_G1000.acf", "path": str(acf_path)},
+                    "values": {"sim_speed": sim_speed, "paused": paused,
+                               "sim_time_s": sim_time}}
+    return Client()
+
+
+def test_readiness_requires_initialized_paused_sim_speed_and_positive_sim_time(tmp_path):
+    acf = tmp_path / "Cessna_172SP_G1000.acf"
+    acf.touch()
+    with pytest.raises(TimeoutError, match="stopped and not initialized-paused"):
+        wait_for_ready_snapshot(_readiness_client(acf, sim_speed=0, paused=1, sim_time=10.),
+                                timeout_s=.01, poll_s=.001)
+    reset_ready = wait_for_ready_snapshot(
+        _readiness_client(acf, sim_speed=0, paused=1, sim_time=10.),
+        timeout_s=.1, poll_s=0., validate=lambda snap: snap["values"]["paused"] == 1)
+    assert reset_ready["values"]["sim_speed"] == 0
+    with pytest.raises(TimeoutError, match="stopped and not initialized-paused"):
+        wait_for_ready_snapshot(_readiness_client(acf, sim_speed=1, paused=1, sim_time=0.),
+                                timeout_s=.01, poll_s=.001)
+    ready = wait_for_ready_snapshot(_readiness_client(acf, sim_speed=1, paused=1, sim_time=10.),
+                                    timeout_s=.1, poll_s=0.)
+    assert ready["values"]["paused"] == 1 and ready["values"]["sim_speed"] == 1
+
+
+def test_bridge_client_retries_expired_exchange_with_a_fresh_lease(monkeypatch):
+    import services.ai_pilot.experiment as experiment
+
+    payloads = []
+    replies = [
+        b'{"error":"Frame expired in queue","status":{"state":"ACTIVE","fault":null}}\n',
+        b'{"ok":true}\n',
+    ]
+
+    class FakeSocket:
+        def __enter__(self): return self
+        def __exit__(self, *_args): pass
+        def settimeout(self, _timeout): pass
+        def connect(self, _path): pass
+        def sendall(self, raw): payloads.append(json.loads(raw))
+        def recv(self, _size): return replies.pop(0)
+
+    monkeypatch.setattr(experiment.socket, "socket", lambda *_args: FakeSocket())
+    response = BridgeClient({"secret": "s", "socket_path": "/fake"}).request(
+        "exchange", expires_at=0., sequence=3)
+    assert response["ok"]
+    assert len(payloads) == 2 and payloads[0]["sequence"] == payloads[1]["sequence"] == 3
+    assert payloads[1]["expires_at"] > payloads[0]["expires_at"]
+
+
+def test_bridge_client_does_not_retry_exchange_that_did_not_answer(monkeypatch):
+    import services.ai_pilot.experiment as experiment
+
+    payloads = []
+
+    class FakeSocket:
+        def __enter__(self): return self
+        def __exit__(self, *_args): pass
+        def settimeout(self, _timeout): pass
+        def connect(self, _path): pass
+        def sendall(self, raw): payloads.append(json.loads(raw))
+        def recv(self, _size):
+            return b'{"error":"flight loop did not answer within 0.25 s","status":{"state":"ACTIVE","fault":null}}\n'
+
+    monkeypatch.setattr(experiment.socket, "socket", lambda *_args: FakeSocket())
+    with pytest.raises(RuntimeError, match="did not answer"):
+        BridgeClient({"secret": "s", "socket_path": "/fake"}).request(
+            "exchange", expires_at=1., sequence=3)
+    assert len(payloads) == 1 and payloads[0]["sequence"] == 3

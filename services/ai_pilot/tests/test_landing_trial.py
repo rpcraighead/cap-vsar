@@ -1,4 +1,5 @@
 """Landing brake lease, geometry and independent touchdown/stop criteria."""
+from services.ai_pilot.aircraft_profiles import C172SP, C182T
 import math
 
 import pytest
@@ -6,8 +7,18 @@ import pytest
 from xplane.capvsar_flight_control_core import CHANNELS, ControlBridge
 from xplane.capvsar_landing import (AIRPORT_ELEV_FT, FAR_END, GLIDEPATH_AIMPOINT_M,
                                    HEADING_TRUE_DEG, RUNWAYS, RUNWAY_LENGTH_M,
-                                   THRESHOLD, runway_coordinates)
+                                   THRESHOLD, landing_agl_in_bounds,
+                                   runway_coordinates)
 from services.ai_pilot.landing_trial import LandingController, LandingObserver, TOUCHDOWN_MIN_M
+
+
+def test_landing_bridge_allows_only_small_ground_contact_agl_roundoff():
+    assert landing_agl_in_bounds(-.001, True)
+    assert landing_agl_in_bounds(0., True)
+    assert not landing_agl_in_bounds(-.051, True)
+    assert not landing_agl_in_bounds(-.001, False)
+    assert landing_agl_in_bounds(250., False)
+    assert not landing_agl_in_bounds(250.001, False)
 
 
 def test_kmyf_28r_geometry_uses_installed_runway_direction():
@@ -21,12 +32,21 @@ def test_kmyf_28r_geometry_uses_installed_runway_direction():
 
 
 def test_unflared_glidepath_intersects_new_aimpoint():
-    c = LandingController()
+    c = LandingController(profile=C172SP)
     c.step(snapshot(0, agl_ft=50., gs_kt=65.))
     assert c.last_commands["target_altitude_ft"] == pytest.approx(
         AIRPORT_ELEV_FT + GLIDEPATH_AIMPOINT_M * math.tan(math.radians(3.)) * 3.28084)
     c.step(snapshot(GLIDEPATH_AIMPOINT_M, agl_ft=20., gs_kt=65., sim=1.1, frame=2))
     assert c.last_commands["target_altitude_ft"] == pytest.approx(AIRPORT_ELEV_FT)
+
+
+def test_trace_led_flare_start_is_profile_specific():
+    c182 = LandingController(profile=C182T)
+    c172 = LandingController(profile=C172SP)
+    c182.step(snapshot(0, agl_ft=25., gs_kt=68.))
+    c172.step(snapshot(0, agl_ft=25., gs_kt=65.))
+    assert c182.phase == "flare"
+    assert c172.phase == "approach"
 
 
 def test_ksan_27_uses_installed_runway_and_displaced_threshold():
@@ -36,13 +56,86 @@ def test_ksan_27_uses_installed_runway_and_displaced_threshold():
     assert runway.length_m == pytest.approx(2101.6, abs=1.)
     assert runway.heading_true_deg == pytest.approx(286.04, abs=.1)
     assert runway.aimpoint_m == pytest.approx(559.62)
-    controller = LandingController(runway.name)
+    controller = LandingController(runway.name, profile=C172SP)
     controller.step(snapshot(0, agl_ft=55., runway=runway.name,
                              heading_deg=runway.heading_true_deg))
     assert controller.last_commands["target_altitude_ft"] == pytest.approx(
         17. + runway.aimpoint_m * math.tan(math.radians(3.)) * 3.28084)
-    observer = LandingObserver(15., -90., runway.name)
+    observer = LandingObserver(15., -90., runway.name, profile=C172SP)
     assert observer.wind_from_true_deg == pytest.approx(196.04, abs=.1)
+
+
+@pytest.mark.parametrize("name,threshold,far_end,elevation,displacement,width", [
+    ("KMYF 28R", (32.8128249, -117.1311307), (32.8181752, -117.1447205),
+     424., 366., 46.02),
+    ("KSAN 27", (32.73136873, -117.18062185), (32.73659395, -117.20217254),
+     17., 552., 61.02),
+    # Global Airports apt.dat KSEE header and 9L/27R row (2026-10-18).
+    ("KSEE 27R", (32.8263994, -116.9642836), (32.8294697, -116.9812827),
+     388., 215., 29.87),
+])
+def test_runway_table_pins_installed_geometry(name, threshold, far_end, elevation,
+                                           displacement, width):
+    runway = RUNWAYS[name]
+    assert runway.name == name
+    assert runway.threshold == threshold
+    assert runway.far_end == far_end
+    assert runway.airport_elev_ft == elevation
+    assert runway.displaced_threshold_m == displacement
+    assert runway.width_m == width
+
+
+def test_ksee_27r_derived_geometry_and_c182_guidance():
+    runway = RUNWAYS["KSEE 27R"]
+    assert runway.coordinates(*runway.threshold) == pytest.approx((0, 0))
+    assert runway.coordinates(*runway.far_end) == pytest.approx((runway.length_m, 0), abs=1e-8)
+    assert runway.length_m == pytest.approx(1627.6, abs=.1)
+    assert runway.heading_true_deg == pytest.approx(282.1, abs=.2)
+    assert runway.aimpoint_m == pytest.approx(222.62, abs=.05)
+    controller = LandingController(runway.name, profile=C182T)
+    s = snapshot(0, agl_ft=55., runway=runway.name, heading_deg=runway.heading_true_deg)
+    s["aircraft"]["name"] = C182T.acf_name
+    controller.step(s)
+    assert controller.last_commands["target_altitude_ft"] == pytest.approx(
+        388. + 222.62 * math.tan(math.radians(3.)) * 3.28084)
+    observer = LandingObserver(15., -90., runway.name, profile=C182T)
+    assert observer.wind_from_true_deg == pytest.approx(192.1, abs=.2)
+
+
+@pytest.mark.parametrize("touchdown,stop_margin,outcome,reason", [
+    (221.62, 101., "FAIL", "Touchdown outside acceptance window"),
+    (223.62, 101., "PASS", None),
+    (465.46, 101., "PASS", None),
+    (467.46, 101., "FAIL", "Touchdown outside acceptance window"),
+    (280., 99., "FAIL", "Stopped outside runway stop window"),
+])
+def test_ksee_c182_scorer_uses_aimpoint_window_and_length_minus_100(
+        touchdown, stop_margin, outcome, reason):
+    runway = RUNWAYS["KSEE 27R"]
+    observer = LandingObserver(runway=runway.name, profile=C182T)
+
+    def observe(along, frame, **kwargs):
+        s = snapshot(along, runway=runway.name, heading_deg=runway.heading_true_deg,
+                     gs_kt=65., pitch_deg=6., sim=1. + .1 * (frame - 1),
+                     frame=frame, **kwargs)
+        s["aircraft"]["name"] = C182T.acf_name
+        return observer.observe(s)
+
+    for frame, (along, flap) in enumerate(((-2000, 1/3), (-1300, 2/3),
+                                           (-500, 1.), (2, 1.)), 1):
+        assert observe(along, frame, flap=flap, agl_ft=50.)["outcome"] == "INCOMPLETE"
+    report = observe(touchdown, 5, ground=1, agl_ft=0.)
+    if report["outcome"] == "INCOMPLETE":
+        for frame in range(6, 16):
+            observe(touchdown + (frame - 5) * 20, frame, ground=1, agl_ft=0., brake=.3)
+        s = snapshot(runway.length_m - stop_margin, runway=runway.name,
+                     heading_deg=runway.heading_true_deg, ground=1, agl_ft=0.,
+                     gs_kt=1.5, brake=.3, sim=2.5, frame=16)
+        s["aircraft"]["name"] = C182T.acf_name
+        report = observer.observe(s)
+    assert report["outcome"] == outcome
+    if reason is not None:
+        assert report["reason"] == reason
 
 
 def test_atomic_landing_frame_caps_brake_and_fault_releases_it():
@@ -75,10 +168,62 @@ def test_atomic_landing_frame_caps_brake_and_fault_releases_it():
     controls["brake"] = .36
     with pytest.raises(ValueError, match="brake"):
         bridge.submit_frame(bridge.session, 1, 3, .18, controls)
-    now[0] = .19
-    bridge.tick()
+    bridge.tick()  # establish the previous flight-loop timestamp
+    now[0] = .4
+    bridge.tick()  # one late simulator callback is tolerated; physics did not advance in the hitch
+    assert bridge.status()["state"] == "ACTIVE"
+    bridge.tick()  # the controller still must provide its next frame
     assert sink.paused and not sink.override and sink.brake == 0.
     assert bridge.status()["retired"]
+
+
+def test_atomic_frame_survives_one_400ms_flight_loop_stall_but_not_a_stopped_controller():
+    class Sink:
+        def __init__(self): self.override = self.paused = False
+        def ap_engaged(self): return False
+        def override_state(self): return self.override
+        def set_override(self, enabled): self.override = enabled
+        def write_control(self, channel, value): pass
+        def pause(self): self.paused = True
+        def is_paused(self): return self.paused
+    now = [0.]
+    sink = Sink()
+    bridge = ControlBridge(sink, "c"*32, clock=lambda: now[0], atomic=True)
+    controls = {c: 0. for c in CHANNELS}
+    bridge.submit_frame(bridge.session, 0, 1, .18, controls)
+    bridge.prepare("DIRECT", bridge.session, 0)
+    bridge.submit_frame(bridge.session, 1, 2, .18, controls)
+    bridge.activate(bridge.session, 1)
+    bridge.tick()  # establish the previous flight-loop timestamp
+    now[0] = .4
+    assert bridge.tick()["state"] == "ACTIVE"
+    assert not sink.paused and sink.override
+    assert bridge.tick()["state"] == "PAUSED_FAULT"
+    assert sink.paused and not sink.override
+
+
+def test_gfc_owner_gets_one_late_callback_grace_then_heartbeat_faults():
+    class Sink:
+        def __init__(self): self.override = False; self.paused = False
+        def ap_engaged(self): return True
+        def override_state(self): return False
+        def set_override(self, enabled): self.override = enabled
+        def write_control(self, channel, value): pass
+        def pause(self): self.paused = True
+        def is_paused(self): return self.paused
+    now = [0.]
+    sink = Sink()
+    bridge = ControlBridge(sink, "e"*32, clock=lambda: now[0], atomic=True)
+    bridge.state = "GFC700"
+    bridge.owner = "GFC700"
+    bridge.retired = True
+    bridge.last_heartbeat = 0.
+    bridge.last_tick_time = 0.
+    now[0] = .5
+    assert bridge.tick()["state"] == "GFC700"
+    now[0] = .516
+    assert bridge.tick()["state"] == "PAUSED_FAULT"
+    assert sink.paused and not sink.override
 
 
 def snapshot(along, cross=0., ground=0, gs_kt=70., brake=0., sim=1., frame=1,
@@ -112,16 +257,31 @@ def snapshot(along, cross=0., ground=0, gs_kt=70., brake=0., sim=1., frame=1,
 
 
 def test_brake_stays_off_in_air_then_moderate_after_touchdown():
-    c = LandingController()
+    c = LandingController(profile=C172SP)
     assert c.step(snapshot(-500))["brake"] == 0
     touchdown = snapshot(100, ground=1, gs_kt=58, sim=2, frame=2, agl_ft=0)
     assert c.step(touchdown)["brake"] == 0
     later = snapshot(200, ground=1, gs_kt=40, sim=4, frame=3, agl_ft=0)
-    assert .15 <= c.step(later)["brake"] <= .35
+    assert .15 <= c.step(later)["brake"] <= .32
+
+
+def test_landing_end_metrics_capture_toe_brake_readback_and_rollout_deceleration():
+    observer = LandingObserver(profile=C172SP)
+    first = snapshot(-100, ground=1, gs_kt=40, sim=1., frame=1, agl_ft=0., brake=.32)
+    second = snapshot(-99, ground=1, gs_kt=39, sim=1.2, frame=2, agl_ft=0., brake=.35)
+    first["actuator_readback"].update(brake_left=.32, brake_right=.32)
+    second["actuator_readback"].update(brake_left=.35, brake_right=.35)
+    observer.touchdown = {"sim_time_s": .8}
+    observer.last_rollout_speed = (.8, 41/1.94384)
+    observer.observe(first)
+    report = observer.observe(second)
+    assert report["brake_readback_max"] == {"left": .35, "right": .35}
+    assert report["rollout_deceleration_mps2"]["samples"] == 2
+    assert report["rollout_deceleration_mps2"]["median"] > 0
 
 
 def test_flare_begins_below_half_the_prior_agl_trigger():
-    c = LandingController()
+    c = LandingController(profile=C172SP)
     c.step(snapshot(40, agl_ft=20))
     assert c.phase == "approach"
     c.step(snapshot(45, agl_ft=17, sim=1.1, frame=2))
@@ -129,7 +289,7 @@ def test_flare_begins_below_half_the_prior_agl_trigger():
 
 
 def test_last_two_seconds_gradually_increase_nose_up_command():
-    c = LandingController()
+    c = LandingController(profile=C172SP)
     c.phase = "flare"
     c.flare_started_sim = 1.
     c.flare_entry_pitch = 3.
@@ -145,7 +305,7 @@ def test_last_two_seconds_gradually_increase_nose_up_command():
 
 
 def test_initial_flare_pitch_target_eases_in():
-    c = LandingController()
+    c = LandingController(profile=C172SP)
     c.phase = "flare"
     c.flare_started_sim = 1.
     c.flare_entry_pitch = 0.
@@ -161,20 +321,20 @@ def test_initial_flare_pitch_target_eases_in():
 
 def test_approach_uses_pitch_for_speed_and_power_for_glidepath():
     def command(*, speed, height):
-        c = LandingController()
+        c = LandingController(profile=C172SP)
         c.start_sim = 0.
         c.last_sim = 9.9
         c.last_throttle = .3
         return c.step(snapshot(-1000, gs_kt=speed, agl_ft=height, sim=10.))
     assert command(speed=60, height=220)["pitch"] < command(speed=70, height=220)["pitch"]
     assert command(speed=65, height=300)["throttle"] < command(speed=65, height=170)["throttle"]
-    assert LandingController().step(snapshot(-1000, cross=-10))["roll"] > 0
-    assert LandingController().step(snapshot(-1000, cross=10))["roll"] < 0
+    assert LandingController(profile=C172SP).step(snapshot(-1000, cross=-10))["roll"] > 0
+    assert LandingController(profile=C172SP).step(snapshot(-1000, cross=10))["roll"] < 0
 
 
 def test_low_and_slow_commands_nose_down_and_more_power_together():
     def command(speed, height):
-        c = LandingController()
+        c = LandingController(profile=C172SP)
         c.start_sim = 0.
         c.last_sim = 9.9
         c.last_throttle = .3
@@ -188,16 +348,16 @@ def test_low_and_slow_commands_nose_down_and_more_power_together():
 def test_left_crosswind_uses_left_aileron_and_rudder_for_runway_heading_through_rollout():
     wind = {"wind_mps": 12 * .514444,
             "wind_from_true_deg": HEADING_TRUE_DEG - 45}
-    centered = LandingController().step(snapshot(100, agl_ft=12, **wind))
-    right_of_center = LandingController().step(snapshot(100, cross=5, agl_ft=12, **wind))
-    misaligned = LandingController().step(snapshot(
+    centered = LandingController(profile=C172SP).step(snapshot(100, agl_ft=12, **wind))
+    right_of_center = LandingController(profile=C172SP).step(snapshot(100, cross=5, agl_ft=12, **wind))
+    misaligned = LandingController(profile=C172SP).step(snapshot(
         100, agl_ft=12, heading_deg=HEADING_TRUE_DEG + 5, **wind))
-    ground = LandingController().step(snapshot(100, ground=1, agl_ft=0, **wind))
+    ground = LandingController(profile=C172SP).step(snapshot(100, ground=1, agl_ft=0, **wind))
     assert centered["roll"] < 0
     assert right_of_center["roll"] < centered["roll"]
     assert misaligned["yaw"] < centered["yaw"]
     assert ground["roll"] < 0
-    slow_rollout = LandingController().step(snapshot(
+    slow_rollout = LandingController(profile=C172SP).step(snapshot(
         300, ground=1, gs_kt=5, agl_ft=0, heading_deg=HEADING_TRUE_DEG - 4,
         beta_deg=25, **wind))
     assert slow_rollout["yaw"] > 0
@@ -206,18 +366,18 @@ def test_left_crosswind_uses_left_aileron_and_rudder_for_runway_heading_through_
 def test_direct_right_crosswind_reverses_aileron_side():
     wind = {"wind_mps": 12 * .514444,
             "wind_from_true_deg": (HEADING_TRUE_DEG + 90) % 360}
-    air = LandingController().step(snapshot(100, agl_ft=12, **wind))
-    ground = LandingController().step(snapshot(100, ground=1, agl_ft=0, **wind))
+    air = LandingController(profile=C172SP).step(snapshot(100, agl_ft=12, **wind))
+    ground = LandingController(profile=C172SP).step(snapshot(100, ground=1, agl_ft=0, **wind))
     assert air["roll"] > 0
     assert ground["roll"] > 0
-    assert LandingObserver(12, 90).wind_side == 1
+    assert LandingObserver(12, 90, profile=C172SP).wind_side == 1
 
 
 @pytest.mark.parametrize("offset,windward", [(-90, -1), (90, 1)])
 def test_rollout_aileron_continues_then_increases_as_speed_falls(offset, windward):
     wind = {"wind_mps": 12 * .514444,
             "wind_from_true_deg": (HEADING_TRUE_DEG + offset) % 360}
-    c = LandingController()
+    c = LandingController(profile=C172SP)
     air = c.step(snapshot(300, agl_ft=1., gs_kt=53., **wind))
     touchdown = c.step(snapshot(301, ground=1, agl_ft=0., gs_kt=52.,
                                 sim=1.05, frame=2, **wind))
@@ -235,13 +395,13 @@ def test_wing_low_slip_does_not_cancel_runway_heading_rudder():
     wind = {"wind_mps": 12 * .514444,
             "wind_from_true_deg": HEADING_TRUE_DEG - 90,
             "heading_deg": HEADING_TRUE_DEG - 4}
-    no_slip = LandingController().step(snapshot(150, agl_ft=12, beta_deg=0, **wind))
-    slip = LandingController().step(snapshot(150, agl_ft=12, beta_deg=5, **wind))
+    no_slip = LandingController(profile=C172SP).step(snapshot(150, agl_ft=12, beta_deg=0, **wind))
+    slip = LandingController(profile=C172SP).step(snapshot(150, agl_ft=12, beta_deg=5, **wind))
     assert slip["yaw"] == pytest.approx(no_slip["yaw"])
 
 
 def test_observer_requires_runway_touchdown_moderate_braking_and_stop():
-    o = LandingObserver()
+    o = LandingObserver(profile=C172SP)
     for i, (along, flap) in enumerate(((-2000, 1/3), (-1300, 2/3), (-500, 1.),
                                        (-50, 1.), (2, 1.)), 1):
         assert o.observe(snapshot(along, flap=flap, agl_ft=50, gs_kt=65, pitch_deg=6.,
@@ -252,10 +412,10 @@ def test_observer_requires_runway_touchdown_moderate_braking_and_stop():
                                   brake=.3, sim=1. + .1 * (i - 1), frame=i, agl_ft=0))["outcome"] == "INCOMPLETE"
     assert o.observe(snapshot(800, ground=1, gs_kt=1.5, brake=.25, sim=3.1, frame=22,
                               agl_ft=0))["outcome"] == "PASS"
-    early = LandingObserver()
+    early = LandingObserver(profile=C172SP)
     early.observe(snapshot(-50))
     assert early.observe(snapshot(-10, ground=1, sim=1.1, frame=2, agl_ft=0))["outcome"] == "FAIL"
-    displaced = LandingObserver()
+    displaced = LandingObserver(profile=C172SP)
     for i, (along, flap) in enumerate(((-2000, 1/3), (-1300, 2/3),
                                        (-500, 1.), (2, 1.)), 1):
         displaced.observe(snapshot(along, flap=flap, agl_ft=50., gs_kt=65.,
@@ -264,7 +424,7 @@ def test_observer_requires_runway_touchdown_moderate_braking_and_stop():
     short = displaced.observe(snapshot(TOUCHDOWN_MIN_M - 1., ground=1, agl_ft=0.,
                                        pitch_deg=6., sim=1.5, frame=6))
     assert short["reason"] == "Touchdown outside acceptance window"
-    flat = LandingObserver()
+    flat = LandingObserver(profile=C172SP)
     for i, (along, flap) in enumerate(((-2000, 1/3), (-1300, 2/3),
                                        (-500, 1.), (2, 1.)), 1):
         flat.observe(snapshot(along, flap=flap, agl_ft=50, gs_kt=65,
@@ -274,7 +434,7 @@ def test_observer_requires_runway_touchdown_moderate_braking_and_stop():
 
 
 def test_crosswind_observer_rejects_crabbed_touchdown():
-    o = LandingObserver(12, -45)
+    o = LandingObserver(12, -45, profile=C172SP)
     wind = {"wind_mps": 12 * .514444,
             "wind_from_true_deg": HEADING_TRUE_DEG - 45,
             "heading_deg": HEADING_TRUE_DEG - 4,

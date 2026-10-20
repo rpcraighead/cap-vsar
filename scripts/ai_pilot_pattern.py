@@ -27,11 +27,14 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from services.ai_pilot.aircraft_profiles import PROFILES
 from services.ai_pilot.control_ownership import ControllerLock
-from services.ai_pilot.experiment import BridgeClient, Recorder, digest
+from services.ai_pilot.experiment import (BridgeClient, Recorder, digest, FRAME_LEASE_S,
+                                          wait_for_ready_snapshot)
+from services.ai_pilot.terrain_guard import TerrainGuard
+from xplane.capvsar_mission import AIRBORNE_MAX_ALTITUDE_FT
 from services.ai_pilot.search_patterns import (PatternObserver, SearchPatternController,
                                                creeping_line, expanding_square, parallel_track,
                                                track_miles)
-from scripts.ai_pilot_experiment import inventory
+from scripts.ai_pilot_experiment import inventory, validate_staged_profile
 
 CHANNELS = ("roll", "pitch", "yaw", "throttle", "flap", "trim", "brake")
 
@@ -52,6 +55,7 @@ def run(args):
     channels = CHANNELS + (("prop",) if profile.constant_speed_prop else ())
     waypoints = build_pattern(args)
     inv = inventory(args.xplane, include_mission=True, profile=args.profile)
+    validate_staged_profile(config, profile, inv, mode="mission")
     for name, installed in inv["installed_bridge_sha256"].items():
         if installed != inv["source_sha256"]["xplane/" + name]:
             raise ValueError("Installed mission bridge mismatch: " + name)
@@ -72,11 +76,17 @@ def run(args):
                                          profile=profile, kias=args.kias)
     observer = PatternObserver(waypoints, altitude_indicated_ft=args.altitude_ft,
                                aircraft_name=profile.acf_name)
+    # The executive's terrain guard (it flew as a demo script until 2026-10-15): a
+    # floor on the altitude target, never above what the bridge envelope accepts.
+    guard = None if args.no_terrain_guard else TerrainGuard(
+        ceiling_ft=AIRBORNE_MAX_ALTITUDE_FT - 500, max_climb_fpm=profile.sustainable_climb_fpm())
     result = {"outcome": "FAIL", "reason": "Setup incomplete"}
     session = secrets.token_hex(16)
     samples = 0
+    guard_said = ""
     previous_frame = None
     try:
+        wait_for_ready_snapshot(client, timeout_s=120.)
         status = client.request("fault_pause", reason="pattern trial setup")
         deadline = time.monotonic() + 3
         while not status["pause_confirmed"]:
@@ -85,15 +95,10 @@ def run(args):
             time.sleep(.03)
             status = client.request("status")
         recorder.write("setup", client.request("lab_reset", session=session))
-        deadline = time.monotonic() + 15
-        while True:
-            snap = client.request("snapshot")
-            if (snap["session"] == session and snap["values"]["paused"] == 1
-                    and snap["override_state"] is False and snap["ap_engaged"] is False):
-                break
-            if time.monotonic() > deadline:
-                raise ValueError("Pattern readiness not confirmed")
-            time.sleep(.1)
+        snap = wait_for_ready_snapshot(
+            client, timeout_s=120.,
+            validate=lambda s: (s["session"] == session and s["values"]["paused"] == 1
+                                and s["override_state"] is False and s["ap_engaged"] is False))
         measured = snap["controls"]
         controls = {"roll": 0., "pitch": max(-.4, min(.4, measured.get("pitch", 0.))), "yaw": 0.,
                     "throttle": max(.2, min(1., measured.get("throttle", .6))), "flap": 0.,
@@ -110,7 +115,7 @@ def run(args):
         while time.monotonic() - start_wall < args.max_wall_s:
             seq += 1
             response = client.request("exchange", session=session, generation=generation, sequence=seq,
-                                      expires_at=time.monotonic() + .18, controls=controls)
+                                      expires_at=time.monotonic() + FRAME_LEASE_S, controls=controls)
             if response["bridge"]["state"] != "ACTIVE":
                 raise ValueError("Mission bridge lost authority")
             snap = response["snapshot"]
@@ -130,6 +135,21 @@ def run(args):
             if report["outcome"] != "INCOMPLETE":
                 result = {**report, "controller_transitions": controller.transitions}
                 break
+            if guard is not None:
+                if "terrain" not in snap and not guard_said:
+                    guard_said = "no terrain in snapshots"
+                    print("GUARD WARNING: snapshots carry no terrain scan; stage the session with the "
+                          "current stage-mission so the guard can see the ground", flush=True)
+                advice = guard.update(snap)
+                controller.altitude_ft = guard.apply_to_altitude(args.altitude_ft, advice)
+                observer.terrain_override = controller.altitude_ft > args.altitude_ft
+                if advice.turn_back:
+                    raise ValueError("Terrain guard: " + advice.reason)
+                if advice.reason and advice.reason != guard_said:
+                    guard_said = advice.reason
+                    print("GUARD", advice.reason, flush=True)
+                    recorder.write("guard", {"frame": snap["frame"], "reason": advice.reason,
+                                             "floor_ft": advice.floor_indicated_ft})
             frame = controller.step(snap)
             controls = {k: float(frame[k]) for k in channels}
             if samples % 5 == 0:
@@ -177,7 +197,7 @@ def main():
     p.add_argument("--config", type=Path, required=True)
     p.add_argument("--xplane", type=Path, default=Path.home() / "X-Plane 12")
     p.add_argument("--output", type=Path, required=True)
-    p.add_argument("--profile", choices=sorted(PROFILES), default="C172SP")
+    p.add_argument("--profile", choices=sorted(PROFILES), required=True)
     p.add_argument("--pattern", choices=("expanding_square", "parallel", "creeping_line"), required=True)
     p.add_argument("--lat", type=float, required=True)
     p.add_argument("--lon", type=float, required=True)
@@ -190,6 +210,8 @@ def main():
     p.add_argument("--altitude-ft", type=float, default=2000.)
     p.add_argument("--kias", type=float, default=None)
     p.add_argument("--max-wall-s", type=float, default=1800.)
+    p.add_argument("--no-terrain-guard", action="store_true",
+                   help="fly the pattern altitude whatever the ground ahead (the bridge fence still applies)")
     a = p.parse_args()
     with ControllerLock():
         return run(a)

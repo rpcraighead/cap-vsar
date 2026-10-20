@@ -28,6 +28,64 @@ class RunwayGeometry:
         self.unit_n, self.unit_e = north / self.length_m, east / self.length_m
         self.heading_true_deg = math.degrees(math.atan2(east, north)) % 360
 
+    @classmethod
+    def from_record(cls, record, *, aim_point_mode="legacy"):
+        """Construct geometry from a sourced airport-builder runway-end record.
+
+        ``aim_point_mode="legacy"`` preserves the historical 25 ft offset (or
+        a record's explicit legacy aim point).  The published TCH rule is
+        available only through the explicit ``aim_point_mode="tch"`` option.
+        """
+        if aim_point_mode not in {"legacy", "tch"}:
+            raise ValueError("aim_point_mode must be 'legacy' or 'tch'")
+        if hasattr(record, "fields"):
+            fields = record.fields
+            get_record_value = lambda key: getattr(record, key, None)
+        elif isinstance(record, dict):
+            fields = record.get("fields", record)
+            get_record_value = record.get
+        else:
+            raise TypeError("record must be a runway-end record or mapping")
+
+        def value(key, default=None):
+            item = fields.get(key, default)
+            if hasattr(item, "value"):
+                return item.value
+            if isinstance(item, dict) and "value" in item:
+                return item["value"]
+            return item
+
+        name = get_record_value("runway_name")
+        if not name:
+            icao = get_record_value("icao") or value("icao")
+            end = get_record_value("runway_end") or value("runway_end")
+            name = f"{icao} {end}"
+        threshold = value("threshold")
+        far_end = value("far_end")
+        airport_elevation = value("airport_elevation_ft")
+        physical_displaced = value("displaced_threshold_m")
+        legacy_displaced = value("legacy_displaced_threshold_m")
+        displaced = ((legacy_displaced if legacy_displaced is not None else physical_displaced)
+                     if aim_point_mode == "legacy" else physical_displaced)
+        width = value("width_m")
+        if any(item is None for item in
+               (threshold, far_end, airport_elevation, physical_displaced, displaced, width)):
+            raise ValueError("record is missing threshold, far end, airport elevation, displacement or width")
+        runway = cls(name, tuple(threshold), tuple(far_end), float(airport_elevation),
+                     float(displaced), float(width))
+        runway.physical_displaced_threshold_m = float(physical_displaced)
+        runway.legacy_aim_point = value("legacy_aim_point", True)
+        runway.legacy_aim_point_m = value("legacy_aim_point_m")
+        if aim_point_mode == "legacy":
+            runway.aimpoint_m = (float(runway.legacy_aim_point_m)
+                                 if runway.legacy_aim_point_m is not None
+                                 else runway.displaced_threshold_m + 25. * .3048)
+        else:
+            runway.aimpoint_m = tch_aim_point_m(
+                runway.displaced_threshold_m, value("tch_ft"), value("glide_angle_deg"))
+        runway.aim_point_mode = aim_point_mode
+        return runway
+
     def coordinates(self, lat, lon):
         north = (lat - self.threshold[0]) * M_PER_DEG_LAT
         east = (lon - self.threshold[1]) * self.m_per_deg_lon
@@ -36,12 +94,33 @@ class RunwayGeometry:
 
 
 M_PER_DEG_LAT = 111132.92
+
+
+def tch_aim_point_m(displaced_threshold_m, tch_ft, glide_angle_deg):
+    """Return the proposed TCH-based aim point; callers must opt in explicitly."""
+    if (displaced_threshold_m is None or tch_ft is None or glide_angle_deg is None
+            or not all(math.isfinite(float(value)) for value in
+                       (displaced_threshold_m, tch_ft, glide_angle_deg))
+            or float(tch_ft) < 0 or not 0 < float(glide_angle_deg) < 90):
+        raise ValueError("A finite displaced threshold, nonnegative TCH and valid glide angle are required")
+    return float(displaced_threshold_m) + float(tch_ft) * .3048 / math.tan(
+        math.radians(float(glide_angle_deg)))
+
+
 RUNWAYS = {
     "KMYF 28R": RunwayGeometry("KMYF 28R", (32.8128249, -117.1311307),
                                (32.8181752, -117.1447205), 424., 366., 46.02),
     # Installed KSAN_San_Diego_Int'l v3.0 apt.dat: runway 27 end, 552 m displacement.
     "KSAN 27": RunwayGeometry("KSAN 27", (32.73136873, -117.18062185),
                               (32.73659395, -117.20217254), 17., 552., 61.02),
+    # Global Airports apt.dat: physical 27R end, 215 m displaced threshold.
+    "KSEE 27R": RunwayGeometry("KSEE 27R", (32.8263994, -116.9642836),
+                               (32.8294697, -116.9812827), 388., 215., 29.87),
+    # Global Airports apt.dat (McClellan-Palomar): runway 24 end, 331 ft. The runway has
+    # no displaced threshold; 305 m (1,000 ft) is the touchdown aim point, which gives
+    # the 3 degree path a threshold crossing height of about 50 ft.
+    "KCRQ 24": RunwayGeometry("KCRQ 24", (33.1295232, -117.2722025),
+                              (33.1269806, -117.2879522), 331., 305., 45.72),
 }
 DEFAULT_RUNWAY = RUNWAYS["KMYF 28R"]
 # Preserve the KMYF symbols used by earlier evidence and controller tests.
@@ -55,6 +134,14 @@ M_PER_DEG_LON = DEFAULT_RUNWAY.m_per_deg_lon
 RUNWAY_LENGTH_M = DEFAULT_RUNWAY.length_m
 UNIT_N, UNIT_E = DEFAULT_RUNWAY.unit_n, DEFAULT_RUNWAY.unit_e
 HEADING_TRUE_DEG = DEFAULT_RUNWAY.heading_true_deg
+
+
+def landing_agl_in_bounds(agl_m, on_ground):
+    """Allow small negative AGL roundoff only after ground contact."""
+    floor = -.05 if on_ground else 0.
+    return math.isfinite(agl_m) and floor <= agl_m <= 250.
+
+
 AUTHORITY = {"roll": (-.35, .35), "pitch": (-.45, .45), "yaw": (-1., 1.),
              "throttle": (0., .65), "flap": (0., 1.), "trim": (-.6, .6),
              "brake": (0., .35)}
@@ -178,7 +265,8 @@ class LandingLab(QualificationLab):
             self.resume_pending = False
         along, cross = self.runway.coordinates(v["latitude_deg"], v["longitude_deg"])
         if (v["paused"] or abs(cross) > 180 or not -2450 <= along <= self.runway.length_m + 80
-                or not 0 <= v["agl_m"] <= 250 or not 0 <= v["kias"] <= 110
+                or not landing_agl_in_bounds(v["agl_m"], bool(v["on_ground"]))
+                or not 0 <= v["kias"] <= 110
                 or abs(v["roll_deg"]) > 35 or abs(v["pitch_deg"]) > 20
                 or (v["on_ground"] and along < -70)
                 or time.monotonic() - self.trial_started > 240):

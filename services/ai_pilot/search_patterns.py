@@ -27,7 +27,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
-from .aircraft_profiles import AircraftProfile, C172SP
+from .performance import CLIMB_MARGIN
+from .aircraft_profiles import AircraftProfile
 from .prop_law import PropLaw
 
 EARTH_NM = 3440.065
@@ -170,19 +171,29 @@ class CruiseLaw:
     sortie, not aircraft data; `profile.cruise_base_throttle` is the one
     aircraft-dependent constant."""
 
-    def __init__(self, profile: AircraftProfile):
+    def __init__(self, profile: AircraftProfile, adopt_slew_kt_s=None):
+        # adopt_slew_kt_s: take over an airplane that is already flying at its own
+        # speed and power (a hand-back from the GFC 700) without a bump. The speed
+        # command starts at the measured airspeed and slews to the target at this
+        # rate, and the throttle integrator is seeded so the first throttle equals
+        # the measured one. None (default) is the lifted-unchanged behaviour.
         self.profile = profile
         self.prop_law = PropLaw(profile)
+        self.adopt_slew_kt_s = adopt_slew_kt_s
         self.alt_i = 0.
         self.power_i = 0.
         self.trim = None
+        self.ias_cmd = None
+        self.seeded = False
 
     def reset(self):
         self.alt_i = 0.
         self.power_i = 0.
+        self.ias_cmd = None
+        self.seeded = False
 
     def frame(self, v, trim_in, target_true, target_alt, target_ias, dt,
-              max_bank_deg=20.):
+              max_bank_deg=20., throttle_in=None):
         if self.trim is None:
             self.trim = clamp(trim_in, -.6, .6)
         heading_error = wrap180(target_true - v["heading_true_deg"])
@@ -190,14 +201,40 @@ class CruiseLaw:
         roll = clamp((bank_target - v["roll_deg"]) * .020 - v["roll_rate_dps"] * .022, -.35, .35)
         alt_error = target_alt - v["altitude_indicated_ft"]
         target_vvi = clamp(alt_error * 2., -650., 650.)
+        # Never ask for a climb the airplane cannot hold at the commanded speed: this law holds the
+        # vertical speed with pitch, so an unsustainable rate just bleeds off airspeed. The limit is the
+        # aircraft's measured one (85% of the best rate at full throttle); without a table the law is as flown.
+        climb_capped = False
+        performance = self.profile.performance
+        if performance is not None and target_vvi > 0:
+            best = performance.sustainable_vvi(target_ias if self.adopt_slew_kt_s is None
+                                               else (self.ias_cmd if self.ias_cmd is not None else v["kias"]))
+            if best is not None and target_vvi > max(0., best * CLIMB_MARGIN):
+                target_vvi, climb_capped = max(0., best * CLIMB_MARGIN), True
         raw_pitch = (target_vvi - v["vvi_fpm"]) * .010 + self.alt_i
         pitch_target = clamp(raw_pitch, -6., 10.)
         candidate = clamp(self.alt_i + alt_error * .0002 * dt * 10., -4., 4.)
         if (-6 < raw_pitch < 10 or (raw_pitch >= 10 and candidate < self.alt_i)
                 or (raw_pitch <= -6 and candidate > self.alt_i)):
             self.alt_i = candidate
+        if self.adopt_slew_kt_s is not None:
+            if self.ias_cmd is None:
+                self.ias_cmd = v["kias"]
+            step = self.adopt_slew_kt_s * dt
+            self.ias_cmd += clamp(target_ias - self.ias_cmd, -step, step)
+            target_ias = self.ias_cmd
         speed_error = target_ias - v["kias"]
         base = self.profile.cruise_base_throttle
+        # Feed-forward: with a measured performance table the throttle starts from what the airplane needs
+        # for this speed at this climb rate, and the loop below only trims the remainder. Without one
+        # (None) the fixed cruise base is used, which is the law exactly as it was flown.
+        feed_forward, in_table = None, False
+        if self.profile.performance is not None:
+            feed_forward, in_table = self.profile.performance.throttle_for(target_ias, target_vvi)
+            base = feed_forward
+        if self.adopt_slew_kt_s is not None and throttle_in is not None and not self.seeded:
+            self.power_i = clamp(throttle_in - (base + speed_error * .020), -.35, .35)
+            self.seeded = True
         candidate = clamp(self.power_i + speed_error * .0015 * dt * 10., -.35, .35)
         trial = base + speed_error * .020 + candidate
         if (.12 < trial < 1. or (trial >= 1 and candidate < self.power_i)
@@ -211,7 +248,9 @@ class CruiseLaw:
         return (self.prop_law.add_to({"roll": roll, "pitch": pitch, "yaw": yaw, "throttle": throttle,
                                       "flap": 0., "trim": self.trim, "brake": 0.}, v),
                 {"heading_error_deg": heading_error, "bank_target_deg": bank_target,
-                 "target_vvi_fpm": target_vvi, "pitch_target_deg": pitch_target})
+                 "target_vvi_fpm": target_vvi, "pitch_target_deg": pitch_target,
+                 "feed_forward_throttle": feed_forward, "feed_forward_in_table": in_table,
+                 "climb_capped": climb_capped})
 
 
 class SearchPatternController:
@@ -232,7 +271,7 @@ class SearchPatternController:
     """
 
     def __init__(self, waypoints, *, altitude_indicated_ft, kias=None,
-                 profile: AircraftProfile = C172SP, capture_nm=.25,
+                 profile: AircraftProfile, capture_nm=.25,
                  bank_deg=20., lost_nm=3.):
         if len(waypoints) < 2:
             raise ValueError("a pattern needs at least two waypoints")
@@ -418,6 +457,12 @@ class PatternObserver:
         self.reason = None
         self.max_altitude_error_ft = 0.
         self.max_bank_seen_deg = 0.
+        # Set by the runner while the executive's terrain guard holds a floor above
+        # the assigned altitude: the altitude criterion is waived for those samples
+        # (a climb away from the ground is not a tracking failure) and counted, so a
+        # PASS that used the waiver says so.
+        self.terrain_override = False
+        self.terrain_override_samples = 0
 
     def fail(self, reason):
         self.outcome, self.reason = "FAIL", reason
@@ -449,7 +494,9 @@ class PatternObserver:
                 err = abs(v["altitude_indicated_ft"] - self.altitude_ft)
                 self.max_altitude_error_ft = max(self.max_altitude_error_ft, err)
                 self.max_bank_seen_deg = max(self.max_bank_seen_deg, abs(v["roll_deg"]))
-                if err > self.altitude_tol_ft:
+                if self.terrain_override:
+                    self.terrain_override_samples += 1
+                elif err > self.altitude_tol_ft:
                     return self.fail("Altitude outside tolerance on the pattern")
                 if not self.kias_band[0] <= v["kias"] <= self.kias_band[1]:
                     return self.fail("Speed outside band on the pattern")
@@ -473,4 +520,5 @@ class PatternObserver:
         return {"outcome": self.outcome, "reason": self.reason, "samples": self.samples,
                 "reached": list(self.reached), "next_index": self.index,
                 "max_altitude_error_ft": self.max_altitude_error_ft,
-                "max_bank_deg": self.max_bank_seen_deg}
+                "max_bank_deg": self.max_bank_seen_deg,
+                "terrain_override_samples": self.terrain_override_samples}

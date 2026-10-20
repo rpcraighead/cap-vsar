@@ -23,6 +23,7 @@ from starlette.concurrency import run_in_threadpool
 
 from .roles import any_role, base_or_instructor
 from . import access
+from . import radio_link, radio_sites
 from .mumble_channels import browser_nets
 
 router = APIRouter()
@@ -59,6 +60,28 @@ CHANNEL_ACTIVITY: dict[str, float] = {}
 BY_USERNAME: dict = {}
 
 
+@router.get('/api/radio/sites', dependencies=[any_role])
+def radio_sites_view(lat: float | None = None, lon: float | None = None, alt_ft: float | None = None):
+    """The exercise's fixed radio sites (T31): where the base antenna and the
+    repeater are, the repeater pair, each repeater's fixed link to the base,
+    and, given a position, how a transmission from there would reach base.
+    Radio-horizon only: the console has no terrain, so `terrain_checked` is
+    false and a ridge the simulator would see is not modelled here."""
+    from . import radio_sites
+    cfg = radio_sites.configured()
+    sites = cfg["sites"]
+    base = next(s for s in sites if s.role == "base_antenna")
+    result = {"sites": [s.as_dict() for s in sites], "repeater_pair": cfg["repeater_pair"],
+              "links": [radio_sites.site_link(s, base) for s in sites if s.role == "repeater"]}
+    if lat is not None and lon is not None:
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            raise HTTPException(400, "lat/lon outside the globe")
+        if alt_ft is None or not -1500 <= alt_ft <= 60000:
+            raise HTTPException(400, "alt_ft (MSL) is required with lat/lon, -1500..60000")
+        result["route"] = radio_sites.route(lat, lon, alt_ft, sites)
+    return result
+
+
 @router.get('/api/radio/config', dependencies=[any_role])
 def config():
     max_sessions = int(os.getenv('CAPVSAR_RADIO_MAX_SESSIONS', '16'))
@@ -70,8 +93,9 @@ def config():
             "securePort": int(os.getenv('CAPVSAR_RADIO_HTTPS_PORT', '443'))}
 
 
-@router.get('/api/radio/rx')
+@router.get('/api/radio/rx', dependencies=[any_role])
 def rx_status():
+    """Who is keyed on which net: exercise state, so a login is needed to read it."""
     now = time.monotonic()
     return {
         "main_rx": (now - CHANNEL_ACTIVITY.get('primary', 0) < 0.4),
@@ -132,6 +156,51 @@ def _aircraft_arg(value) -> str:
     if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9._-]{1,32}', value):
         raise HTTPException(422, 'aircraft_id must be 1-32 letters, numbers, dots, dashes or underscores.')
     return value
+
+
+# ---------------------------------------------------------------- T33: reach
+# How often a listener's link to each speaker is recomputed from positions.
+LINK_REFRESH_S = 2.0
+
+
+def _norm_callsign(value) -> str:
+    return re.sub(r'[^A-Z0-9]', '', str(value or '').upper())
+
+
+def reach_conditions():
+    """None when the reach model is off (no scenario loaded, or the sortie's
+    `radio_reach` effect is false); otherwise the 0..1 conditions factor."""
+    from .hub import hub
+    scenario = hub.scenario
+    if not scenario:
+        return None
+    effects = scenario.get('effects') or {}
+    if not effects.get('radio_reach', True):
+        return None
+    try:
+        return max(0.0, min(1.0, float(effects.get('radio_conditions', 1.0))))
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def station_endpoint(callsign, role) -> dict:
+    """Where a station is, for the link model. Aircraft come from the
+    telemetry the console already receives; base staff sit at the base
+    antenna; ground teams report no position today (nominal link); anything
+    else is unknown (nominal link)."""
+    from .hub import hub
+    wanted = _norm_callsign(callsign)
+    for key, ac in hub.aircraft.items():
+        if wanted and _norm_callsign(key) == wanted:
+            return {"kind": "aircraft", "lat": ac.get("lat"), "lon": ac.get("lon"),
+                    "alt_ft": ac.get("alt_ft"), "callsign": key}
+    if role in ('base', 'instructor', 'evaluator'):
+        return {"kind": "base"}
+    if role == 'ground_team':
+        return {"kind": "ground"}
+    if role == 'aircrew':
+        return {"kind": "aircraft"}        # no telemetry yet: nominal until it reports
+    return {"kind": "unknown"}
 
 
 def classify_crew(assigned_name: str | None, callsign: str = '') -> str:
@@ -223,6 +292,9 @@ class MumbleRadio:
         # must not stall the other face on the same desk, and a queue that
         # overflows takes down that face only.
         self.faces: dict = {}
+        # A9/A13: the session each face joined with, and whether one was
+        # required (False only for the anonymous join of an open dev console).
+        self.face_session: dict = {}
         self.attach(sock)
         self.connected = asyncio.Event()
         self.failed = False
@@ -236,6 +308,9 @@ class MumbleRadio:
         self.rx_announced = {}
         self.credit = FRAME_BYTES * 5
         self.credit_at = time.monotonic()
+        # T33: per-speaker link state (impairment, dropout gate, noise phase).
+        self.links: dict = {}
+        self.links_at: dict = {}
 
     def tuned_ack(self):
         """The join acknowledgement, as this radio currently stands.
@@ -262,11 +337,54 @@ class MumbleRadio:
         self.dropped[sock] = asyncio.Event()
         return queue
 
+    def admit(self, sock, session, required):
+        """Record the credential a face joined with (A9, A13)."""
+        self.face_session[sock] = (session, required)
+
+    def role(self):
+        """The roster role behind this radio, from any admitted face."""
+        for session, _required in self.face_session.values():
+            if session and session.get('role'):
+                return session['role']
+        return None
+
+    def link_to(self, speaker_name, speaker_radio):
+        """This listener's link state for `speaker_name`, refreshed every
+        LINK_REFRESH_S from the current positions; None when the model is off."""
+        conditions = reach_conditions()
+        if conditions is None:
+            self.links.clear()
+            return None
+        now = time.monotonic()
+        state = self.links.get(speaker_name)
+        if state is not None and now - self.links_at.get(speaker_name, 0) < LINK_REFRESH_S:
+            return state
+        listener = station_endpoint(self.callsign, self.role())
+        if speaker_radio is not None:
+            speaker = station_endpoint(speaker_radio.callsign, speaker_radio.role())
+        else:
+            speaker = station_endpoint(speaker_name, None)
+        try:
+            sites = radio_sites.configured()["sites"]
+            link = radio_link.link_between(listener, speaker, sites, conditions=conditions)
+        except (ValueError, OSError) as error:
+            log.warning('radio reach model unavailable (%s); passing audio through', type(error).__name__)
+            return None
+        seed = "%s|%s|%s|%s|%.2f" % (self.callsign, speaker_name, link["path"], link["via"], link["margin"])
+        self.links_at[speaker_name] = now
+        if state is None:
+            state = self.links[speaker_name] = radio_link.LinkState(link, seed)
+            state.announce = True
+        elif state.update(link, seed):
+            state.announce = True
+        return state
+
     def detach(self, sock):
         """Remove one face. True when that was the last one."""
         self.faces.pop(sock, None)
         self.dropped.pop(sock, None)
         self.drop_reason.pop(sock, None)
+        self.face_session.pop(sock, None)
         return not self.faces
 
     def drop_face(self, sock, reason):
@@ -344,6 +462,16 @@ class MumbleRadio:
             self.enqueue({"type": "rx", "speaker": name, "session": session,
                           "receiver": self.receiver_kind, "net": self.channel_name})
             self.rx_announced[session] = now
+        # T33: static and dropouts by reach to the fixed sites. Only the
+        # tactical net is modelled; the airband face is a local base radio.
+        if self.receiver_kind == 'main':
+            link = self.link_to(name, speaker_radio)
+            if link is not None:
+                if getattr(link, 'announce', False):
+                    link.announce = False
+                    self.enqueue({"type": "link", "speaker": name, "receiver": self.receiver_kind,
+                                  **link.describe()})
+                pcm = link.process(pcm)
         self.enqueue(struct.pack('<II', epoch, session) + pcm)
 
     async def connect(self, key):
@@ -412,7 +540,7 @@ class MumbleRadio:
         self.channel_name = choice['name']
         self.enqueue(self.tuned_ack())
 
-    async def command(self, data):
+    async def command(self, data, sock=None):
         action = data.get('action')
         if action == 'tune':
             await self.tune(data.get('channel'))
@@ -440,9 +568,18 @@ class MumbleRadio:
         elif action == 'ping':
             self.enqueue({"type": "pong"})
         elif action == 'ics':
-            # Reachable only through a joined socket, and since FE-4 a join
-            # requires an authenticated session whenever roles are configured,
-            # so this shares the REST route's gate rather than needing its own.
+            # A9 (review T11): this used to rely on the join gate alone, which
+            # only asks for *a* session with a callsign. A UDF or an aircrew
+            # seat (aircraft_id "") could set PILOT isolation or split COM on
+            # the console-wide state every aircraft follows. It now shares
+            # POST /api/radio/ics's gate: base or instructor, or the explicitly
+            # open dev console. The session is re-read rather than taken from
+            # the join (A13), so a revoked badge cannot keep the gate open.
+            session = self.face_session.get(sock, (None, True))[0]
+            if sock is not None:
+                session = await run_in_threadpool(access.get_session_from_request, sock)
+            if not access.session_satisfies('base', session):
+                raise ValueError('The intercom is set by mission base or the instructor.')
             # A seat in an aircraft changes that aircraft's intercom, not the
             # whole net's.
             state = apply_ics(_target_ics(self.aircraft_id), data)
@@ -514,7 +651,23 @@ class MumbleRadio:
                 data = json.loads(msg['text'])
                 if not isinstance(data, dict):
                     raise ValueError('Invalid radio command.')
-                await self.command(data)
+                await self.command(data, sock)
+
+    async def session_guard(self, sock):
+        """A13: a joined face keeps its credential only while the session exists.
+
+        Logout, the 24 h expiry and roster regeneration all delete the session
+        row, and none of them used to reach a radio that had joined before.
+        Re-read off the event loop (X2-5) every SOCKET_RECHECK_S; a face whose
+        session is gone is dropped with a reason, the desk's other faces and the
+        Mumble client are left alone.
+        """
+        _, required = self.face_session.get(sock, (None, False))
+        while True:
+            await asyncio.sleep(access.SOCKET_RECHECK_S)
+            fresh = await run_in_threadpool(access.get_session_from_request, sock)
+            if not access.socket_still_admitted(fresh, required=required):
+                raise ValueError('Your login has ended. Log in again and reconnect the radio.')
 
     async def close(self):
         self.closed = True
@@ -604,9 +757,13 @@ async def stream(sock: WebSocket):
         # and the desk stays one station on the net instead of appearing twice.
         key = radio_key(name, receiver)
         existing = OPERATORS.get(key)
+        # A13: a session is required unless this is the anonymous join of an
+        # open dev console (the elif above is the only other way in).
+        required = session is not None
         if existing is not None and not existing.closed and not existing.failed:
             radio, shared = existing, True
             queue = radio.attach(sock)
+            radio.admit(sock, session, required)
             # Tell the new face where the radio already is, or it waits for a
             # `tuned` that was sent before it existed.
             queue.put_nowait(radio.tuned_ack())
@@ -614,6 +771,7 @@ async def stream(sock: WebSocket):
             if len(SESSIONS) >= int(os.getenv('CAPVSAR_RADIO_MAX_SESSIONS', '16')):
                 raise ValueError('All browser radio connections are occupied.')
             radio, shared = MumbleRadio(sock, name, receiver=receiver), False
+            radio.admit(sock, session, required)
             SESSIONS.add(radio)
             OPERATORS[key] = radio
             await radio.connect(hello.get('channel', 'primary'))
@@ -624,7 +782,8 @@ async def stream(sock: WebSocket):
                                                  radio.callsign)
             # The watchdog belongs to the radio (X2-7), not to this face.
             radio.start_watchdog()
-        pumps = [radio.sender(sock), radio.receiver(sock), radio.face_dropped(sock)]
+        pumps = [radio.sender(sock), radio.receiver(sock), radio.face_dropped(sock),
+                 radio.session_guard(sock)]
         tasks = [asyncio.create_task(coro) for coro in pumps]
         done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         for task in done:

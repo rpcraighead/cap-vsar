@@ -13,6 +13,9 @@ from pathlib import Path
 import socket
 import time
 
+FRAME_LEASE_S = 0.18
+FRAME_QUEUE_DEADLINE_S = 0.20
+
 
 def digest(path):
     h = hashlib.sha256()
@@ -29,22 +32,78 @@ class BridgeClient:
 
     def request(self, action, **arguments):
         payload = {**arguments, "action": action, "secret": self.config["secret"]}
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
-            # Reset is restricted to paused/released state and may rebuild the
-            # simulator's weather/engine setup. Never extend live-frame leases.
-            conn.settimeout(20.0 if action == "lab_reset" else 3.0 if action == "lab_start" else 1.0)
-            conn.connect(self.config["socket_path"])
-            conn.sendall(json.dumps(payload, allow_nan=False).encode() + b"\n")
-            raw = bytearray()
-            while b"\n" not in raw:
-                part = conn.recv(4096)
-                if not part or len(raw) + len(part) > 65536:
-                    raise RuntimeError("Incomplete or oversized bridge response")
-                raw.extend(part)
-        response = json.loads(raw.partition(b"\n")[0])
-        if "error" in response:
-            raise RuntimeError(response["error"])
-        return response
+        timeout = (20.0 if action == "lab_reset" else
+                   3.0 if action == "lab_start" else 1.0)
+        for attempt in range(2):
+            try:
+                with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
+                    conn.settimeout(timeout)
+                    conn.connect(self.config["socket_path"])
+                    conn.sendall(json.dumps(payload, allow_nan=False).encode() + b"\n")
+                    raw = bytearray()
+                    while b"\n" not in raw:
+                        part = conn.recv(4096)
+                        if not part or len(raw) + len(part) > 65536:
+                            raise RuntimeError("Incomplete or oversized bridge response")
+                        raw.extend(part)
+                response = json.loads(raw.partition(b"\n")[0])
+            except socket.timeout as error:
+                raise TimeoutError("Bridge %s timed out after %.2f s" % (action, timeout)) from error
+            if "error" not in response:
+                return response
+            status = response.get("status", {})
+            message = response["error"] or "Bridge request failed"
+            if (action == "exchange" and attempt == 0 and status.get("state") == "ACTIVE"
+                    and "expired in queue" in message):
+                payload["expires_at"] = time.monotonic() + FRAME_LEASE_S
+                continue
+            detail = " (bridge %s; fault: %s)" % (status.get("state", "unknown"),
+                                                  status.get("fault") or "none")
+            raise RuntimeError(message + detail)
+        raise RuntimeError("Bridge exchange retry exhausted")
+
+
+def wait_for_ready_snapshot(client, *, timeout_s=120., poll_s=.1, validate=None):
+    """Wait for a live bridge and two advancing, fresh snapshots of the loaded flight."""
+    deadline = time.monotonic() + timeout_s
+    last_frame = None
+    last_problem = "no snapshot received"
+    while time.monotonic() < deadline:
+        try:
+            status = client.request("status")
+            if not isinstance(status, dict) or not status.get("state"):
+                raise ValueError("bridge status unavailable")
+            snap = client.request("snapshot")
+            values, aircraft = snap["values"], snap["aircraft"]
+            loaded = bool(aircraft.get("name") and aircraft.get("path")
+                          and Path(aircraft["path"]).is_file())
+            fresh = type(snap.get("age_s")) in (int, float) and 0 <= snap["age_s"] <= .10
+            sim_speed = values.get("sim_speed")
+            sim_time = values.get("sim_time_s")
+            running = (not bool(values.get("paused"))
+                       and type(sim_speed) in (int, float) and sim_speed > 0)
+            initialized_paused = (bool(values.get("paused")) and loaded
+                                  and (sim_speed == 1 or (validate is not None and sim_speed == 0))
+                                  and type(sim_time) in (int, float) and sim_time > 0)
+            advancing = type(snap.get("frame")) is int and last_frame is not None and snap["frame"] > last_frame
+            if type(snap.get("frame")) is int and fresh and loaded:
+                last_frame = snap["frame"]
+            if not loaded:
+                last_problem = "flight aircraft is not loaded"
+            elif not fresh:
+                last_problem = "snapshot is stale (age %s s)" % snap.get("age_s")
+            elif not (running or initialized_paused):
+                last_problem = "simulator is stopped and not initialized-paused"
+            elif not advancing:
+                last_problem = "snapshot frame is not advancing"
+            elif validate is not None and not validate(snap):
+                last_problem = "loaded flight does not match reset state"
+            else:
+                return snap
+        except (RuntimeError, OSError, TimeoutError, KeyError, TypeError, ValueError) as error:
+            last_problem = str(error) or type(error).__name__
+        time.sleep(poll_s)
+    raise TimeoutError("Bridge readiness timed out after %.0f s: %s" % (timeout_s, last_problem))
 
 
 @dataclass(frozen=True)

@@ -11,9 +11,10 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from services.ai_pilot.control_ownership import ControllerLock
-from services.ai_pilot.experiment import BridgeClient, CycleObserver, Recorder, Scenario, digest, score_trace
+from services.ai_pilot.experiment import (BridgeClient, CycleObserver, Recorder, Scenario, digest,
+                                          score_trace, FRAME_LEASE_S, wait_for_ready_snapshot)
 from services.ai_pilot.snapshot_controller import SnapshotController
-from scripts.ai_pilot_experiment import inventory
+from scripts.ai_pilot_experiment import inventory, validate_staged_profile
 
 
 def run(args):
@@ -22,7 +23,9 @@ def run(args):
         raise ValueError("Requires an expiring stock-C172 qualification installation")
     client = BridgeClient(config)
     scenario = Scenario()
-    inv = inventory(args.xplane)
+    inv = inventory(args.xplane, profile="C172SP")  # stock-C172 qualification lab
+    from services.ai_pilot.aircraft_profiles import C172SP
+    validate_staged_profile(config, C172SP, inv, mode="qualification")
     inv["controller_sha256"] = {name: digest(ROOT / "services/ai_pilot" / name)
                                  for name in ("snapshot_controller.py", "direct_backend.py")}
     inv["runner_sha256"] = digest(Path(__file__))
@@ -40,11 +43,12 @@ def run(args):
         nonlocal seq
         seq += 1
         return dict(session=session, generation=generation, sequence=seq,
-                    expires_at=time.monotonic() + .18, controls=controls)
+                    expires_at=time.monotonic() + FRAME_LEASE_S, controls=controls)
     try:
         for name, value in inv["installed_bridge_sha256"].items():
             if value != inv["source_sha256"]["xplane/" + name]:
                 raise ValueError("Installed bridge mismatch: " + name)
+        wait_for_ready_snapshot(client, timeout_s=120.)
         client.request("fault_pause", reason="Qualification setup between trials")
         deadline = time.monotonic() + 3
         while not client.request("status")["pause_confirmed"]:
@@ -53,25 +57,17 @@ def run(args):
             time.sleep(.05)
         reset = client.request("lab_reset", session=session, **manifest["entry"])
         recorder.write("setup", reset)
-        deadline = time.monotonic() + 15
-        while True:
-            try:
-                s = client.request("snapshot")
-                v = s["values"]
-                ready = (s["session"] == session and v["paused"] == 1
-                         and all(abs(v[f"local_{axis}_m"] - value) < 1
-                                 for axis, value in zip("xyz", reset["local_position_m"]))
-                         and abs(v["payload_kg"] - 170) < 1 and abs(v["fuel_kg"] - 100) < 1
-                         and v["wind_mps"] < .5 and v["sim_speed"] in (0, 1)
-                         and s["override_state"] is False and s["ap_engaged"] is False)
-                recorder.write("setup_snapshot", s)
-                if ready:
-                    break
-            except (RuntimeError, OSError):
-                pass
-            if time.monotonic() > deadline:
-                raise ValueError("Reset readiness not established in 15 seconds")
-            time.sleep(.1)
+        s = wait_for_ready_snapshot(
+            client, timeout_s=120.,
+            validate=lambda snap: (snap["session"] == session and snap["values"]["paused"] == 1
+                                   and all(abs(snap["values"][f"local_{axis}_m"] - value) < 1
+                                           for axis, value in zip("xyz", reset["local_position_m"]))
+                                   and abs(snap["values"]["payload_kg"] - 170) < 1
+                                   and abs(snap["values"]["fuel_kg"] - 100) < 1
+                                   and snap["values"]["wind_mps"] < .5
+                                   and snap["override_state"] is False
+                                   and snap["ap_engaged"] is False))
+        recorder.write("setup_snapshot", s)
         controls = dict(s["controls"])
         started_bridge = client.request("lab_start", session=session, controls=controls,
                                         snapshot_frame=s["frame"],

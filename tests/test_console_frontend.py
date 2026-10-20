@@ -814,5 +814,39 @@ class HelpPage(unittest.TestCase):
         self.assertNotIn("this new page does not automatically transcribe voice to it", readme)
 
 
+# ------------------------------------------------------------------ T20 / B8
+class OidcAndSignOut(unittest.TestCase):
+    """T20 + B8: Google OIDC sign-in on /login, per-seat email invites on
+    /setup, and POST /api/auth/logout in shell.js."""
+
+    def test_shell_sign_out_posts_to_logout_then_redirects(self):
+        shell = src("shell.js")
+        self.assertNotIn("id.href = '/api/auth/logout'", shell)
+        self.assertIn("fetch('/api/auth/logout'", shell)
+        self.assertIn("method: 'POST'", shell)
+        self.assertIn("location.href = '/login'", shell)
+
+    def test_login_page_implements_oidc_provider_contract_and_errors(self):
+        html, js = src("login.html"), src("login.js")
+        self.assertIn('id="oidcSection"', html)
+        self.assertIn('id="oidcLoginBtn"', html)
+        self.assertIn('id="oidcDivider"', html)
+        self.assertIn("Sign in with a badge code (offline / field use)", html)
+        self.assertIn("/api/auth/providers", js)
+        for code in ("oidc_cancelled", "oidc_failed", "no_seat", "invalid_code", "instructor_required"):
+            self.assertIn(code, js, f"missing error handler for {code}")
+
+    def test_setup_page_implements_seat_emails_and_invite_flow(self):
+        html, js = src("setup.html"), src("setup.js")
+        self.assertIn('id="directorEmailInput"', html)
+        self.assertIn('id="inviteList"', html)
+        self.assertIn('id="offlineBadgeFallback"', html)
+        self.assertIn("Offline fallback: badge cards", html)
+        for token in ("Copy sign-in link", "Email this invite", "mailto:",
+                      "last_login_via", "Not signed in yet", "applyServer422Errors"):
+            self.assertIn(token, js, f"setup.js missing {token}")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+

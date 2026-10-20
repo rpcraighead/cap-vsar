@@ -1,11 +1,14 @@
 """Key chart gates and the runway-rollout envelope found by the live sortie."""
+from services.ai_pilot.aircraft_profiles import C172SP, C182T
 import time
 from types import SimpleNamespace
 
 import pytest
 
 from services.ai_pilot.ksee_kmyf_mission import MissionController
-from xplane.capvsar_mission import MissionLab
+from xplane.capvsar_mission import (AIRBORNE_MAX_ALTITUDE_FT, GFC_TRIAL_EAST_BOX,
+                                    GFC_TRIAL_MAX_ALTITUDE_FT, MissionLab,
+                                    mission_altitude_ceiling)
 
 
 def snapshot(**changes):
@@ -24,7 +27,7 @@ def snapshot(**changes):
 
 
 def test_departure_turn_waits_for_790_ft():
-    controller = MissionController()
+    controller = MissionController(profile=C172SP)
     controller.step(snapshot())
     assert controller.stage == "runway_climb"
     controller.step(snapshot(sim_time_s=10.1, altitude_indicated_ft=790.))
@@ -32,8 +35,28 @@ def test_departure_turn_waits_for_790_ft():
     assert controller.last_diagnostics["target_true_deg"] == 73.
 
 
+def test_vector_heading_speed_uses_the_selected_aircraft_profile():
+    controller = MissionController("vector_heading", profile=C182T)
+    controller.vector_heading_mag = 90.
+    controller.vector_alt_ft = 5000.
+    controller.step(snapshot())
+    assert controller.last_diagnostics["target_kias"] == C182T.cruise_kias
+
+
+def test_gfc_trial_envelope_is_named_bounded_and_leaves_default_mission_unchanged():
+    assert mission_altitude_ceiling({}) == AIRBORNE_MAX_ALTITUDE_FT == 6500.
+    trial = {"gfc_trial_envelope": True,
+             "airborne_max_altitude_ft": GFC_TRIAL_MAX_ALTITUDE_FT}
+    assert mission_altitude_ceiling(trial) == 8500.
+    assert GFC_TRIAL_EAST_BOX == (33.00, 33.35, -116.85, -116.70)
+    with pytest.raises(ValueError, match="fixed 8,500 ft"):
+        mission_altitude_ceiling({**trial, "airborne_max_altitude_ft": 9000.})
+    with pytest.raises(ValueError, match="named GFC trial"):
+        mission_altitude_ceiling({"airborne_max_altitude_ft": 8500.})
+
+
 def test_pilot_directed_bakel_vector_at_3500_ft():
-    controller = MissionController("missed_270")
+    controller = MissionController("missed_270", profile=C172SP)
     controller.step(snapshot(latitude_deg=32.82, longitude_deg=-117.19,
                              altitude_indicated_ft=3499., heading_true_deg=281.,
                              heading_mag_deg=270.))
@@ -46,7 +69,7 @@ def test_pilot_directed_bakel_vector_at_3500_ft():
 
 
 def test_live_direct_bakel_applies_without_stage_pause():
-    controller = MissionController("mzb_inbound")
+    controller = MissionController("mzb_inbound", profile=C172SP)
     live = snapshot(paused=0, on_ground=0, altitude_indicated_ft=3500.,
                     latitude_deg=32.82, longitude_deg=-117.19)
     accepted = controller.retask({"kind": "direct", "fix": "BAKEL",
@@ -58,7 +81,7 @@ def test_live_direct_bakel_applies_without_stage_pause():
 
 
 def test_live_heading_and_altitude_update():
-    controller = MissionController("mzb_inbound")
+    controller = MissionController("mzb_inbound", profile=C172SP)
     live = snapshot(paused=0, on_ground=0, altitude_indicated_ft=4500.)
     controller.retask({"kind": "heading", "heading_mag_deg": 90.,
                        "altitude_ft": 5000.}, live)
@@ -77,17 +100,17 @@ def test_live_heading_and_altitude_update():
 ])
 def test_live_retask_rejects_invalid_commands(task):
     with pytest.raises(ValueError):
-        MissionController("mzb_inbound").retask(
+        MissionController("mzb_inbound", profile=C172SP).retask(
             task, snapshot(paused=0, on_ground=0, altitude_indicated_ft=4500.))
 
 
 def test_live_retask_rejects_final_and_low_departure():
     live = snapshot(paused=0, on_ground=0, altitude_indicated_ft=5000.)
     with pytest.raises(ValueError):
-        MissionController("ils").retask(
+        MissionController("ils", profile=C172SP).retask(
             {"kind": "direct", "fix": "BAKEL", "altitude_ft": 5000.}, live)
     with pytest.raises(ValueError):
-        MissionController("pgy_inbound").retask(
+        MissionController("pgy_inbound", profile=C172SP).retask(
             {"kind": "heading", "heading_mag_deg": 90., "altitude_ft": 5000.},
             snapshot(paused=0, on_ground=0, altitude_indicated_ft=2000.))
 
@@ -96,8 +119,8 @@ def test_ils_glideslope_above_calls_for_more_descent():
     common = dict(latitude_deg=32.76774, longitude_deg=-117.0166,
                   altitude_indicated_ft=2600., heading_true_deg=295.,
                   heading_mag_deg=284., pitch_deg=0., vvi_fpm=-400.)
-    high = MissionController("ils")
-    low = MissionController("ils")
+    high = MissionController("ils", profile=C172SP)
+    low = MissionController("ils", profile=C172SP)
     high.step(snapshot(**common, nav1_vdef_dots=1.))
     low.step(snapshot(**common, nav1_vdef_dots=-1.))
     assert high.last_diagnostics["target_vvi_fpm"] < low.last_diagnostics["target_vvi_fpm"]
@@ -106,7 +129,7 @@ def test_ils_glideslope_above_calls_for_more_descent():
 
 
 def test_lost_ils_signal_commands_missed_approach_in_same_frame():
-    controller = MissionController("ils")
+    controller = MissionController("ils", profile=C172SP)
     command = controller.step(snapshot(latitude_deg=32.77, longitude_deg=-117.02,
                                        altitude_indicated_ft=2400.,
                                        nav1_glideslope_flag=1))
@@ -121,7 +144,7 @@ def test_unstable_final_goes_around_without_fault_pause():
     distance = 1.1 * 1852
     lat = runway.threshold[0]-distance*runway.unit_n/111132.92
     lon = runway.threshold[1]-distance*runway.unit_e/runway.m_per_deg_lon
-    controller = MissionController("ils")
+    controller = MissionController("ils", profile=C172SP)
     command = controller.step(snapshot(latitude_deg=lat, longitude_deg=lon,
                                        altitude_indicated_ft=900., nav1_vdef_dots=1.5))
     assert controller.stage == "missed_runway"

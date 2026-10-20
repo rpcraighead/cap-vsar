@@ -2,6 +2,10 @@ fastapi==0.115.6
 uvicorn[standard]==0.34.0
 pydantic==2.10.4
 segno==1.6.6
+# OpenID Connect sign-in (app/oidc.py): ID-token verification. PyJWT needs
+# cryptography for RS256/ES256; HTTP to the provider is stdlib urllib.
+PyJWT==2.10.1
+cryptography==46.0.5
 
 # pymumble itself is in requirements-pymumble.txt, installed separately with a
 # content hash (O2-9). These two are its own pins (it declares opuslib==3.0.1 and

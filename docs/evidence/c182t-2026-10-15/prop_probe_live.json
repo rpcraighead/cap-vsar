@@ -1,0 +1,314 @@
+[
+ {
+  "path": "A prop_ratio[0]",
+  "write": 1.0,
+  "after_1s": {
+   "lever_0": 0.19231374561786652,
+   "lever_rad_s": 251.3273162841797,
+   "lever_all": 0.19231374561786652,
+   "commanded_prop_rad_s": 251.3273162841797,
+   "rpm": 2167.818603515625,
+   "pitch_req_deg": 18.130870819091797,
+   "pitch_actual_deg": 18.130870819091797,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  },
+  "after_9s": {
+   "lever_0": 0.052216675132513046,
+   "lever_rad_s": 251.3273162841797,
+   "lever_all": 0.052216675132513046,
+   "commanded_prop_rad_s": 251.3273162841797,
+   "rpm": 2399.699462890625,
+   "pitch_req_deg": 15.777239799499512,
+   "pitch_actual_deg": 15.777239799499512,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  }
+ },
+ {
+  "path": "A prop_ratio[0]",
+  "write": 0.5,
+  "after_1s": {
+   "lever_0": 0.09684845805168152,
+   "lever_rad_s": 251.3273162841797,
+   "lever_all": 0.09684845805168152,
+   "commanded_prop_rad_s": 251.3273162841797,
+   "rpm": 2320.419677734375,
+   "pitch_req_deg": 16.527053833007812,
+   "pitch_actual_deg": 16.527053833007812,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  },
+  "after_9s": {
+   "lever_0": 0.052196864038705826,
+   "lever_rad_s": 251.3273162841797,
+   "lever_all": 0.052196864038705826,
+   "commanded_prop_rad_s": 251.3273162841797,
+   "rpm": 2399.90185546875,
+   "pitch_req_deg": 15.776906967163086,
+   "pitch_actual_deg": 15.776906967163086,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  }
+ },
+ {
+  "path": "A prop_ratio[0]",
+  "write": 0.0,
+  "after_1s": {
+   "lever_0": 0.04733329266309738,
+   "lever_rad_s": 251.3273162841797,
+   "lever_all": 0.04733329266309738,
+   "commanded_prop_rad_s": 251.3273162841797,
+   "rpm": 2408.09619140625,
+   "pitch_req_deg": 15.695199012756348,
+   "pitch_actual_deg": 15.695199012756348,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  },
+  "after_9s": {
+   "lever_0": 0.05222416669130325,
+   "lever_rad_s": 251.3273162841797,
+   "lever_all": 0.05222416669130325,
+   "commanded_prop_rad_s": 251.3273162841797,
+   "rpm": 2400.01708984375,
+   "pitch_req_deg": 15.777365684509277,
+   "pitch_actual_deg": 15.777365684509277,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  }
+ },
+ {
+  "path": "A prop_ratio[0]",
+  "write": 1.0,
+  "after_1s": {
+   "lever_0": 0.1922295093536377,
+   "lever_rad_s": 251.3273162841797,
+   "lever_all": 0.1922295093536377,
+   "commanded_prop_rad_s": 251.3273162841797,
+   "rpm": 2167.83642578125,
+   "pitch_req_deg": 18.12945556640625,
+   "pitch_actual_deg": 18.12945556640625,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  },
+  "after_9s": {
+   "lever_0": 0.05216535925865173,
+   "lever_rad_s": 251.3273162841797,
+   "lever_all": 0.05216535925865173,
+   "commanded_prop_rad_s": 251.3273162841797,
+   "rpm": 2399.701171875,
+   "pitch_req_deg": 15.77637767791748,
+   "pitch_actual_deg": 15.77637767791748,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  }
+ },
+ {
+  "path": "B prop_ratio_all",
+  "write": 1.0,
+  "after_1s": {
+   "lever_0": 0.19294635951519012,
+   "lever_rad_s": 251.3273162841797,
+   "lever_all": 0.19294635951519012,
+   "commanded_prop_rad_s": 251.3273162841797,
+   "rpm": 2166.518798828125,
+   "pitch_req_deg": 18.141498565673828,
+   "pitch_actual_deg": 18.141498565673828,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  },
+  "after_9s": {
+   "lever_0": 0.05199414864182472,
+   "lever_rad_s": 251.3273162841797,
+   "lever_all": 0.05199414864182472,
+   "commanded_prop_rad_s": 251.3273162841797,
+   "rpm": 2399.701904296875,
+   "pitch_req_deg": 15.7735013961792,
+   "pitch_actual_deg": 15.7735013961792,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  }
+ },
+ {
+  "path": "B prop_ratio_all",
+  "write": 0.5,
+  "after_1s": {
+   "lever_0": 0.09664727747440338,
+   "lever_rad_s": 251.3273162841797,
+   "lever_all": 0.09664727747440338,
+   "commanded_prop_rad_s": 251.3273162841797,
+   "rpm": 2320.423828125,
+   "pitch_req_deg": 16.52367401123047,
+   "pitch_actual_deg": 16.52367401123047,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  },
+  "after_9s": {
+   "lever_0": 0.05204978212714195,
+   "lever_rad_s": 251.3273162841797,
+   "lever_all": 0.05204978212714195,
+   "commanded_prop_rad_s": 251.3273162841797,
+   "rpm": 2399.906005859375,
+   "pitch_req_deg": 15.774435997009277,
+   "pitch_actual_deg": 15.774435997009277,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  }
+ },
+ {
+  "path": "B prop_ratio_all",
+  "write": 0.0,
+  "after_1s": {
+   "lever_0": 0.04720142483711243,
+   "lever_rad_s": 251.3273162841797,
+   "lever_all": 0.04720142483711243,
+   "commanded_prop_rad_s": 251.3273162841797,
+   "rpm": 2408.087890625,
+   "pitch_req_deg": 15.692983627319336,
+   "pitch_actual_deg": 15.692983627319336,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  },
+  "after_9s": {
+   "lever_0": 0.05210927128791809,
+   "lever_rad_s": 251.3273162841797,
+   "lever_all": 0.05210927128791809,
+   "commanded_prop_rad_s": 251.3273162841797,
+   "rpm": 2400.017822265625,
+   "pitch_req_deg": 15.775435447692871,
+   "pitch_actual_deg": 15.775435447692871,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  }
+ },
+ {
+  "path": "B prop_ratio_all",
+  "write": 1.0,
+  "after_1s": {
+   "lever_0": 0.19190412759780884,
+   "lever_rad_s": 251.3273162841797,
+   "lever_all": 0.19190412759780884,
+   "commanded_prop_rad_s": 251.3273162841797,
+   "rpm": 2168.17333984375,
+   "pitch_req_deg": 18.12398910522461,
+   "pitch_actual_deg": 18.12398910522461,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  },
+  "after_9s": {
+   "lever_0": 0.05208684876561165,
+   "lever_rad_s": 251.3273162841797,
+   "lever_all": 0.05208684876561165,
+   "commanded_prop_rad_s": 251.3273162841797,
+   "rpm": 2399.70263671875,
+   "pitch_req_deg": 15.77505874633789,
+   "pitch_actual_deg": 15.77505874633789,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  }
+ },
+ {
+  "path": "C prop_rotation_speed",
+  "write": 1.0,
+  "after_1s": {
+   "lever_0": 0.05201169103384018,
+   "lever_rad_s": 251.3274383544922,
+   "lever_all": 0.05201169103384018,
+   "commanded_prop_rad_s": 251.3274383544922,
+   "rpm": 2399.8740234375,
+   "pitch_req_deg": 15.773796081542969,
+   "pitch_actual_deg": 15.773796081542969,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  },
+  "after_9s": {
+   "lever_0": 0.05208940431475639,
+   "lever_rad_s": 251.3274383544922,
+   "lever_all": 0.05208940431475639,
+   "commanded_prop_rad_s": 251.3274383544922,
+   "rpm": 2400.00732421875,
+   "pitch_req_deg": 15.775101661682129,
+   "pitch_actual_deg": 15.775101661682129,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  }
+ },
+ {
+  "path": "C prop_rotation_speed",
+  "write": 0.5,
+  "after_1s": {
+   "lever_0": 0.15609706938266754,
+   "lever_rad_s": 230.38348388671875,
+   "lever_all": 0.15609706938266754,
+   "commanded_prop_rad_s": 230.38348388671875,
+   "rpm": 2295.099365234375,
+   "pitch_req_deg": 17.522430419921875,
+   "pitch_actual_deg": 17.522430419921875,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  },
+  "after_9s": {
+   "lever_0": 0.21307648718357086,
+   "lever_rad_s": 230.38348388671875,
+   "lever_all": 0.21307648718357086,
+   "commanded_prop_rad_s": 230.38348388671875,
+   "rpm": 2200.1328125,
+   "pitch_req_deg": 18.479684829711914,
+   "pitch_actual_deg": 18.479684829711914,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  }
+ },
+ {
+  "path": "C prop_rotation_speed",
+  "write": 0.0,
+  "after_1s": {
+   "lever_0": 0.32968711853027344,
+   "lever_rad_s": 209.4395294189453,
+   "lever_all": 0.32968711853027344,
+   "commanded_prop_rad_s": 209.4395294189453,
+   "rpm": 2098.099609375,
+   "pitch_req_deg": 20.438743591308594,
+   "pitch_actual_deg": 20.438743591308594,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  },
+  "after_9s": {
+   "lever_0": 0.3976520895957947,
+   "lever_rad_s": 209.4395294189453,
+   "lever_all": 0.3976520895957947,
+   "commanded_prop_rad_s": 209.4395294189453,
+   "rpm": 2000.0740966796875,
+   "pitch_req_deg": 21.580554962158203,
+   "pitch_actual_deg": 21.580554962158203,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  }
+ },
+ {
+  "path": "C prop_rotation_speed",
+  "write": 1.0,
+  "after_1s": {
+   "lever_0": 0.15823101997375488,
+   "lever_rad_s": 251.3274383544922,
+   "lever_all": 0.15823101997375488,
+   "commanded_prop_rad_s": 251.3274383544922,
+   "rpm": 2204.2236328125,
+   "pitch_req_deg": 17.55828094482422,
+   "pitch_actual_deg": 17.55828094482422,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  },
+  "after_9s": {
+   "lever_0": 0.049941763281822205,
+   "lever_rad_s": 251.3274383544922,
+   "lever_all": 0.049941763281822205,
+   "commanded_prop_rad_s": 251.3274383544922,
+   "rpm": 2399.78759765625,
+   "pitch_req_deg": 15.739021301269531,
+   "pitch_actual_deg": 15.739021301269531,
+   "override_prop_pitch": 0.0,
+   "prop_mode": 1.0
+  }
+ }
+]

@@ -3,6 +3,112 @@
 Record implementation changes, research findings, and design decisions here.
 Clearly distinguish proposed work from completed implementation.
 
+## 2026-10-15 — The stock C172SP flies the shared code: pattern and owner-transfer trials PASS, four aircraft-specific constants found (branch `feat/aircraft-profile-config`)
+
+Status: **flown.** The C172 has a measured performance table in its profile (`profiles/c172sp.toml`, stock ACF hash, the
+frozen campaign's 1,043.8 kg loading) and flew the ESCON expanding square (9/9 waypoints, altitude within 25 ft, 89.4-90.6
+KIAS) and the AI pilot -> GFC 700 -> AI pilot trial with the terrain guard at the Ramona ridge (hand-back mid-climb, PASS,
+crest crossed 1,757 ft above the ground) on exactly the code the CAP 487 flies, differing only by profile data. Found by
+flying it, each hidden while only the 182 flew: the cruise law asked for up to 650 fpm and the guard ordered 500-700 fpm
+whatever the airplane could hold (now bounded by the aircraft's own sustainable climb from its table: 340 fpm for the 172,
+595 for the 182); the owner trial counted a climb as above a fixed 500 fpm so the 172's hand-back never fired; the profile's
+fixed cruise throttle 0.55 was far from the 172's 0.85 for 100 KIAS; and the table rule needed two points per edge row.
+First live turn-back (the guard stopping a trial that would need a floor above the envelope ceiling) and first live check
+of the GFC owner's throttle restore after a level-off. `xplane-clean --restart` added after two silently refused launches.
+Not done: the frozen C172 campaign (it does not use `CruiseLaw` or the table), merging `MissionController`'s cruise loop,
+more than one altitude band. Account: `docs/ONE_AUTOPILOT_TWO_AIRCRAFT_2026-10-15.md`; evidence
+`docs/evidence/ai_pilot_c172_shared_code_20261015.json`.
+
+## 2026-10-15 — Measured performance table for the CAP 487 as profile data (branch `feat/aircraft-profile-config`)
+
+Status: **measured and flown on the C182T; the C172 has none.** `scripts/perf_table_sweep.py` flew 35
+(throttle, vertical speed) points with the aircraft's own autopilot holding the climb rate; the settled
+airspeeds, inverted, say what throttle a speed and climb rate need. The first sweep let altitude drift and
+hid up to 6.7 kt; the second recentres and is the table (`[performance]` in `profiles/c182t.toml`, tagged with
+the ACF hash `11ff17d1...`, 2,185 lb, mean 4,036 ft). `CruiseLaw` uses it as throttle feed-forward when a
+profile has one; without one it is the law as flown. Validation: the ESCON expanding square is unchanged
+(9 waypoints, altitude within 30 ft, 99.3-100.7 KIAS, same median throttle); the hand-back mid-climb is NOT
+fixed by the table: at a 2 kt/s speed ramp it dips to 95 KIAS (90 without it) and still fails, at 0.4 kt/s
+both pass, so the slow ramp stays the operative fix. Found on the way: `xplane-clean` correctly refused to
+start while the sweep's own simulator was still running (one unflown attempt). New: `performance.py`, the
+optional `[performance]` loader section, the two scripts. Account and the grid:
+`docs/C182T_PERFORMANCE_TABLE_2026-10-15.md`; evidence `docs/evidence/ai_pilot_performance_table_20261015.json`.
+Not done: the C172 table and its frozen campaign; a second altitude band; merging `MissionController`'s cruise loop.
+
+## 2026-10-15 — No controller defaults to a particular aircraft (branch `feat/aircraft-profile-config`)
+
+Status: **implemented and tested offline; behaviour unchanged, nothing re-flown.** Step 2 of making the AI
+autopilot one code path across aircraft. Every controller and observer that reads an `AircraftProfile`
+(`TaxiGuidance`, `TakeoffGuidance`, `RunwayEntryGuidance`, `MissionController`, `LandingController`,
+`LandingObserver`, `SearchPatternController`) used to default to the C172SP, so a new aircraft could fly C172
+numbers by forgetting an argument. `profile` is now required, keyword-only. The runners that fly an aircraft
+(`ai_pilot_pattern.py`, `ai_pilot_ksee_kmyf.py`, `ai_pilot_surface.py`, `ai_pilot_experiment.py observe`) now
+require `--profile` instead of defaulting to `C172SP`, and `inventory()` requires one. The scripts that are
+stock-C172 labs by design (`ai_pilot_cycle.py`, `ai_pilot_landing.py`) now say so, passing `C172SP`
+explicitly. 48 test call sites carry an explicit `profile=C172SP`. New tests fail if any controller regains a
+default or if a runner starts without a named aircraft. Old commands that omitted `--profile` for the four
+runners need it added (`docs/AI_PILOT_FIRST_INCREMENT.md` updated).
+
+## 2026-10-15 — Aircraft profiles are data: TOML files and a strict loader (branch `feat/aircraft-profile-config`)
+
+Status: **implemented and tested offline; no controller changed, nothing re-flown.** Step 1 of making the AI
+autopilot one code path across aircraft with differences in data, at Ron's direction. The C172SP and C182T
+profiles moved from Python literals to `services/ai_pilot/profiles/c172sp.toml` and `c182t.toml`, loaded by
+`profile_loader.py`, which requires every value, rejects unknown keys, checks types, applies the dataclass's
+existing physics checks and demands a `[sources]` table with a `tuning` entry. `aircraft_profiles.PROFILES` is
+built from the directory, so adding an aircraft is adding a file. The migration is proved by
+`tests/golden_profiles.py` (the old literals, verbatim) and a test that the files load to profiles equal to
+them, `sources` text included; the full AI-pilot suite passes unchanged (670 passed, 20 expected failures).
+Schema and procedure: `services/ai_pilot/profiles/README.md`. Not done yet, in order: remove the `C172SP`
+default arguments from the controllers; measured performance tables and a throttle feed-forward to replace the
+stopgap hand-back ramp; merge `MissionController`'s duplicate cruise loop into `CruiseLaw` behind a regression
+flight; run the frozen campaign on the shared code for both aircraft.
+
+## 2026-10-15 — Owner-transfer trial flown six times on ESCON; two defects found and fixed (branch `feat/c182-prop-control`)
+
+Status: **flown on the CAP 487; the final run passes.** First live use of the GFC 700 second owner, the
+terrain scan and the terrain guard, with the simulator started and flown unattended and the bridge's
+pause/override release as containment. Open water (PASS), then ESCON toward the Ramona ridge: the guard
+raised a 6,000 ft floor over 4,000-4,500 ft ground and the GFC 700 flew the 700 fpm climb at full power.
+Real defects found and fixed: the GFC owner left the throttle at full after levelling (run 3, 130 KIAS);
+a fresh AI-pilot cruise law handed a fast, climbing airplane cut power and fell to 90 KIAS (run 4), fixed by an
+opt-in bumpless `CruiseLaw` (`adopt_slew_kt_s`, 0.4 kt/s; a 2 kt/s ramp did not work, run 5). Two scorer
+errors were also found and fixed (the adopted first phase; a wrong speed-loss criterion). Final run 6:
+hand-back at 119.5 KIAS mid-climb, eased to 100, min 98.5, ridge crest crossed under the AI pilot at
+1,703 ft above the ground. A widened geofence (`--extra-box`, session-only, recorded in the config) was
+needed to reach the high ground. The throttle restore under a GFC level-off is unit-tested, not re-flown.
+Evidence `docs/evidence/ai_pilot_owner_trial_20261015.json`; account
+`docs/GFC700_SECOND_OWNER_2026-10-15.md`.
+
+## 2026-10-15 — C182T prop lever: wrong dataref found and fixed; map measured (branch `feat/c182-prop-control`)
+
+Status: **measured live; sink corrected and unit-tested; not yet exercised in the simulator.** The
+simulator was launched unattended for the first time (`~/.local/bin/xplane-clean`). The morning's sweep
+had shown the lever write doing nothing: `prop_ratio` is not the constant-speed lever. The lever is
+`prop_rotation_speed_rad_sec` (requested prop speed), and governed RPM follows it one-for-one from
+2,000 to 2,400 RPM. The bridge's `prop` channel, which wrote `prop_ratio`, is now scaled across
+`acf_RSC_mingov_prp`..`acf_RSC_redline_prp`. The cockpit lever animation is still bound to `prop_ratio`
+and needs rebinding. Record, table and open points: `docs/C182T_AI_PILOT_PROP_2026-10-15.md`.
+
+## 2026-10-15 — GFC 700 as a second owner of the bridge; terrain guard moved into the executive (branch `feat/c182-prop-control`)
+
+Status: **implemented and tested offline; never run in X-Plane.** 636 AI-pilot tests
+pass; the full suite has the same 169 console failures as `main`.
+
+The mission bridge can now hand the airplane to the GFC 700 and take it back
+(`transfer_gfc`, `gfc_select`, `lab_handback`; `GfcOwner` on the executive side), under
+the same airborne envelope, heartbeat and pause containment as the AI pilot's own
+controllers, and the capture loop now pauses on a fault in `GFC700`, not only `ACTIVE`.
+The demo's terrain guard became `services/ai_pilot/terrain_guard.py` (pure advice) fed by
+a terrain scan in every telemetry snapshot (`xplane/capvsar_terrain.py`); the pattern
+runner applies it to the DIRECT owner, `GfcOwner.step` to the autopilot. A configurable
+last-ditch terrain fence (`terrain_backstop_ft`, default 200 ft in `stage-mission`) pauses
+the simulator if the guard did not act. Found and fixed while testing: the guard's ceiling
+had to sit under the bridge envelope's 6,500 ft or a raised floor would pause the sim.
+`scripts/ai_pilot_owner_trial.py` is the attended trial (AI pilot -> GFC 700 -> AI pilot,
+both hand-overs scored); it has not been flown. Unverified list and procedure:
+`docs/GFC700_SECOND_OWNER_2026-10-15.md`.
+
 ## 2026-10-15 — Gate G closed: ArduPlane not adopted
 
 Status: **decision recorded; no code changed.** Ron closed CONOPS gate G without

@@ -73,6 +73,21 @@ Civil Air Patrol
     official CAP product and carries no CAP endorsement. Use of the marks
     here is descriptive — identifying the organisation the training is for.
 
+Mumble client library (pymumble, GPL-3.0)
+    The exercise service's radio bridge (services/exercise/app/radio.py)
+    imports pymumble, a third-party library licensed under GPL-3.0. It is
+    installed from a pinned upstream commit at build time (see
+    services/exercise/requirements-pymumble.txt) and is NOT included in this
+    repository. This project is published as SOURCE ONLY: no built container
+    image or other binary bundle that contains pymumble is distributed. The
+    project's own code stays under Apache-2.0.
+
+    If you build the exercise container yourself, running it is not
+    distribution. If you distribute an image or bundle that contains pymumble,
+    you take on the GPL-3.0 obligations for that combined work, including
+    offering the corresponding source. The speech service (cap-vsar-voice)
+    makes the same kind of note for phonemizer and espeak-ng.
+
 Aviation data
     The flight planner's airport and navaid database is derived from
     OurAirports (public domain). It is NOT FAA NASR data and carries no

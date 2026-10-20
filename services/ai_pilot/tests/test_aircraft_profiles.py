@@ -16,7 +16,7 @@ def test_c182t_speeds_match_the_182t_handbook_and_the_built_acf():
     assert C182T.va_kias == 110.
     assert C182T.acf_name == "Cessna_182T_G1000.acf"
     assert C182T.takeoff_flap_ratio == pytest.approx(1/3)
-    assert not C182T.tuning_validated and C172SP.tuning_validated
+    assert not C182T.tuning_validated and not C172SP.tuning_validated
 
 
 def test_c172_profile_reproduces_the_flown_literals():

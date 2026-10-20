@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0B1220">
+  <meta name="description" content="The AI Mission Pilot in CAP-VSAR: how it flies the simulated airplane, who taught it, and what is proven, flown, and still being tested.">
+  <title>AI Pilot — CAP-VSAR</title>
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="AI Pilot — CAP-VSAR">
+  <meta property="og:description" content="The AI Mission Pilot in CAP-VSAR: how it flies the simulated airplane, who taught it, and what is proven, flown, and still being tested.">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="assets/brand/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/brand/favicon.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="assets/css/reel.css">
+  <script src="assets/js/main.js" defer></script>
+  <script src="assets/js/reel.js" defer></script>
+<noscript><style>@media(max-width:900px){.site-header{height:auto;flex-wrap:wrap;padding-block:.5rem}.primary-nav{display:flex;position:static;flex-direction:row;flex-wrap:wrap;gap:.25rem .9rem;padding:.25rem 0 .5rem;width:100%;background:none}.primary-nav a{font-size:.9rem;padding:.4rem 0;border:0}.primary-nav .nav-pill{margin-top:0}}.menu-toggle,.pause-control,.clip-pause,.reel-controls{display:none}</style></noscript>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+  <a class="brand" href="index.html" aria-label="CAP-VSAR home"><img src="assets/brand/logo.svg" alt="CAP-VSAR bearing mark" width="180" height="48"></a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="primary-nav">Menu</button>
+  <nav id="primary-nav" class="primary-nav" aria-label="Main navigation">
+    <a href="index.html">Home</a><a href="comms.html">Comms</a><a href="df.html">DF &amp; Beacons</a><a href="foreflight.html">ForeFlight</a><a href="caltopo.html">CalTopo</a><a href="ai-pilot.html" aria-current="page">AI Pilot</a><a href="airplane.html">The Airplane</a><a href="flight-planner.html">Flight Planner</a><a href="hosting.html">Hosting</a><a href="how-its-built.html">How It's Built</a><a class="nav-pill" href="index.html#get-started">Get started</a>
+  </nav>
+</header>
+<main id="main" tabindex="-1">
+  <section class="page-title"><div class="wrap"><p class="eyebrow">THE AI MISSION PILOT</p><h1>When no pilot can sit at the console, the airplane still flies.</h1><p class="lede">An observer wants to practice the DF on a weeknight. A base wants to run the whole exercise with every aircraft airborne. The AI Mission Pilot flies the search pattern, hands the airplane to the autopilot for the cruise, and takes it back for the approach, so the rest of the crew can train.</p></div></section>
+
+  <section class="section" aria-labelledby="pattern-title"><div class="wrap">
+    <h2 id="pattern-title" class="visually-hidden-heading">The search pattern</h2>
+    <figure class="figure"><button class="shot-open" type="button" data-lightbox="assets/img/planner-escon-square.webp" data-alt="Flight Planner showing an expanding-square search pattern around the ESCON fix on the FAA sectional, with the navigation log below."><img src="assets/img/planner-escon-square.webp" alt="Expanding-square search pattern drawn around the ESCON fix on the sectional chart, with a navigation log of its legs." width="1440" height="900"><span class="zoom-hint">Open image</span></button><figcaption><strong>The ESCON square.</strong> The search pattern as the Flight Planner builds it on the sectional: the same nine-waypoint expanding square the AI Mission Pilot flies in the table below.</figcaption></figure>
+  </div></section>
+
+  <section class="section paper" id="how" aria-labelledby="how-title"><div class="wrap">
+    <p class="eyebrow">HOW IT WORKS, IN PLAIN TERMS</p><h2 id="how-title">Three layers, kept deliberately apart.</h2>
+    <div class="prose">
+      <ul>
+        <li><strong>Judgment.</strong> Tasks are chosen and results read above the control loop — "fly the ESCON square at 4,500", "that landing was long of the aim point" — today by the test team and its AI coding assistants working offline, by design never by a model inside the loop. The flights on this page were started by scripts that name the task; a language model is not in the airplane.</li>
+        <li><strong>Stick and rudder.</strong> A small, predictable controller does the flying: same inputs, same outputs, every time. It talks to the simulator through a bounded bridge, frame by frame fifty times a second, on a control lease that expires in under a fifth of a second, and the simulator pauses the moment the controller goes quiet. An independent observer scores every trial from the recorded trace, not from the controller's own opinion.</li>
+        <li><strong>Workload and safety.</strong> The Garmin GFC 700 flies the cruise and climb legs the way a human crew would use it, with a hand-over in both directions (flown in vertical-speed mode; the flight level change (FLC) procedure crews brief is not yet validated) and a terrain guard that climbs away from the Ramona ridge before the airplane gets there.</li>
+      </ul>
+    </div>
+    <figure class="diagram">
+      <svg viewBox="0 0 1000 600" role="img" aria-labelledby="a1-title a1-desc">
+        <title id="a1-title">No model in the loop</title>
+        <desc id="a1-desc">Three stacked layers. Top: Judgment, where tasks are chosen and results read, offline and never by a model inside the loop. A bold orange line below it is labeled no model in the control loop. Middle: Stick and rudder, a small predictable controller talking to the simulator fifty times a second on a short lease, with an independent observer scoring the recorded trace. Bottom: Workload and safety, the GFC 700 autopilot flying cruise and climb legs, a clean hand-over both ways, and a terrain guard. Arrows carry intent downward on the left and results upward on the right.</desc>
+        <defs><pattern id="a1-grid" width="50" height="50" patternUnits="userSpaceOnUse"><path d="M50 0H0V50" fill="none" stroke="#a9c7b2" stroke-opacity=".1"/></pattern>
+          <marker id="a1-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5 0 10Z" fill="#7fe0ea"/></marker></defs>
+        <rect width="1000" height="600" fill="#0b1220"/><rect width="1000" height="600" fill="url(#a1-grid)"/>
+        <!-- top layer -->
+        <rect x="150" y="40" width="560" height="120" rx="10" fill="#111a2b" stroke="#3a4a66"/>
+        <text class="diagram-head" x="175" y="75">JUDGMENT</text>
+        <text class="diagram-note" x="175" y="103">Tasks chosen and results read above the loop, offline.</text>
+        <text class="diagram-note" x="175" y="125">"Fly the ESCON square at 4,500." "That landing was long."</text>
+        <text class="diagram-chip" x="175" y="150" fill="#9aa7b5">OFF THE CONTROL LOOP</text>
+        <!-- the line -->
+        <line x1="120" y1="192" x2="880" y2="192" stroke="#ff6a13" stroke-width="5"/>
+        <rect x="330" y="176" width="300" height="32" rx="6" fill="#0b1220" stroke="#ff6a13" stroke-width="2"/><text class="diagram-chip" x="352" y="197" fill="#ff8a47">NO MODEL IN THE CONTROL LOOP</text>
+        <!-- middle layer -->
+        <rect x="150" y="230" width="560" height="150" rx="10" fill="#111a2b" stroke="#27c7d9"/>
+        <text class="diagram-head" x="175" y="265">STICK AND RUDDER</text>
+        <text class="diagram-note" x="175" y="293">A small, predictable controller. Same inputs, same outputs, every time.</text>
+        <text class="diagram-note" x="175" y="315">Fifty frames a second through a bounded bridge, on a lease that</text>
+        <text class="diagram-note" x="175" y="337">expires in under a fifth of a second. Goes quiet, and the sim pauses.</text>
+        <text class="diagram-chip" x="175" y="366" fill="#7fe0ea">DETERMINISTIC · BOUNDED · LEASED</text>
+        <!-- observer -->
+        <rect x="740" y="230" width="195" height="150" rx="10" fill="#111a2b" stroke="#3a4a66" stroke-dasharray="6 5"/>
+        <text class="diagram-head" x="760" y="265" font-size="18">INDEPENDENT</text><text class="diagram-head" x="760" y="287" font-size="18">OBSERVER</text>
+        <text class="diagram-note" x="760" y="315">Scores every trial from</text><text class="diagram-note" x="760" y="335">the recorded trace, not</text><text class="diagram-note" x="760" y="355">the controller's view.</text>
+        <path d="M710 305H740" stroke="#7fe0ea" stroke-width="2" stroke-dasharray="4 4"/>
+        <!-- bottom layer -->
+        <rect x="150" y="410" width="560" height="150" rx="10" fill="#111a2b" stroke="#7fbf4d"/>
+        <text class="diagram-head" x="175" y="445">WORKLOAD AND SAFETY</text>
+        <text class="diagram-note" x="175" y="473">The GFC 700 flies the cruise and climb legs the way a crew would use it.</text>
+        <text class="diagram-note" x="175" y="495">A clean hand-over in both directions.</text>
+        <text class="diagram-note" x="175" y="517">A terrain guard climbs away from the Ramona ridge before the airplane gets there.</text>
+        <text class="diagram-chip" x="175" y="546" fill="#7fbf4d">AUTOPILOT · HAND-OVER · TERRAIN GUARD</text>
+        <!-- arrows -->
+        <path d="M110 100V430" stroke="#7fe0ea" stroke-width="2.5" marker-end="url(#a1-arrow)"/>
+        <text class="diagram-chip" transform="translate(96 310) rotate(-90)" text-anchor="middle" fill="#7fe0ea">INTENT</text>
+        <path d="M962 480V200" stroke="#7fe0ea" stroke-width="2.5" stroke-dasharray="7 6" marker-end="url(#a1-arrow)"/>
+        <text class="diagram-chip" transform="translate(980 340) rotate(-90)" text-anchor="middle" fill="#7fe0ea">RESULTS</text>
+        <!-- simulator -->
+        <rect x="740" y="470" width="195" height="90" rx="10" fill="#182338" stroke="#3a4a66"/>
+        <text class="diagram-head" x="760" y="505" font-size="18">THE SIMULATOR</text><text class="diagram-note" x="760" y="530">A simulated airplane.</text><text class="diagram-note" x="760" y="550">Never a real one.</text>
+        <path d="M710 490H740" stroke="#7fbf4d" stroke-width="2.5"/>
+      </svg>
+      <figcaption><strong>No model in the loop.</strong> Judgment above, a controller in the middle, the autopilot below.</figcaption>
+    </figure>
+  </div></section>
+
+  <section class="section" id="instructor" aria-labelledby="instructor-title"><div class="wrap">
+    <p class="eyebrow">TAUGHT BY A FLIGHT INSTRUCTOR</p><h2 id="instructor-title">Corrected the way a flight instructor corrects a student.</h2>
+    <div class="prose"><p>The controller was corrected the way a certificated flight instructor (CFI) corrects a student, by one sitting at the simulator and watching it fly. Pitch controls airspeed, power controls the glidepath; if you are low and slow, lower the nose <em>and</em> add power. Make the flare gradual and keep raising the nose in the last two seconds. In a crosswind, aileron into the wind and rudder to keep the nose straight, through touchdown and into the rollout. And look at the <em>usable</em> runway: the instructor caught a scorer that called a landing good when the wheels touched before the displaced threshold, and the acceptance test changed.</p></div>
+  </div></section>
+
+  <section class="section paper" id="concepts" aria-labelledby="concepts-title"><div class="wrap">
+    <p class="eyebrow">OPERATIONAL CONCEPTS</p><h2 id="concepts-title">Hands for the parts that need hands.</h2>
+    <div class="prose"><p>The AI is written to hand-fly the parts that need hands: taxi and line-up, the takeoff roll and initial climb, pattern entry, the search pattern itself, and the approach and landing. Of these, the search pattern, the autopilot hand-over and the approach and landing have been flown and scored (table below). The GFC 700 takes the rest. Every aircraft is a data profile, not a code branch: the C172SP and the C182T fly the same program with their own speeds and flap gates, and the C182T carries a measured performance table flown with the aircraft's own autopilot.</p></div>
+  </div></section>
+
+  <section class="section clips-only" id="flown" aria-labelledby="flown-title"><div class="wrap"><h2 id="flown-title" class="visually-hidden-heading">Flown, on the simulator</h2><div class="clip-grid"><figure class="clip" data-clip="c182-landing-ai" data-state="pending"><div class="clip-stage"><img class="slide-poster" src="assets/video/c182-landing-ai-poster.webp" alt="A high-wing Civil Air Patrol single touching down on a runway, seen from above and the side." width="1280" height="720" loading="lazy"><video muted playsinline loop preload="metadata" poster="assets/video/c182-landing-ai-poster.webp" aria-label="A high-wing Civil Air Patrol single touching down on a runway, seen from above and the side."><source src="assets/video/c182-landing-ai.webm" type="video/webm"><source src="assets/video/c182-landing-ai.mp4" type="video/mp4"></video></div><div class="clip-controls"><p class="clip-caption"><strong>Touchdown at Montgomery-Gibbs (KMYF).</strong> The AI pilot's landing, seen from the side: wheels on about 63 m past the aim point, then rollout.</p><button class="clip-pause" type="button">Pause clip</button></div></figure><figure class="clip" data-clip="gfc-handover" data-state="pending"><div class="clip-stage"><video muted playsinline loop preload="metadata" aria-label="Cockpit view with the autopilot annunciation lit and terrain ahead."><source src="assets/video/gfc-handover.webm" type="video/webm"><source src="assets/video/gfc-handover.mp4" type="video/mp4"></video></div><div class="clip-controls"><p class="clip-caption"><strong>Handing over.</strong> The AI engages the GFC 700 and the terrain guard climbs away from the ridge.</p><button class="clip-pause" type="button">Pause clip</button></div></figure></div></div></section>
+
+  <section class="section" id="status" aria-labelledby="status-title"><div class="wrap">
+    <p class="eyebrow">REPEATABLE, FLOWN, AND STILL BEING TESTED</p><h2 id="status-title">What is repeatable, what has been flown, and what is still owed.</h2>
+    <div class="prose"><p><strong>How to read the table.</strong> <em>Repeatable</em>: flown and independently scored more than once. <em>Flown</em>: done at least once and scored. <em>Not yet</em>: owed. Nothing here is a validated tuning; both aircraft profiles still carry <span class="mono">tuning_validated = false</span>, and the last row says so.</p></div>
+    <div class="table-wrap"><table class="spec-table status-table"><caption class="visually-hidden-heading">Status of each AI Mission Pilot capability</caption><thead><tr><th scope="col">Capability</th><th scope="col">Status</th></tr></thead><tbody>
+      <tr><th scope="row">Cessna 172SP: repeated flight cycles, independent scoring, terminal pause every time</th><td><span class="status-cell"><span class="chip chip-proven">Repeatable</span>ten-and-ten campaign; tuning not yet validated</span></td></tr>
+      <tr><th scope="row">172SP crosswind landings at Montgomery, 12–15 kt</th><td><span class="status-cell"><span class="chip chip-flown">Flown</span>scored; the formal 10/10 gate was not completed</span></td></tr>
+      <tr><th scope="row">172SP full sortie Gillespie → Mission Bay departure → vectors → Montgomery ILS 28R</th><td><span class="status-cell"><span class="chip chip-flown">Flown</span>attended</span></td></tr>
+      <tr><th scope="row">ESCON expanding square, 9 waypoints, altitude within 25 ft</th><td><span class="status-cell"><span class="chip chip-proven">Repeatable</span>on both aircraft</span></td></tr>
+      <tr><th scope="row">AI → GFC 700 → AI hand-over with the terrain guard at the Ramona ridge</th><td><span class="status-cell"><span class="chip chip-flown">Flown</span>PASS on both aircraft in vertical-speed mode; the FLC hand-over crews brief is not yet validated, and the guard's turn-back has not been flown</span></td></tr>
+      <tr><th scope="row">Cessna 182T takeoff and landing</th><td><span class="status-cell"><span class="chip chip-flown">Flown</span>the landing passed its scorer but touched down 63 m past the aim point, still long</span></td></tr>
+      <tr><th scope="row">Tuning validated end to end</th><td><span class="status-cell"><span class="chip chip-notyet">Not yet</span>for either aircraft: a full scored validation sortie is still owed</span></td></tr>
+      <tr><th scope="row">A real airplane</th><td><span class="status-cell"><span class="chip chip-planned">Never</span>not the goal</span></td></tr>
+    </tbody></table></div>
+  </div></section>
+
+  <section class="section paper" id="f4" aria-labelledby="f4-title"><div class="wrap">
+    <p class="eyebrow">THE F-4 AND THE CARRIER</p><h2 id="f4-title">Arrestments from a Case I-style arrival, on the simulator.</h2>
+    <div class="prose">
+      <p>Alongside the Cessna work, the same ideas were pointed at something harder. A separate F-4 test program, built on the same principles — bounded, leased control; every flight's telemetry recorded and scored afterwards by an independent check — flies the Laminar F-4 Phantom II in X-Plane 12.4.3 through a Case I-style overhead arrival: the initial, the break, the downwind descent, the approach turn, the groove, and a guarded terminal to the deck. The project calls the arrival card experimental; the pattern's timing does not yet match the briefed procedure (rollout about 190 knots against roughly 250 briefed, a 52–54 second approach turn against 45).</p>
+      <p>In the program's own test flying, after some fifty development attempts, the last three versions of the control law came aboard on 12 of 15 completed approaches — flown on a development copy of the aircraft whose tail hook was extended to 50° (stock is 40°). On the unmodified aircraft, in one series of five on 2026-10-14, the figure was 3 in 5; the stock hook appears to need the wheels down further aft, and the aim point has not yet been re-tuned for it. "Completed" excludes attempts the plugin's own oscillation guard waved off within seconds of engaging; counting those, it is 12 in 22 and 3 in 6. Earlier versions did much worse (for example 5 in 10 and 1 in 5 on the two versions before these).</p>
+      <p>It is not a CAP mission. It is evidence that the ideas carry to a harder airplane, and no more than that.</p>
+    </div>
+    <div class="table-wrap"><table class="spec-table status-table"><caption class="visually-hidden-heading">Status of the separate F-4 program</caption><thead><tr><th scope="col">Separate program</th><th scope="col">Status</th></tr></thead><tbody>
+      <tr><th scope="row">F-4 Phantom II (Laminar model), Case I-style overhead arrival to an inferred arrestment</th><td><span class="status-cell"><span class="chip chip-flown">Flown</span>scored from recorded telemetry: 3 arrestments in 5 completed approaches on the unmodified aircraft (one series); 12 in 15 on a development copy with the hook extended 10° further than stock; simulator characterization only; not a CAP-VSAR capability</span></td></tr>
+    </tbody></table></div>
+    <figure class="clip" data-clip="f4-case1-arrival" data-state="pending"><div class="clip-stage"><video muted playsinline loop preload="metadata" aria-label="A jet fighter with hook down on final to a carrier deck, seen from astern."><source src="assets/video/f4-case1-arrival.webm" type="video/webm"><source src="assets/video/f4-case1-arrival.mp4" type="video/mp4"></video></div><div class="clip-controls"><p class="clip-caption"><strong>The groove.</strong> The F-4 test program's jet in the groove. Simulator characterization, not a qualification; see the paragraphs above and the notes below.</p><button class="clip-pause" type="button">Pause clip</button></div></figure>
+    <aside class="callout callout-live"><h3>How to read those numbers.</h3><p>This is a simulator characterization program, not a carrier qualification or a real-aircraft procedure. Each approach begins airborne about 3 nautical miles astern at about 350 knots, not from a catapult launch; the ship holds a steady 27 knots in calm air on a private test fixture; one aircraft weight, one simulator version. The simulator exposes no wire signal, so an "arrestment" is the program's own label for the aircraft decelerating to rest on deck; there is no optical landing aid, no landing signal officer (LSO) grade and no wire number. Every attempt was recorded at 80 Hz with no dropped frames and a safe hand-back of the controls, and the counts are read from those recordings. The program is paused; a continuous launch-to-trap has not been flown.</p></aside>
+  </div></section>
+
+  <nav class="page-next" aria-label="Next page"><div class="wrap button-row"><p class="next-label">Next</p><a class="button button-primary" href="airplane.html">The Airplane <span aria-hidden="true">→</span></a></div></nav>
+</main>
+<footer class="site-footer"><div class="footer-grid wrap"><div><a class="brand" href="index.html"><img src="assets/brand/logo.svg" alt="CAP-VSAR" width="180" height="48"></a><p>Virtual search and rescue training for crews and staff.</p></div><div><nav aria-label="Footer navigation"><div class="footer-links"><a href="index.html">Home</a><a href="comms.html">Comms</a><a href="df.html">DF &amp; Beacons</a><a href="foreflight.html">ForeFlight</a><a href="caltopo.html">CalTopo</a><a href="ai-pilot.html" aria-current="page">AI Pilot</a><a href="airplane.html">The Airplane</a><a href="flight-planner.html">Flight Planner</a><a href="hosting.html">Hosting</a><a href="how-its-built.html">How It's Built</a></div></nav><p>Exercise guide: in review, not yet published.</p></div><div class="footer-notice"><p class="footer-brand-line"><strong>Unofficial training tool. Not affiliated with or endorsed by Civil Air Patrol.</strong></p><p>CAP-VSAR is an unofficial training project built by Civil Air Patrol members. It is not an official Civil Air Patrol product and is not endorsed by Civil Air Patrol. "Civil Air Patrol" and "CAP" identify the organization this training is for; no CAP seal, emblem or wing patch is used here. Everything on this site is simulation: it is not for real flight planning, real direction finding or a real search.</p><p>Product names are the property of their owners and are used to identify the equipment being simulated.</p><p><strong>Not for operational use.</strong></p></div></div><div class="footer-last wrap">© 2026 the CAP-VSAR contributors · source code under the Apache-2.0 license; public link to follow</div></footer>
+<dialog class="lightbox" aria-label="Expanded image"><button class="lightbox-close" type="button" aria-label="Close expanded image">Close</button><img alt=""></dialog>
+</body></html>

@@ -1,4 +1,5 @@
 """Taxi guidance must honor authority, physical corridor and stop boundaries."""
+from services.ai_pilot.aircraft_profiles import C172SP
 import unittest
 
 from services.ai_pilot.ground_guidance import (
@@ -16,7 +17,7 @@ class TaxiGuidanceTests(unittest.TestCase):
         self.taxi.load_route(self.route)
         self.guide = TaxiGuidance(self.taxi, self.route,
                                   {"ramp":TaxiPoint(0,0),
-                                   "hold short":TaxiPoint(0,100)})
+                                   "hold short":TaxiPoint(0,100)}, profile=C172SP)
 
     def observation(self, **changes):
         values = dict(east_m=0, north_m=0, heading_true_deg=0,
@@ -41,7 +42,7 @@ class TaxiGuidanceTests(unittest.TestCase):
         self.taxi.authorize_taxi(ClearanceSource.ATC)
         self.assertEqual(self.guide.step(self.observation(groundspeed_mps=9)).brake,.35)
         self.assertEqual(self.guide.step(self.observation()).throttle,0)
-        second = TaxiGuidance(self.taxi,self.route,self.guide.points)
+        second = TaxiGuidance(self.taxi,self.route,self.guide.points, profile=C172SP)
         self.assertEqual(second.step(self.observation(east_m=6)).brake,.35)
         self.assertEqual(second.step(self.observation()).throttle,0)
 
@@ -50,7 +51,7 @@ class TaxiGuidanceTests(unittest.TestCase):
         command=self.guide.step(self.observation(north_m=98,groundspeed_mps=3))
         self.assertEqual(command.throttle,0)
         self.assertGreater(command.brake,0)
-        second=TaxiGuidance(self.taxi,self.route,self.guide.points)
+        second=TaxiGuidance(self.taxi,self.route,self.guide.points, profile=C172SP)
         self.assertEqual(second.step(self.observation(on_ground=False)).brake,.35)
 
     def test_slow_rolling_turn_from_parking_heading(self):
@@ -72,7 +73,7 @@ class TaxiGuidanceTests(unittest.TestCase):
         guide = TaxiGuidance(taxi, route, {"ramp": TaxiPoint(0, 0),
                                           "corner": TaxiPoint(0, 30),
                                           "hold short": TaxiPoint(30, 30)},
-                             corridor_half_width_m=10.)
+                             corridor_half_width_m=10., profile=C172SP)
         turn = guide.step(self.observation(north_m=22, groundspeed_mps=1))
         self.assertGreater(turn.yaw, .5)
         self.assertGreater(turn.throttle, 0)

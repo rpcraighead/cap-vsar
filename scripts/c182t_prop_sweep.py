@@ -30,17 +30,26 @@ OUT = Path.home() / ".cache/capvsar/measurements"
 # Open water west of Point Loma, heading west, 2,000 ft, 100 kt.
 START = {"latitude": 32.70, "longitude": -117.40, "elevation_in_meters": 609.6,
          "heading_true": 270.0, "speed_in_meters_per_second": 51.4}
-LEVER = "sim/cockpit2/engine/actuators/prop_ratio[0]"
+# The lever is the requested prop speed in rad/s (prop_ratio reads 0.0 and drives nothing:
+# docs/C182T_AI_PILOT_PROP_2026-10-15.md). Levers below are bridge ratios, 0 = minimum
+# governed speed, 1 = redline, scaled across the aircraft's governing range.
+LEVER = "sim/cockpit2/engine/actuators/prop_rotation_speed_rad_sec[0]"
+RANGE = ("sim/aircraft/controls/acf_RSC_mingov_prp", "sim/aircraft/controls/acf_RSC_redline_prp")
 THROTTLE = "sim/cockpit2/engine/actuators/throttle_ratio_all"
 READ = {"rpm": "sim/cockpit2/engine/indicators/engine_speed_rpm[0]",
         "mp_inhg": "sim/cockpit2/engine/indicators/MPR_in_hg[0]",
         "power_w": "sim/cockpit2/engine/indicators/power_watts[0]",
-        "prop_ratio": LEVER,
+        "lever_rad_s": LEVER,
         "engn_prop": "sim/flightmodel/engine/ENGN_prop[0]",
         "kias": "sim/flightmodel/position/indicated_airspeed",
         "ktas": "sim/flightmodel/position/true_airspeed",
         "alt_ft": "sim/cockpit2/gauges/indicators/altitude_ft_pilot",
         "vvi_fpm": "sim/flightmodel/position/vh_ind_fpm"}
+
+
+def set_lever(h, ratio):
+    low, high = (h.dref_get([name])[name] for name in RANGE)
+    h.dref_set(LEVER, low + ratio * (high - low))
 
 
 def load_harness():
@@ -97,8 +106,7 @@ def main(argv=None):
                 h.dref_set("sim/weather/region/%s[%d]" % (ref, i), 0.0)
         h.dref_set("sim/weather/region/update_immediately", 1)
         h.dref_set("sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot", 29.92)
-        for ref in ("mixture_ratio_all", "prop_ratio_all"):
-            h.dref_set("sim/cockpit2/engine/actuators/" + ref, 1.0)
+        h.dref_set("sim/cockpit2/engine/actuators/mixture_ratio_all", 1.0)
         h.dref_set(THROTTLE, args.throttles[0])
         h.dref_set("sim/cockpit2/controls/flap_handle_request_ratio", 0.0)
         h.dref_set("sim/cockpit2/engine/actuators/cowl_flap_ratio[0]", 0.0)
@@ -120,11 +128,11 @@ def main(argv=None):
         print("AP modes", log["ap_modes"], flush=True)
         for throttle in args.throttles:
             h.dref_set(THROTTLE, throttle)
-            h.dref_set(LEVER, 1.0)
+            set_lever(h, 1.0)
             time.sleep(args.settle_s)
             points = []
             for lever in args.levers:
-                h.dref_set(LEVER, lever)
+                set_lever(h, lever)
                 time.sleep(args.settle_s)
                 row = {"lever_cmd": lever, **sample(h, args.sample_s)}
                 points.append(row)
@@ -132,7 +140,7 @@ def main(argv=None):
                     throttle, lever, row["rpm"], row["mp_inhg"], row["power_w"] / 745.7,
                     row["kias"]), flush=True)
             log["sweeps"].append({"throttle": throttle, "points": points})
-        h.dref_set(LEVER, 1.0)
+        set_lever(h, 1.0)
     finally:
         h.cmd("sim/operation/pause_on")
         (OUT / f"prop_sweep_{args.run}.json").write_text(json.dumps(log, indent=1))

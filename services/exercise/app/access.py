@@ -22,6 +22,7 @@ import hashlib
 import secrets
 import hmac
 import json
+import logging
 import os
 import sqlite3
 import time
@@ -29,6 +30,8 @@ import uuid
 from contextlib import contextmanager
 
 from fastapi import HTTPException, Request
+
+log = logging.getLogger("capvsar.console.access")
 
 TOKEN_HEADER = "X-CAPVSAR-Token"
 SESSION_COOKIE = "capvsar_session"
@@ -168,6 +171,25 @@ def init_auth_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_roster_code ON roster(code);
         CREATE INDEX IF NOT EXISTS idx_sessions_id ON sessions(session_id);
         """)
+        # Seats assigned by email (OIDC sign-in, identity plan §5): the roster row
+        # carries the normalised address and how its holder last signed in; a
+        # session carries which path minted it and the verified email, so the
+        # director's "who joined" view and the audit line never guess.
+        # Additive, like every migration in store.init_db().
+        roster_cols = {r["name"] for r in c.execute("PRAGMA table_info(roster)")}
+        if "email" not in roster_cols:
+            c.execute("ALTER TABLE roster ADD COLUMN email TEXT")
+        if "last_login_via" not in roster_cols:
+            c.execute("ALTER TABLE roster ADD COLUMN last_login_via TEXT")
+        session_cols = {r["name"] for r in c.execute("PRAGMA table_info(sessions)")}
+        if "via" not in session_cols:
+            c.execute("ALTER TABLE sessions ADD COLUMN via TEXT")
+        if "email" not in session_cols:
+            c.execute("ALTER TABLE sessions ADD COLUMN email TEXT")
+        # One email holds one seat per exercise (v1): the database says so too,
+        # not only the setup validation.
+        c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_roster_email ON roster(email) "
+                  "WHERE email IS NOT NULL AND email != ''")
         # Existing databases have no FK: triggers also cover direct roster deletion.
         c.executescript("""
         CREATE TRIGGER IF NOT EXISTS revoke_roster_sessions AFTER DELETE ON roster
@@ -270,6 +292,8 @@ def get_session_from_request(request: Request) -> dict | None:
                     "callsign": r.upper(),
                     "aircraft_id": "",
                     "target_url": "/" if r == "instructor" else "/base",
+                    "via": "token", "email": None,
+                    "seat": {"instructor": "director", "base": "base", "plugin": "station"}[r],
                 }
 
     # 2. Check session ID from cookie or Bearer authorization
@@ -288,7 +312,7 @@ def get_session_from_request(request: Request) -> dict | None:
         # session was minted for, so the radio can tell a pilot from an
         # observer by what the roster says rather than by the callsign.
         row = c.execute(
-            "SELECT code, role, title, callsign, aircraft_id, target_url, expires, "
+            "SELECT code, role, title, callsign, aircraft_id, target_url, expires, via, email, "
             "(SELECT assigned_name FROM roster WHERE roster.code=sessions.code) "
             "AS assigned_name "
             "FROM sessions WHERE session_id=? AND expires>?",
@@ -297,21 +321,40 @@ def get_session_from_request(request: Request) -> dict | None:
         if row:
             identity = dict(row)
             identity["code"] = identity["code"].rsplit("-", 1)[0]
+            identity["via"] = identity.get("via") or "badge"
+            identity["seat"] = seat_of(identity)
             return identity
     return None
 
 
+SESSION_LIFETIME_DEFAULT_S = 86400.0
+
+
+def session_lifetime_s() -> float:
+    """CAPVSAR_SESSION_LIFETIME_S, 5 minutes to 30 days; the 24 h default otherwise.
+    Read on every mint so an operator change needs no restart."""
+    raw = os.environ.get("CAPVSAR_SESSION_LIFETIME_S", "").strip()
+    try:
+        value = float(raw) if raw else SESSION_LIFETIME_DEFAULT_S
+    except ValueError:
+        return SESSION_LIFETIME_DEFAULT_S
+    return value if 300.0 <= value <= 30 * 86400.0 else SESSION_LIFETIME_DEFAULT_S
+
+
 def create_session(code: str, role: str, title: str, callsign: str = "",
-                   aircraft_id: str = "", target_url: str = "") -> str:
-    """Create a persistent session token lasting 24 hours."""
+                   aircraft_id: str = "", target_url: str = "", *,
+                   via: str = "badge", email: str | None = None) -> str:
+    """Mint a session. `via` says which path proved the identity (badge, oidc);
+    `email` is the provider-verified address for an OIDC login, else None."""
     sess_id = secrets.token_urlsafe(32)
     now = time.time()
-    expires = now + 86400.0  # 24 hours
+    expires = now + session_lifetime_s()
     with auth_db() as c:
         c.execute(
-            "INSERT INTO sessions (session_id, code, role, title, callsign, aircraft_id, target_url, created, expires) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (_session_hash(sess_id), code, role, title, callsign, aircraft_id, target_url, now, expires)
+            "INSERT INTO sessions (session_id, code, role, title, callsign, aircraft_id, target_url, "
+            "created, expires, via, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (_session_hash(sess_id), code, role, title, callsign, aircraft_id, target_url, now, expires,
+             via, email)
         )
     return sess_id
 
@@ -319,6 +362,17 @@ def create_session(code: str, role: str, title: str, callsign: str = "",
 def delete_session(sess_id: str) -> None:
     with auth_db() as c:
         c.execute("DELETE FROM sessions WHERE session_id=?", (_session_hash(sess_id),))
+
+
+def revoke_previous_session(request: Request) -> None:
+    """T23 P2: a browser that signs in again gets a fresh session id and the
+    cookie is overwritten, but the row it used to carry stayed valid until it
+    expired. Delete it once the new login has succeeded. Every tab of that
+    browser shares the cookie jar, so no open tab is still presenting the old
+    id; another device on the same seat has its own session and is untouched."""
+    previous = request.cookies.get(SESSION_COOKIE)
+    if previous:
+        delete_session(previous)
 
 
 def authenticate_code(code: str) -> tuple[dict, str] | None:
@@ -344,27 +398,101 @@ def authenticate_code(code: str) -> tuple[dict, str] | None:
             (clean_code,)
         ).fetchone()
         if not row:
+            # Review T11: a refused code used to leave no trace at all, so a
+            # guessing run was invisible. The value itself is never logged.
+            log.warning("login refused: unknown participant code (%d chars)", len(clean_code))
             return None
         d = dict(row)
         sess_id = secrets.token_urlsafe(32)
-        c.execute("UPDATE roster SET last_login=? WHERE id=?", (now, d["id"]))
+        c.execute("UPDATE roster SET last_login=?, last_login_via='badge' WHERE id=?", (now, d["id"]))
         c.execute(
-            "INSERT INTO sessions (session_id, code, role, title, callsign, aircraft_id, target_url, created, expires) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO sessions (session_id, code, role, title, callsign, aircraft_id, target_url, "
+            "created, expires, via, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'badge', NULL)",
             (_session_hash(sess_id), d["code"], d["role"], d["title"],
-             d["callsign"], d["aircraft_id"], d["target_url"], now, now + 86400))
+             d["callsign"], d["aircraft_id"], d["target_url"], now, now + session_lifetime_s()))
 
     d["code"] = d["code"].rsplit("-", 1)[0]
     return (d, sess_id)
 
 
+def _roster_row_public(row) -> dict:
+    d = dict(row)
+    d["code"] = d["code"].rsplit("-", 1)[0]
+    return d
+
+
+def login_with_email(email: str, *, directors: tuple = ()) -> tuple[dict, str] | None:
+    """The OIDC counterpart of authenticate_code(): a provider-verified,
+    normalised email becomes the seat the director assigned to it.
+
+    A configured director email becomes an instructor session bound to the
+    roster's director row (so presence and the Ready room work), whatever that
+    row's own email says. Anyone else must match a roster row exactly (after
+    the same trim + case-fold the setup applied; no alias canonicalisation).
+    None means "no seat": the caller shows the friendly page and mints nothing.
+    """
+    now = time.time()
+    with auth_db() as c:
+        c.execute("BEGIN IMMEDIATE")
+        if email in directors:
+            row = c.execute(
+                "SELECT id, code, role, title, callsign, aircraft_id, assigned_name, target_url "
+                "FROM roster WHERE role='instructor' ORDER BY created, id LIMIT 1").fetchone()
+            if row is None:
+                # A console with no director row at all (never set up): the
+                # allow-list still gets the director in, on a roster-less code.
+                d = {"id": None, "code": "INSTR-1-DIRECTOR", "role": "instructor",
+                     "title": "Exercise Director", "callsign": "INSTRUCTOR",
+                     "aircraft_id": "", "assigned_name": "Instructor", "target_url": "/"}
+            else:
+                d = dict(row)
+        else:
+            row = c.execute(
+                "SELECT id, code, role, title, callsign, aircraft_id, assigned_name, target_url "
+                "FROM roster WHERE email=?", (email,)).fetchone()
+            if row is None:
+                return None
+            d = dict(row)
+        sess_id = secrets.token_urlsafe(32)
+        if d.get("id"):
+            c.execute("UPDATE roster SET last_login=?, last_login_via='oidc' WHERE id=?", (now, d["id"]))
+        c.execute(
+            "INSERT INTO sessions (session_id, code, role, title, callsign, aircraft_id, target_url, "
+            "created, expires, via, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'oidc', ?)",
+            (_session_hash(sess_id), d["code"], d["role"], d["title"], d["callsign"],
+             d["aircraft_id"], d["target_url"], now, now + session_lifetime_s(), email))
+    return (_roster_row_public(d), sess_id)
+
+
+def reissue_instructor_session(previous: dict) -> str | None:
+    """B7: a setup save regenerates the roster and revokes every session,
+    the saving instructor's included. Mint them a fresh one on the new
+    director row so the page they are on stays signed in. Token-header
+    identities need nothing."""
+    if not previous or previous.get("role") != "instructor" or previous.get("via") == "token":
+        return None
+    with auth_db() as c:
+        row = c.execute("SELECT code, title, callsign, target_url FROM roster WHERE role='instructor' "
+                        "ORDER BY created, id LIMIT 1").fetchone()
+    if row is None:
+        return None
+    return create_session(row["code"], "instructor", row["title"], row["callsign"] or "INSTRUCTOR", "",
+                          row["target_url"] or "/", via=previous.get("via") or "badge",
+                          email=previous.get("email"))
+
+
 def get_roster() -> list[dict]:
     with auth_db() as c:
         rows = c.execute(
-            "SELECT id, code, role, title, callsign, aircraft_id, assigned_name, token, target_url, created, last_login "
-            "FROM roster ORDER BY created, id"
+            "SELECT id, code, role, title, callsign, aircraft_id, assigned_name, token, target_url, created, "
+            "last_login, email, last_login_via FROM roster ORDER BY created, id"
         ).fetchall()
-        return [dict(r) for r in rows]
+        result = []
+        for r in rows:
+            d = dict(r)
+            d["seat"] = seat_of(d)
+            result.append(d)
+        return result
 
 
 def get_exercise_setup() -> dict:
@@ -401,11 +529,33 @@ def get_exercise_setup() -> dict:
         }
 
 
-def save_exercise_setup(name: str, num_aircraft: int, aircraft_list: list[dict], staff_list: list[dict]) -> dict:
-    """Save exercise configuration and generate participant roster with codes and invite URLs."""
+def _normalised_email(value) -> str | None:
+    """Trim + ASCII lower-case, nothing more; None for empty. Raises ValueError
+    (plain-language message) for a malformed or non-ASCII address so the route
+    can answer 422. One rule for the models and the store: oidc.parse_setup_email."""
+    from .oidc import parse_setup_email
+    return parse_setup_email(value)
+
+
+def save_exercise_setup(name: str, num_aircraft: int, aircraft_list: list[dict], staff_list: list[dict],
+                        *, director_email: str | None = None) -> dict:
+    """Save exercise configuration and generate participant roster with codes and invite URLs.
+
+    Seats may carry an email (`director_email`, `aircraft[].emails[seat]`,
+    `staff[].email`): the address Google (or authentik) must verify for the
+    holder to be signed into that seat. One email, one seat: a duplicate
+    raises ValueError naming the seats, and the route answers 422.
+    """
     now = time.time()
-    config_obj = {"aircraft": aircraft_list, "staff": staff_list}
+    director_email = _normalised_email(director_email)
+    config_obj = {"aircraft": aircraft_list, "staff": staff_list, "director_email": director_email}
     config_json = json.dumps(config_obj)
+    assigned: dict[str, list[str]] = {}
+
+    def claim(email, seat_label):
+        if email:
+            assigned.setdefault(email, []).append(seat_label)
+        return email
 
     with auth_db() as c:
         # Mark previous configs inactive
@@ -425,7 +575,7 @@ def save_exercise_setup(name: str, num_aircraft: int, aircraft_list: list[dict],
         new_roster.append((
             f"r-instr-{uuid.uuid4().hex[:6]}", "INSTR-1", "instructor",
             "Exercise Director / Evaluator", "INSTRUCTOR", "", "Instructor",
-            secrets.token_hex(16).upper(), "/", now
+            secrets.token_hex(16).upper(), "/", now, claim(director_email, "INSTR-1")
         ))
 
         # 2. Aircraft crews
@@ -440,23 +590,32 @@ def save_exercise_setup(name: str, num_aircraft: int, aircraft_list: list[dict],
             num_suffix = callsign.split()[-1] if " " in callsign else str(ac_idx)
 
             crew_roles = ac.get("crew") or ["pilot", "observer"]
+            crew_emails = ac.get("emails") or {}
+            if not isinstance(crew_emails, dict):
+                raise ValueError("emails must map crew seats to addresses")
+            for seat_key in crew_emails:
+                if seat_key not in crew_roles:
+                    raise ValueError("emails key '%s' is not a crew seat of this aircraft" % seat_key)
             if "pilot" in crew_roles:
                 new_roster.append((
                     f"r-plt-{uuid.uuid4().hex[:6]}", f"PLT-{num_suffix}", "aircrew",
                     f"{callsign}{tail_part} SAR Mission Pilot", callsign, ac_id, "Mission Pilot",
-                    secrets.token_hex(16).upper(), "/base", now
+                    secrets.token_hex(16).upper(), "/base", now,
+                    claim(_normalised_email(crew_emails.get("pilot")), f"PLT-{num_suffix}")
                 ))
             if "observer" in crew_roles:
                 new_roster.append((
                     f"r-obs-{uuid.uuid4().hex[:6]}", f"OBS-{num_suffix}", "aircrew",
                     f"{callsign}{tail_part} Mission Observer [{df_model}]", callsign, ac_id, "Mission Observer",
-                    secrets.token_hex(16).upper(), "/base", now
+                    secrets.token_hex(16).upper(), "/base", now,
+                    claim(_normalised_email(crew_emails.get("observer")), f"OBS-{num_suffix}")
                 ))
             if "scanner" in crew_roles:
                 new_roster.append((
                     f"r-scn-{uuid.uuid4().hex[:6]}", f"SCN-{num_suffix}", "aircrew",
                     f"{callsign}{tail_part} Mission Scanner", callsign, ac_id, "Mission Scanner",
-                    secrets.token_hex(16).upper(), "/base", now
+                    secrets.token_hex(16).upper(), "/base", now,
+                    claim(_normalised_email(crew_emails.get("scanner")), f"SCN-{num_suffix}")
                 ))
 
         # 3. Ground Staff & MROs
@@ -470,13 +629,20 @@ def save_exercise_setup(name: str, num_aircraft: int, aircraft_list: list[dict],
             new_roster.append((
                 f"r-staff-{uuid.uuid4().hex[:6]}", code, s_role,
                 s_title, s_callsign, "", s_title,
-                secrets.token_hex(16).upper(), target, now
+                secrets.token_hex(16).upper(), target, now,
+                claim(_normalised_email(st.get("email")), s_callsign or code)
             ))
+
+        duplicates = {e: seats for e, seats in assigned.items() if len(seats) > 1}
+        if duplicates:
+            email, seats = sorted(duplicates.items())[0]
+            raise ValueError("email %s is assigned to more than one seat (%s); one seat per email"
+                             % (email, ", ".join(seats)))
 
         new_roster = [_credential_row(row) for row in new_roster]
         c.executemany(
-            "INSERT INTO roster (id, code, role, title, callsign, aircraft_id, assigned_name, token, target_url, created) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", new_roster
+            "INSERT INTO roster (id, code, role, title, callsign, aircraft_id, assigned_name, token, "
+            "target_url, created, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", new_roster
         )
 
     return get_exercise_setup()
@@ -531,6 +697,39 @@ def enforce_read(request: Request) -> None:
     raise HTTPException(
         403, "Log in at /login (or send a role token in the "
              f"{TOKEN_HEADER} header) to read exercise state.")
+
+
+# A13 (review T11): how often an open socket (/ws, the radio stream) re-reads
+# its session. Sessions are revoked by logout, expiry and roster regeneration,
+# none of which used to reach a socket that had authenticated once.
+SOCKET_RECHECK_S = 60.0
+
+
+def session_satisfies(role: str, sess: dict | None) -> bool:
+    """enforce()'s decision for a credential already resolved from a socket.
+
+    A websocket carries no X-CAPVSAR-Token after the handshake, so the token
+    branch reduces to: the role has no token configured and the console is an
+    explicitly open dev console. Anything else needs the session's role to be
+    in SATISFIED_BY, exactly as the REST routes require.
+    """
+    if sess and sess.get("role", "") in SATISFIED_BY.get(role, ()):
+        return True
+    accepted = [t for t in (token_for(r) for r in SATISFIED_BY[role]) if t]
+    return not accepted and dev_open()
+
+
+def socket_still_admitted(sess: dict | None, *, required: bool) -> bool:
+    """Re-check of an open socket's credential (A13).
+
+    `required` is whether a session existed when the socket was admitted. A
+    socket admitted on a session must still have one; a socket admitted
+    anonymously on an open dev console (the only way in without one) stays as
+    long as the console is still open.
+    """
+    if sess:
+        return True
+    return not required and dev_open()
 
 
 def is_instructor(request: Request) -> bool:

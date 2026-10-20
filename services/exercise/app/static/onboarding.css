@@ -1,0 +1,3243 @@
+/* ==========================================================================
+   CAP V-SAR Onboarding Design System (static/onboarding.css)
+   Scoped under `.onb` so legacy console pages sharing `style.css` are untouched.
+   Supports dark & light themes via `prefers-color-scheme` and `[data-theme]`.
+   Runs 100% offline with local/system fonts and inline SVG iconography.
+   ========================================================================== */
+
+/* ---- 1. Color & Design Tokens (Dark Default + prefers-color-scheme) ------ */
+html:has(body.onb),
+body.onb {
+  --onb-font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+  --onb-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Type scale */
+  --onb-fs-2xs: 11px;
+  --onb-fs-xs:  12px;
+  --onb-fs-sm:  13px;
+  --onb-fs-md:  14px;
+  --onb-fs-lg:  16px;
+  --onb-fs-xl:  18px;
+  --onb-fs-2xl: 22px;
+  --onb-fs-3xl: 28px;
+
+  /* Spacing scale */
+  --onb-sp-1: 4px;
+  --onb-sp-2: 8px;
+  --onb-sp-3: 12px;
+  --onb-sp-4: 16px;
+  --onb-sp-5: 20px;
+  --onb-sp-6: 24px;
+  --onb-sp-8: 32px;
+
+  /* Radii & shape */
+  --onb-radius-sm: 6px;
+  --onb-radius:    8px;
+  --onb-radius-lg: 12px;
+  --onb-radius-xl: 16px;
+  --onb-touch:     42px;
+  --onb-motion:    150ms cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Aircraft identity slots (matching tokens.css D6) */
+  --onb-ac-1: #3987e5;
+  --onb-ac-2: #d95926;
+  --onb-ac-3: #199e70;
+  --onb-ac-4: #c98500;
+
+  /* Dark theme palette (default) */
+  color-scheme: dark;
+  --onb-bg:             #0b0f17;
+  --onb-bg-subtle:      #101622;
+  --onb-surface:        #151c28;
+  --onb-surface-2:      #1c2536;
+  --onb-surface-3:      #253047;
+  --onb-header-bg:      rgba(15, 21, 34, 0.92);
+  --onb-border:         #263246;
+  --onb-border-strong:  #384863;
+  --onb-ink:            #f1f5f9;
+  --onb-ink-2:          #cbd5e1;
+  --onb-muted:          #8e9fb8;
+  --onb-accent:         #5899f8;
+  --onb-accent-hover:   #76adff;
+  --onb-accent-soft:    rgba(88, 153, 248, 0.14);
+  --onb-primary-bg:     #2563eb;
+  --onb-primary-hover:  #3b82f6;
+  --onb-primary-ink:    #ffffff;
+  --onb-focus-ring:     rgba(88, 153, 248, 0.45);
+  --onb-shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.35);
+  --onb-shadow-md:      0 8px 24px rgba(0, 0, 0, 0.45);
+  --onb-shadow-lg:      0 16px 40px rgba(0, 0, 0, 0.55);
+
+  /* Semantic status tokens (Dark) */
+  --onb-good:           #10b981;
+  --onb-good-soft:      rgba(16, 185, 129, 0.14);
+  --onb-good-border:    rgba(16, 185, 129, 0.4);
+  --onb-good-ink:       #6ee7b7;
+
+  --onb-warn:           #f59e0b;
+  --onb-warn-soft:      rgba(245, 158, 11, 0.14);
+  --onb-warn-border:    rgba(245, 158, 11, 0.4);
+  --onb-warn-ink:       #fcd34d;
+
+  --onb-danger:         #ef4444;
+  --onb-danger-soft:    rgba(239, 68, 68, 0.14);
+  --onb-danger-border:  rgba(239, 68, 68, 0.45);
+  --onb-danger-ink:     #fca5a5;
+
+  --onb-info:           #38bdf8;
+  --onb-info-soft:      rgba(56, 189, 248, 0.14);
+  --onb-info-border:    rgba(56, 189, 248, 0.4);
+  --onb-info-ink:       #7dd3fc;
+
+  /* Role tokens (Dark) */
+  --onb-role-instr:     #f59e0b;
+  --onb-role-instr-bg:  rgba(245, 158, 11, 0.15);
+  --onb-role-instr-ink: #fcd34d;
+
+  --onb-role-base:      #10b981;
+  --onb-role-base-bg:   rgba(16, 185, 129, 0.15);
+  --onb-role-base-ink:  #6ee7b7;
+
+  --onb-role-air:       #3b82f6;
+  --onb-role-air-bg:    rgba(59, 130, 246, 0.16);
+  --onb-role-air-ink:   #93c5fd;
+
+  --onb-role-ground:    #a855f7;
+  --onb-role-ground-bg: rgba(168, 85, 247, 0.16);
+  --onb-role-ground-ink:#d8b4fe;
+}
+
+/* Automatic Light Theme via prefers-color-scheme (unless forced dark) */
+@media (prefers-color-scheme: light) {
+  html:not([data-theme="dark"]):has(body.onb),
+  html:not([data-theme="dark"]) body.onb {
+    color-scheme: light;
+    --onb-bg:             #f4f7fb;
+    --onb-bg-subtle:      #eaf0f7;
+    --onb-surface:        #ffffff;
+    --onb-surface-2:      #f8fafc;
+    --onb-surface-3:      #edf2f7;
+    --onb-header-bg:      rgba(255, 255, 255, 0.94);
+    --onb-border:         #d8e2ef;
+    --onb-border-strong:  #b8c7dc;
+    --onb-ink:            #0f172a;
+    --onb-ink-2:          #334155;
+    --onb-muted:          #526277;
+    --onb-accent:         #1d4ed8;
+    --onb-accent-hover:   #1e3a8a;
+    --onb-accent-soft:    rgba(29, 78, 216, 0.08);
+    --onb-primary-bg:     #1e3a8a;
+    --onb-primary-hover:  #1d4ed8;
+    --onb-primary-ink:    #ffffff;
+    --onb-focus-ring:     rgba(29, 78, 216, 0.32);
+    --onb-shadow-sm:      0 1px 3px rgba(15, 23, 42, 0.06);
+    --onb-shadow-md:      0 8px 24px rgba(15, 23, 42, 0.08);
+    --onb-shadow-lg:      0 18px 40px rgba(15, 23, 42, 0.12);
+
+    --onb-good:           #059669;
+    --onb-good-soft:      #ecfdf5;
+    --onb-good-border:    #a7f3d0;
+    --onb-good-ink:       #065f46;
+
+    --onb-warn:           #d97706;
+    --onb-warn-soft:      #fffbeb;
+    --onb-warn-border:    #fde68a;
+    --onb-warn-ink:       #92400e;
+
+    --onb-danger:         #dc2626;
+    --onb-danger-soft:    #fef2f2;
+    --onb-danger-border:  #fecaca;
+    --onb-danger-ink:     #991b1b;
+
+    --onb-info:           #0284c7;
+    --onb-info-soft:      #f0f9ff;
+    --onb-info-border:    #bae6fd;
+    --onb-info-ink:       #075985;
+
+    --onb-role-instr:     #b45309;
+    --onb-role-instr-bg:  #fef3c7;
+    --onb-role-instr-ink: #78350f;
+
+    --onb-role-base:      #047857;
+    --onb-role-base-bg:   #d1fae5;
+    --onb-role-base-ink:  #064e3b;
+
+    --onb-role-air:       #1d4ed8;
+    --onb-role-air-bg:    #dbeafe;
+    --onb-role-air-ink:   #1e3a8a;
+
+    --onb-role-ground:    #7e22ce;
+    --onb-role-ground-bg: #f3e8ff;
+    --onb-role-ground-ink:#581c87;
+  }
+}
+
+/* Explicit light override via [data-theme="light"] */
+html[data-theme="light"]:has(body.onb),
+html[data-theme="light"] body.onb,
+body.onb[data-theme="light"] {
+  color-scheme: light;
+  --onb-bg:             #f4f7fb;
+  --onb-bg-subtle:      #eaf0f7;
+  --onb-surface:        #ffffff;
+  --onb-surface-2:      #f8fafc;
+  --onb-surface-3:      #edf2f7;
+  --onb-header-bg:      rgba(255, 255, 255, 0.94);
+  --onb-border:         #d8e2ef;
+  --onb-border-strong:  #b8c7dc;
+  --onb-ink:            #0f172a;
+  --onb-ink-2:          #334155;
+  --onb-muted:          #526277;
+  --onb-accent:         #1d4ed8;
+  --onb-accent-hover:   #1e3a8a;
+  --onb-accent-soft:    rgba(29, 78, 216, 0.08);
+  --onb-primary-bg:     #1e3a8a;
+  --onb-primary-hover:  #1d4ed8;
+  --onb-primary-ink:    #ffffff;
+  --onb-focus-ring:     rgba(29, 78, 216, 0.32);
+  --onb-shadow-sm:      0 1px 3px rgba(15, 23, 42, 0.06);
+  --onb-shadow-md:      0 8px 24px rgba(15, 23, 42, 0.08);
+  --onb-shadow-lg:      0 18px 40px rgba(15, 23, 42, 0.12);
+
+  --onb-good:           #059669;
+  --onb-good-soft:      #ecfdf5;
+  --onb-good-border:    #a7f3d0;
+  --onb-good-ink:       #065f46;
+
+  --onb-warn:           #d97706;
+  --onb-warn-soft:      #fffbeb;
+  --onb-warn-border:    #fde68a;
+  --onb-warn-ink:       #92400e;
+
+  --onb-danger:         #dc2626;
+  --onb-danger-soft:    #fef2f2;
+  --onb-danger-border:  #fecaca;
+  --onb-danger-ink:     #991b1b;
+
+  --onb-info:           #0284c7;
+  --onb-info-soft:      #f0f9ff;
+  --onb-info-border:    #bae6fd;
+  --onb-info-ink:       #075985;
+
+  --onb-role-instr:     #b45309;
+  --onb-role-instr-bg:  #fef3c7;
+  --onb-role-instr-ink: #78350f;
+
+  --onb-role-base:      #047857;
+  --onb-role-base-bg:   #d1fae5;
+  --onb-role-base-ink:  #064e3b;
+
+  --onb-role-air:       #1d4ed8;
+  --onb-role-air-bg:    #dbeafe;
+  --onb-role-air-ink:   #1e3a8a;
+
+  --onb-role-ground:    #7e22ce;
+  --onb-role-ground-bg: #f3e8ff;
+  --onb-role-ground-ink:#581c87;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.onb { --onb-motion: 0ms; }
+}
+
+/* ---- 2. Base Page Reset & Typography (Scoped to .onb) -------------------- */
+html:has(body.onb) {
+  background-color: var(--onb-bg);
+  color: var(--onb-ink);
+}
+
+body.onb {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  font-family: var(--onb-font-sans);
+  font-size: var(--onb-fs-md);
+  line-height: 1.5;
+  color: var(--onb-ink);
+  background-color: var(--onb-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body.onb .mono {
+  font-family: var(--onb-font-mono);
+  font-variant-numeric: tabular-nums;
+  opacity: 1;
+}
+
+body.onb :focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--onb-focus-ring);
+}
+
+body.onb svg.onb-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  vertical-align: -2px;
+}
+
+body.onb svg.onb-icon-lg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+/* ---- 3. Top Header Bar (.onb-topbar) ------------------------------------- */
+body.onb header.onb-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 54px;
+  padding: 8px 16px;
+  background: var(--onb-header-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--onb-border);
+  color: var(--onb-ink);
+}
+
+body.onb .onb-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--onb-ink);
+  white-space: nowrap;
+}
+
+body.onb .onb-brand-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: var(--onb-primary-bg);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  box-shadow: var(--onb-shadow-sm);
+}
+
+body.onb .onb-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+body.onb .onb-brand-text b {
+  font-size: var(--onb-fs-md);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--onb-ink);
+}
+
+body.onb .onb-brand-text span {
+  font-size: var(--onb-fs-2xs);
+  color: var(--onb-muted);
+  margin: 0;
+  opacity: 1;
+}
+
+body.onb .onb-exercise-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--onb-font-mono);
+  font-size: var(--onb-fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: var(--onb-warn-soft);
+  color: var(--onb-warn-ink);
+  border: 1px solid var(--onb-warn-border);
+  white-space: nowrap;
+}
+
+body.onb .onb-nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: 4px;
+  overflow: visible;
+  flex-shrink: 0;
+}
+
+body.onb .onb-nav .navlink {
+  color: var(--onb-ink-2);
+  opacity: 1;
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 5px 8px;
+  border-radius: var(--onb-radius-sm);
+  border: 1px solid transparent;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--onb-motion), color var(--onb-motion);
+}
+
+body.onb .onb-nav .navlink:hover {
+  background: var(--onb-surface-2);
+  color: var(--onb-ink);
+}
+
+body.onb .onb-nav .navlink[aria-current="page"] {
+  background: var(--onb-accent-soft);
+  color: var(--onb-accent);
+  border-color: color-mix(in srgb, var(--onb-accent) 30%, transparent);
+  font-weight: 600;
+}
+
+body.onb .onb-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--onb-sp-2);
+  margin-left: auto;
+}
+
+body.onb .onb-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--onb-fs-xs);
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--onb-good-soft);
+  color: var(--onb-good-ink);
+  border: 1px solid var(--onb-good-border);
+  white-space: nowrap;
+}
+
+body.onb .onb-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--onb-good);
+  display: inline-block;
+}
+
+body.onb .onb-clock {
+  font-family: var(--onb-font-mono);
+  font-size: var(--onb-fs-xs);
+  color: var(--onb-muted);
+  padding: 4px 8px;
+  background: var(--onb-surface-2);
+  border: 1px solid var(--onb-border);
+  border-radius: var(--onb-radius-sm);
+  white-space: nowrap;
+}
+
+body.onb .user-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--onb-fs-xs);
+  font-weight: 600;
+  color: var(--onb-ink);
+  background: var(--onb-surface-2);
+  border: 1px solid var(--onb-border);
+  padding: 5px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+body.onb .onb-theme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 10px;
+  font-size: var(--onb-fs-xs);
+  font-weight: 500;
+  color: var(--onb-ink-2);
+  background: var(--onb-surface-2);
+  border: 1px solid var(--onb-border);
+  border-radius: var(--onb-radius-sm);
+  cursor: pointer;
+}
+
+body.onb .onb-theme-btn:hover {
+  background: var(--onb-surface-3);
+  color: var(--onb-ink);
+}
+
+/* ---- 4. Setup Main Container & Hero Header ------------------------------- */
+body.onb .setup-main {
+  display: block;
+  height: auto;
+  overflow: visible;
+  padding: var(--onb-sp-6) var(--onb-sp-5) 64px;
+}
+
+body.onb .setup-container {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+body.onb .setup-header-block {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: var(--onb-sp-5);
+  flex-wrap: wrap;
+  margin-bottom: var(--onb-sp-5);
+}
+
+body.onb .setup-header-copy {
+  max-width: 720px;
+}
+
+body.onb .onb-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--onb-fs-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--onb-accent);
+  margin-bottom: 6px;
+}
+
+body.onb .setup-header-block h1 {
+  margin: 0 0 8px;
+  font-size: var(--onb-fs-3xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--onb-ink);
+  line-height: 1.2;
+}
+
+body.onb .setup-header-block .subtitle {
+  margin: 0;
+  font-size: var(--onb-fs-md);
+  color: var(--onb-ink-2);
+  line-height: 1.55;
+}
+
+body.onb .setup-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--onb-sp-2);
+  flex-wrap: wrap;
+}
+
+/* ---- 5. 5-Step Process Stepper Bar (.onb-stepper) ------------------------ */
+body.onb .onb-stepper {
+  position: sticky;
+  top: 57px;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(170px, 1fr));
+  gap: var(--onb-sp-2);
+  padding: var(--onb-sp-2);
+  margin-bottom: var(--onb-sp-6);
+  background: var(--onb-surface);
+  border: 1px solid var(--onb-border);
+  border-radius: var(--onb-radius-lg);
+  box-shadow: var(--onb-shadow-sm);
+  overflow-x: auto;
+}
+
+body.onb .onb-step-tab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--onb-radius);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--onb-ink-2);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--onb-motion), border-color var(--onb-motion), color var(--onb-motion);
+  min-height: 54px;
+}
+
+body.onb .onb-step-tab:hover {
+  background: var(--onb-surface-2);
+  color: var(--onb-ink);
+}
+
+body.onb .onb-step-tab.active,
+body.onb .onb-step-tab[aria-current="step"] {
+  background: var(--onb-accent-soft);
+  border-color: color-mix(in srgb, var(--onb-accent) 40%, transparent);
+  color: var(--onb-ink);
+}
+
+body.onb .onb-step-num {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--onb-font-mono);
+  font-size: var(--onb-fs-xs);
+  font-weight: 700;
+  background: var(--onb-surface-2);
+  color: var(--onb-muted);
+  border: 1px solid var(--onb-border-strong);
+  flex-shrink: 0;
+}
+
+body.onb .onb-step-tab.active .onb-step-num,
+body.onb .onb-step-tab[aria-current="step"] .onb-step-num {
+  background: var(--onb-primary-bg);
+  color: var(--onb-primary-ink);
+  border-color: var(--onb-primary-bg);
+}
+
+body.onb .onb-step-tab.done .onb-step-num {
+  background: var(--onb-good-soft);
+  color: var(--onb-good-ink);
+  border-color: var(--onb-good-border);
+}
+
+body.onb .onb-step-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+body.onb .onb-step-title {
+  font-size: var(--onb-fs-sm);
+  font-weight: 600;
+  color: var(--onb-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body.onb .onb-step-sub {
+  font-size: var(--onb-fs-2xs);
+  color: var(--onb-muted);
+  font-family: var(--onb-font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+/* ---- 6. Cards, Sections & Step Headers ----------------------------------- */
+body.onb .setup-card {
+  background: var(--onb-surface);
+  border: 1px solid var(--onb-border);
+  border-radius: var(--onb-radius-lg);
+  padding: var(--onb-sp-6);
+  margin-bottom: var(--onb-sp-5);
+  box-shadow: var(--onb-shadow-sm);
+  scroll-margin-top: 132px;
+}
+
+body.onb .onb-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--onb-sp-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--onb-sp-4);
+  padding-bottom: var(--onb-sp-3);
+  border-bottom: 1px solid var(--onb-border);
+}
+
+body.onb .onb-step-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--onb-font-mono);
+  font-size: var(--onb-fs-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--onb-accent);
+  background: var(--onb-accent-soft);
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-bottom: 6px;
+}
+
+body.onb .card-title {
+  font-size: var(--onb-fs-xl);
+  font-weight: 700;
+  color: var(--onb-ink);
+  margin: 0;
+  text-transform: none;
+  letter-spacing: -0.01em;
+}
+
+body.onb .card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--onb-sp-3);
+  margin-bottom: var(--onb-sp-3);
+}
+
+body.onb .hint {
+  font-size: var(--onb-fs-sm);
+  color: var(--onb-ink-2);
+  margin: 0 0 var(--onb-sp-4);
+  line-height: 1.5;
+}
+
+body.onb .notes {
+  font-size: var(--onb-fs-xs);
+  color: var(--onb-muted);
+  margin-top: 6px;
+  line-height: 1.45;
+}
+
+/* ---- 7. Forms, Inputs, Validation & Buttons ------------------------------ */
+body.onb label {
+  display: block;
+  font-size: var(--onb-fs-xs);
+  font-weight: 600;
+  color: var(--onb-ink-2);
+  margin: 0 0 6px;
+  letter-spacing: 0.02em;
+}
+
+body.onb input[type="text"],
+body.onb input:not([type]),
+body.onb select,
+body.onb textarea {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  font-family: var(--onb-font-sans);
+  font-size: var(--onb-fs-md);
+  color: var(--onb-ink);
+  background: var(--onb-surface-2);
+  border: 1px solid var(--onb-border-strong);
+  border-radius: var(--onb-radius-sm);
+  transition: border-color var(--onb-motion), box-shadow var(--onb-motion);
+}
+
+body.onb input::placeholder,
+body.onb textarea::placeholder {
+  color: var(--onb-muted);
+}
+
+body.onb input:focus,
+body.onb select:focus,
+body.onb textarea:focus {
+  outline: none;
+  border-color: var(--onb-accent);
+  box-shadow: 0 0 0 3px var(--onb-focus-ring);
+}
+
+body.onb input.is-invalid,
+body.onb select.is-invalid {
+  border-color: var(--onb-danger);
+  background: var(--onb-danger-soft);
+}
+
+body.onb .onb-field-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--onb-fs-xs);
+  font-weight: 500;
+  color: var(--onb-danger-ink);
+  margin-top: 5px;
+}
+
+body.onb .onb-field-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--onb-fs-xs);
+  color: var(--onb-muted);
+  margin-top: 5px;
+}
+
+/* Buttons */
+body.onb button,
+body.onb .onb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 14px;
+  font-family: var(--onb-font-sans);
+  font-size: var(--onb-fs-sm);
+  font-weight: 600;
+  border-radius: var(--onb-radius-sm);
+  border: 1px solid var(--onb-border-strong);
+  background: var(--onb-surface-2);
+  color: var(--onb-ink);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--onb-motion), border-color var(--onb-motion), transform var(--onb-motion);
+}
+
+body.onb button:hover:not(:disabled),
+body.onb .onb-btn:hover:not(:disabled) {
+  background: var(--onb-surface-3);
+  border-color: var(--onb-accent);
+}
+
+body.onb button:disabled,
+body.onb .onb-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+body.onb button.primary,
+body.onb .onb-btn-primary {
+  background: var(--onb-primary-bg);
+  color: var(--onb-primary-ink);
+  border-color: var(--onb-primary-bg);
+  box-shadow: var(--onb-shadow-sm);
+}
+
+body.onb button.primary:hover:not(:disabled),
+body.onb .onb-btn-primary:hover:not(:disabled) {
+  background: var(--onb-primary-hover);
+  border-color: var(--onb-primary-hover);
+}
+
+body.onb button.ghost,
+body.onb .onb-btn-ghost {
+  background: transparent;
+  color: var(--onb-ink-2);
+  border-color: var(--onb-border-strong);
+}
+
+body.onb button.ghost:hover:not(:disabled),
+body.onb .onb-btn-ghost:hover:not(:disabled) {
+  background: var(--onb-surface-2);
+  color: var(--onb-ink);
+}
+
+body.onb .btn-lg,
+body.onb .onb-btn-lg {
+  min-height: 44px;
+  padding: 10px 20px;
+  font-size: var(--onb-fs-md);
+}
+
+body.onb .btn-sm,
+body.onb .onb-btn-sm {
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: var(--onb-fs-xs);
+}
+
+body.onb .btn-block,
+body.onb .onb-btn-block {
+  width: 100%;
+}
+
+/* ---- 8. Pills, Status Badges & Honest Gap Tags --------------------------- */
+body.onb .onb-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: var(--onb-fs-2xs);
+  font-weight: 600;
+  border: 1px solid var(--onb-border);
+  background: var(--onb-surface-2);
+  color: var(--onb-ink-2);
+  white-space: nowrap;
+}
+
+body.onb .onb-pill.good {
+  background: var(--onb-good-soft);
+  border-color: var(--onb-good-border);
+  color: var(--onb-good-ink);
+}
+
+body.onb .onb-pill.warn {
+  background: var(--onb-warn-soft);
+  border-color: var(--onb-warn-border);
+  color: var(--onb-warn-ink);
+}
+
+body.onb .onb-pill.danger {
+  background: var(--onb-danger-soft);
+  border-color: var(--onb-danger-border);
+  color: var(--onb-danger-ink);
+}
+
+body.onb .onb-pill.info {
+  background: var(--onb-info-soft);
+  border-color: var(--onb-info-border);
+  color: var(--onb-info-ink);
+}
+
+body.onb .onb-pill.untracked {
+  font-family: var(--onb-font-mono);
+  background: var(--onb-surface-2);
+  border: 1px dashed var(--onb-border-strong);
+  color: var(--onb-muted);
+}
+
+/* ---- 9. Step 1: Exercise Parameters Grid --------------------------------- */
+body.onb .onb-meta-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--onb-sp-3);
+  margin-top: var(--onb-sp-4);
+  padding-top: var(--onb-sp-4);
+  border-top: 1px solid var(--onb-border);
+}
+
+body.onb .onb-meta-item {
+  background: var(--onb-surface-2);
+  border: 1px solid var(--onb-border);
+  border-radius: var(--onb-radius);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+body.onb .onb-meta-label {
+  font-size: var(--onb-fs-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--onb-muted);
+}
+
+body.onb .onb-meta-value {
+  font-size: var(--onb-fs-sm);
+  font-weight: 600;
+  color: var(--onb-ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ---- 10. Step 2: Fleet Stepper, Aircraft Cards & Staff Grid -------------- */
+body.onb .stepper-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--onb-surface-2);
+  padding: 4px 6px;
+  border-radius: var(--onb-radius);
+  border: 1px solid var(--onb-border);
+}
+
+body.onb .stepper-label {
+  font-size: var(--onb-fs-xs);
+  font-weight: 600;
+  color: var(--onb-ink-2);
+  padding: 0 6px;
+  margin: 0;
+}
+
+body.onb .btn-stepper {
+  width: 36px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: var(--onb-radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--onb-ink-2);
+  font-family: var(--onb-font-mono);
+  font-size: var(--onb-fs-sm);
+  font-weight: 700;
+}
+
+body.onb .btn-stepper:hover:not(:disabled) {
+  background: var(--onb-surface-3);
+  color: var(--onb-ink);
+}
+
+body.onb .btn-stepper.active {
+  background: var(--onb-primary-bg);
+  color: var(--onb-primary-ink);
+  border-color: var(--onb-primary-bg);
+}
+
+body.onb .aircraft-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: var(--onb-sp-4);
+  margin-top: var(--onb-sp-4);
+}
+
+body.onb .ac-config-card {
+  background: var(--onb-surface-2);
+  border: 1px solid var(--onb-border);
+  border-top: 3px solid var(--onb-ac-1);
+  border-radius: var(--onb-radius);
+  padding: var(--onb-sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--onb-sp-3);
+}
+
+body.onb .ac-config-card[data-slot="1"] { border-top-color: var(--onb-ac-1); }
+body.onb .ac-config-card[data-slot="2"] { border-top-color: var(--onb-ac-2); }
+body.onb .ac-config-card[data-slot="3"] { border-top-color: var(--onb-ac-3); }
+body.onb .ac-config-card[data-slot="4"] { border-top-color: var(--onb-ac-4); }
+
+body.onb .ac-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+body.onb .ac-card-header b {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--onb-ink);
+  font-size: var(--onb-fs-md);
+  font-weight: 700;
+}
+
+body.onb .ac-slot-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--onb-ac-1);
+  display: inline-block;
+}
+
+body.onb .ac-config-card[data-slot="2"] .ac-slot-dot { background: var(--onb-ac-2); }
+body.onb .ac-config-card[data-slot="3"] .ac-slot-dot { background: var(--onb-ac-3); }
+body.onb .ac-config-card[data-slot="4"] .ac-slot-dot { background: var(--onb-ac-4); }
+
+body.onb .tag {
+  font-family: var(--onb-font-mono);
+  font-size: var(--onb-fs-xs);
+  font-weight: 600;
+  background: var(--onb-surface);
+  color: var(--onb-ink);
+  border: 1px solid var(--onb-border-strong);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+body.onb .crew-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 4px;
+}
+
+body.onb .checkbox-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: var(--onb-radius-sm);
+  border: 1px solid var(--onb-border);
+  background: var(--onb-surface);
+  font-size: var(--onb-fs-xs);
+  font-weight: 600;
+  color: var(--onb-ink);
+  cursor: pointer;
+  margin: 0;
+  transition: border-color var(--onb-motion), background var(--onb-motion);
+}
+
+body.onb .checkbox-inline:hover {
+  border-color: var(--onb-accent);
+}
+
+body.onb .checkbox-inline input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  min-height: 0;
+  margin: 0;
+  accent-color: var(--onb-primary-bg);
+}
+
+/* Staff Grid */
+body.onb .staff-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--onb-sp-3);
+  margin-top: var(--onb-sp-3);
+}
+
+body.onb .staff-option-box {
+  background: var(--onb-surface-2);
+  border: 1px solid var(--onb-border);
+  border-radius: var(--onb-radius);
+  padding: var(--onb-sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color var(--onb-motion);
+}
+
+body.onb .staff-option-box:hover {
+  border-color: var(--onb-border-strong);
+}
+
+body.onb .staff-option-box.is-placeholder {
+  border-style: dashed;
+  opacity: 0.85;
+}
+
+body.onb .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--onb-fs-sm);
+  font-weight: 600;
+  color: var(--onb-ink);
+  cursor: pointer;
+  margin: 0;
+}
+
+body.onb .checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  margin: 0;
+  accent-color: var(--onb-primary-bg);
+}
+
+body.onb .staff-box-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+/* ---- 11. Step 3: Review Readiness & Generation Summary ------------------- */
+body.onb .onb-review-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--onb-sp-3);
+  margin-bottom: var(--onb-sp-4);
+}
+
+body.onb .onb-stat-card {
+  background: var(--onb-surface-2);
+  border: 1px solid var(--onb-border);
+  border-radius: var(--onb-radius);
+  padding: var(--onb-sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+body.onb .onb-stat-label {
+  font-size: var(--onb-fs-xs);
+  color: var(--onb-muted);
+  font-weight: 500;
+}
+
+body.onb .onb-stat-value {
+  font-family: var(--onb-font-mono);
+  font-size: var(--onb-fs-2xl);
+  font-weight: 700;
+  color: var(--onb-ink);
+  line-height: 1.2;
+}
+
+body.onb .onb-stat-sub {
+  font-size: var(--onb-fs-2xs);
+  color: var(--onb-ink-2);
+}
+
+body.onb .onb-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--onb-radius);
+  border: 1px solid var(--onb-border);
+  background: var(--onb-surface-2);
+  font-size: var(--onb-fs-sm);
+  color: var(--onb-ink-2);
+  margin-bottom: var(--onb-sp-4);
+}
+
+body.onb .onb-callout.warn {
+  background: var(--onb-warn-soft);
+  border-color: var(--onb-warn-border);
+  color: var(--onb-warn-ink);
+}
+
+body.onb .onb-callout.info {
+  background: var(--onb-info-soft);
+  border-color: var(--onb-info-border);
+  color: var(--onb-info-ink);
+}
+
+body.onb .onb-callout.danger {
+  background: var(--onb-danger-soft);
+  border-color: var(--onb-danger-border);
+  color: var(--onb-danger-ink);
+}
+
+body.onb .setup-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--onb-sp-3);
+  flex-wrap: wrap;
+  margin-top: var(--onb-sp-4);
+}
+
+/* ---- 12. Step 4: Roster Filter Bar & QR Badge Cards ---------------------- */
+body.onb .onb-roster-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--onb-sp-3);
+  flex-wrap: wrap;
+  padding: var(--onb-sp-3);
+  background: var(--onb-surface-2);
+  border: 1px solid var(--onb-border);
+  border-radius: var(--onb-radius);
+  margin-bottom: var(--onb-sp-4);
+}
+
+body.onb .onb-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+body.onb .onb-filter-btn {
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: var(--onb-fs-xs);
+  font-weight: 600;
+  border-radius: 999px;
+  border: 1px solid var(--onb-border);
+  background: var(--onb-surface);
+  color: var(--onb-ink-2);
+}
+
+body.onb .onb-filter-btn.active {
+  background: var(--onb-primary-bg);
+  color: var(--onb-primary-ink);
+  border-color: var(--onb-primary-bg);
+}
+
+body.onb .onb-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+body.onb .roster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(265px, 1fr));
+  gap: var(--onb-sp-4);
+  margin-top: var(--onb-sp-3);
+}
+
+body.onb .roster-badge-card {
+  background: var(--onb-surface-2);
+  border: 1px solid var(--onb-border);
+  border-top: 4px solid var(--onb-role-air);
+  border-radius: var(--onb-radius-lg);
+  padding: var(--onb-sp-4);
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--onb-shadow-sm);
+  transition: border-color var(--onb-motion), transform var(--onb-motion);
+}
+
+body.onb .roster-badge-card:hover {
+  border-color: var(--onb-border-strong);
+}
+
+body.onb .roster-badge-card.role-instructor { border-top-color: var(--onb-role-instr); }
+body.onb .roster-badge-card.role-base { border-top-color: var(--onb-role-base); }
+body.onb .roster-badge-card.role-aircrew { border-top-color: var(--onb-role-air); }
+body.onb .roster-badge-card.role-ground_team { border-top-color: var(--onb-role-ground); }
+
+body.onb .badge-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+body.onb .role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+body.onb .badge-instructor {
+  background: var(--onb-role-instr-bg);
+  color: var(--onb-role-instr-ink);
+}
+
+body.onb .badge-base {
+  background: var(--onb-role-base-bg);
+  color: var(--onb-role-base-ink);
+}
+
+body.onb .badge-aircrew {
+  background: var(--onb-role-air-bg);
+  color: var(--onb-role-air-ink);
+}
+
+body.onb .badge-ground {
+  background: var(--onb-role-ground-bg);
+  color: var(--onb-role-ground-ink);
+}
+
+body.onb .badge-callsign {
+  font-family: var(--onb-font-mono);
+  font-size: var(--onb-fs-md);
+  font-weight: 700;
+  color: var(--onb-ink);
+  letter-spacing: 0.02em;
+}
+
+body.onb .badge-title {
+  font-size: var(--onb-fs-sm);
+  font-weight: 600;
+  color: var(--onb-ink);
+  margin-bottom: 2px;
+  line-height: 1.35;
+}
+
+body.onb .badge-meta {
+  font-size: var(--onb-fs-xs);
+  color: var(--onb-muted);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+/* QR Code Container — Always crisp white scan surface for mobile cameras */
+body.onb .badge-qr-container {
+  background: #ffffff;
+  color: #0f172a;
+  padding: 14px 12px 10px;
+  border: 1px solid var(--onb-border-strong);
+  border-radius: var(--onb-radius);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 12px;
+  position: relative;
+}
+
+body.onb .qr-canvas {
+  width: 150px;
+  height: 150px;
+  display: block;
+  border-radius: 4px;
+  background: #ffffff;
+}
+
+body.onb .qr-canvas.is-loading {
+  background: linear-gradient(90deg, #e2e8f0 25%, #f8fafc 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: onb-shimmer 1.4s infinite;
+}
+
+body.onb .qr-label {
+  font-family: var(--onb-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: #334155;
+  margin-top: 8px;
+  text-align: center;
+}
+
+body.onb .badge-code-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+body.onb .badge-code-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--onb-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+body.onb .badge-code {
+  display: block;
+  font-family: var(--onb-font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--onb-ink);
+  background: var(--onb-surface);
+  padding: 8px 10px;
+  border-radius: var(--onb-radius-sm);
+  border: 1px solid var(--onb-border-strong);
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  letter-spacing: 0.03em;
+}
+
+body.onb .badge-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: var(--onb-fs-2xs);
+  color: var(--onb-muted);
+  padding: 6px 0 10px;
+  border-top: 1px dashed var(--onb-border);
+  margin-top: 2px;
+}
+
+body.onb .badge-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+}
+
+body.onb .badge-actions .btn-copy {
+  flex: 1;
+}
+
+body.onb .badge-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  min-height: 32px;
+  border-radius: var(--onb-radius-sm);
+  border: 1px solid var(--onb-border-strong);
+  background: var(--onb-surface);
+  color: var(--onb-accent);
+  font-size: var(--onb-fs-xs);
+  font-weight: 600;
+  text-decoration: none;
+  opacity: 1;
+}
+
+body.onb .badge-open:hover {
+  background: var(--onb-accent-soft);
+  border-color: var(--onb-accent);
+}
+
+body.onb .btn-copied {
+  background: var(--onb-good) !important;
+  color: #ffffff !important;
+  border-color: var(--onb-good) !important;
+}
+
+/* Print-only instructions inside badge card (hidden on screen) */
+body.onb .badge-print-only {
+  display: none;
+}
+
+/* ---- 13. Step 5: Attendance & Presence Tracking Table -------------------- */
+body.onb .onb-track-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--onb-border);
+  border-radius: var(--onb-radius);
+  background: var(--onb-surface-2);
+}
+
+body.onb .onb-track-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--onb-fs-sm);
+  text-align: left;
+}
+
+body.onb .onb-track-table th {
+  padding: 10px 14px;
+  font-size: var(--onb-fs-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--onb-muted);
+  background: var(--onb-surface);
+  border-bottom: 1px solid var(--onb-border);
+  white-space: nowrap;
+}
+
+body.onb .onb-track-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--onb-border);
+  color: var(--onb-ink);
+  vertical-align: middle;
+}
+
+body.onb .onb-track-table tr:last-child td {
+  border-bottom: 0;
+}
+
+body.onb .onb-checks-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+body.onb .onb-check-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-family: var(--onb-font-mono);
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--onb-border);
+  background: var(--onb-surface);
+  color: var(--onb-muted);
+}
+
+body.onb .onb-check-chip.ok {
+  border-color: var(--onb-good-border);
+  background: var(--onb-good-soft);
+  color: var(--onb-good-ink);
+}
+
+body.onb .onb-check-chip.bad {
+  border-color: var(--onb-warn-border);
+  background: var(--onb-warn-soft);
+  color: var(--onb-warn-ink);
+}
+
+/* Step footer navigation */
+body.onb .onb-step-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--onb-sp-3);
+  flex-wrap: wrap;
+  margin-top: var(--onb-sp-5);
+  padding-top: var(--onb-sp-4);
+  border-top: 1px solid var(--onb-border);
+}
+
+/* ---- 14. Skeleton & Empty States ----------------------------------------- */
+@keyframes onb-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+body.onb .onb-skeleton {
+  height: 120px;
+  border-radius: var(--onb-radius);
+  background: linear-gradient(90deg, var(--onb-surface-2) 25%, var(--onb-surface-3) 50%, var(--onb-surface-2) 75%);
+  background-size: 200% 100%;
+  animation: onb-shimmer 1.5s infinite;
+  border: 1px solid var(--onb-border);
+}
+
+body.onb .onb-empty-state {
+  text-align: center;
+  padding: var(--onb-sp-8) var(--onb-sp-4);
+  background: var(--onb-surface-2);
+  border: 1px dashed var(--onb-border-strong);
+  border-radius: var(--onb-radius);
+  color: var(--onb-muted);
+}
+
+body.onb .onb-empty-state h3 {
+  margin: 8px 0 4px;
+  font-size: var(--onb-fs-lg);
+  color: var(--onb-ink);
+}
+
+body.onb .onb-empty-state p {
+  margin: 0 0 14px;
+  font-size: var(--onb-fs-sm);
+}
+
+/* ---- 15. Toast Notification System --------------------------------------- */
+body.onb .onb-toast-container {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 380px;
+  pointer-events: none;
+}
+
+body.onb .onb-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: var(--onb-radius);
+  background: var(--onb-surface);
+  color: var(--onb-ink);
+  border: 1px solid var(--onb-border-strong);
+  border-left: 4px solid var(--onb-accent);
+  box-shadow: var(--onb-shadow-md);
+  font-size: var(--onb-fs-sm);
+  line-height: 1.4;
+}
+
+body.onb .onb-toast.good { border-left-color: var(--onb-good); }
+body.onb .onb-toast.warn { border-left-color: var(--onb-warn); }
+body.onb .onb-toast.danger { border-left-color: var(--onb-danger); }
+
+/* ---- 16. Participant Login & Boarding Pass (/login & /join/{code}) ------- */
+body.onb.login-body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 0;
+  background:
+    radial-gradient(circle at 50% 0%, var(--onb-accent-soft), transparent 60%),
+    var(--onb-bg);
+}
+
+body.onb .onb-auth-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  width: 100%;
+  gap: 12px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--onb-border);
+  background: var(--onb-header-bg);
+}
+
+body.onb main.login-wrapper,
+body.onb .login-wrapper {
+  display: block;
+  height: auto;
+  min-height: 0;
+  width: 100%;
+  max-width: 480px;
+  margin: auto;
+  padding: 28px 16px;
+}
+
+body.onb main.login-wrapper.join-wrapper,
+body.onb .login-wrapper.join-wrapper {
+  max-width: 540px;
+}
+
+body.onb .login-card {
+  height: auto;
+  background: var(--onb-surface);
+  color: var(--onb-ink);
+  border: 1px solid var(--onb-border);
+  border-radius: var(--onb-radius-xl);
+  padding: 28px 28px 24px;
+  box-shadow: var(--onb-shadow-lg);
+}
+
+body.onb .login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--onb-border);
+}
+
+body.onb .login-brand-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--onb-primary-bg);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+  box-shadow: var(--onb-shadow-sm);
+}
+
+body.onb .login-logo-text {
+  font-size: var(--onb-fs-lg);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--onb-ink);
+}
+
+body.onb .login-sub-text {
+  font-size: var(--onb-fs-2xs);
+  font-weight: 600;
+  color: var(--onb-muted);
+  letter-spacing: 0.08em;
+  margin-top: 3px;
+}
+
+body.onb .login-title-block {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+body.onb .login-title-block h2,
+body.onb .login-title-block h1 {
+  font-size: var(--onb-fs-2xl);
+  font-weight: 700;
+  color: var(--onb-ink);
+  margin: 0 0 6px;
+  border: 0;
+  padding: 0;
+  text-transform: none;
+  letter-spacing: -0.01em;
+}
+
+body.onb .login-error-box {
+  background: var(--onb-danger-soft);
+  border: 1px solid var(--onb-danger-border);
+  color: var(--onb-danger-ink);
+  padding: 12px 14px;
+  border-radius: var(--onb-radius);
+  font-size: var(--onb-fs-sm);
+  margin-bottom: 18px;
+  text-align: left;
+  line-height: 1.45;
+}
+
+body.onb .login-error-box b {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 700;
+}
+
+body.onb .onb-code-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+body.onb .code-input {
+  font-family: var(--onb-font-mono);
+  font-size: var(--onb-fs-md);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-align: left;
+  text-transform: uppercase;
+  padding: 11px 14px;
+  min-height: 46px;
+  border: 1.5px solid var(--onb-border-strong);
+  border-radius: var(--onb-radius);
+  background: var(--onb-surface-2);
+  color: var(--onb-ink);
+}
+
+body.onb .onb-onboarding-steps {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--onb-border);
+  display: grid;
+  gap: 10px;
+}
+
+body.onb .onb-mini-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: var(--onb-fs-xs);
+  color: var(--onb-ink-2);
+}
+
+body.onb .onb-mini-step-num {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--onb-surface-2);
+  border: 1px solid var(--onb-border-strong);
+  color: var(--onb-accent);
+  font-family: var(--onb-font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+body.onb .login-footer-notice {
+  margin-top: 18px;
+  text-align: center;
+  font-family: var(--onb-font-mono);
+  font-size: 10.5px;
+  color: var(--onb-muted);
+  letter-spacing: 0.06em;
+}
+
+/* Boarding Pass (/join/{code}) specifics */
+body.onb .onb-boarding-pass {
+  background: var(--onb-surface-2);
+  border: 1px solid var(--onb-border-strong);
+  border-radius: var(--onb-radius-lg);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+body.onb .onb-pass-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px dashed var(--onb-border-strong);
+}
+
+body.onb .onb-pass-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+body.onb .onb-pass-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+body.onb .onb-pass-field span {
+  font-size: var(--onb-fs-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--onb-muted);
+  font-weight: 600;
+}
+
+body.onb .onb-pass-field b {
+  font-size: var(--onb-fs-md);
+  color: var(--onb-ink);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+body.onb .onb-pass-checklist {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  background: var(--onb-surface-2);
+  border: 1px solid var(--onb-border);
+  border-radius: var(--onb-radius);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: var(--onb-fs-xs);
+  color: var(--onb-ink-2);
+}
+
+body.onb .onb-pass-checklist li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* ---- 17. Responsive Breakpoints (1560px, Tablet 768px & Phone 390px) ----- */
+@media (max-width: 1560px) {
+  body.onb header.onb-topbar {
+    flex-wrap: wrap;
+    row-gap: 6px;
+    padding: 8px var(--onb-sp-4);
+  }
+  body.onb .onb-nav {
+    order: 10;
+    flex-basis: 100%;
+    margin-left: 0;
+    padding-top: 6px;
+    border-top: 1px solid var(--onb-border);
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+  body.onb .onb-stepper {
+    top: 96px;
+    grid-template-columns: repeat(5, minmax(150px, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  body.onb .setup-main {
+    padding: var(--onb-sp-4) var(--onb-sp-3) 48px;
+  }
+  body.onb .setup-card {
+    padding: var(--onb-sp-4);
+  }
+  body.onb .setup-header-block h1 {
+    font-size: var(--onb-fs-2xl);
+  }
+  body.onb .onb-exercise-tag,
+  body.onb .onb-clock {
+    display: none;
+  }
+  body.onb .onb-stepper {
+    position: static;
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  body.onb .onb-step-tab {
+    min-height: 44px;
+    padding: 8px 10px;
+  }
+  body.onb .crew-options {
+    grid-template-columns: 1fr;
+  }
+  body.onb .setup-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  body.onb .setup-actions button {
+    width: 100%;
+  }
+  body.onb .login-card {
+    padding: 24px 18px;
+  }
+  body.onb .onb-pass-grid {
+    grid-template-columns: 1fr;
+  }
+  body.onb .onb-auth-topbar {
+    padding: 10px 14px;
+  }
+  body.onb .onb-toast-container {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    max-width: none;
+  }
+}
+
+/* ---- 18. Printable Invitation Cards (@media print) ----------------------- */
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  html:has(body.onb),
+  body.onb {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt;
+  }
+
+  body.onb header.onb-topbar,
+  body.onb .setup-header-block,
+  body.onb .onb-stepper,
+  body.onb .setup-card:not(#rosterSection),
+  body.onb .setup-actions,
+  body.onb .onb-roster-toolbar,
+  body.onb .onb-step-footer,
+  body.onb .onb-toast-container,
+  body.onb .no-print {
+    display: none !important;
+  }
+
+  body.onb .setup-main,
+  body.onb .setup-container {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+  }
+
+  body.onb .setup-card#rosterSection {
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #ffffff !important;
+  }
+
+  body.onb #rosterSection .onb-card-header {
+    margin-bottom: 10pt !important;
+    padding-bottom: 6pt !important;
+    border-bottom: 1.5pt solid #000000 !important;
+  }
+
+  body.onb .roster-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10pt !important;
+  }
+
+  body.onb .roster-badge-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: 1.5pt solid #0f172a !important;
+    border-top: 4pt solid #0f172a !important;
+    border-radius: 6pt !important;
+    padding: 10pt !important;
+    box-shadow: none !important;
+  }
+
+  body.onb .badge-callsign,
+  body.onb .badge-title {
+    color: #000000 !important;
+  }
+
+  body.onb .role-badge {
+    border: 1pt solid #000000 !important;
+    color: #000000 !important;
+    background: #f1f5f9 !important;
+  }
+
+  body.onb .badge-qr-container {
+    border: 1pt solid #94a3b8 !important;
+    padding: 8pt !important;
+    margin-bottom: 8pt !important;
+  }
+
+  body.onb .qr-canvas {
+    width: 128px !important;
+    height: 128px !important;
+  }
+
+  body.onb .badge-code {
+    background: #f8fafc !important;
+    color: #000000 !important;
+    border: 1pt solid #64748b !important;
+    font-size: 8.5pt !important;
+  }
+
+  body.onb .badge-print-only {
+    display: block !important;
+    margin-top: 6pt;
+    padding-top: 6pt;
+    border-top: 1pt dashed #94a3b8;
+    font-size: 8pt;
+    line-height: 1.35;
+    color: #1e293b !important;
+  }
+
+  body.onb .badge-print-only ol {
+    margin: 3pt 0 4pt 14pt;
+    padding: 0;
+  }
+
+  body.onb .badge-print-only .print-equip {
+    font-family: var(--onb-font-mono);
+    font-size: 7.5pt;
+    font-weight: 600;
+  }
+}
+
+/* ---- 19. Extended Setup, KPI Strip, Workflow Stepper & Attendance Styles -- */
+body.onb header.onb-topbar .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--onb-fs-md);
+  color: var(--onb-ink);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+body.onb header.onb-topbar .brand b {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--onb-ink);
+}
+
+body.onb header.onb-topbar .brand > span:not(.onb-brand-mark) {
+  font-size: 11.5px;
+  color: var(--onb-muted);
+  font-weight: 500;
+  padding-left: 8px;
+  border-left: 1px solid var(--onb-border-strong);
+}
+
+body.onb .onb-brand-mark svg {
+  width: 18px;
+  height: 18px;
+}
+
+body.onb .onb-safety-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-family: var(--onb-font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: var(--onb-warn-soft);
+  color: var(--onb-warn-ink);
+  border: 1px solid var(--onb-warn-border);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+body.onb .onb-safety-pill svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+body.onb header.onb-topbar .status.online,
+body.onb header.onb-topbar .status {
+  background: var(--onb-good-soft);
+  color: var(--onb-good-ink);
+  border: 1px solid var(--onb-good-border);
+  font-size: var(--onb-fs-2xs);
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+body.onb header.onb-topbar #logoutBtn {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+body.onb .onb-icon-btn {
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: var(--onb-radius-sm);
+  background: var(--onb-surface-2);
+  border: 1px solid var(--onb-border);
+  color: var(--onb-ink-2);
+}
+
+body.onb .onb-icon-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+body.onb .onb-print-header {
+  display: none;
+}
+
+/* Hero & KPI Strip */
+body.onb .setup-header-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--onb-sp-5);
+  margin-bottom: var(--onb-sp-6);
+}
+
+body.onb .onb-hero-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: var(--onb-sp-5);
+  align-items: start;
+}
+
+body.onb .onb-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--onb-font-mono);
+  font-size: var(--onb-fs-2xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--onb-accent);
+  margin-bottom: 8px;
+}
+
+body.onb .onb-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(150px, 1fr));
+  gap: var(--onb-sp-3);
+}
+
+body.onb .onb-kpi-card {
+  background: var(--onb-surface);
+  border: 1px solid var(--onb-border);
+  border-radius: var(--onb-radius);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: var(--onb-shadow-sm);
+}
+
+body.onb .onb-kpi-label {
+  font-size: var(--onb-fs-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--onb-muted);
+}
+
+body.onb .onb-kpi-value {
+  font-size: var(--onb-fs-xl);
+  font-weight: 700;
+  color: var(--onb-ink);
+  line-height: 1.25;
+}
+
+body.onb .onb-kpi-sub {
+  font-size: var(--onb-fs-2xs);
+  color: var(--onb-ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 5-Step Workflow Stepper */
+body.onb .onb-workflow-stepper {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(175px, 1fr));
+  gap: var(--onb-sp-2);
+  padding: 8px;
+  background: var(--onb-surface);
+  border: 1px solid var(--onb-border);
+  border-radius: var(--onb-radius-lg);
+  box-shadow: var(--onb-shadow-sm);
+  overflow-x: auto;
+}
+
+body.onb .onb-step-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--onb-radius);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--onb-ink-2);
+  text-align: left;
+  min-height: 54px;
+  cursor: pointer;
+}
+
+body.onb .onb-step-item:hover {
+  background: var(--onb-surface-2);
+  border-color: var(--onb-border);
+}
+
+body.onb .onb-step-item.is-active {
+  background: var(--onb-accent-soft);
+  border-color: color-mix(in srgb, var(--onb-accent) 45%, transparent);
+  color: var(--onb-ink);
+}
+
+body.onb .onb-step-item.is-active .onb-step-num {
+  background: var(--onb-primary-bg);
+  color: var(--onb-primary-ink);
+  border-color: var(--onb-primary-bg);
+}
+
+body.onb .onb-step-item.is-complete .onb-step-num {
+  background: var(--onb-good-soft);
+  color: var(--onb-good-ink);
+  border-color: var(--onb-good-border);
+}
+
+body.onb .onb-step-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+body.onb .onb-step-desc {
+  font-size: var(--onb-fs-2xs);
+  color: var(--onb-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+/* Section Badges & Chips */
+body.onb .card-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+body.onb .onb-section-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-family: var(--onb-font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  background: var(--onb-accent-soft);
+  color: var(--onb-accent);
+  border: 1px solid color-mix(in srgb, var(--onb-accent) 30%, transparent);
+}
+
+body.onb .onb-section-badge.onb-badge-subtle {
+  background: var(--onb-surface-2);
+  color: var(--onb-ink-2);
+  border-color: var(--onb-border-strong);
+}
+
+body.onb .onb-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: var(--onb-fs-xs);
+  font-weight: 600;
+  border: 1px solid var(--onb-border);
+  background: var(--onb-surface-2);
+  color: var(--onb-ink-2);
+}
+
+body.onb .onb-status-chip.onb-chip-ok {
+  background: var(--onb-good-soft);
+  border-color: var(--onb-good-border);
+  color: var(--onb-good-ink);
+}
+
+body.onb .onb-status-chip.onb-chip-warn {
+  background: var(--onb-warn-soft);
+  border-color: var(--onb-warn-border);
+  color: var(--onb-warn-ink);
+}
+
+/* Step 1 Layout */
+body.onb .onb-step1-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: var(--onb-sp-5);
+  align-items: start;
+}
+
+body.onb .onb-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+body.onb .onb-label-row label {
+  margin: 0;
+}
+
+body.onb .onb-char-count {
+  font-size: var(--onb-fs-2xs);
+  color: var(--onb-muted);
+}
+
+body.onb .onb-field-feedback {
+  font-size: var(--onb-fs-xs);
+  color: var(--onb-muted);
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+body.onb .onb-field-feedback.is-error {
+  color: var(--onb-danger-ink);
+  font-weight: 600;
+}
+
+body.onb .onb-field-feedback.is-valid {
+  color: var(--onb-ink-2);
+}
+
+body.onb .onb-preset-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+body.onb .onb-preset-label {
+  font-size: var(--onb-fs-xs);
+  color: var(--onb-muted);
+  font-weight: 500;
+}
+
+body.onb .onb-chip-btn {
+  min-height: 28px;
+  padding: 3px 10px;
+  font-size: var(--onb-fs-2xs);
+  font-weight: 600;
+  border-radius: 999px;
+  background: var(--onb-surface-2);
+  border: 1px solid var(--onb-border-strong);
+  color: var(--onb-ink-2);
+}
+
+body.onb .onb-chip-btn:hover {
+  border-color: var(--onb-accent);
+  color: var(--onb-ink);
+}
+
+body.onb .onb-policy-box {
+  background: var(--onb-surface-2);
+  border: 1px solid var(--onb-border);
+  border-radius: var(--onb-radius);
+  padding: 14px 16px;
+}
+
+body.onb .onb-policy-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--onb-fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--onb-ink);
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--onb-border);
+}
+
+body.onb .onb-policy-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+body.onb .onb-policy-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: var(--onb-fs-xs);
+}
+
+body.onb .onb-policy-key {
+  color: var(--onb-muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+body.onb .onb-policy-val {
+  color: var(--onb-ink);
+  font-weight: 600;
+  text-align: right;
+}
+
+body.onb .onb-untracked-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-family: var(--onb-font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  background: var(--onb-surface);
+  color: var(--onb-muted);
+  border: 1px dashed var(--onb-border-strong);
+}
+
+/* Step 2 Additions */
+body.onb .onb-subsection-divider {
+  height: 1px;
+  background: var(--onb-border);
+  margin: var(--onb-sp-6) 0 var(--onb-sp-5);
+}
+
+body.onb .onb-meta-note {
+  font-size: var(--onb-fs-xs);
+  color: var(--onb-muted);
+  background: var(--onb-surface-2);
+  border: 1px solid var(--onb-border);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+body.onb .onb-staff-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+body.onb .staff-option-box.is-checked {
+  border-color: color-mix(in srgb, var(--onb-accent) 40%, var(--onb-border));
+}
+
+body.onb .onb-role-pill {
+  font-family: var(--onb-font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+body.onb .onb-role-pill.role-instructor {
+  background: var(--onb-role-instr-bg);
+  color: var(--onb-role-instr-ink);
+}
+
+body.onb .onb-role-pill.role-base {
+  background: var(--onb-role-base-bg);
+  color: var(--onb-role-base-ink);
+}
+
+body.onb .onb-role-pill.role-aircrew {
+  background: var(--onb-role-air-bg);
+  color: var(--onb-role-air-ink);
+}
+
+body.onb .onb-role-pill.role-ground {
+  background: var(--onb-role-ground-bg);
+  color: var(--onb-role-ground-ink);
+}
+
+/* Step 3 Readiness Layout */
+body.onb .onb-readiness-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: var(--onb-sp-5);
+  margin-bottom: var(--onb-sp-4);
+}
+
+body.onb .onb-checklist-panel,
+body.onb .onb-manifest-panel {
+  background: var(--onb-surface-2);
+  border: 1px solid var(--onb-border);
+  border-radius: var(--onb-radius);
+  padding: var(--onb-sp-4);
+}
+
+body.onb .onb-panel-subtitle {
+  font-size: var(--onb-fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--onb-muted);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--onb-border);
+}
+
+body.onb .onb-check-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+body.onb .onb-check-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: var(--onb-radius-sm);
+  background: var(--onb-surface);
+  border: 1px solid var(--onb-border);
+  font-size: var(--onb-fs-xs);
+}
+
+body.onb .onb-check-item-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--onb-ink);
+  font-weight: 500;
+}
+
+body.onb .onb-check-item.is-ok .onb-check-icon {
+  color: var(--onb-good);
+}
+
+body.onb .onb-check-item.is-warn .onb-check-icon {
+  color: var(--onb-warn);
+}
+
+body.onb .onb-manifest-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+body.onb .onb-manifest-card {
+  background: var(--onb-surface);
+  border: 1px solid var(--onb-border);
+  border-radius: var(--onb-radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+body.onb .onb-manifest-role {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--onb-muted);
+}
+
+body.onb .onb-manifest-count {
+  font-family: var(--onb-font-mono);
+  font-size: var(--onb-fs-lg);
+  font-weight: 700;
+  color: var(--onb-ink);
+}
+
+body.onb .onb-manifest-detail {
+  font-size: 11px;
+  color: var(--onb-ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body.onb .onb-reissue-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: var(--onb-radius-sm);
+  background: var(--onb-warn-soft);
+  border: 1px solid var(--onb-warn-border);
+  color: var(--onb-warn-ink);
+  font-size: var(--onb-fs-xs);
+  line-height: 1.4;
+}
+
+body.onb .onb-reissue-warning svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Step 4 Filter Pills & Search */
+body.onb .onb-filter-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+body.onb .onb-filter-pill {
+  min-height: 32px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: var(--onb-fs-xs);
+  font-weight: 600;
+  background: var(--onb-surface);
+  border: 1px solid var(--onb-border);
+  color: var(--onb-ink-2);
+}
+
+body.onb .onb-filter-pill.is-active {
+  background: var(--onb-primary-bg);
+  border-color: var(--onb-primary-bg);
+  color: var(--onb-primary-ink);
+}
+
+body.onb .onb-roster-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 240px;
+  flex: 1;
+  max-width: 320px;
+}
+
+body.onb .onb-roster-search-wrap svg {
+  position: absolute;
+  left: 10px;
+  color: var(--onb-muted);
+  pointer-events: none;
+}
+
+body.onb .onb-roster-search-wrap input {
+  width: 100%;
+  min-height: 34px;
+  padding: 5px 10px 5px 32px;
+  font-size: var(--onb-fs-xs);
+  border-radius: 999px;
+  background: var(--onb-surface);
+  border: 1px solid var(--onb-border-strong);
+  color: var(--onb-ink);
+}
+
+body.onb .onb-delivery-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--onb-fs-xs);
+}
+
+body.onb .onb-delivery-label {
+  color: var(--onb-muted);
+  font-weight: 500;
+}
+
+/* Step 5 Attendance Table */
+body.onb .onb-attendance-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+body.onb .onb-poll-indicator {
+  font-size: var(--onb-fs-2xs);
+  color: var(--onb-muted);
+}
+
+body.onb .onb-ready-link {
+  font-size: var(--onb-fs-xs);
+  font-weight: 600;
+  color: var(--onb-accent);
+  text-decoration: none;
+}
+
+body.onb .onb-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--onb-border);
+  border-radius: var(--onb-radius);
+  background: var(--onb-surface-2);
+}
+
+body.onb .onb-attendance-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--onb-fs-xs);
+  text-align: left;
+}
+
+body.onb .onb-attendance-table th {
+  padding: 10px 12px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--onb-muted);
+  background: var(--onb-surface);
+  border-bottom: 1px solid var(--onb-border);
+  white-space: nowrap;
+}
+
+body.onb .onb-attendance-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--onb-border);
+  color: var(--onb-ink);
+  vertical-align: middle;
+}
+
+body.onb .onb-attendance-table tr:last-child td {
+  border-bottom: 0;
+}
+
+body.onb .onb-attendance-table .text-right {
+  text-align: right;
+}
+
+body.onb .onb-table-empty {
+  text-align: center;
+  padding: 24px !important;
+  color: var(--onb-muted) !important;
+}
+
+@media (max-width: 960px) {
+  body.onb .onb-hero-top,
+  body.onb .onb-step1-grid,
+  body.onb .onb-readiness-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  body.onb .onb-print-header {
+    display: flex !important;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12pt;
+    padding-bottom: 8pt;
+    margin-bottom: 12pt;
+    border-bottom: 2pt solid #0f172a;
+  }
+  body.onb .onb-print-kicker {
+    font-size: 8pt;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #334155;
+  }
+  body.onb .onb-print-header h2 {
+    margin: 2pt 0 4pt;
+    font-size: 16pt;
+    color: #000000;
+  }
+  body.onb .onb-print-header p {
+    margin: 0;
+    font-size: 9pt;
+    color: #334155;
+  }
+  body.onb .onb-print-header-right {
+    text-align: right;
+    font-size: 8.5pt;
+    color: #334155;
+  }
+}
+
+@media (max-width: 640px) {
+  body.onb .setup-container {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  body.onb .onb-kpi-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  body.onb .onb-workflow-stepper {
+    grid-template-columns: 1fr;
+  }
+  body.onb .onb-manifest-grid,
+  body.onb .aircraft-grid,
+  body.onb .staff-grid,
+  body.onb .roster-grid {
+    grid-template-columns: 1fr;
+  }
+  body.onb .onb-roster-search-wrap {
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+  }
+}
+
+/* ---- 20. Google Sign-In (OIDC), Seat Email Assignment & Invite Rows ------ */
+body.onb a.primary,
+body.onb a.onb-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 20px;
+  font-family: var(--onb-font-sans);
+  font-size: var(--onb-fs-md);
+  font-weight: 700;
+  border-radius: var(--onb-radius);
+  border: 1px solid var(--onb-primary-bg);
+  background: var(--onb-primary-bg);
+  color: var(--onb-primary-ink);
+  box-shadow: var(--onb-shadow-sm);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--onb-motion), border-color var(--onb-motion), transform var(--onb-motion);
+}
+
+body.onb a.primary:hover,
+body.onb a.onb-btn-primary:hover {
+  background: var(--onb-primary-hover);
+  border-color: var(--onb-primary-hover);
+  color: var(--onb-primary-ink);
+}
+
+body.onb .onb-oidc-section {
+  margin-bottom: 6px;
+}
+
+body.onb .onb-oidc-btn {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 18px;
+  font-size: var(--onb-fs-md);
+  font-weight: 700;
+  border-radius: var(--onb-radius);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+body.onb .onb-oidc-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+body.onb .onb-oidc-hint {
+  margin: 8px 0 0;
+  font-size: var(--onb-fs-xs);
+  color: var(--onb-muted);
+  text-align: center;
+  line-height: 1.4;
+}
+
+body.onb .onb-login-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0;
+  color: var(--onb-muted);
+  font-family: var(--onb-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+body.onb .onb-login-divider::before,
+body.onb .onb-login-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--onb-border);
+}
+
+body.onb .onb-badge-login-section {
+  transition: background var(--onb-motion), border-color var(--onb-motion);
+}
+
+body.onb .onb-badge-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+body.onb .onb-badge-section-title {
+  font-size: var(--onb-fs-xs);
+  font-weight: 700;
+  color: var(--onb-ink-2);
+}
+
+body.onb .onb-badge-fallback-tag {
+  font-family: var(--onb-font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--onb-surface);
+  border: 1px solid var(--onb-border-strong);
+  color: var(--onb-muted);
+}
+
+body.onb .onb-badge-login-section.is-secondary {
+  background: var(--onb-surface-2);
+  border: 1px solid var(--onb-border);
+  border-radius: var(--onb-radius-lg);
+  padding: 14px 16px;
+}
+
+body.onb .onb-badge-login-section.is-secondary .onb-badge-section-head {
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--onb-border);
+}
+
+body.onb .onb-badge-login-section.is-secondary .code-input {
+  background: var(--onb-surface);
+  min-height: 40px;
+  padding: 8px 12px;
+  font-size: var(--onb-fs-sm);
+}
+
+body.onb .onb-badge-login-section.is-secondary #loginSubmitBtn {
+  background: var(--onb-surface);
+  color: var(--onb-ink);
+  border: 1px solid var(--onb-border-strong);
+  box-shadow: none;
+  min-height: 40px;
+}
+
+body.onb .onb-badge-login-section.is-secondary #loginSubmitBtn:hover:not(:disabled) {
+  background: var(--onb-surface-3);
+  border-color: var(--onb-accent);
+}
+
+/* Step 2: Per-seat email inputs */
+body.onb .onb-opt-note {
+  font-size: var(--onb-fs-2xs);
+  font-weight: 500;
+  color: var(--onb-muted);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+body.onb .onb-crew-email-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+body.onb .onb-crew-email-row {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 8px 10px;
+  border-radius: var(--onb-radius-sm);
+  border: 1px solid var(--onb-border);
+  background: var(--onb-surface);
+  transition: border-color var(--onb-motion), opacity var(--onb-motion);
+}
+
+body.onb .onb-crew-email-row.is-disabled {
+  opacity: 0.6;
+  background: var(--onb-surface-2);
+}
+
+body.onb .onb-crew-chk-label {
+  padding: 6px 4px;
+  border: 0;
+  background: transparent;
+  min-height: 34px;
+}
+
+body.onb .onb-crew-email-field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+body.onb .onb-crew-email-field .ac-email-input,
+body.onb .onb-seat-email-block .staff-email-input {
+  min-height: 34px;
+  padding: 5px 10px;
+  font-size: var(--onb-fs-xs);
+  font-family: var(--onb-font-mono);
+}
+
+body.onb .onb-seat-email-block {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--onb-border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+body.onb .onb-seat-email-block.is-disabled {
+  opacity: 0.55;
+}
+
+body.onb .onb-seat-email-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--onb-ink-2);
+  margin: 0;
+}
+
+body.onb .seat-email-err {
+  font-size: 11px;
+  color: var(--onb-danger-ink);
+  font-weight: 600;
+  margin-top: 3px;
+}
+
+body.onb input.input-invalid {
+  border-color: var(--onb-danger) !important;
+  box-shadow: 0 0 0 2px var(--onb-danger-soft) !important;
+}
+
+/* Step 4: Primary Invite Participant List & Collapsible Offline Fallback */
+body.onb .onb-invite-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 410px;
+  overflow-y: auto;
+  padding-right: 4px;
+  margin-bottom: var(--onb-sp-4);
+}
+
+body.onb .onb-invite-row {
+  display: grid;
+  grid-template-columns: minmax(210px, 1.1fr) minmax(220px, 1.2fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 14px;
+  background: var(--onb-surface-2);
+  border: 1px solid var(--onb-border);
+  border-left: 4px solid var(--onb-role-air);
+  border-radius: var(--onb-radius);
+  transition: border-color var(--onb-motion);
+}
+
+body.onb .onb-invite-row:hover {
+  border-color: var(--onb-border-strong);
+}
+
+body.onb .onb-invite-row.role-instructor { border-left-color: var(--onb-role-instr); }
+body.onb .onb-invite-row.role-base { border-left-color: var(--onb-role-base); }
+body.onb .onb-invite-row.role-aircrew { border-left-color: var(--onb-role-air); }
+body.onb .onb-invite-row.role-ground_team { border-left-color: var(--onb-role-ground); }
+
+body.onb .onb-invite-seat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+body.onb .onb-invite-seat-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+body.onb .onb-invite-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+body.onb .onb-invite-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+body.onb .onb-collapsible-fallback {
+  border: 1px solid var(--onb-border);
+  border-radius: var(--onb-radius-lg);
+  background: var(--onb-surface-2);
+  overflow: hidden;
+  margin-top: var(--onb-sp-3);
+}
+
+body.onb .onb-collapsible-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  background: var(--onb-surface);
+  border-bottom: 1px solid transparent;
+}
+
+body.onb .onb-collapsible-summary::-webkit-details-marker {
+  display: none;
+}
+
+body.onb .onb-collapsible-fallback[open] .onb-collapsible-summary {
+  border-bottom-color: var(--onb-border);
+}
+
+body.onb .onb-collapsible-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--onb-fs-sm);
+  font-weight: 700;
+  color: var(--onb-ink);
+}
+
+body.onb .onb-collapsible-body {
+  padding: 14px 16px 18px;
+}
+
+@media (max-width: 960px) {
+  body.onb .onb-invite-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+  body.onb .onb-invite-actions {
+    justify-content: flex-start;
+  }
+}
+
+body.onb .onb-step-section {
+  scroll-margin-top: 84px;
+}
+
+body.onb header.onb-topbar .user-badge {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+body.onb header.onb-topbar #userBadgeText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  body.onb header.onb-topbar {
+    position: static;
+  }
+  body.onb .onb-step-section {
+    scroll-margin-top: 12px;
+  }
+  body.onb .onb-crew-email-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  body.onb .onb-invite-list,
+  body.onb .onb-collapsible-summary {
+    display: none !important;
+  }
+  body.onb .onb-collapsible-fallback,
+  body.onb .onb-collapsible-body {
+    display: block !important;
+    border: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #ffffff !important;
+  }
+}
+

@@ -5,6 +5,7 @@ Split out of main.py under C15-1.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -72,9 +73,14 @@ TILE_SOURCES = {
 }
 
 
-@router.get("/api/tile-sources")
+@router.get("/api/tile-sources", dependencies=[any_role])
 def tile_sources():
-    """Basemap URLs for the map views. Override any of them with CAPVSAR_TILES_*."""
+    """Basemap URLs for the map views. Override any of them with CAPVSAR_TILES_*.
+
+    Login required (review T11): a wing that repoints these at a keyed tile
+    provider would otherwise publish the key to anyone on the LAN. Every page
+    that draws a map is behind the login already.
+    """
     return TILE_SOURCES
 
 @router.get("/api/health")
@@ -92,8 +98,10 @@ def health(response: Response):
         with db() as c:
             c.execute("SELECT COUNT(*) FROM scenarios").fetchone()
     except Exception as e:                      # sqlite3.Error, OSError, ...
-        db_ok, detail = False, f"{type(e).__name__}: {e}"
-        log.error("healthcheck: database unusable: %s", detail)
+        # The exception's own text names the database path; the log gets it,
+        # the anonymous caller gets the kind of failure only (review T11).
+        db_ok, detail = False, type(e).__name__
+        log.error("healthcheck: database unusable: %s: %s", type(e).__name__, e)
     if not db_ok:
         response.status_code = 503
     return {"ok": db_ok, "db": detail, "sortie": bool(hub.sortie),
@@ -124,7 +132,8 @@ async def ws(sock: WebSocket):
     # D5.10: the socket is how the Ready room knows who is here. Anonymous
     # viewers on an open dev console are one shared "DEV" presence.
     presence_key = (sess or {}).get("code") or "DEV"
-    hub.touch_presence(presence_key, page=sock.query_params.get("page", ""),
+    # The page name is shown in the Ready room; bound it (review T11).
+    hub.touch_presence(presence_key, page=sock.query_params.get("page", "")[:64],
                        role=(sess or {}).get("role", ""), socket=True)
     hub.clients.add(sock)
     if sees_truth:
@@ -133,8 +142,20 @@ async def ws(sock: WebSocket):
         await sock.send_text(json.dumps(
             {"type": "state", **hub.snapshot(include_df=sees_truth)},
             allow_nan=False))
+        # A13 (review T11): the socket authenticated once and then stayed open
+        # for as long as the tab did, so logout, expiry and roster regeneration
+        # never reached it. Inbound frames are still discarded; between them
+        # the session is re-read (off the loop, X2-5) and a socket whose
+        # session is gone is closed with the same code admit() refuses with.
+        required = sess is not None
         while True:
-            await sock.receive_text()
+            try:
+                await asyncio.wait_for(sock.receive_text(), access.SOCKET_RECHECK_S)
+            except asyncio.TimeoutError:
+                fresh = await run_in_threadpool(access.get_session_from_request, sock)
+                if not access.socket_still_admitted(fresh, required=required):
+                    await sock.close(code=1008)
+                    return
     except WebSocketDisconnect:
         pass
     finally:

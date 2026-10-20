@@ -23,6 +23,7 @@ sys.path.insert(0, str(ROOT))
 from services.ai_pilot.experiment import BridgeClient, Recorder, Scenario, digest, score_trace
 from services.ai_pilot.control_ownership import ControllerLock
 from services.ai_pilot.aircraft_profiles import PROFILES, profile_for
+from xplane.capvsar_landing import RUNWAYS
 
 
 AIRCRAFT_PATHS = {
@@ -31,15 +32,48 @@ AIRCRAFT_PATHS = {
 }
 
 
+def validate_staged_profile(config, profile, inv, *, mode):
+    """Fail before reset/taxi if the installed lab is staged for another profile."""
+    if config.get("mode") != mode:
+        raise ValueError("Staged bridge mode does not match %s trial" % mode)
+    aircraft = inv["aircraft"]
+    configured_path = Path(config.get("aircraft_path", "")).resolve()
+    if configured_path != Path(aircraft["path"]).resolve() or Path(aircraft["path"]).name != profile.acf_name:
+        raise ValueError("Staged aircraft path does not match profile %s" % profile.key)
+    staged_hash = config.get("aircraft_sha256")
+    if staged_hash is not None and staged_hash != aircraft["sha256"]:
+        raise ValueError("Staged aircraft hash does not match loaded package")
+    if profile.acf_name == "Cessna_172SP_G1000.acf":
+        from xplane.capvsar_qualification import STOCK_SHA256
+        if aircraft["sha256"] != STOCK_SHA256:
+            raise ValueError("Loaded C172 aircraft hash is not the pinned stock package")
+    elif staged_hash != aircraft["sha256"]:
+        raise ValueError("Staged aircraft hash is required for a rebuilt package")
+    if bool(config.get("constant_speed_prop", False)) != profile.constant_speed_prop:
+        raise ValueError("Staged constant-speed prop setting does not match profile %s" % profile.key)
+    if mode == "surface":
+        ratio = config.get("surface_takeoff_flap_ratio", 0.)
+        if (type(ratio) not in (int, float)
+                or abs(ratio-profile.takeoff_flap_ratio) > 1e-6):
+            raise ValueError("Staged takeoff flap ratio does not match profile %s" % profile.key)
+    if mode == "landing":
+        expected_toe_brakes = profile.landing_toe_brakes
+        if bool(config.get("landing_toe_brakes", False)) != expected_toe_brakes:
+            raise ValueError("Staged landing brake path does not match profile %s" % profile.key)
+
+
 def inventory(xplane, include_landing=False, include_surface=False, include_mission=False,
-              profile="C172SP"):
-    aircraft = xplane / AIRCRAFT_PATHS[profile]
+              *, profile, aircraft_path=None):
+    # An explicit aircraft folder (a side-by-side build under test) replaces the
+    # standard install path; the staged config path and hash must still match it.
+    aircraft = Path(aircraft_path) if aircraft_path else xplane / AIRCRAFT_PATHS[profile]
     plugins = xplane / "Resources/plugins/PythonPlugins"
     def git(*args):
         return subprocess.check_output(["git", "-C", str(ROOT), *args], text=True).strip()
     names = (
         "PI_capvsar_flight_control.py", "capvsar_flight_control_core.py",
-        "capvsar_flight_control_mapping.py", "capvsar_telemetry.py", "capvsar_qualification.py")
+        "capvsar_flight_control_mapping.py", "capvsar_telemetry.py", "capvsar_qualification.py",
+        "capvsar_terrain.py")
     sources = [ROOT / "xplane" / name for name in names]
     if include_landing:
         sources.append(ROOT / "xplane/capvsar_landing.py")
@@ -67,7 +101,8 @@ def inventory(xplane, include_landing=False, include_surface=False, include_miss
 
 
 def stage_observer(destination, qualification_aircraft=None, mode="qualification",
-                   runway="KMYF 28R"):
+                   runway="KMYF 28R", terrain_backstop_ft=200, extra_boxes=(),
+                   gfc_trial_envelope=False):
     """Stage an explicit observation or expiring laboratory installation."""
     aircraft_sha256 = None
     if qualification_aircraft is not None:
@@ -80,7 +115,8 @@ def stage_observer(destination, qualification_aircraft=None, mode="qualification
             raise ValueError("Laboratory requires the pinned stock C172 G1000 or a built CAP package")
     destination.mkdir(parents=True, exist_ok=False)
     names = ("PI_capvsar_flight_control.py", "capvsar_flight_control_core.py",
-             "capvsar_flight_control_mapping.py", "capvsar_telemetry.py", "capvsar_qualification.py")
+             "capvsar_flight_control_mapping.py", "capvsar_telemetry.py", "capvsar_qualification.py",
+             "capvsar_terrain.py")
     extras = (("capvsar_landing.py",) if mode == "landing" else
               ("capvsar_surface.py",) if mode == "surface" else
               ("capvsar_mission.py", "capvsar_surface.py") if mode == "mission" else ())
@@ -98,12 +134,31 @@ def stage_observer(destination, qualification_aircraft=None, mode="qualification
         config.update(mode=mode, aircraft_path=str(qualification_aircraft),
                       expires_unix_s=time.time() + (14300 if mode == "mission" else 10800 if mode in ("landing", "surface") else 3600))
         if mode == "landing":
-            from xplane.capvsar_landing import RUNWAYS
             if runway not in RUNWAYS:
                 raise ValueError("Unknown landing runway: " + runway)
             config["runway"] = runway
+            config["landing_toe_brakes"] = profile_for(qualification_aircraft.name).landing_toe_brakes
         if mode == "surface":
             config["parking"] = "KSEE East Transient Parking 12"
+            config["surface_takeoff_flap_ratio"] = profile_for(qualification_aircraft.name).takeoff_flap_ratio
+        if mode == "mission":
+            # Terrain lookahead in every snapshot, the GFC 700 as a second owner,
+            # and a last-ditch terrain fence (None disables the fence).
+            config.update(terrain_lookahead=True, gfc_owner=True)
+            if gfc_trial_envelope:
+                from xplane.capvsar_mission import (GFC_TRIAL_EAST_BOX,
+                                                    GFC_TRIAL_MAX_ALTITUDE_FT)
+                if extra_boxes:
+                    raise ValueError("The named GFC trial envelope supplies its own geofence extension")
+                config.update(gfc_trial_envelope=True,
+                              airborne_max_altitude_ft=GFC_TRIAL_MAX_ALTITUDE_FT,
+                              extra_airborne_boxes=[list(GFC_TRIAL_EAST_BOX)])
+            if terrain_backstop_ft is not None:
+                config["terrain_backstop_ft"] = terrain_backstop_ft
+            if extra_boxes:
+                # A deliberate, recorded widening of the airborne geofence for this session only.
+                from xplane.capvsar_mission import checked_extra_boxes
+                config["extra_airborne_boxes"] = [list(b) for b in checked_extra_boxes(extra_boxes)]
     fd = os.open(destination / "capvsar_flight_control_config.json",
                  os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w") as stream:
@@ -177,7 +232,7 @@ def main():
     read.add_argument("--xplane", type=Path, default=Path.home() / "X-Plane 12")
     read.add_argument("--output", type=Path, required=True)
     read.add_argument("--seconds", type=float, default=30)
-    read.add_argument("--profile", choices=sorted(PROFILES), default="C172SP")
+    read.add_argument("--profile", choices=sorted(PROFILES), required=True)
     score = commands.add_parser("score")
     score.add_argument("trace", type=Path)
     stage = commands.add_parser("stage-observer")
@@ -188,13 +243,22 @@ def main():
     landing = commands.add_parser("stage-landing")
     landing.add_argument("destination", type=Path)
     landing.add_argument("--aircraft", type=Path, required=True)
-    landing.add_argument("--runway", choices=("KMYF 28R", "KSAN 27"), default="KMYF 28R")
+    landing.add_argument("--runway", choices=tuple(RUNWAYS), default="KMYF 28R")
     surface = commands.add_parser("stage-surface")
     surface.add_argument("destination", type=Path)
     surface.add_argument("--aircraft", type=Path, required=True)
     mission = commands.add_parser("stage-mission")
     mission.add_argument("destination", type=Path)
     mission.add_argument("--aircraft", type=Path, required=True)
+    mission.add_argument("--extra-box", nargs=4, type=float, action="append", default=[],
+                         metavar=("LAT_MIN", "LAT_MAX", "LON_MIN", "LON_MAX"),
+                         help="widen the airborne geofence for this session with one more box "
+                              "(Southern California trial area only); repeatable")
+    mission.add_argument("--gfc-trial-envelope", action="store_true",
+                         help="stage the named GFC-only east extension and 8,500 ft mission ceiling")
+    mission.add_argument("--terrain-backstop-ft", type=float, default=200.,
+                         help="pause if terrain within 1.5 nm is closer than this below the "
+                              "airplane (above 1,000 ft AGL only); 0 disables")
     args = parser.parse_args()
     if args.command == "observe":
         if not 2 <= args.seconds <= 600:
@@ -207,7 +271,11 @@ def main():
     else:
         stage_observer(args.destination, args.aircraft if args.command in ("stage-qualification", "stage-landing", "stage-surface", "stage-mission") else None,
                        mode="landing" if args.command == "stage-landing" else "surface" if args.command == "stage-surface" else "mission" if args.command == "stage-mission" else "qualification",
-                       runway=args.runway if args.command == "stage-landing" else "KMYF 28R")
+                       runway=args.runway if args.command == "stage-landing" else "KMYF 28R",
+                       **({"terrain_backstop_ft": args.terrain_backstop_ft or None,
+                           "extra_boxes": args.extra_box,
+                           "gfc_trial_envelope": args.gfc_trial_envelope}
+                          if args.command == "stage-mission" else {}))
     return 0
 
 

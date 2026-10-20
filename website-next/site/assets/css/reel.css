@@ -1,0 +1,54 @@
+/* T43: video reels and single clips. Posters first, video when it loads, nothing when neither exists. */
+.reel,.clip{position:relative;margin:0;background:#070c14;border:1px solid var(--line);border-radius:var(--radius-lg);overflow:hidden}
+.reel-slides,.clip-stage{position:relative;aspect-ratio:16/9;background:#070c14}
+.reel-slide{position:absolute;inset:0;opacity:0;transition:opacity .8s ease;pointer-events:none}
+.reel-slide.is-active{opacity:1;pointer-events:auto}
+.reel-slide>svg{position:absolute;inset:0;width:100%;height:100%}
+.reel-slide video,.reel-slide .slide-poster,.clip-stage video,.clip-stage .slide-poster{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+[data-state=poster] video,[data-state=pending] video{visibility:hidden}
+[data-state=video] .slide-poster{visibility:hidden}
+.reel-slide[data-state=pending],.clip[data-state=pending],.clip[hidden]{display:none}
+.slide-caption{position:absolute;left:0;right:0;bottom:0;margin:0;padding:1.6rem .9rem .7rem;background:linear-gradient(rgba(11,18,32,0),rgba(11,18,32,.92) 55%);color:#e6ecf2;font-size:.92rem;line-height:1.45}
+.slide-caption strong{color:#fff}
+.reel-controls,.clip-controls{display:flex;align-items:center;gap:.4rem;padding:.45rem .6rem;background:var(--bg-2);border-top:1px solid var(--line)}
+.reel-prev,.reel-next,.clip-pause,.reel-pause{min-height:44px;min-width:44px;padding:.4rem .8rem;color:var(--text);background:var(--bg-3);border:1px solid var(--line-strong);border-radius:var(--radius);cursor:pointer;font-size:.9rem}
+.reel-prev:hover,.reel-next:hover,.clip-pause:hover,.reel-pause:hover{background:#1f2c45}
+.reel-dots{display:flex;flex-wrap:wrap;gap:.1rem;margin:0 auto}
+.reel-dot{width:44px;height:44px;padding:0;background:transparent;border:0;cursor:pointer;display:grid;place-items:center}
+.reel-dot:before{content:"";width:10px;height:10px;border-radius:50%;border:2px solid var(--text-muted);background:transparent}
+.reel-dot[aria-current=true]:before{background:var(--orange);border-color:var(--orange-soft);transform:scale(1.2)}
+.reel-live{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.reel[data-slides="1"] .reel-controls{display:none}
+.reel-note,.clip-note{position:absolute;top:.6rem;right:.6rem;margin:0;padding:.2rem .5rem;border-radius:4px;background:rgba(11,18,32,.85);color:#e6ecf2;font:600 .8125rem var(--font-mono);letter-spacing:.06em;text-transform:uppercase}
+.clip-controls{justify-content:space-between}
+.clip-controls .clip-caption{margin:0;color:var(--text-muted);font-size:var(--fs-small);line-height:1.45;padding:.2rem .3rem}
+.clip-controls .clip-caption strong{color:var(--text)}
+.clip figcaption{padding:.9rem 1rem;color:var(--text-muted);font-size:var(--fs-small);line-height:1.5}.clip figcaption strong{color:var(--text)}
+.paper .clip{border-color:var(--paper-line)}.paper .clip figcaption{color:#9aa7b5}.paper .clip figcaption strong{color:#e6ecf2}
+.clip-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,22rem),1fr));gap:1rem;margin:1.5rem 0}
+.clip-grid .clip{margin:0}
+.section>.wrap>.clip{margin:1.5rem 0}
+/* Home hero: the reel sits where the map sat; the first slide is the map itself. */
+.hero .hero-reel{position:absolute;inset:0 0 0 auto;width:64%;height:100%;z-index:0;border:0;border-radius:0;background:#203b36}
+.hero .hero-reel .reel-slides{position:absolute;inset:0;aspect-ratio:auto;background:#203b36}
+.hero .hero-reel .hero-map{position:absolute;inset:0;width:100%;height:100%;max-width:none;margin:0;border:0;aspect-ratio:auto;max-height:none;opacity:1;z-index:auto;background:#203b36}
+.hero:before{z-index:1;pointer-events:none}.hero-content,.hero .pause-control,.hero .hero-caption{z-index:2}
+.hero .hero-caption{top:1.25rem;bottom:auto}
+.hero .hero-reel .slide-caption{left:auto;right:0;max-width:34rem;bottom:4.1rem;padding:1.4rem .9rem .5rem 2.5rem;text-align:right;background:linear-gradient(90deg,rgba(11,18,32,0),rgba(11,18,32,.9) 35%)}
+.hero .hero-reel .reel-controls{position:absolute;right:var(--gutter);bottom:1.2rem;z-index:3;padding:.25rem .35rem;border:1px solid var(--line-strong);border-radius:var(--radius);background:rgba(17,26,43,.92)}
+.hero .hero-reel .reel-dots{margin:0}
+.hero .hero-reel[data-slides="1"] .reel-controls{display:none}
+.hero .hero-reel .slide-caption:empty{display:none}
+@media(min-width:901px) and (max-width:1200px){.hero .hero-reel{width:55%}}
+@media(max-width:900px){.hero .hero-reel{position:relative;inset:auto;order:1;width:100%;height:auto;margin-top:1.5rem;border:1px solid #3a4a66;border-radius:var(--radius-lg)}.hero .hero-reel .reel-slides{position:relative;aspect-ratio:9/8;max-height:580px}.hero .hero-reel .reel-controls{position:static;background:var(--bg-2);border:0;border-top:1px solid var(--line);border-radius:0}.hero .hero-reel .slide-caption{left:0;right:0;max-width:none;text-align:left;padding:1.4rem .9rem .7rem;background:linear-gradient(rgba(11,18,32,0),rgba(11,18,32,.92) 55%)}.hero .hero-caption{top:auto;bottom:1rem}}
+@media(max-width:600px){.clip-grid{grid-template-columns:1fr}.hero .hero-reel{margin-top:1.25rem}.hero .hero-reel .reel-slides{max-height:none}}
+@media(prefers-reduced-motion:reduce){.reel-slide{transition:none}}
+/* T11: controls hidden until the reel is ready (S7), dots on their own row on phones (S7), UI captures letterboxed in the hero (S3). */
+.reel:not([data-ready]) .reel-controls{visibility:hidden}
+.hero .hero-reel .reel-slide:not(:first-child):not([data-fit=cover]) :is(video,.slide-poster){object-fit:contain;background:#070c14}
+@media(max-width:600px){.reel-controls{flex-wrap:wrap;justify-content:space-between}.reel-dots{order:3;flex:1 0 100%;justify-content:center}.reel-dot{width:36px}}
+/* T22: the Mission Observer station panel in the hero (slide 2): its letterbox bands take the panel's own background, and the STILL FRAME badge sits under the hero's mono caption on desktop instead of on top of it. */
+.hero .hero-reel .reel-slide[data-clip=hero-panel]:not([data-fit=cover]) :is(video,.slide-poster){background:#1c2028}
+@media(min-width:901px){.hero .hero-reel .reel-note{top:4rem;right:var(--gutter)}}
+.hero .hero-reel .reel-slide[data-clip=hero-panel]{background:#1c2028}
+@media(max-width:600px){.hero .hero-reel .reel-slide[data-clip=hero-panel]:not([data-fit=cover]) :is(video,.slide-poster){object-position:top;height:62%}.hero .hero-reel .reel-slide[data-clip=hero-panel] .slide-caption{bottom:0;padding:1rem .9rem .6rem;font-size:.85rem;line-height:1.4}.hero .hero-reel .reel-slide[data-clip=hero-panel] .still-note{margin-top:.15rem}}

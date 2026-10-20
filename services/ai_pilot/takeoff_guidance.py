@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
-from .aircraft_profiles import AircraftProfile, C172SP
+from .aircraft_profiles import AircraftProfile
 from .prop_law import full_forward
 from .taxi import TaxiCoordinator, TaxiPhase
 
@@ -85,7 +85,7 @@ class TakeoffGuidance:
 
     def __init__(self, taxi: TaxiCoordinator, *, runway: str,
                  runway_heading_true_deg: float, runway_length_m: float,
-                 field_elevation_ft: float, profile: AircraftProfile = C172SP):
+                 field_elevation_ft: float, profile: AircraftProfile):
         if not runway.strip() or not math.isfinite(runway_heading_true_deg):
             raise ValueError("surveyed runway identification and heading required")
         if not 500 <= runway_length_m <= 4000:
@@ -119,9 +119,11 @@ class TakeoffGuidance:
             heading_error = wrap180(self.heading_true_deg-o.heading_true_deg)
             if (not o.on_ground or o.kias > 5 or o.groundspeed_mps > 3
                     or abs(o.cross_runway_m) > 3 or abs(heading_error) > 5
-                    or not 0 <= o.along_runway_m <= self.runway_length_m-500
-                    or abs(o.flap_ratio-self.profile.takeoff_flap_ratio) > .05):
+                    or not 0 <= o.along_runway_m <= self.runway_length_m-500):
                 return TakeoffCommand(brake=.35, reason="runway alignment or configuration invalid")
+            if abs(o.flap_ratio-self.profile.takeoff_flap_ratio) > .05:
+                return TakeoffCommand(brake=.35, flap=self.flap,
+                                      reason="set takeoff flap configuration")
             self.phase = "roll"
             self.roll_start_s = o.sim_time_s
         if self.phase in ("roll", "rotate"):
@@ -175,3 +177,15 @@ class TakeoffGuidance:
                                   target_kias=target, phase="climb", reason="initial climb",
                                   intervention_required=self.gradient_deficit)
         raise AssertionError("unreachable takeoff state")
+
+
+def takeoff_stage_complete(command: TakeoffCommand, observation: TakeoffObservation,
+                           profile: AircraftProfile) -> bool:
+    """Require the 300 ft gate and, for a flapped profile, verified retraction."""
+    if command.phase != "climb" or observation.agl_ft < 300.:
+        return False
+    if not profile.takeoff_flap_ratio:
+        return True
+    return (observation.agl_ft > profile.flap_retract_agl_ft
+            and observation.kias > profile.flap_retract_kias
+            and command.flap <= .05 and observation.flap_ratio <= .05)

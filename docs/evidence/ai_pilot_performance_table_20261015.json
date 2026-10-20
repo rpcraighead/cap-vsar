@@ -1,0 +1,78 @@
+{
+ "purpose": "performance-table validation, 2026-10-15",
+ "sweeps": {
+  "t1": {
+   "raw": "docs/evidence/c182t-2026-10-15/perf_table_C182T_t1.json",
+   "sha256": "0d81fd5df2ac0d5954c50da9f0ee12edcfd72e5981e75fdb7d12b5189fa48759"
+  },
+  "t2": {
+   "raw": "docs/evidence/c182t-2026-10-15/perf_table_C182T_t2.json",
+   "sha256": "cb7561fff82e9a208e81063936b3aa0c62ff20157e1b0b3a4da420c0fe8bf1cf"
+  }
+ },
+ "sweep_notes": {
+  "t1": "altitude uncontrolled, 2,424-5,203 ft; superseded",
+  "t2": "altitude recentred, 3,376-5,076 ft, mean 4,036 ft; used for the profile"
+ },
+ "handback_mid_climb": {
+  "run6_fixed_base_0p4": {
+   "note": "fixed-base law, 0.4 kt/s ramp",
+   "outcome": "PASS",
+   "reason": null,
+   "trace_sha256": "2129dab6cacb4c425332cf0607a8a7e15005a2169297b0db7253674e5ee71e37",
+   "handed_kias": 119.5,
+   "min_kias_90s": 98.5
+  },
+  "run8_table_0p4": {
+   "note": "table, 0.4 kt/s ramp",
+   "outcome": "PASS",
+   "reason": null,
+   "trace_sha256": "9c45142bb0932ad40aa922f55c2445270ce7a359f5d56dbda5c1dd5c74f43eaf",
+   "handed_kias": 119.6,
+   "min_kias_90s": 98.9
+  },
+  "run4_fixed_base_2p0": {
+   "note": "fixed-base law, 2.0 kt/s ramp",
+   "outcome": "PASS",
+   "reason": null,
+   "trace_sha256": "687a2f0e0ff267f490dd508e4d39e4523199c229006e26e8c1e05eac342f9205",
+   "handed_kias": 119.6,
+   "min_kias_90s": 90.0
+  },
+  "run9_table_2p0": {
+   "note": "table, 2.0 kt/s ramp",
+   "outcome": "FAIL",
+   "reason": "Speed undershot after the hand-back: 95 KIAS, 5 kt below 100",
+   "trace_sha256": "3861be60351102155500beafc89b7aacb8b0d9e9572b24266829cc0984bc38c5",
+   "handed_kias": 119.6,
+   "min_kias_90s": 95.0
+  }
+ },
+ "pattern_regression": {
+  "baseline_2026-10-14": {
+   "trace_sha256": "972ea0c14c9af17e0563e6e98fc48bf401b9f72e2a20cb3bd7d621c14516a7de",
+   "outcome": "PASS",
+   "waypoints": 9,
+   "max_alt_err_ft": 27.8,
+   "kias": [
+    99.1,
+    100.9
+   ],
+   "xtk_median_m": 12,
+   "throttle_median": 0.59
+  },
+  "with_table_2026-10-15": {
+   "trace_sha256": "86867c67b9149b78861d300012c9aef88be4b8f1513bafbb4f5bf6cd79b7f8ea",
+   "outcome": "PASS",
+   "waypoints": 9,
+   "max_alt_err_ft": 30.2,
+   "kias": [
+    99.3,
+    100.7
+   ],
+   "xtk_median_m": 11,
+   "throttle_median": 0.59
+  }
+ },
+ "invalid_attempt": "owner_trial_c182_escon_20261015_7: the sweep's simulator was still running, so xplane-clean refused a second instance and the trial found no bridge; nothing flew"
+}

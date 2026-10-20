@@ -92,6 +92,59 @@ def test_pause_request_is_not_pause_confirmation():
     assert bridge.state == "FAULT_PAUSE_PENDING" and bridge.retired
 
 
+def test_late_frame_graces_are_bounded_and_only_timely_frames_reset_them():
+    wall, _, bridge, frame = setup()
+    bridge.submit_frame(**frame)
+    bridge.last_tick_time = wall[0]
+
+    wall[0] += .3
+    bridge.tick()
+    bridge._fresh()
+    assert bridge.frame_stall_graces == 1
+
+    # A late replacement gets a new lease but does not erase the stall streak.
+    frame.update(sequence=1, expires_at=wall[0] + .15)
+    bridge.submit_frame(**frame)
+    assert bridge.frame_stall_graces == 1
+    wall[0] += .05
+    frame.update(sequence=2, expires_at=wall[0] + .15)
+    bridge.submit_frame(**frame)
+    assert bridge.frame_stall_graces == 0
+
+    for sequence in range(3, 6):
+        wall[0] += .3
+        bridge.tick()
+        bridge._fresh()
+        frame.update(sequence=sequence, expires_at=wall[0] + .15)
+        bridge.submit_frame(**frame)
+    assert bridge.frame_stall_graces == 3
+    wall[0] += .3
+    bridge.tick()
+    with pytest.raises(ValueError, match="Atomic frame expired"):
+        bridge._fresh()
+
+
+def test_in_time_heartbeat_resets_stall_grace_but_late_heartbeats_do_not():
+    wall, _, bridge, _ = setup()
+    bridge.state = "WAIT_GFC"
+    bridge.transfer_deadline = 100.
+    bridge.last_heartbeat = wall[0]
+    bridge.last_tick_time = wall[0]
+
+    wall[0] += .5
+    bridge.tick()
+    assert bridge.heartbeat_stall_graces == 1
+    bridge.heartbeat(SESSION, bridge.generation)
+    assert bridge.heartbeat_stall_graces == 1
+
+    wall[0] += .1
+    bridge.heartbeat(SESSION, bridge.generation)
+    assert bridge.heartbeat_stall_graces == 0
+    wall[0] += .5
+    bridge.tick()
+    assert bridge.heartbeat_stall_graces == 1
+
+
 def request(plugin, **payload):
     answer = queue.Queue(maxsize=1)
     plugin.requests.put((payload, answer))

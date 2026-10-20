@@ -13,7 +13,8 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from services.ai_pilot.control_ownership import ControllerLock
-from services.ai_pilot.experiment import BridgeClient, Recorder, digest
+from services.ai_pilot.experiment import (BridgeClient, Recorder, digest, FRAME_LEASE_S,
+                                          wait_for_ready_snapshot)
 from services.ai_pilot.ksee_kmyf_mission import MissionController, STAGES
 from services.ai_pilot.landing_trial import LandingObserver
 from services.ai_pilot.mission_retask import MissionRetaskServer
@@ -23,7 +24,7 @@ from services.ai_pilot.runway_entry import RunwayEntryGuidance
 from services.ai_pilot.takeoff_guidance import TakeoffGuidance, TakeoffObservation
 from services.ai_pilot.taxi import ClearanceSource, TaxiCoordinator, TaxiPhase
 from xplane.capvsar_landing import RUNWAYS
-from scripts.ai_pilot_experiment import inventory
+from scripts.ai_pilot_experiment import inventory, validate_staged_profile
 from services.ai_pilot.aircraft_profiles import PROFILES
 
 
@@ -37,6 +38,7 @@ def run(args):
         raise ValueError("Requires expiring mission bridge")
     profile = PROFILES[args.profile]
     inv = inventory(args.xplane, include_mission=True, profile=args.profile)
+    validate_staged_profile(config, profile, inv, mode="mission")
     inv["profile_tuning_validated"] = profile.tuning_validated
     for name, installed in inv["installed_bridge_sha256"].items():
         if installed != inv["source_sha256"]["xplane/"+name]:
@@ -84,6 +86,7 @@ def run(args):
     previous_stage = controller.stage
     try:
         retask.__enter__()
+        wait_for_ready_snapshot(client, timeout_s=120.)
         status = client.request("fault_pause", reason="KSEE-KMYF mission setup")
         deadline = time.monotonic()+3
         while not status["pause_confirmed"]:
@@ -94,17 +97,11 @@ def run(args):
         reset = client.request("lab_reset", session=session,
                                **({"checkpoint": "KSEE parking"} if args.from_parking else {}))
         recorder.write("setup", reset)
-        deadline = time.monotonic()+15
-        while True:
-            snap = client.request("snapshot")
-            v = snap["values"]
-            if (snap["session"] == session and v["paused"] == 1 and
-                    v["nav1_frequency_10khz"] == 11195 and
-                    snap["override_state"] is False and snap["ap_engaged"] is False):
-                break
-            if time.monotonic()>deadline:
-                raise ValueError("Mission readiness not confirmed")
-            time.sleep(.1)
+        snap = wait_for_ready_snapshot(
+            client, timeout_s=120.,
+            validate=lambda s: (s["session"] == session and s["values"]["paused"] == 1
+                                and s["values"]["nav1_frequency_10khz"] == 11195
+                                and s["override_state"] is False and s["ap_engaged"] is False))
         controls = {"roll": .0, "pitch": .06, "yaw": .10, "throttle": 1.,
                     "flap": 0., "trim": max(-.6, min(.6, snap["controls"]["trim"])), "brake": 0.}
         if profile.constant_speed_prop:
@@ -126,7 +123,7 @@ def run(args):
         while time.monotonic()-start_wall < args.max_wall_s:
             seq += 1
             response = client.request("exchange", session=session, generation=generation,
-                                      sequence=seq, expires_at=time.monotonic()+.18,
+                                      sequence=seq, expires_at=time.monotonic()+FRAME_LEASE_S,
                                       controls=controls)
             if response["bridge"]["state"] != "ACTIVE":
                 raise ValueError("Mission bridge lost authority")
@@ -280,7 +277,7 @@ def main():
     p.add_argument("--stop-at", choices=STAGES)
     p.add_argument("--max-wall-s", type=float, default=3600)
     p.add_argument("--rollout-only", action="store_true")
-    p.add_argument("--profile", choices=sorted(PROFILES), default="C172SP",
+    p.add_argument("--profile", choices=sorted(PROFILES), required=True,
                    help="aircraft profile; C182T tuning is not yet validated")
     p.add_argument("--from-parking", action="store_true")
     a = p.parse_args()

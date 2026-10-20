@@ -12,7 +12,15 @@ const EFFECTS = [
   ['cone_of_confusion', 'Cone of confusion',  'Bearing indeterminate overhead'],
   ['multipath',         'Multipath',          'A confident, wrong bearing'],
   ['airframe_shadowing','Wing blanking',      'Banking can shield the selected antenna'],
+  ['radio_reach',       'Radio reach',        'Static and dropouts by distance, terrain and the fixed radio sites'],
 ];
+
+// T38: the plain-language steps of the radio-conditions setting (effects.radio_conditions, 1 = a clear day).
+const RADIO_CONDITIONS = [[1, 'Normal'], [0.75, 'Light static'], [0.5, 'Poor'], [0.25, 'Very poor']];
+function radioConditionOption(value) {
+  const v = Number.isFinite(value) ? value : 1;
+  return RADIO_CONDITIONS.reduce((best, step) => Math.abs(step[0] - v) < Math.abs(best[0] - v) ? step : best)[0];
+}
 
 let state = {}, acLayers = {}, trackLines = {}, beaconMarker = null;
 const bearingLayer = L.layerGroup().addTo(map);
@@ -77,8 +85,14 @@ function render() {
     $('effects').innerHTML = EFFECTS.map(([k, label, hint]) =>
       `<label title="${hint}"><input type="checkbox" data-k="${k}" ${sc.effects[k] ? 'checked' : ''}> ${label}</label>`
     ).join('') + `<label title="Physical antenna installation used by the propagation engine">DF antenna
-      <select id="liveAntennaProfile"><option value="c182_belly">C182 belly</option><option value="c182_top">C182 top</option></select></label>`;
+      <select id="liveAntennaProfile"><option value="c182_belly">C182 belly</option><option value="c182_top">C182 top</option></select></label>` +
+      `<label title="How good a radio day it is: more static and dropouts on the tactical net as it gets worse">Radio conditions
+      <select id="liveRadioConditions">${RADIO_CONDITIONS.map(([v, label]) => `<option value="${v}">${label}</option>`).join('')}</select></label>`;
     $('liveAntennaProfile').value = sc.effects.df_antenna_profile || 'c182_belly';
+    $('liveRadioConditions').value = String(radioConditionOption(parseFloat(sc.effects.radio_conditions)));
+    $('liveRadioConditions').onchange = e =>
+      vsarFetch('/api/sorties/effects', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({radio_conditions: parseFloat(e.target.value)})});
     $('liveAntennaProfile').onchange = e =>
       vsarFetch('/api/sorties/effects', {method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({df_antenna_profile: e.target.value})});
@@ -269,7 +283,7 @@ $('nsClear').onclick = () => {
 
 function nsRenderEffects() {
   const on = {radio_horizon: true, burst_cadence: true, cone_of_confusion: true,
-              multipath: false, airframe_shadowing: false};
+              multipath: false, airframe_shadowing: false, radio_reach: true};
   $('nsEffects').innerHTML = EFFECTS.map(([k, label, hint]) =>
     `<label title="${hint}"><input type="checkbox" data-k="${k}" ${on[k] ? 'checked' : ''}> ${label}</label>`
   ).join('');
@@ -291,7 +305,7 @@ $('nsCreate').onclick = async () => {
 
   // The offset is what multipath swings the false bearing by; the server keeps
   // it alongside the on/off switches.
-  const effects = {multipath_offset_deg: 40.0, wing_null_max_loss_db: 24.0,
+  const effects = {multipath_offset_deg: 40.0, wing_null_max_loss_db: 24.0, radio_conditions: 1.0,
                    df_antenna_profile: $('nsAntennaProfile').value};
   $('nsEffects').querySelectorAll('input').forEach(i => effects[i.dataset.k] = i.checked);
 
